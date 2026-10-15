@@ -12,6 +12,7 @@ import {
   SlashCommandBuilder,
 } from "discord.js";
 import { discordLocalizations, pickLanguage, translate } from "../i18n/i18n.js";
+import { result, Status } from "../logs/actionLog.js";
 import { Setting } from "../settings/guildSettings.js";
 import { isPermissionError } from "../utils/discordErrors.js";
 
@@ -61,18 +62,18 @@ export function createCountryHelpCommand({ guildSettings, forcedLanguage } = {})
 
     if (!interaction.inCachedGuild()) {
       await interaction.reply({ content: translate(adminLanguage, "guildOnly"), flags: MessageFlags.Ephemeral });
-      return;
+      return result(Status.REFUSED, "guildOnly");
     }
     // Discord already hides the command from everyone else, but check anyway.
     if (!interaction.memberPermissions.has(PermissionFlagsBits.ManageGuild)) {
       await interaction.reply({ content: translate(adminLanguage, "helpNoPermission"), flags: MessageFlags.Ephemeral });
-      return;
+      return result(Status.REFUSED, "helpNoPermission");
     }
 
     const channel = interaction.channel;
     if (!channel || !canPostHere(interaction)) {
       await interaction.reply({ content: translate(adminLanguage, "helpCannotPost"), flags: MessageFlags.Ephemeral });
-      return;
+      return result(Status.FAILED, "helpCannotPost");
     }
 
     // Answer the admin privately first, so the interaction can't expire while posting.
@@ -90,9 +91,10 @@ export function createCountryHelpCommand({ guildSettings, forcedLanguage } = {})
         throw error;
       }
       await interaction.editReply({ content: translate(adminLanguage, "helpCannotPost") });
-      return;
+      return result(Status.FAILED, "helpCannotPost");
     }
     await interaction.editReply({ content: translate(adminLanguage, "helpPosted") });
+    return result(Status.SUCCESS, "helpPosted");
   }
 
   return { name: COMMAND_NAME, data: buildCountryHelpCommandData(), execute };

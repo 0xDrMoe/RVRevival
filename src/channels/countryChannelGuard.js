@@ -4,9 +4,11 @@
 // the channel are left alone.
 //
 // Needs the GuildMessages intent (not privileged) and the Manage Messages
-// permission in that channel. Message content is never read.
+// permission in that channel. Message content is never read. Each deletion is
+// recorded in the logs channel (author and channel only).
 
 import { RESTJSONErrorCodes } from "discord.js";
+import { noActionLog, Status } from "../logs/actionLog.js";
 import { Setting } from "../settings/guildSettings.js";
 import { getDiscordErrorCode, isPermissionError } from "../utils/discordErrors.js";
 
@@ -19,7 +21,8 @@ const IGNORED_ERRORS = new Set([
 // Options:
 //   guildSettings   where the /country channel is stored (GuildSettings)
 //   logger
-export function createCountryChannelGuard({ guildSettings, logger }) {
+//   actionLog       records each deletion in the logs channel (see logs/actionLog.js)
+export function createCountryChannelGuard({ guildSettings, logger, actionLog = noActionLog }) {
   // Servers already warned about missing permissions, so a busy channel can't
   // flood the log. A server is warned again once a delete has worked.
   const warnedGuilds = new Set();
@@ -37,7 +40,6 @@ export function createCountryChannelGuard({ guildSettings, logger }) {
 
     try {
       await message.delete();
-      warnedGuilds.delete(message.guildId);
     } catch (error) {
       if (IGNORED_ERRORS.has(getDiscordErrorCode(error))) {
         return;
@@ -51,7 +53,17 @@ export function createCountryChannelGuard({ guildSettings, logger }) {
           guildId: message.guildId,
           channelId: message.channelId,
         });
+        await actionLog.logDeletedMessage(message, {
+          status: Status.FAILED,
+          note: "The bot needs View Channel and Manage Messages in this channel. Logged once until a delete works again.",
+        });
       }
+      return;
     }
+    warnedGuilds.delete(message.guildId);
+    await actionLog.logDeletedMessage(message, {
+      status: Status.SUCCESS,
+      note: "Only /country can be used in this channel. The message content isn't read or kept.",
+    });
   };
 }

@@ -32,7 +32,7 @@
   "nothingToRemove": "ليس لدى {member} أي دور دولة.",
   "removeFailed": "لم أتمكن من إزالة دور {country} من {member}. يرجى التحقق من صلاحياتي والمحاولة مرة أخرى.",
 
-  "settingsCommandDescription": "للمشرفين فقط: اختيار دور الطاقم وقناة /country.",
+  "settingsCommandDescription": "للمشرفين فقط: اختيار دور الطاقم وقناة /country وقناة السجلات.",
   "settingsStaffRoleDescription": "اختيار الدور الذي يمكنه استخدام /country-staff.",
   "settingsRoleOptionDescription": "دور الطاقم.",
   "settingsCountryChannelDescription": "السماح باستخدام /country في قناة واحدة فقط وحذف الرسائل الأخرى فيها.",
@@ -53,6 +53,14 @@
   "settingsShowNoStaffRole": "دور الطاقم: غير معيّن",
   "settingsShowCountryChannel": "قناة /country: {channel}",
   "settingsShowNoCountryChannel": "قناة /country: أي قناة",
+  "settingsLogsChannelDescription": "تسجيل كل ما يفعله الأعضاء مع البوت في قناة واحدة.",
+  "settingsLogsChannelOptionDescription": "القناة المخصصة لسجلات البوت.",
+  "settingsLogsChannelName": "قناة السجلات",
+  "settingsLogsChannelSet": "سيتم الآن تسجيل كل ما يفعله الأعضاء مع البوت في {channel}.",
+  "settingsLogsChannelCleared": "تمت إزالة قناة السجلات. لم يعد البوت ينشر السجلات.",
+  "settingsLogsChannelNeedsPermissions": "لا أستطيع النشر في {channel} بعد. امنحني صلاحيات **عرض القناة** و**إرسال الرسائل** و**تضمين الروابط** هناك.",
+  "settingsShowLogsChannel": "قناة السجلات: {channel}",
+  "settingsShowNoLogsChannel": "قناة السجلات: غير معيّنة",
 
   "helpCommandDescription": "للمشرفين فقط: نشر طريقة الحصول على دور الدولة في هذه القناة.",
   "helpNoPermission": "تحتاج إلى صلاحية **إدارة الخادم** لاستخدام هذا الأمر.",

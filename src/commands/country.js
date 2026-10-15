@@ -5,6 +5,7 @@
 import { MessageFlags, SlashCommandBuilder, InteractionContextType } from "discord.js";
 import { countryList, MAX_NAME_LENGTH } from "../countries/countries.js";
 import { discordLocalizations, pickLanguage, translate } from "../i18n/i18n.js";
+import { result, Status, statusForOutcome } from "../logs/actionLog.js";
 import { CountryRoleService, Outcome } from "../roles/countryRoles.js";
 import { wrapMember, wrapServer } from "../roles/discordAdapters.js";
 import { Setting } from "../settings/guildSettings.js";
@@ -86,16 +87,14 @@ export function createCountryCommand(options) {
 
     if (!interaction.inCachedGuild()) {
       await interaction.reply({ ...message("guildOnly"), flags: MessageFlags.Ephemeral });
-      return;
+      return result(Status.REFUSED, "guildOnly");
     }
 
     const allowedChannelId = guildSettings?.get(interaction.guildId, Setting.COUNTRY_CHANNEL);
     if (allowedChannelId && !isInChannel(interaction, allowedChannelId)) {
-      await interaction.reply({
-        ...message("wrongChannel", { channel: `<#${allowedChannelId}>` }),
-        flags: MessageFlags.Ephemeral,
-      });
-      return;
+      const values = { channel: `<#${allowedChannelId}>` };
+      await interaction.reply({ ...message("wrongChannel", values), flags: MessageFlags.Ephemeral });
+      return result(Status.REFUSED, "wrongChannel", values);
     }
 
     // Tell Discord we're working on it right away. Discord cancels commands that
@@ -110,17 +109,18 @@ export function createCountryCommand(options) {
         inputLength: typed?.length ?? 0,
       });
       await interaction.editReply(message("invalidCountry"));
-      return;
+      return result(Status.REFUSED, "invalidCountry");
     }
 
-    const result = await roleService.giveCountryRole(
+    const { outcome, role } = await roleService.giveCountryRole(
       toServer(interaction.guild),
       toMember(interaction.member),
       country,
     );
     // When they already have a country, name the one they have.
-    const shownCountry = result.outcome === Outcome.LOCKED ? result.role.name : country.name;
-    await interaction.editReply(message(result.outcome, { country: shownCountry }));
+    const values = { country: outcome === Outcome.LOCKED ? role.name : country.name };
+    await interaction.editReply(message(outcome, values));
+    return result(statusForOutcome(outcome), outcome, values);
   }
 
   const autocomplete = (interaction) => suggestCountries(interaction, { countries, logger });

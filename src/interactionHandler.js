@@ -1,11 +1,13 @@
-// Sends each Discord interaction to the right command, and makes sure the user
-// always gets an answer, even if the command crashes.
+// Sends each Discord interaction to the right command, makes sure the user
+// always gets an answer, even if the command crashes, and records every command
+// use in the server's logs channel.
 
 import { MessageFlags } from "discord.js";
 import { pickLanguage, translate } from "./i18n/i18n.js";
+import { noActionLog, Status } from "./logs/actionLog.js";
 import { isExpiredInteractionError } from "./utils/discordErrors.js";
 
-export function createInteractionHandler({ commands, logger, forcedLanguage }) {
+export function createInteractionHandler({ commands, logger, forcedLanguage, actionLog = noActionLog }) {
   async function handleAutocomplete(interaction) {
     const command = commands.get(interaction.commandName);
     try {
@@ -28,14 +30,23 @@ export function createInteractionHandler({ commands, logger, forcedLanguage }) {
         command: interaction.commandName,
       });
       await sendErrorReply(interaction);
+      await actionLog.logCommand(interaction, {
+        status: Status.ERROR,
+        note: "The bot doesn't know this command. Re-run `npm run register`.",
+      });
       return;
     }
 
+    let outcome;
     try {
-      await command.execute(interaction);
+      outcome = await command.execute(interaction);
     } catch (error) {
       if (isExpiredInteractionError(error)) {
         logger.warn("The interaction expired before the bot could answer", { command: interaction.commandName });
+        await actionLog.logCommand(interaction, {
+          status: Status.FAILED,
+          note: "Discord cancelled the command before the bot could answer.",
+        });
         return;
       }
       logger.error("Command crashed", {
@@ -45,7 +56,13 @@ export function createInteractionHandler({ commands, logger, forcedLanguage }) {
         error,
       });
       await sendErrorReply(interaction);
+      await actionLog.logCommand(interaction, {
+        status: Status.ERROR,
+        note: "The command crashed. The details are in the bot's console log.",
+      });
+      return;
     }
+    await actionLog.logCommand(interaction, outcome ?? { status: Status.SUCCESS });
   }
 
   // Shows the generic "something went wrong" message, never error details.

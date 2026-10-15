@@ -2,6 +2,7 @@ import { MessageFlags, RESTJSONErrorCodes } from "discord.js";
 import { describe, expect, it, vi } from "vitest";
 import { translate } from "../src/i18n/i18n.js";
 import { createInteractionHandler } from "../src/interactionHandler.js";
+import { Status } from "../src/logs/actionLog.js";
 import { discordError, fakeLogger } from "./helpers/fakes.js";
 
 function fakeCommandInteraction(commandName, { deferred = false, locale = "en-US" } = {}) {
@@ -81,5 +82,35 @@ describe("interaction handler", () => {
       respond,
     });
     expect(respond).toHaveBeenCalledWith([]);
+  });
+
+  describe("logs channel", () => {
+    const fakeActionLog = () => ({ logCommand: vi.fn(async () => {}), logDeletedMessage: vi.fn(async () => {}) });
+
+    it("logs what the command reported", async () => {
+      const actionLog = fakeActionLog();
+      const outcome = { status: Status.REFUSED, key: "guildOnly" };
+      const interaction = fakeCommandInteraction("country");
+      await handlerFor({ execute: vi.fn(async () => outcome) }, { actionLog })(interaction);
+      expect(actionLog.logCommand).toHaveBeenCalledWith(interaction, outcome);
+    });
+
+    it("logs a success when the command reports nothing", async () => {
+      const actionLog = fakeActionLog();
+      await handlerFor({ execute: vi.fn(async () => {}) }, { actionLog })(fakeCommandInteraction("country"));
+      expect(actionLog.logCommand).toHaveBeenCalledWith(expect.anything(), { status: Status.SUCCESS });
+    });
+
+    it("logs crashes, expired interactions and unknown commands", async () => {
+      const actionLog = fakeActionLog();
+      await handlerFor({ execute: failing(new Error("boom")) }, { actionLog })(fakeCommandInteraction("country"));
+      await handlerFor({ execute: failing(discordError(RESTJSONErrorCodes.UnknownInteraction)) }, { actionLog })(
+        fakeCommandInteraction("country"),
+      );
+      await handlerFor({}, { actionLog })(fakeCommandInteraction("old-command"));
+
+      const statuses = actionLog.logCommand.mock.calls.map(([, outcome]) => outcome.status);
+      expect(statuses).toEqual([Status.ERROR, Status.FAILED, Status.ERROR]);
+    });
   });
 });

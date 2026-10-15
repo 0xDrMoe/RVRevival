@@ -7,6 +7,7 @@ The Discord bot for the Rumbleverse Revival server. It is built as a set of inde
 | Feature | Commands | Who can use it |
 | --- | --- | --- |
 | [Settings](#settings) | `/settings` | Manage Server |
+| [Logs channel](#logs-channel) | `/settings logs-channel` | Manage Server |
 | [Country roles](#country-roles) | `/country`, `/country-staff`, `/country-help` | Everyone (`/country`), the staff role (`/country-staff`), Manage Server (`/country-help`) |
 
 Every reply is translated into English, Spanish, German, French, Portuguese, Italian or Arabic (see [Languages](#languages)).
@@ -17,10 +18,25 @@ Every reply is translated into English, Spanish, German, French, Portuguese, Ita
 
 - **`/settings staff-role role:<role>`** chooses the staff role. Only members with it can use `/country-staff`. `@everyone` is refused.
 - **`/settings country-channel channel:<channel>`** limits `/country` to one channel (threads inside it work too) and keeps that channel clean: every message posted in it is deleted right away, including staff's and admins', so it only holds `/country` and the bot's own posts (like the `/country-help` guide). Threads inside it are not cleaned. The bot needs **View Channel** and **Manage Messages** there; `/settings` warns the admin if it doesn't have them. Messages already in the channel before it was set are left alone.
-- **`/settings clear setting:<Staff role | /country channel>`** resets one setting.
+- **`/settings logs-channel channel:<channel>`** chooses the channel where the bot logs everything members do with it (see [Logs channel](#logs-channel)). The bot needs **View Channel**, **Send Messages** and **Embed Links** there; `/settings` warns the admin if it doesn't have them.
+- **`/settings clear setting:<Staff role | /country channel | Logs channel>`** resets one setting. Clearing the logs channel stops logging.
 - **`/settings show`** lists the current settings.
 
-If the staff role or the `/country` channel is deleted, the bot forgets it automatically.
+If the staff role, the `/country` channel or the logs channel is deleted, the bot forgets it automatically.
+
+### Logs channel
+
+Once an admin runs `/settings logs-channel`, the bot posts a short embed there for:
+
+- **Every command anyone runs**, with who ran it, the channel, the options they picked or typed, and how it ended:
+  - **Success** (green): it did what was asked.
+  - **Refused** (yellow): not allowed, bad input, or nothing to do (for example a second `/country`, an unknown country, or `/country-staff` without the staff role).
+  - **Failed** (orange): allowed, but the bot couldn't do it, usually because of a missing permission or the role hierarchy.
+  - **Error** (red): the command crashed, or Discord cancelled it. The details stay in the bot's console log.
+  The embed includes the reply the member got, in English.
+- **Every message deleted from the `/country` channel**, with its author and the channel. The bot can't read message content, so the content isn't logged. If the bot can't delete messages there, that is logged once until a delete works again.
+
+Autocomplete suggestions aren't logged. Log entries are always in English, since only staff read them. Mentions in log entries never ping anyone, and typed text is shown as code, so it can't add formatting. If the bot can't post in the logs channel, commands keep working and the console log warns once until posting works again. Make the logs channel visible to staff only.
 
 ### Country roles
 
@@ -120,6 +136,7 @@ src/
   countries/             Country roles: country list, name matching and search
   roles/                 Country roles: find, create, assign and remove roles
   channels/              Country roles: keeps the /country channel clean
+  logs/                  Logs channel: posts what members do with the bot
   settings/              Per-server settings (saved to data/settings.json, git-ignored)
   i18n/                  Language selection and locales/*.json (all features)
   utils/                 Shared: logger with token redaction, keyed lock, Discord error codes
@@ -128,7 +145,7 @@ tests/                   Unit tests using in-memory Discord fakes
 
 ## Adding a feature
 
-1. **Commands.** Create `src/commands/<name>.js` exporting a factory that returns `{ name, data, execute }` (and `autocomplete` if needed). `countryHelp.js` is a small example. Add it to the list in `src/commands/index.js`.
+1. **Commands.** Create `src/commands/<name>.js` exporting a factory that returns `{ name, data, execute }` (and `autocomplete` if needed). `countryHelp.js` is a small example. Add it to the list in `src/commands/index.js`. Every command use is logged automatically; have `execute` return `result(Status.<SUCCESS | REFUSED | FAILED>, "<translation key>", values)` from `src/logs/actionLog.js` so the logs channel shows how it ended.
 2. **Logic.** Put anything bigger than the command itself in its own folder under `src/` (like `countries/` and `roles/`), so features stay separate.
 3. **Text.** Every user-facing string goes in all seven `src/i18n/locales/*.json` files with the same key. The tests fail if a language is missing a key.
 4. **Permissions.** If the feature needs a new bot permission, update the invite link in [Setup](#setup) and re-invite the bot.
@@ -152,6 +169,7 @@ Replies use each user's Discord language when it's supported, otherwise English.
 | `/country-help` says it can't post | Give the bot **View Channel**, **Send Messages** and **Embed Links** in that channel. |
 | Messages in the `/country` channel aren't deleted | Give the bot **View Channel** and **Manage Messages** in that channel (the log warns once when it can't). |
 | `/country-staff` says no staff role is set | An admin runs `/settings staff-role`. |
+| Nothing shows up in the logs channel | Check `/settings show`, then give the bot **View Channel**, **Send Messages** and **Embed Links** there (the console log warns once when it can't post). |
 | A member needs a different country | Staff run `/country-staff set`. |
 
 Set `LOG_LEVEL=debug` for more detail.

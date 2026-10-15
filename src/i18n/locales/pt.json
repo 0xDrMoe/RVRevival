@@ -32,7 +32,7 @@
   "nothingToRemove": "{member} não tem cargo de país.",
   "removeFailed": "Não consegui remover o cargo {country} de {member}. Verifique minhas permissões e tente de novo.",
 
-  "settingsCommandDescription": "Só admins: escolha o cargo de staff e o canal do /country.",
+  "settingsCommandDescription": "Só admins: escolha o cargo de staff, o canal do /country e o canal de logs.",
   "settingsStaffRoleDescription": "Escolha o cargo que pode usar /country-staff.",
   "settingsRoleOptionDescription": "O cargo de staff.",
   "settingsCountryChannelDescription": "Permitir /country em apenas um canal e apagar as outras mensagens nele.",
@@ -53,6 +53,14 @@
   "settingsShowNoStaffRole": "Cargo de staff: não definido",
   "settingsShowCountryChannel": "Canal do /country: {channel}",
   "settingsShowNoCountryChannel": "Canal do /country: qualquer canal",
+  "settingsLogsChannelDescription": "Registre num canal tudo o que os membros fazem com o bot.",
+  "settingsLogsChannelOptionDescription": "O canal para os logs do bot.",
+  "settingsLogsChannelName": "Canal de logs",
+  "settingsLogsChannelSet": "Tudo o que os membros fizerem com o bot agora será registrado em {channel}.",
+  "settingsLogsChannelCleared": "O canal de logs foi removido. O bot não publica mais logs.",
+  "settingsLogsChannelNeedsPermissions": "Ainda não consigo publicar em {channel}. Me dê as permissões **Ver canal**, **Enviar mensagens** e **Inserir links** lá.",
+  "settingsShowLogsChannel": "Canal de logs: {channel}",
+  "settingsShowNoLogsChannel": "Canal de logs: não definido",
 
   "helpCommandDescription": "Só admins: publica neste canal como obter um cargo de país.",
   "helpNoPermission": "Você precisa da permissão **Gerenciar servidor** para usar este comando.",
