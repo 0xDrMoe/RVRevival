@@ -27,6 +27,8 @@
 
   "helpCommandDescription": "Só admins: publica neste canal como obter um cargo de país.",
   "helpNoPermission": "Você precisa da permissão **Gerenciar servidor** para usar este comando.",
+  "helpPosted": "O guia do /country foi publicado neste canal.",
+  "helpCannotPost": "Não consigo publicar neste canal. Me dê aqui as permissões **Ver canal**, **Enviar mensagens** e **Inserir links** e tente de novo.",
   "helpTitle": "Pegue seu cargo de país",
   "helpIntro": "Mostre para a comunidade de onde você joga! Adicione um cargo de país ao seu perfil em poucos segundos.",
   "helpStepsTitle": "Como pegar",

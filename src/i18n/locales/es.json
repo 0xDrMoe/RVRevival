@@ -27,6 +27,8 @@
 
   "helpCommandDescription": "Solo admins: publica en este canal cómo obtener un rol de país.",
   "helpNoPermission": "Necesitas el permiso **Gestionar servidor** para usar este comando.",
+  "helpPosted": "La guía de /country se ha publicado en este canal.",
+  "helpCannotPost": "No puedo publicar en este canal. Dame aquí los permisos **Ver canal**, **Enviar mensajes** e **Insertar enlaces** y vuelve a intentarlo.",
   "helpTitle": "Obtén tu rol de país",
   "helpIntro": "¡Muestra a la comunidad desde dónde juegas! Añade un rol de país a tu perfil en unos segundos.",
   "helpStepsTitle": "Cómo obtenerlo",

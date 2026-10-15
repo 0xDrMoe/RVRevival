@@ -27,6 +27,8 @@
 
   "helpCommandDescription": "Admins uniquement : publie ici comment obtenir un rôle de pays.",
   "helpNoPermission": "Vous avez besoin de la permission **Gérer le serveur** pour utiliser cette commande.",
+  "helpPosted": "Le guide de /country a été publié dans ce salon.",
+  "helpCannotPost": "Je ne peux pas publier dans ce salon. Donne-moi ici les permissions **Voir le salon**, **Envoyer des messages** et **Intégrer des liens**, puis réessaie.",
   "helpTitle": "Obtiens ton rôle de pays",
   "helpIntro": "Montre à la communauté d'où tu joues ! Ajoute un rôle de pays à ton profil en quelques secondes.",
   "helpStepsTitle": "Comment l'obtenir",

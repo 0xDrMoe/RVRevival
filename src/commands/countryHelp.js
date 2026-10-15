@@ -1,5 +1,6 @@
 // The /country-help command: an admin runs it in a channel, and the bot posts a
-// short public message there telling members how to get their country role.
+// standalone public message there telling members how to get their country role.
+// The admin gets a private confirmation.
 //
 // Only members with the Manage Server permission can see or use it.
 
@@ -11,6 +12,7 @@ import {
   SlashCommandBuilder,
 } from "discord.js";
 import { discordLocalizations, pickLanguage, translate } from "../i18n/i18n.js";
+import { isPermissionError } from "../utils/discordErrors.js";
 
 const COMMAND_NAME = "country-help";
 const EMBED_COLOR = 0x5865f2;
@@ -38,6 +40,14 @@ export function buildHelpEmbed(language) {
     );
 }
 
+// Whether the bot can post an embed in the channel the command was used in.
+function canPostHere(interaction) {
+  const send = interaction.channel?.isThread()
+    ? PermissionFlagsBits.SendMessagesInThreads
+    : PermissionFlagsBits.SendMessages;
+  return interaction.appPermissions.has([PermissionFlagsBits.ViewChannel, send, PermissionFlagsBits.EmbedLinks]);
+}
+
 // Options:
 //   forcedLanguage   reply in this language for everyone (BOT_LANGUAGE)
 export function createCountryHelpCommand({ forcedLanguage } = {}) {
@@ -55,10 +65,28 @@ export function createCountryHelpCommand({ forcedLanguage } = {}) {
       return;
     }
 
+    const channel = interaction.channel;
+    if (!channel || !canPostHere(interaction)) {
+      await interaction.reply({ content: translate(adminLanguage, "helpCannotPost"), flags: MessageFlags.Ephemeral });
+      return;
+    }
+
+    // Answer the admin privately first, so the interaction can't expire while posting.
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
     // Everyone reads the post, so it uses the server's language, not the admin's.
-    // Posting it as the command's reply needs no extra channel permissions.
     const serverLanguage = pickLanguage(interaction.guildLocale, forcedLanguage);
-    await interaction.reply({ embeds: [buildHelpEmbed(serverLanguage)] });
+    try {
+      await channel.send({ embeds: [buildHelpEmbed(serverLanguage)] });
+    } catch (error) {
+      // Permissions can change between the check above and the send.
+      if (!isPermissionError(error)) {
+        throw error;
+      }
+      await interaction.editReply({ content: translate(adminLanguage, "helpCannotPost") });
+      return;
+    }
+    await interaction.editReply({ content: translate(adminLanguage, "helpPosted") });
   }
 
   return { name: COMMAND_NAME, data: buildCountryHelpCommandData(), execute };

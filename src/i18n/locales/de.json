@@ -27,6 +27,8 @@
 
   "helpCommandDescription": "Nur für Admins: Postet in diesem Kanal, wie man eine Länderrolle bekommt.",
   "helpNoPermission": "Du brauchst die Berechtigung **Server verwalten**, um diesen Befehl zu verwenden.",
+  "helpPosted": "Die Anleitung zu /country wurde in diesem Kanal gepostet.",
+  "helpCannotPost": "Ich kann in diesem Kanal nicht posten. Gib mir hier die Berechtigungen **Kanal ansehen**, **Nachrichten senden** und **Links einbetten** und versuche es erneut.",
   "helpTitle": "Hol dir deine Länderrolle",
   "helpIntro": "Zeig der Community, von wo aus du spielst! Füge deinem Profil in wenigen Sekunden eine Länderrolle hinzu.",
   "helpStepsTitle": "So geht's",
