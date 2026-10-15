@@ -2,6 +2,7 @@ import { MessageFlags, PermissionFlagsBits, RESTJSONErrorCodes } from "discord.j
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createCountryHelpCommand } from "../src/commands/countryHelp.js";
 import { PickerId } from "../src/commands/countryPicker.js";
+import { CONTINENTS } from "../src/countries/continents.js";
 import { translate } from "../src/i18n/i18n.js";
 import { Status } from "../src/logs/actionLog.js";
 import { GuildSettings, Setting } from "../src/settings/guildSettings.js";
@@ -77,18 +78,23 @@ describe("/country-help", () => {
     ]);
   });
 
-  it("adds the Pick my country button under the guide", async () => {
+  it("adds a button per continent and a Type my country button under the guide", async () => {
     const interaction = fakeInteraction();
     await command.execute(interaction);
-    expect(postedButtons(interaction)).toEqual([
-      expect.objectContaining({ custom_id: PickerId.BUTTON, label: translate("en", "pickButtonLabel") }),
+    const buttons = postedButtons(interaction);
+    expect(buttons.map((button) => button.custom_id)).toEqual([
+      ...CONTINENTS.map((continent) => PickerId.CONTINENT + continent),
+      PickerId.BUTTON,
     ]);
+    expect(buttons.map((button) => button.label)).toContain("North America");
+    expect(buttons.at(-1).label).toBe(translate("en", "pickButtonLabel"));
   });
 
   it("labels the button in the server's language", async () => {
     const interaction = fakeInteraction({ locale: "de", guildLocale: "es-ES" });
     await command.execute(interaction);
-    expect(postedButtons(interaction)[0].label).toBe(translate("es", "pickButtonLabel"));
+    expect(postedButtons(interaction).at(-1).label).toBe(translate("es", "pickButtonLabel"));
+    expect(postedButtons(interaction)[0].label).toBe(translate("es", "continentAfrica"));
   });
 
   it("says other messages are deleted when posted in the /country channel", async () => {

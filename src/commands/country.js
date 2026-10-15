@@ -126,7 +126,7 @@ export function createCountryCommand(options) {
 
   const autocomplete = (interaction) => suggestCountries(interaction, { countries, logger });
 
-  // The "Pick my country" button on the /country-help guide does the same job without typing a command.
+  // The buttons on the /country-help guide do the same job without typing a command.
   const components = createCountryPicker({ countries, roleService, wrapServer: toServer, wrapMember: toMember, forcedLanguage });
 
   return { name: COMMAND_NAME, data: buildCountryCommandData(), execute, autocomplete, components };

@@ -1,9 +1,11 @@
-// The "Pick my country" button, the no-slash-command way to get a country role.
+// The guide's buttons, the no-slash-command way to get a country role.
 //
-//   1. /country-help posts the guide with a "Pick my country" button.
-//   2. Clicking it opens a small form where the member types their country.
-//   3. An exact match ("Germany", "USA") gives the role right away. Otherwise
-//      the bot privately shows a list of close matches to pick from.
+// /country-help posts the guide with one button per continent and a "Type my
+// country" button.
+//   - A continent button privately shows that continent's countries in
+//     alphabetical lists (25 per list, Discord's limit); the member picks theirs.
+//   - "Type my country" opens a small form. An exact match ("Germany", "USA")
+//     gives the role right away; otherwise the bot shows close matches to pick.
 //
 // The same rules as /country apply: one country per member, and only staff can
 // change it afterwards. Every custom ID is fixed, so buttons on old messages
@@ -20,7 +22,8 @@ import {
   TextInputBuilder,
   TextInputStyle,
 } from "discord.js";
-import { MAX_NAME_LENGTH } from "../countries/countries.js";
+import { CONTINENTS, continentOf } from "../countries/continents.js";
+import { MAX_NAME_LENGTH, normalizeName } from "../countries/countries.js";
 import { pickLanguage, translate } from "../i18n/i18n.js";
 import { result, Status, statusForOutcome } from "../logs/actionLog.js";
 import { Outcome } from "../roles/countryRoles.js";
@@ -29,24 +32,64 @@ export const PickerId = Object.freeze({
   BUTTON: "country-picker:open",
   FORM: "country-picker:form",
   FORM_INPUT: "country",
-  LIST: "country-picker:list",
+  // Followed by the continent ("country-picker:continent:europe").
+  CONTINENT: "country-picker:continent:",
+  // Followed by the list's number, since IDs must be unique within a message.
+  LIST: "country-picker:list:",
 });
 
-// Discord shows at most 25 options in a select menu.
+// Discord shows at most 25 options in a select menu, and 5 rows in a message.
 export const MAX_CHOICES = 25;
+export const MAX_LISTS = 5;
 
 // How the picker shows up in the logs channel.
-const LOG_LABEL = "Pick my country button";
+const LOG_LABEL = "Country picker buttons";
 
-// The button row under the guide. `labelKey` lets the "no match" reply reuse it as "Try again".
-export function buildPickButtonRow(language, labelKey = "pickButtonLabel") {
-  return new ActionRowBuilder().addComponents(
+const CONTINENT_KEYS = {
+  africa: "continentAfrica",
+  asia: "continentAsia",
+  europe: "continentEurope",
+  "north-america": "continentNorthAmerica",
+  "south-america": "continentSouthAmerica",
+  oceania: "continentOceania",
+};
+
+const CONTINENT_EMOJI = {
+  africa: "🌍",
+  asia: "🌏",
+  europe: "🌍",
+  "north-america": "🌎",
+  "south-america": "🌎",
+  oceania: "🌏",
+};
+
+// The "Type my country" button. `labelKey` lets the "no match" reply reuse it as "Try again".
+function typeButton(language, labelKey = "pickButtonLabel") {
+  return new ButtonBuilder()
+    .setCustomId(PickerId.BUTTON)
+    .setStyle(ButtonStyle.Secondary)
+    .setEmoji("🔎")
+    .setLabel(translate(language, labelKey));
+}
+
+export function buildTryAgainRow(language) {
+  return new ActionRowBuilder().addComponents(typeButton(language, "pickTryAgainLabel"));
+}
+
+// The buttons under the guide: continents in two rows of three, then "Type my country".
+export function buildGuideRows(language) {
+  const continentButton = (continent) =>
     new ButtonBuilder()
-      .setCustomId(PickerId.BUTTON)
+      .setCustomId(PickerId.CONTINENT + continent)
       .setStyle(ButtonStyle.Primary)
-      .setEmoji("🌍")
-      .setLabel(translate(language, labelKey)),
-  );
+      .setEmoji(CONTINENT_EMOJI[continent])
+      .setLabel(translate(language, CONTINENT_KEYS[continent]));
+  const half = Math.ceil(CONTINENTS.length / 2);
+  return [
+    new ActionRowBuilder().addComponents(CONTINENTS.slice(0, half).map(continentButton)),
+    new ActionRowBuilder().addComponents(CONTINENTS.slice(half).map(continentButton)),
+    new ActionRowBuilder().addComponents(typeButton(language)),
+  ];
 }
 
 export function buildPickForm(language) {
@@ -65,13 +108,25 @@ export function buildPickForm(language) {
     );
 }
 
-export function buildChoiceRow(language, countries) {
-  return new ActionRowBuilder().addComponents(
-    new StringSelectMenuBuilder()
-      .setCustomId(PickerId.LIST)
-      .setPlaceholder(translate(language, "pickListPlaceholder"))
-      .addOptions(countries.slice(0, MAX_CHOICES).map((country) => ({ label: country.name, value: country.name }))),
-  );
+// "A", for the "A–E" range shown on a list. Ignores accents ("Åland" is under A).
+const initialOf = (country) => normalizeName(country.name).charAt(0).toUpperCase();
+
+// The countries as alphabetical lists of at most 25, split evenly.
+export function buildChoiceRows(language, countries) {
+  const lists = Math.min(Math.ceil(countries.length / MAX_CHOICES), MAX_LISTS);
+  const perList = Math.ceil(countries.length / lists);
+  return Array.from({ length: lists }, (_, index) => {
+    const chunk = countries.slice(index * perList, (index + 1) * perList).slice(0, MAX_CHOICES);
+    const range = `${initialOf(chunk[0])}–${initialOf(chunk.at(-1))}`;
+    const placeholder =
+      lists > 1 ? translate(language, "pickListRangePlaceholder", { range }) : translate(language, "pickListPlaceholder");
+    return new ActionRowBuilder().addComponents(
+      new StringSelectMenuBuilder()
+        .setCustomId(PickerId.LIST + index)
+        .setPlaceholder(placeholder)
+        .addOptions(chunk.map((country) => ({ label: country.name, value: country.name }))),
+    );
+  });
 }
 
 // Options:
@@ -103,24 +158,52 @@ export function createCountryPicker({ countries, roleService, wrapServer, wrapMe
     };
   }
 
-  // Step 1: the button. Members who already have a country are told right away
-  // instead of filling in the form for nothing.
+  // Members who already have a country are told as soon as they click, instead
+  // of picking for nothing. Returns what to log, or null if they can pick.
+  async function refuseIfLocked(interaction, language) {
+    const [held] = roleService.heldCountryRoles(wrapServer(interaction.guild), wrapMember(interaction.member));
+    if (!held) {
+      return null;
+    }
+    const values = { country: held.name };
+    await interaction.reply({ content: translate(language, Outcome.LOCKED, values), flags: MessageFlags.Ephemeral });
+    return logged(result(Status.REFUSED, Outcome.LOCKED, values));
+  }
+
+  // A continent button: that continent's countries, privately.
+  async function showContinent(interaction, continent) {
+    if (!interaction.inCachedGuild()) {
+      return refuseOutsideServer(interaction);
+    }
+    const language = languageOf(interaction);
+    const refused = await refuseIfLocked(interaction, language);
+    if (refused) {
+      return refused;
+    }
+    const inContinent = countries.countries.filter((country) => continentOf(country.code) === continent);
+    await interaction.reply({
+      content: translate(language, "pickContinentChoose", { continent: translate(language, CONTINENT_KEYS[continent]) }),
+      components: buildChoiceRows(language, inContinent),
+      flags: MessageFlags.Ephemeral,
+    });
+    return null;
+  }
+
+  // "Type my country": opens the form.
   async function openForm(interaction) {
     if (!interaction.inCachedGuild()) {
       return refuseOutsideServer(interaction);
     }
     const language = languageOf(interaction);
-    const [held] = roleService.heldCountryRoles(wrapServer(interaction.guild), wrapMember(interaction.member));
-    if (held) {
-      const values = { country: held.name };
-      await interaction.reply({ content: translate(language, Outcome.LOCKED, values), flags: MessageFlags.Ephemeral });
-      return logged(result(Status.REFUSED, Outcome.LOCKED, values));
+    const refused = await refuseIfLocked(interaction, language);
+    if (refused) {
+      return refused;
     }
     await interaction.showModal(buildPickForm(language));
     return null;
   }
 
-  // Step 2: what they typed.
+  // What they typed in the form.
   async function readForm(interaction) {
     if (!interaction.inCachedGuild()) {
       return refuseOutsideServer(interaction);
@@ -141,19 +224,19 @@ export function createCountryPicker({ countries, roleService, wrapServer, wrapMe
     if (matches.length === 0) {
       await interaction.editReply({
         content: translate(language, "pickNoMatch"),
-        components: [buildPickButtonRow(language, "pickTryAgainLabel")],
+        components: [buildTryAgainRow(language)],
       });
       return logged(result(Status.REFUSED, "pickNoMatch"), { typed });
     }
     // Never guess: even a single close match is shown for them to confirm.
     await interaction.editReply({
       content: translate(language, "pickChoose"),
-      components: [buildChoiceRow(language, matches)],
+      components: buildChoiceRows(language, matches),
     });
     return null;
   }
 
-  // Step 3: the country they chose from the list of close matches.
+  // The country they chose from a list (a continent's countries or close matches).
   async function readChoice(interaction) {
     if (!interaction.inCachedGuild()) {
       return refuseOutsideServer(interaction);
@@ -172,9 +255,16 @@ export function createCountryPicker({ countries, roleService, wrapServer, wrapMe
     return outcome;
   }
 
+  const handler = (handle) => ({ label: LOG_LABEL, handle });
   return {
-    [PickerId.BUTTON]: { label: LOG_LABEL, handle: openForm },
-    [PickerId.FORM]: { label: LOG_LABEL, handle: readForm },
-    [PickerId.LIST]: { label: LOG_LABEL, handle: readChoice },
+    [PickerId.BUTTON]: handler(openForm),
+    [PickerId.FORM]: handler(readForm),
+    ...Object.fromEntries(
+      CONTINENTS.map((continent) => [
+        PickerId.CONTINENT + continent,
+        handler((interaction) => showContinent(interaction, continent)),
+      ]),
+    ),
+    ...Object.fromEntries(Array.from({ length: MAX_LISTS }, (_, index) => [PickerId.LIST + index, handler(readChoice)])),
   };
 }

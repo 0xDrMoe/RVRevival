@@ -5,6 +5,7 @@ import {
   countryList,
   normalizeName,
 } from "../src/countries/countries.js";
+import { CONTINENTS, continentOf } from "../src/countries/continents.js";
 
 describe("country dataset", () => {
   it("contains the ISO 3166-1 countries with unique canonical names within Discord's limits", () => {
@@ -121,5 +122,32 @@ describe("countryList.search", () => {
 
   it("returns nothing for gibberish", () => {
     expect(countryList.search("zzzzqqq", 25)).toEqual([]);
+  });
+});
+
+describe("continents", () => {
+  it("puts every country under exactly one continent", () => {
+    for (const country of countryList.countries) {
+      expect(CONTINENTS, country.name).toContain(continentOf(country.code));
+    }
+  });
+
+  it("fits each continent in one message of five 25-country lists", () => {
+    for (const continent of CONTINENTS) {
+      const size = countryList.countries.filter((country) => continentOf(country.code) === continent).length;
+      expect(size, continent).toBeGreaterThan(0);
+      expect(size, continent).toBeLessThanOrEqual(125);
+    }
+  });
+
+  it.each([
+    ["DE", "europe"],
+    ["NG", "africa"],
+    ["JP", "asia"],
+    ["MX", "north-america"],
+    ["BR", "south-america"],
+    ["AU", "oceania"],
+  ])("lists %s under %s", (code, continent) => {
+    expect(continentOf(code)).toBe(continent);
   });
 });

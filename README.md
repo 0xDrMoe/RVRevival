@@ -44,12 +44,12 @@ Autocomplete suggestions aren't logged. Log entries are always in English, since
 
 Members pick the country they live in and get a role named after it. They can only pick once; after that, only staff can change it.
 
-- **The Pick my country button** (the easy way, no slash command). It sits under the guide `/country-help` posts. Clicking it opens a small form with one box: the member types their country and presses Submit.
-  - An exact match (`Germany`, `USA`, `Deutschland`) gives the role right away.
-  - Otherwise the bot privately shows a list of close matches (up to 25) to pick from. It never guesses, even when only one country is close. Nothing close gives a *Try again* button.
-  - Members who already have a country are told so as soon as they click, before the form opens.
-  - Same rules and checks as `/country`: one country per member, ISO-validated names, replies only the member sees, and every result in the logs channel (as *Pick my country button*, with what they typed). It works in any channel the guide is posted in.
-  - The button keeps working after the bot restarts. Guides posted before this feature have no button: run `/country-help` again to post a new one.
+- **The guide's buttons** (the easy way, no slash command). `/country-help` posts the guide with one button per continent (Africa, Asia, Europe, North America, South America, Oceania) and a **Type my country** button.
+  - A continent button privately shows that continent's countries in A–Z lists (25 per list, Discord's limit, so Africa is split into three). The member picks theirs and gets the role. Central America and the Caribbean are under North America. Every country is under exactly one continent (`src/countries/continents.js`).
+  - **Type my country** opens a small form with one box. An exact match (`Germany`, `USA`, `Deutschland`) gives the role right away. Otherwise the bot shows a list of close matches to pick from, and never guesses. If nothing is close, it shows a *Try again* button.
+  - Members who already have a country are told so as soon as they click.
+  - The same rules and checks apply as for `/country`: one country per member, ISO-validated names, replies only the member sees, and every result in the logs channel (as *Country picker buttons*, with what they typed). It works in any channel the guide is posted in.
+  - The buttons keep working after the bot restarts. Guides posted before this feature have no buttons, so run `/country-help` again to post a new one.
 - **`/country country:<name>`** assigns a country role to the member who ran it.
   - Input is validated against the ISO 3166-1 list, so arbitrary text can never create a role.
   - Matching ignores case, spacing and accents, and accepts common aliases (`USA`, `UK`, `Turkey`) and the country's name in any of the bot's languages (`Deutschland`, `Estados Unidos`, `Allemagne`). Roles are always named in English.
@@ -63,7 +63,7 @@ Members pick the country they live in and get a role named after it. They can on
   - Discord can't hide a command by role, so everyone sees `/country-staff`, but the bot refuses anyone without the staff role (server admins included, unless they have it). To hide it, use *Server Settings > Integrations > the bot > /country-staff*.
   - Nothing works until an admin runs `/settings staff-role`.
   - Every change is logged with who made it.
-- **`/country-help`** (Manage Server only) posts a standalone message in the current channel telling members how to get their country, with the **Pick my country** button under it, and confirms privately to the admin. When posted in the `/country` channel, it also says that any other message there is deleted automatically.
+- **`/country-help`** (Manage Server only) posts a standalone message in the current channel telling members how to get their country, with the continent and **Type my country** buttons under it, and confirms privately to the admin. When posted in the `/country` channel, it also says that any other message there is deleted automatically.
 
 Needs: the **Manage Roles** permission, and the bot's role above every country role (including ones staff remove) (see [Setup](#setup), step 3). `/country-help` also needs **View Channel**, **Send Messages** (or **Send Messages in Threads**) and **Embed Links** in the channel it posts to. Keeping the `/country` channel clean needs **Manage Messages** in that channel.
 
@@ -139,7 +139,7 @@ src/
     index.js             The list of all commands (add new ones here)
     settings.js          Settings: /settings
     country.js           Country roles: /country
-    countryPicker.js     Country roles: the Pick my country button, form and list
+    countryPicker.js     Country roles: the guide's continent buttons, form and lists
     countryStaff.js      Country roles: /country-staff
     countryHelp.js       Country roles: /country-help
   countries/             Country roles: country list, name matching and search
