@@ -1,10 +1,12 @@
 // The list of countries a user can pick, and how typed text is matched to one.
 //
 // Names come from the ISO 3166-1 list in the i18n-iso-countries package. Each
-// country has one official name (used as the role name) plus other accepted
-// spellings ("USA", "UK", "Czechia").
+// country has one official English name (used as the role name) plus other
+// accepted spellings ("USA", "UK", "Czechia") and its name in each of the bot's
+// languages ("Deutschland", "Estados Unidos").
 
 import isoCountries from "i18n-iso-countries";
+import { SUPPORTED_LANGUAGES } from "../i18n/i18n.js";
 
 // Discord allows at most 100 characters in role names and autocomplete choices.
 export const MAX_NAME_LENGTH = 100;
@@ -132,14 +134,20 @@ function matchScore(country, query) {
   return 0;
 }
 
+const cleanName = (name) => name.replace(/\s+/g, " ").trim();
+
 // Reads the ISO list and returns [{ code: "CA", name: "Canada", aliases: [...] }, ...].
-export function loadIsoCountries() {
+export function loadIsoCountries(languages = SUPPORTED_LANGUAGES) {
   const namesByCode = isoCountries.getNames("en", { select: "all" });
+  const translatedNames = languages
+    .filter((language) => language !== "en")
+    .map((language) => isoCountries.getNames(language, { select: "all" }));
 
   return Object.entries(namesByCode).map(([code, isoNames]) => {
-    const cleanNames = isoNames.map((name) => name.replace(/\s+/g, " ").trim());
+    const cleanNames = isoNames.map(cleanName);
     const name = NAME_OVERRIDES[code] ?? cleanNames[0];
-    return { code, name, aliases: [...new Set([name, ...cleanNames])] };
+    const translated = translatedNames.flatMap((names) => names[code] ?? []).map(cleanName);
+    return { code, name, aliases: [...new Set([name, ...cleanNames, ...translated])] };
   });
 }
 

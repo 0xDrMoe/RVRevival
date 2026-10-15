@@ -21,7 +21,8 @@ import { Setting } from "../settings/guildSettings.js";
 
 // How a command ended. Commands return { status, key?, values?, note? } from
 // execute(): `key` and `values` name the reply the user got (logged in English),
-// `note` is a plain English explanation instead.
+// `note` is a plain English explanation instead, and `action` ({ label, fields })
+// names a button or form, which has no command name.
 export const Status = Object.freeze({
   SUCCESS: "success", // did what was asked
   REFUSED: "refused", // not allowed, bad input, or nothing to do
@@ -150,6 +151,16 @@ function codeBlock(text) {
   return `\`\`\`\n${shown.replace(/```/g, "`\u200b``")}\n\`\`\`${cut}`;
 }
 
+// What was used: a slash command and its options, or for buttons and forms the
+// `action` the handler returned ({ label, fields }).
+function describeAction(interaction, outcome) {
+  if (!outcome.action) {
+    return describeCommand(interaction);
+  }
+  const fields = Object.entries(outcome.action.fields ?? {});
+  return { command: outcome.action.label, options: fields.map(([name, value]) => `${name}: ${quote(value)}`) };
+}
+
 // One compact entry:
 //   [avatar] name
 //   **Refused** · `/country-staff set` in #channel
@@ -157,7 +168,7 @@ function codeBlock(text) {
 //   > Only members with the @Staff role can use this command.
 //   User ID 123 · today at 21:43
 export function buildCommandLogEmbed(interaction, outcome) {
-  const { command, options } = describeCommand(interaction);
+  const { command, options } = describeAction(interaction, outcome);
   const style = styleOf(outcome);
   const where = interaction.channelId ? ` in <#${interaction.channelId}>` : "";
   const lines = [`**${style.label}** · \`${command}\`${where}`];

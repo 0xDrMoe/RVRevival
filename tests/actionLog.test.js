@@ -126,6 +126,21 @@ describe("buildCommandLogEmbed", () => {
     expect(embed.footer.text).toBe(`User ID ${USER_ID}`);
     expect(embed.fields).toBeUndefined();
   });
+
+  it("names buttons and forms by their label and shows what was typed", () => {
+    const outcome = {
+      ...result(Status.SUCCESS, "assigned", { country: "Germany" }),
+      action: { label: "Pick my country button", fields: { typed: "deutsch`land", country: "Germany" } },
+    };
+    const embed = buildCommandLogEmbed(fakeInteraction(), outcome).toJSON();
+    expect(embed.description).toBe(
+      [
+        `**Success** · \`Pick my country button\` in <#${CHANNEL_ID}>`,
+        "typed: `deutsch'land` · country: `Germany`",
+        "> Your country role has been set to Germany.",
+      ].join("\n"),
+    );
+  });
 });
 
 describe("buildDeletedMessageLogEmbed", () => {

@@ -64,13 +64,23 @@
 
   "helpCommandDescription": "Admins only: post how to get a country role in this channel.",
   "helpNoPermission": "You need the **Manage Server** permission to use this command.",
-  "helpPosted": "The /country guide has been posted in this channel.",
+  "helpPosted": "The country guide has been posted in this channel.",
   "helpCannotPost": "I can't post in this channel. Give me the **View Channel**, **Send Messages** and **Embed Links** permissions here, then try again.",
   "helpTitle": "Get your country role",
   "helpIntro": "Show the community where you're playing from! Add a country role to your profile in a few seconds.",
   "helpStepsTitle": "How to get it",
-  "helpSteps": "1. Type `/country` in the message box.\n2. Start typing the country you live in and pick it from the list.\n3. Press Enter. The role shows up on your profile right away.",
+  "helpSteps": "1. Click the **Pick my country** button below.\n2. Type the country you live in and press **Submit**.\n3. Done! The role shows up on your profile right away. If a few countries match, just pick yours from the list.",
   "helpNotesTitle": "Good to know",
   "helpNotes": "- Only you can see the bot's reply.\n- Common short names like USA or UK work too.\n- You can only pick one country. Picked the wrong one? Ask a staff member to change it.\n- If something goes wrong, the bot will tell you. If it keeps happening, contact a server admin.",
-  "helpChannelNote": "- This channel is only for `/country`. Any other message posted here is deleted automatically."
+  "helpFallbackNote": "- Prefer commands? `/country` works too.",
+  "helpChannelNote": "- This channel is only for picking your country. Any other message posted here is deleted automatically.",
+
+  "pickButtonLabel": "Pick my country",
+  "pickTryAgainLabel": "Try again",
+  "pickFormTitle": "Pick your country",
+  "pickFormLabel": "The country you live in",
+  "pickFormPlaceholder": "For example: Germany, USA, Brazil",
+  "pickChoose": "Which one is yours? Pick your country from the list.",
+  "pickListPlaceholder": "Choose your country",
+  "pickNoMatch": "I couldn't find that country. Check the spelling and try again."
 }

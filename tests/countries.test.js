@@ -25,6 +25,18 @@ describe("country dataset", () => {
 });
 
 describe("countryList.find", () => {
+  it.each([
+    ["Deutschland", "Germany"],
+    ["Alemania", "Germany"],
+    ["Allemagne", "Germany"],
+    ["Estados Unidos", "United States"],
+    ["Brasil", "Brazil"],
+    ["Svizzera", "Switzerland"],
+    ["مصر", "Egypt"],
+  ])("accepts %j, a name in one of the bot's languages, as %s", (input, name) => {
+    expect(countryList.find(input)?.name).toBe(name);
+  });
+
   it("accepts a valid country and returns its canonical name", () => {
     expect(countryList.find("Canada")).toMatchObject({ code: "CA", name: "Canada" });
   });

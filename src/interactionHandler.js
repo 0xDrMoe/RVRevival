@@ -1,6 +1,6 @@
-// Sends each Discord interaction to the right command, makes sure the user
-// always gets an answer, even if the command crashes, and records every command
-// use in the server's logs channel.
+// Sends each Discord interaction to the right command (or button, form or menu),
+// makes sure the user always gets an answer, even if it crashes, and records
+// every use in the server's logs channel.
 
 import { MessageFlags } from "discord.js";
 import { pickLanguage, translate } from "./i18n/i18n.js";
@@ -8,6 +8,11 @@ import { noActionLog, Status } from "./logs/actionLog.js";
 import { isExpiredInteractionError } from "./utils/discordErrors.js";
 
 export function createInteractionHandler({ commands, logger, forcedLanguage, actionLog = noActionLog }) {
+  // Buttons, forms and menus by custom ID, collected from every command.
+  const components = new Map(
+    [...commands.values()].flatMap((command) => Object.entries(command.components ?? {})),
+  );
+
   async function handleAutocomplete(interaction) {
     const command = commands.get(interaction.commandName);
     try {
@@ -65,6 +70,49 @@ export function createInteractionHandler({ commands, logger, forcedLanguage, act
     await actionLog.logCommand(interaction, outcome ?? { status: Status.SUCCESS });
   }
 
+  async function handleComponent(interaction) {
+    const component = components.get(interaction.customId);
+    if (!component) {
+      // Buttons on old messages can outlive the feature that posted them.
+      logger.warn("Got a button or form the bot doesn't know", { customId: interaction.customId });
+      await sendErrorReply(interaction);
+      return;
+    }
+    const action = { label: component.label };
+
+    let outcome;
+    try {
+      outcome = await component.handle(interaction);
+    } catch (error) {
+      if (isExpiredInteractionError(error)) {
+        logger.warn("The interaction expired before the bot could answer", { customId: interaction.customId });
+        await actionLog.logCommand(interaction, {
+          status: Status.FAILED,
+          note: "Discord cancelled the request before the bot could answer.",
+          action,
+        });
+        return;
+      }
+      logger.error("Button or form crashed", {
+        customId: interaction.customId,
+        guildId: interaction.guildId,
+        userId: interaction.user.id,
+        error,
+      });
+      await sendErrorReply(interaction);
+      await actionLog.logCommand(interaction, {
+        status: Status.ERROR,
+        note: "It crashed. The details are in the bot's console log.",
+        action,
+      });
+      return;
+    }
+    // Intermediate steps (opening the form, showing the list) return nothing.
+    if (outcome) {
+      await actionLog.logCommand(interaction, { action, ...outcome });
+    }
+  }
+
   // Shows the generic "something went wrong" message, never error details.
   async function sendErrorReply(interaction) {
     const language = pickLanguage(interaction.locale, forcedLanguage);
@@ -85,6 +133,8 @@ export function createInteractionHandler({ commands, logger, forcedLanguage, act
       await handleAutocomplete(interaction);
     } else if (interaction.isChatInputCommand()) {
       await handleCommand(interaction);
+    } else if (interaction.isButton() || interaction.isModalSubmit() || interaction.isStringSelectMenu()) {
+      await handleComponent(interaction);
     }
   };
 }
