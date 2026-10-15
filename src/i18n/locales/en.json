@@ -58,7 +58,7 @@
   "settingsLogsChannelName": "Logs channel",
   "settingsLogsChannelSet": "Everything members do with the bot will now be logged in {channel}.",
   "settingsLogsChannelCleared": "The logs channel has been removed. The bot no longer posts logs.",
-  "settingsLogsChannelNeedsPermissions": "I can't post in {channel} yet. Give me the **View Channel**, **Send Messages** and **Embed Links** permissions there.",
+  "settingsLogsChannelNeedsPermissions": "I can't post in {channel} yet. Give me the **View Channel**, **Send Messages**, **Embed Links** and **Attach Files** permissions there.",
   "settingsShowLogsChannel": "Logs channel: {channel}",
   "settingsShowNoLogsChannel": "Logs channel: not set",
 

@@ -58,7 +58,7 @@
   "settingsLogsChannelName": "Salon des logs",
   "settingsLogsChannelSet": "Tout ce que les membres font avec le bot sera désormais enregistré dans {channel}.",
   "settingsLogsChannelCleared": "Le salon des logs a été retiré. Le bot ne publie plus de logs.",
-  "settingsLogsChannelNeedsPermissions": "Je ne peux pas encore publier dans {channel}. Donne-moi les permissions **Voir le salon**, **Envoyer des messages** et **Intégrer des liens** là-bas.",
+  "settingsLogsChannelNeedsPermissions": "Je ne peux pas encore publier dans {channel}. Donne-moi les permissions **Voir le salon**, **Envoyer des messages**, **Intégrer des liens** et **Joindre des fichiers** là-bas.",
   "settingsShowLogsChannel": "Salon des logs : {channel}",
   "settingsShowNoLogsChannel": "Salon des logs : non défini",
 

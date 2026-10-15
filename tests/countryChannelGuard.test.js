@@ -94,7 +94,8 @@ describe("/country channel guard", () => {
   });
 
   it("records each deletion, and the first permission failure, in the logs channel", async () => {
-    const actionLog = { logCommand: vi.fn(), logDeletedMessage: vi.fn(async () => {}) };
+    const saved = [{ id: "1", file: {} }];
+    const actionLog = { logCommand: vi.fn(), saveAttachments: vi.fn(async () => saved), logDeletedMessage: vi.fn(async () => {}) };
     guard = createCountryChannelGuard({ guildSettings, logger, actionLog });
 
     const deleted = fakeMessage();
@@ -105,9 +106,11 @@ describe("/country channel guard", () => {
     await guard(denied);
     await guard(fakeMessage({ authorId: BOT_ID }));
 
-    expect(actionLog.logDeletedMessage.mock.calls.map(([message, outcome]) => [message, outcome.status])).toEqual([
-      [deleted, Status.SUCCESS],
-      [denied, Status.FAILED],
+    expect(actionLog.logDeletedMessage.mock.calls.map(([message, outcome, files]) => [message, outcome.status, files])).toEqual([
+      [deleted, Status.SUCCESS, saved],
+      [denied, Status.FAILED, undefined],
     ]);
+    // Attachments are saved before the message is deleted.
+    expect(actionLog.saveAttachments.mock.invocationCallOrder[0]).toBeLessThan(deleted.delete.mock.invocationCallOrder[0]);
   });
 });

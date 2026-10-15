@@ -4,8 +4,9 @@
 // the channel are left alone.
 //
 // Needs the GuildMessages intent (not privileged) and the Manage Messages
-// permission in that channel. Message content is never read. Each deletion is
-// recorded in the logs channel (author and channel only).
+// permission in that channel. Each deletion is recorded in the logs channel
+// with the message's text (if the Message Content intent is on), attachments
+// and stickers.
 
 import { RESTJSONErrorCodes } from "discord.js";
 import { noActionLog, Status } from "../logs/actionLog.js";
@@ -38,9 +39,12 @@ export function createCountryChannelGuard({ guildSettings, logger, actionLog = n
       return;
     }
 
+    // Start saving attachments before deleting: their links stop working after.
+    const saving = actionLog.saveAttachments(message);
     try {
       await message.delete();
     } catch (error) {
+      saving.catch(() => {});
       if (IGNORED_ERRORS.has(getDiscordErrorCode(error))) {
         return;
       }
@@ -61,9 +65,6 @@ export function createCountryChannelGuard({ guildSettings, logger, actionLog = n
       return;
     }
     warnedGuilds.delete(message.guildId);
-    await actionLog.logDeletedMessage(message, {
-      status: Status.SUCCESS,
-      note: "Only /country can be used in this channel. The message content isn't read or kept.",
-    });
+    await actionLog.logDeletedMessage(message, { status: Status.SUCCESS }, await saving);
   };
 }
