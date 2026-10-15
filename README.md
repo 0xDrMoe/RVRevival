@@ -6,25 +6,42 @@ The Discord bot for the Rumbleverse Revival server. It is built as a set of inde
 
 | Feature | Commands | Who can use it |
 | --- | --- | --- |
-| [Country roles](#country-roles) | `/country`, `/country-channel`, `/country-help` | Everyone (`/country`), Manage Server (the rest) |
+| [Settings](#settings) | `/settings` | Manage Server |
+| [Country roles](#country-roles) | `/country`, `/country-staff`, `/country-help` | Everyone (`/country`), the staff role (`/country-staff`), Manage Server (`/country-help`) |
 
 Every reply is translated into English, Spanish, German, French, Portuguese, Italian or Arabic (see [Languages](#languages)).
 
+### Settings
+
+**`/settings`** (Manage Server only) holds every per-server setting. Replies are only visible to the admin.
+
+- **`/settings staff-role role:<role>`** chooses the staff role. Only members with it can use `/country-staff`. `@everyone` is refused.
+- **`/settings country-channel channel:<channel>`** limits `/country` to one channel (threads inside it work too).
+- **`/settings clear setting:<Staff role | /country channel>`** resets one setting.
+- **`/settings show`** lists the current settings.
+
+If the staff role or the `/country` channel is deleted, the bot forgets it automatically.
+
 ### Country roles
 
-Members pick the country they live in and get a role named after it.
+Members pick the country they live in and get a role named after it. They can only pick once; after that, only staff can change it.
 
 - **`/country country:<name>`** assigns a country role to the member who ran it.
   - Input is validated against the ISO 3166-1 list, so arbitrary text can never create a role.
   - Matching ignores case, spacing and accents, and accepts common aliases (`USA`, `UK`, `Turkey`).
   - The role is created if it doesn't exist yet. Existing roles are reused, and duplicates are never created, even under concurrent requests.
   - New roles have no permissions, no color, and are not hoisted or mentionable.
-  - The bot never removes roles or touches anyone else's. Picking a second country adds that role and keeps the first.
+  - A member who already has a country role can't pick another. The bot names the role they have and tells them to ask staff. Any role named after a country counts, including ones added by hand.
+  - `/country` never removes roles or touches anyone else's.
   - Replies are only visible to the member.
-- **`/country-channel set | clear | show`** (Manage Server only) limits `/country` to one channel.
+- **`/country-staff set member:<member> country:<name>`** (staff role only) makes that country the member's only country role, removing any others. It also cleans up members who picked several countries before the one-country rule existed.
+- **`/country-staff remove member:<member>`** (staff role only) removes every country role from the member, so they can pick again with `/country`.
+  - Discord can't hide a command by role, so everyone sees `/country-staff`, but the bot refuses anyone without the staff role (server admins included, unless they have it). To hide it, use *Server Settings > Integrations > the bot > /country-staff*.
+  - Nothing works until an admin runs `/settings staff-role`.
+  - Every change is logged with who made it.
 - **`/country-help`** (Manage Server only) posts a standalone message in the current channel telling members how to use `/country`, and confirms privately to the admin.
 
-Needs: the **Manage Roles** permission, and the bot's role above every country role (see [Setup](#setup), step 3). `/country-help` also needs **View Channel**, **Send Messages** (or **Send Messages in Threads**) and **Embed Links** in the channel it posts to.
+Needs: the **Manage Roles** permission, and the bot's role above every country role (including ones staff remove) (see [Setup](#setup), step 3). `/country-help` also needs **View Channel**, **Send Messages** (or **Send Messages in Threads**) and **Embed Links** in the channel it posts to.
 
 Country names are the English ISO names, with a few shortened (for example *United States*, *Russia*, *Taiwan*). These live in `NAME_OVERRIDES` in `src/countries/countries.js`. Renaming one after roles exist makes the bot create a new role, so rename the Discord role too.
 
@@ -96,12 +113,13 @@ src/
   interactionHandler.js  Routes interactions to commands; always answers the user
   commands/
     index.js             The list of all commands (add new ones here)
+    settings.js          Settings: /settings
     country.js           Country roles: /country
-    countryChannel.js    Country roles: /country-channel
+    countryStaff.js      Country roles: /country-staff
     countryHelp.js       Country roles: /country-help
   countries/             Country roles: country list, name matching and search
-  roles/                 Country roles: find, create and assign roles
-  settings/              Per-server settings (saved to data/, git-ignored)
+  roles/                 Country roles: find, create, assign and remove roles
+  settings/              Per-server settings (saved to data/settings.json, git-ignored)
   i18n/                  Language selection and locales/*.json (all features)
   utils/                 Shared: logger with token redaction, keyed lock, Discord error codes
 tests/                   Unit tests using in-memory Discord fakes
@@ -131,13 +149,15 @@ Replies use each user's Discord language when it's supported, otherwise English.
 | "I can't manage roles…" / role is above mine | Give the bot's role **Manage Roles** and move it above the country roles. |
 | Role limit reached | The server has 250 roles. Remove unused ones. |
 | `/country-help` says it can't post | Give the bot **View Channel**, **Send Messages** and **Embed Links** in that channel. |
+| `/country-staff` says no staff role is set | An admin runs `/settings staff-role`. |
+| A member needs a different country | Staff run `/country-staff set`. |
 
 Set `LOG_LEVEL=debug` for more detail.
 
 ## Operational notes
 
 - **Run one instance.** Some safeguards (like the duplicate-role guard) are in memory, so two instances could race.
-- **Settings** are stored in `data/` next to the project. Keep that folder when moving or updating the bot.
+- **Settings** are stored in `data/settings.json` next to the project. Keep the `data/` folder when moving or updating the bot. A `/country` channel saved by older versions in `data/country-channels.json` is carried over automatically the first time the new version starts.
 
 ## Security
 

@@ -4,7 +4,7 @@ import { MAX_SUGGESTIONS, createCountryCommand } from "../src/commands/country.j
 import { countryList } from "../src/countries/countries.js";
 import { translate } from "../src/i18n/i18n.js";
 import { CountryRoleService } from "../src/roles/countryRoles.js";
-import { ChannelSettings } from "../src/settings/channelSettings.js";
+import { GuildSettings, Setting } from "../src/settings/guildSettings.js";
 import { FakeServer, discordError, fakeLogger } from "./helpers/fakes.js";
 
 const USER_ID = "300000000000000001";
@@ -111,6 +111,18 @@ describe("/country", () => {
     expect(interaction.editReply).toHaveBeenCalledWith({ content: "You already have the Canada role." });
   });
 
+  it("won't let members pick a second country, and points them to staff", async () => {
+    const japanRole = server.addRole("Japan");
+    server.member(USER_ID, [japanRole.id]);
+    const interaction = fakeCommandInteraction("Canada");
+
+    await makeCommand().execute(interaction);
+
+    expect(interaction.editReply).toHaveBeenCalledWith({ content: translate("en", "countryLocked", { country: "Japan" }) });
+    expect(server.createRole).not.toHaveBeenCalled();
+    expect([...server.rolesByUser.get(USER_ID)]).toEqual([japanRole.id]);
+  });
+
   it.each(["Atlantis", "", "   ", null])("rejects %j without touching any roles", async (typed) => {
     const giveCountryRole = vi.spyOn(roleService, "giveCountryRole");
     const interaction = fakeCommandInteraction(typed);
@@ -169,28 +181,28 @@ describe("/country", () => {
   describe("channel restriction", () => {
     const ALLOWED = "800000000000000001";
     const OTHER = "800000000000000002";
-    let channelSettings;
+    let guildSettings;
 
     beforeEach(async () => {
-      channelSettings = new ChannelSettings();
-      await channelSettings.set("900000000000000001", ALLOWED);
+      guildSettings = new GuildSettings();
+      await guildSettings.set("900000000000000001", Setting.COUNTRY_CHANNEL, ALLOWED);
     });
 
     it("works in the channel the admin chose", async () => {
       const interaction = fakeCommandInteraction("Canada", { channelId: ALLOWED });
-      await makeCommand({ channelSettings }).execute(interaction);
+      await makeCommand({ guildSettings }).execute(interaction);
       expect(interaction.editReply).toHaveBeenCalledWith({ content: "Your country role has been set to Canada." });
     });
 
     it("works in a thread inside the chosen channel", async () => {
       const interaction = fakeCommandInteraction("Canada", { channelId: OTHER, channel: { parentId: ALLOWED } });
-      await makeCommand({ channelSettings }).execute(interaction);
+      await makeCommand({ guildSettings }).execute(interaction);
       expect(interaction.editReply).toHaveBeenCalledWith({ content: "Your country role has been set to Canada." });
     });
 
     it("points members to the chosen channel and changes no roles anywhere else", async () => {
       const interaction = fakeCommandInteraction("Canada", { channelId: OTHER });
-      await makeCommand({ channelSettings }).execute(interaction);
+      await makeCommand({ guildSettings }).execute(interaction);
 
       expect(interaction.reply).toHaveBeenCalledWith({
         content: `This command can only be used in <#${ALLOWED}>.`,
@@ -202,7 +214,7 @@ describe("/country", () => {
 
     it("works in every channel when no channel is chosen", async () => {
       const interaction = fakeCommandInteraction("Canada", { channelId: OTHER });
-      await makeCommand({ channelSettings: new ChannelSettings() }).execute(interaction);
+      await makeCommand({ guildSettings: new GuildSettings() }).execute(interaction);
       expect(interaction.editReply).toHaveBeenCalledWith({ content: "Your country role has been set to Canada." });
     });
   });

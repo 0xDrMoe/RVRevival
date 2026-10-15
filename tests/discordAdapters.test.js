@@ -49,13 +49,16 @@ describe("discord.js adapters", () => {
     expect(args).not.toHaveProperty("colors");
   });
 
-  it("adds roles only to the wrapped member", async () => {
+  it("adds and removes roles only on the wrapped member", async () => {
     const add = vi.fn(async () => undefined);
-    const member = { id: "300000000000000001", roles: { cache: new Collection([["1", {}]]), add } };
+    const remove = vi.fn(async () => undefined);
+    const member = { id: "300000000000000001", roles: { cache: new Collection([["1", {}]]), add, remove } };
     const port = wrapMember(member);
     expect(port.hasRole("1")).toBe(true);
     expect(port.hasRole("2")).toBe(false);
     await port.addRole("2", "why");
     expect(add).toHaveBeenCalledWith("2", "why");
+    await port.removeRole("1", "why");
+    expect(remove).toHaveBeenCalledWith("1", "why");
   });
 });

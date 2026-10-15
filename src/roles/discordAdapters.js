@@ -41,5 +41,8 @@ export function wrapMember(member) {
     addRole: async (roleId, reason) => {
       await member.roles.add(roleId, reason);
     },
+    removeRole: async (roleId, reason) => {
+      await member.roles.remove(roleId, reason);
+    },
   };
 }
