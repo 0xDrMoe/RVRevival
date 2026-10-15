@@ -1,6 +1,6 @@
 // The /country-help command: an admin runs it in a channel, and the bot posts a
 // standalone public message there telling members how to get their country role,
-// with a "Pick my country" button (see countryPicker.js).
+// with a button per continent and a "Type my country" button (see countryPicker.js).
 // The admin gets a private confirmation.
 //
 // Only members with the Manage Server permission can see or use it.
@@ -16,7 +16,7 @@ import { discordLocalizations, pickLanguage, translate } from "../i18n/i18n.js";
 import { result, Status } from "../logs/actionLog.js";
 import { Setting } from "../settings/guildSettings.js";
 import { isPermissionError } from "../utils/discordErrors.js";
-import { buildPickButtonRow } from "./countryPicker.js";
+import { buildGuideRows } from "./countryPicker.js";
 
 const COMMAND_NAME = "country-help";
 const EMBED_COLOR = 0x5865f2;
@@ -88,7 +88,7 @@ export function createCountryHelpCommand({ guildSettings, forcedLanguage } = {})
     try {
       await channel.send({
         embeds: [buildHelpEmbed(serverLanguage, { isCountryChannel })],
-        components: [buildPickButtonRow(serverLanguage)],
+        components: buildGuideRows(serverLanguage),
       });
     } catch (error) {
       // Permissions can change between the check above and the send.
