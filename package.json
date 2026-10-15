@@ -1,8 +1,8 @@
 {
-  "name": "rumbleverse-country-bot",
+  "name": "rumbleverse-revival-bot",
   "version": "1.0.0",
   "private": true,
-  "description": "Discord bot for the Rumbleverse Revival server that assigns country roles via /country.",
+  "description": "Discord bot for the Rumbleverse Revival server.",
   "license": "UNLICENSED",
   "type": "module",
   "main": "src/index.js",

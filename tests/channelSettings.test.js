@@ -12,7 +12,7 @@ describe("ChannelSettings", () => {
   let file;
 
   beforeEach(async () => {
-    folder = await mkdtemp(join(tmpdir(), "country-bot-"));
+    folder = await mkdtemp(join(tmpdir(), "rumbleverse-bot-"));
     file = join(folder, "data", "country-channels.json");
   });
 

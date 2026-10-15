@@ -8,16 +8,12 @@ const GUILD_ID = "900000000000000001";
 const CHANNEL_ID = "800000000000000001";
 
 // A fake /country-help interaction from someone with Manage Server.
-function fakeInteraction({ botCanManageRoles = true, ...overrides } = {}) {
+function fakeInteraction(overrides = {}) {
   return {
     commandName: "country-help",
     locale: "en-US",
+    guildLocale: "en-US",
     guildId: GUILD_ID,
-    guild: {
-      members: {
-        me: { permissions: { has: (permission) => botCanManageRoles && permission === PermissionFlagsBits.ManageRoles } },
-      },
-    },
     inCachedGuild: () => true,
     memberPermissions: { has: (permission) => permission === PermissionFlagsBits.ManageGuild },
     reply: vi.fn(async () => {}),
@@ -25,9 +21,8 @@ function fakeInteraction({ botCanManageRoles = true, ...overrides } = {}) {
   };
 }
 
-// The embed sent in the reply, as plain JSON.
-const sentEmbed = (interaction) => interaction.reply.mock.calls[0][0].embeds[0].toJSON();
-const statusField = (embed) => embed.fields.at(-1).value;
+const sentReply = (interaction) => interaction.reply.mock.calls[0][0];
+const sentEmbed = (interaction) => sentReply(interaction).embeds[0].toJSON();
 
 describe("/country-help definition", () => {
   const { data } = createCountryHelpCommand({ channelSettings: new ChannelSettings() });
@@ -47,33 +42,22 @@ describe("/country-help", () => {
     command = createCountryHelpCommand({ channelSettings });
   });
 
-  it("privately explains how to use the bot", async () => {
+  it("posts a public message explaining /country to members", async () => {
     const interaction = fakeInteraction();
     await command.execute(interaction);
 
-    expect(interaction.reply.mock.calls[0][0].flags).toBe(MessageFlags.Ephemeral);
+    expect(sentReply(interaction).flags).toBeUndefined();
     const embed = sentEmbed(interaction);
     expect(embed.title).toBe(translate("en", "helpTitle"));
-    expect(embed.fields.map((field) => field.name)).toEqual([
-      translate("en", "helpMembersTitle"),
-      translate("en", "helpChannelTitle"),
-      translate("en", "helpSetupTitle"),
-      translate("en", "helpLanguageTitle"),
-      translate("en", "helpStatusTitle"),
-    ]);
+    expect(embed.description).toBe(translate("en", "helpBody"));
+    expect(embed.fields).toBeUndefined();
   });
 
-  it("shows the chosen channel and the bot's permissions", async () => {
-    const before = fakeInteraction();
-    await command.execute(before);
-    expect(statusField(sentEmbed(before))).toContain(translate("en", "channelShowNone"));
-    expect(statusField(sentEmbed(before))).toContain(translate("en", "helpStatusCanManageRoles"));
-
+  it("tells members which channel to use when one is set", async () => {
     await channelSettings.set(GUILD_ID, CHANNEL_ID);
-    const after = fakeInteraction({ botCanManageRoles: false });
-    await command.execute(after);
-    expect(statusField(sentEmbed(after))).toContain(`<#${CHANNEL_ID}>`);
-    expect(statusField(sentEmbed(after))).toContain(translate("en", "helpStatusCannotManageRoles"));
+    const interaction = fakeInteraction();
+    await command.execute(interaction);
+    expect(sentEmbed(interaction).description).toContain(translate("en", "helpChannelLine", { channel: `<#${CHANNEL_ID}>` }));
   });
 
   it("refuses members without Manage Server", async () => {
@@ -85,9 +69,22 @@ describe("/country-help", () => {
     });
   });
 
-  it("replies in the admin's language", async () => {
-    const interaction = fakeInteraction({ locale: "fr" });
+  it("refuses outside a server", async () => {
+    const interaction = fakeInteraction({ inCachedGuild: () => false });
+    await command.execute(interaction);
+    expect(interaction.reply).toHaveBeenCalledWith({ content: translate("en", "guildOnly"), flags: MessageFlags.Ephemeral });
+  });
+
+  it("posts in the server's language, not the admin's", async () => {
+    const interaction = fakeInteraction({ locale: "de", guildLocale: "fr" });
     await command.execute(interaction);
     expect(sentEmbed(interaction).title).toBe(translate("fr", "helpTitle"));
+  });
+
+  it("uses BOT_LANGUAGE when it is set", async () => {
+    const forced = createCountryHelpCommand({ channelSettings, forcedLanguage: "ar" });
+    const interaction = fakeInteraction({ guildLocale: "fr" });
+    await forced.execute(interaction);
+    expect(sentEmbed(interaction).title).toBe(translate("ar", "helpTitle"));
   });
 });

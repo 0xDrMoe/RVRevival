@@ -25,18 +25,9 @@
   "channelShowNone": "/country se puede usar en cualquier canal.",
   "channelNoPermission": "Necesitas el permiso **Gestionar servidor** para cambiar esto.",
 
-  "helpCommandDescription": "Solo administradores: cómo usar y configurar el bot de países.",
+  "helpCommandDescription": "Solo admins: publica en este canal cómo obtener un rol de país.",
   "helpNoPermission": "Necesitas el permiso **Gestionar servidor** para usar este comando.",
-  "helpTitle": "Cómo usar el bot de países",
-  "helpMembersTitle": "Para los miembros",
-  "helpMembers": "Los miembros usan `/country` y eligen de las sugerencias el país donde viven. El bot les da un rol con el nombre de ese país y crea el rol si hace falta. Las respuestas solo las ve el miembro.",
-  "helpChannelTitle": "Elegir un canal",
-  "helpChannel": "`/country-channel set` - permitir `/country` solo en un canal (y sus hilos).\n`/country-channel clear` - permitir `/country` en todos los canales.\n`/country-channel show` - ver la configuración actual.",
-  "helpSetupTitle": "Lista de configuración",
-  "helpSetup": "- El rol del bot necesita el permiso **Gestionar roles**.\n- En Ajustes del servidor > Roles, el rol del bot debe estar por encima de todos los roles de país.\n- Los roles de país se crean sin permisos. Los miembros conservan sus roles de país anteriores; quítalos a mano si hace falta.",
-  "helpLanguageTitle": "Idiomas",
-  "helpLanguage": "Las respuestas usan el idioma de Discord de cada miembro: inglés, español, alemán, francés, portugués o italiano; si no, inglés. Define `BOT_LANGUAGE` en el archivo .env del bot para usar un solo idioma para todos (por ejemplo `ar` para árabe).",
-  "helpStatusTitle": "Estado en este servidor",
-  "helpStatusCanManageRoles": "✅ El bot tiene el permiso Gestionar roles.",
-  "helpStatusCannotManageRoles": "❌ Al bot le falta el permiso Gestionar roles."
+  "helpTitle": "Obtén tu rol de país",
+  "helpBody": "Escribe `/country` y elige de las sugerencias el país donde vives. Recibirás un rol con el nombre de ese país. Solo tú puedes ver la respuesta del bot.",
+  "helpChannelLine": "Usa `/country` en {channel}."
 }
