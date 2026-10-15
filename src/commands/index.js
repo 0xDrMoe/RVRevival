@@ -7,7 +7,9 @@ import { createCountryHelpCommand } from "./countryHelp.js";
 import { createCountryStaffCommand } from "./countryStaff.js";
 import { createSettingsCommand } from "./settings.js";
 
-// Each command is { name, data, execute(interaction), autocomplete?(interaction) }.
+// Each command is { name, data, execute(interaction), autocomplete?(interaction),
+// components? }. `components` maps a button, form or menu custom ID to
+// { label, handle(interaction) } (see countryPicker.js).
 export function createCommands({ logger, guildSettings, forcedLanguage }) {
   // Shared, so /country and /country-staff can't change the same member at the same time.
   const roleService = new CountryRoleService(logger);

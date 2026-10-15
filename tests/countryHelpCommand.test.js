@@ -1,6 +1,7 @@
 import { MessageFlags, PermissionFlagsBits, RESTJSONErrorCodes } from "discord.js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createCountryHelpCommand } from "../src/commands/countryHelp.js";
+import { PickerId } from "../src/commands/countryPicker.js";
 import { translate } from "../src/i18n/i18n.js";
 import { Status } from "../src/logs/actionLog.js";
 import { GuildSettings, Setting } from "../src/settings/guildSettings.js";
@@ -37,6 +38,9 @@ function fakeInteraction({ botPermissions = POST_PERMISSIONS, isThread = false, 
 }
 
 const postedEmbed = (interaction) => interaction.channel.send.mock.calls[0][0].embeds[0].toJSON();
+const postedButtons = (interaction) =>
+  interaction.channel.send.mock.calls[0][0].components.flatMap((row) => row.toJSON().components);
+const notes = (language) => `${translate(language, "helpNotes")}\n${translate(language, "helpFallbackNote")}`;
 
 describe("/country-help definition", () => {
   const { data } = createCountryHelpCommand();
@@ -69,8 +73,22 @@ describe("/country-help", () => {
     expect(embed.description).toBe(translate("en", "helpIntro"));
     expect(embed.fields).toEqual([
       { name: translate("en", "helpStepsTitle"), value: translate("en", "helpSteps") },
-      { name: translate("en", "helpNotesTitle"), value: translate("en", "helpNotes") },
+      { name: translate("en", "helpNotesTitle"), value: notes("en") },
     ]);
+  });
+
+  it("adds the Pick my country button under the guide", async () => {
+    const interaction = fakeInteraction();
+    await command.execute(interaction);
+    expect(postedButtons(interaction)).toEqual([
+      expect.objectContaining({ custom_id: PickerId.BUTTON, label: translate("en", "pickButtonLabel") }),
+    ]);
+  });
+
+  it("labels the button in the server's language", async () => {
+    const interaction = fakeInteraction({ locale: "de", guildLocale: "es-ES" });
+    await command.execute(interaction);
+    expect(postedButtons(interaction)[0].label).toBe(translate("es", "pickButtonLabel"));
   });
 
   it("says other messages are deleted when posted in the /country channel", async () => {
@@ -80,7 +98,7 @@ describe("/country-help", () => {
     await createCountryHelpCommand({ guildSettings }).execute(interaction);
 
     expect(postedEmbed(interaction).fields[1].value).toBe(
-      `${translate("en", "helpNotes")}\n${translate("en", "helpChannelNote")}`,
+      `${notes("en")}\n${translate("en", "helpChannelNote")}`,
     );
   });
 
@@ -89,11 +107,11 @@ describe("/country-help", () => {
     await guildSettings.set(GUILD_ID, Setting.COUNTRY_CHANNEL, "800000000000000002");
     const elsewhere = fakeInteraction();
     await createCountryHelpCommand({ guildSettings }).execute(elsewhere);
-    expect(postedEmbed(elsewhere).fields[1].value).toBe(translate("en", "helpNotes"));
+    expect(postedEmbed(elsewhere).fields[1].value).toBe(notes("en"));
 
     const notSet = fakeInteraction();
     await createCountryHelpCommand({ guildSettings: new GuildSettings() }).execute(notSet);
-    expect(postedEmbed(notSet).fields[1].value).toBe(translate("en", "helpNotes"));
+    expect(postedEmbed(notSet).fields[1].value).toBe(notes("en"));
   });
 
   it("never mentions a channel", async () => {

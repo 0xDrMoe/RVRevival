@@ -44,9 +44,15 @@ Autocomplete suggestions aren't logged. Log entries are always in English, since
 
 Members pick the country they live in and get a role named after it. They can only pick once; after that, only staff can change it.
 
+- **The Pick my country button** (the easy way, no slash command). It sits under the guide `/country-help` posts. Clicking it opens a small form with one box: the member types their country and presses Submit.
+  - An exact match (`Germany`, `USA`, `Deutschland`) gives the role right away.
+  - Otherwise the bot privately shows a list of close matches (up to 25) to pick from. It never guesses, even when only one country is close. Nothing close gives a *Try again* button.
+  - Members who already have a country are told so as soon as they click, before the form opens.
+  - Same rules and checks as `/country`: one country per member, ISO-validated names, replies only the member sees, and every result in the logs channel (as *Pick my country button*, with what they typed). It works in any channel the guide is posted in.
+  - The button keeps working after the bot restarts. Guides posted before this feature have no button: run `/country-help` again to post a new one.
 - **`/country country:<name>`** assigns a country role to the member who ran it.
   - Input is validated against the ISO 3166-1 list, so arbitrary text can never create a role.
-  - Matching ignores case, spacing and accents, and accepts common aliases (`USA`, `UK`, `Turkey`).
+  - Matching ignores case, spacing and accents, and accepts common aliases (`USA`, `UK`, `Turkey`) and the country's name in any of the bot's languages (`Deutschland`, `Estados Unidos`, `Allemagne`). Roles are always named in English.
   - The role is created if it doesn't exist yet. Existing roles are reused, and duplicates are never created, even under concurrent requests.
   - New roles have no permissions, no color, and are not hoisted or mentionable.
   - A member who already has a country role can't pick another. The bot names the role they have and tells them to ask staff. Any role named after a country counts, including ones added by hand.
@@ -57,7 +63,7 @@ Members pick the country they live in and get a role named after it. They can on
   - Discord can't hide a command by role, so everyone sees `/country-staff`, but the bot refuses anyone without the staff role (server admins included, unless they have it). To hide it, use *Server Settings > Integrations > the bot > /country-staff*.
   - Nothing works until an admin runs `/settings staff-role`.
   - Every change is logged with who made it.
-- **`/country-help`** (Manage Server only) posts a standalone message in the current channel telling members how to use `/country`, and confirms privately to the admin. When posted in the `/country` channel, it also says that any other message there is deleted automatically.
+- **`/country-help`** (Manage Server only) posts a standalone message in the current channel telling members how to get their country, with the **Pick my country** button under it, and confirms privately to the admin. When posted in the `/country` channel, it also says that any other message there is deleted automatically.
 
 Needs: the **Manage Roles** permission, and the bot's role above every country role (including ones staff remove) (see [Setup](#setup), step 3). `/country-help` also needs **View Channel**, **Send Messages** (or **Send Messages in Threads**) and **Embed Links** in the channel it posts to. Keeping the `/country` channel clean needs **Manage Messages** in that channel.
 
@@ -128,11 +134,12 @@ src/
   index.js               Starts the bot
   register-commands.js   Registers every slash command
   config.js              Reads and validates .env
-  interactionHandler.js  Routes interactions to commands; always answers the user
+  interactionHandler.js  Routes commands, buttons and forms; always answers the user
   commands/
     index.js             The list of all commands (add new ones here)
     settings.js          Settings: /settings
     country.js           Country roles: /country
+    countryPicker.js     Country roles: the Pick my country button, form and list
     countryStaff.js      Country roles: /country-staff
     countryHelp.js       Country roles: /country-help
   countries/             Country roles: country list, name matching and search
@@ -147,7 +154,7 @@ tests/                   Unit tests using in-memory Discord fakes
 
 ## Adding a feature
 
-1. **Commands.** Create `src/commands/<name>.js` exporting a factory that returns `{ name, data, execute }` (and `autocomplete` if needed). `countryHelp.js` is a small example. Add it to the list in `src/commands/index.js`. Every command use is logged automatically; have `execute` return `result(Status.<SUCCESS | REFUSED | FAILED>, "<translation key>", values)` from `src/logs/actionLog.js` so the logs channel shows how it ended.
+1. **Commands.** Create `src/commands/<name>.js` exporting a factory that returns `{ name, data, execute }` (and `autocomplete` if needed). `countryHelp.js` is a small example. Buttons, forms and menus go in the command's `components` map, keyed by a fixed custom ID so they keep working after restarts (see `countryPicker.js`). Add it to the list in `src/commands/index.js`. Every command use is logged automatically; have `execute` return `result(Status.<SUCCESS | REFUSED | FAILED>, "<translation key>", values)` from `src/logs/actionLog.js` so the logs channel shows how it ended.
 2. **Logic.** Put anything bigger than the command itself in its own folder under `src/` (like `countries/` and `roles/`), so features stay separate.
 3. **Text.** Every user-facing string goes in all seven `src/i18n/locales/*.json` files with the same key. The tests fail if a language is missing a key.
 4. **Permissions.** If the feature needs a new bot permission, update the invite link in [Setup](#setup) and re-invite the bot.
@@ -157,7 +164,7 @@ tests/                   Unit tests using in-memory Discord fakes
 
 ## Languages
 
-Replies use each user's Discord language when it's supported, otherwise English. `BOT_LANGUAGE` forces one language for everyone. Discord has no Arabic app language, so Arabic only works via `BOT_LANGUAGE=ar`. Public posts (such as `/country-help`) use the server's language instead of the person who ran the command. Country names stay in English everywhere. Translations have not been reviewed by native speakers yet.
+Replies use each user's Discord language when it's supported, otherwise English. `BOT_LANGUAGE` forces one language for everyone. Discord has no Arabic app language, so Arabic only works via `BOT_LANGUAGE=ar`. Public posts (such as `/country-help`) use the server's language instead of the person who ran the command. Country roles are always named in English, but members can type a country's name in any of the bot's languages. Translations have not been reviewed by native speakers yet.
 
 ## Troubleshooting
 

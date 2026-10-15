@@ -64,13 +64,23 @@
 
   "helpCommandDescription": "Só admins: publica neste canal como obter um cargo de país.",
   "helpNoPermission": "Você precisa da permissão **Gerenciar servidor** para usar este comando.",
-  "helpPosted": "O guia do /country foi publicado neste canal.",
+  "helpPosted": "O guia de países foi publicado neste canal.",
   "helpCannotPost": "Não consigo publicar neste canal. Me dê aqui as permissões **Ver canal**, **Enviar mensagens** e **Inserir links** e tente de novo.",
   "helpTitle": "Pegue seu cargo de país",
   "helpIntro": "Mostre para a comunidade de onde você joga! Adicione um cargo de país ao seu perfil em poucos segundos.",
   "helpStepsTitle": "Como pegar",
-  "helpSteps": "1. Digite `/country` na caixa de mensagem.\n2. Comece a digitar o país onde você mora e escolha-o na lista.\n3. Aperte Enter. O cargo aparece no seu perfil na hora.",
+  "helpSteps": "1. Clique no botão **Escolher meu país** abaixo.\n2. Digite o país onde você mora e clique em **Enviar**.\n3. Pronto! O cargo aparece no seu perfil na hora. Se vários países combinarem, escolha o seu na lista.",
   "helpNotesTitle": "Bom saber",
   "helpNotes": "- Só você vê a resposta do bot.\n- Nomes curtos comuns como USA ou UK também funcionam.\n- Você só pode escolher um país. Escolheu errado? Peça a alguém da staff para mudar.\n- Se algo der errado, o bot vai avisar. Se continuar acontecendo, fale com um admin do servidor.",
-  "helpChannelNote": "- Este canal é só para o `/country`. Qualquer outra mensagem enviada aqui é apagada automaticamente."
+  "helpFallbackNote": "- Prefere comandos? `/country` também funciona.",
+  "helpChannelNote": "- Este canal é só para escolher seu país. Qualquer outra mensagem enviada aqui é apagada automaticamente.",
+
+  "pickButtonLabel": "Escolher meu país",
+  "pickTryAgainLabel": "Tentar de novo",
+  "pickFormTitle": "Escolha seu país",
+  "pickFormLabel": "O país onde você mora",
+  "pickFormPlaceholder": "Por exemplo: Brasil, USA, Portugal",
+  "pickChoose": "Qual é o seu? Escolha seu país na lista.",
+  "pickListPlaceholder": "Escolha seu país",
+  "pickNoMatch": "Não encontrei esse país. Confira a ortografia e tente de novo."
 }

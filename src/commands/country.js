@@ -10,6 +10,7 @@ import { CountryRoleService, Outcome } from "../roles/countryRoles.js";
 import { wrapMember, wrapServer } from "../roles/discordAdapters.js";
 import { Setting } from "../settings/guildSettings.js";
 import { isExpiredInteractionError } from "../utils/discordErrors.js";
+import { createCountryPicker } from "./countryPicker.js";
 
 const COMMAND_NAME = "country";
 const OPTION_NAME = "country";
@@ -125,5 +126,8 @@ export function createCountryCommand(options) {
 
   const autocomplete = (interaction) => suggestCountries(interaction, { countries, logger });
 
-  return { name: COMMAND_NAME, data: buildCountryCommandData(), execute, autocomplete };
+  // The "Pick my country" button on the /country-help guide does the same job without typing a command.
+  const components = createCountryPicker({ countries, roleService, wrapServer: toServer, wrapMember: toMember, forcedLanguage });
+
+  return { name: COMMAND_NAME, data: buildCountryCommandData(), execute, autocomplete, components };
 }
