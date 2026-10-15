@@ -28,6 +28,9 @@
   "helpCommandDescription": "Solo admin: pubblica in questo canale come ottenere un ruolo paese.",
   "helpNoPermission": "Ti serve il permesso **Gestisci server** per usare questo comando.",
   "helpTitle": "Ottieni il tuo ruolo paese",
-  "helpBody": "Scrivi `/country` e scegli tra i suggerimenti il paese in cui vivi. Riceverai un ruolo con il nome di quel paese. Solo tu puoi vedere la risposta del bot.",
-  "helpChannelLine": "Usa `/country` in {channel}."
+  "helpIntro": "Mostra alla community da dove giochi! Aggiungi un ruolo paese al tuo profilo in pochi secondi.",
+  "helpStepsTitle": "Come ottenerlo",
+  "helpSteps": "1. Scrivi `/country` nella casella dei messaggi.\n2. Inizia a scrivere il paese in cui vivi e sceglilo dall'elenco.\n3. Premi Invio. Il ruolo appare subito sul tuo profilo.",
+  "helpNotesTitle": "Buono a sapersi",
+  "helpNotes": "- Solo tu vedi la risposta del bot.\n- Funzionano anche nomi brevi comuni come USA o UK.\n- Hai scelto il paese sbagliato? Chiedi a un admin del server di rimuovere il ruolo.\n- Se qualcosa va storto, il bot te lo dirà. Se continua a succedere, contatta un admin del server."
 }

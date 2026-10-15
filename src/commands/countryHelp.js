@@ -26,19 +26,21 @@ export function buildCountryHelpCommandData() {
 }
 
 // The public message. It only holds what members need to use /country.
-export function buildHelpEmbed(language, channelId) {
-  const text = (key, values) => translate(language, key, values);
-  const lines = [text("helpBody")];
-  if (channelId) {
-    lines.push(text("helpChannelLine", { channel: `<#${channelId}>` }));
-  }
-  return new EmbedBuilder().setColor(EMBED_COLOR).setTitle(text("helpTitle")).setDescription(lines.join("\n\n"));
+export function buildHelpEmbed(language) {
+  const text = (key) => translate(language, key);
+  return new EmbedBuilder()
+    .setColor(EMBED_COLOR)
+    .setTitle(text("helpTitle"))
+    .setDescription(text("helpIntro"))
+    .addFields(
+      { name: text("helpStepsTitle"), value: text("helpSteps") },
+      { name: text("helpNotesTitle"), value: text("helpNotes") },
+    );
 }
 
 // Options:
-//   channelSettings  where the chosen /country channel is stored (ChannelSettings)
 //   forcedLanguage   reply in this language for everyone (BOT_LANGUAGE)
-export function createCountryHelpCommand({ channelSettings, forcedLanguage }) {
+export function createCountryHelpCommand({ forcedLanguage } = {}) {
   async function execute(interaction) {
     // Errors go only to the admin, in their own language.
     const adminLanguage = pickLanguage(interaction.locale, forcedLanguage);
@@ -56,8 +58,7 @@ export function createCountryHelpCommand({ channelSettings, forcedLanguage }) {
     // Everyone reads the post, so it uses the server's language, not the admin's.
     // Posting it as the command's reply needs no extra channel permissions.
     const serverLanguage = pickLanguage(interaction.guildLocale, forcedLanguage);
-    const embed = buildHelpEmbed(serverLanguage, channelSettings.get(interaction.guildId));
-    await interaction.reply({ embeds: [embed] });
+    await interaction.reply({ embeds: [buildHelpEmbed(serverLanguage)] });
   }
 
   return { name: COMMAND_NAME, data: buildCountryHelpCommandData(), execute };

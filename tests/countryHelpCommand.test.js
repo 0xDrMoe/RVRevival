@@ -2,10 +2,8 @@ import { MessageFlags, PermissionFlagsBits } from "discord.js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createCountryHelpCommand } from "../src/commands/countryHelp.js";
 import { translate } from "../src/i18n/i18n.js";
-import { ChannelSettings } from "../src/settings/channelSettings.js";
 
 const GUILD_ID = "900000000000000001";
-const CHANNEL_ID = "800000000000000001";
 
 // A fake /country-help interaction from someone with Manage Server.
 function fakeInteraction(overrides = {}) {
@@ -25,7 +23,7 @@ const sentReply = (interaction) => interaction.reply.mock.calls[0][0];
 const sentEmbed = (interaction) => sentReply(interaction).embeds[0].toJSON();
 
 describe("/country-help definition", () => {
-  const { data } = createCountryHelpCommand({ channelSettings: new ChannelSettings() });
+  const { data } = createCountryHelpCommand();
 
   it("is hidden from members without Manage Server", () => {
     expect(data.name).toBe("country-help");
@@ -34,12 +32,10 @@ describe("/country-help definition", () => {
 });
 
 describe("/country-help", () => {
-  let channelSettings;
   let command;
 
   beforeEach(() => {
-    channelSettings = new ChannelSettings();
-    command = createCountryHelpCommand({ channelSettings });
+    command = createCountryHelpCommand();
   });
 
   it("posts a public message explaining /country to members", async () => {
@@ -49,15 +45,17 @@ describe("/country-help", () => {
     expect(sentReply(interaction).flags).toBeUndefined();
     const embed = sentEmbed(interaction);
     expect(embed.title).toBe(translate("en", "helpTitle"));
-    expect(embed.description).toBe(translate("en", "helpBody"));
-    expect(embed.fields).toBeUndefined();
+    expect(embed.description).toBe(translate("en", "helpIntro"));
+    expect(embed.fields).toEqual([
+      { name: translate("en", "helpStepsTitle"), value: translate("en", "helpSteps") },
+      { name: translate("en", "helpNotesTitle"), value: translate("en", "helpNotes") },
+    ]);
   });
 
-  it("tells members which channel to use when one is set", async () => {
-    await channelSettings.set(GUILD_ID, CHANNEL_ID);
+  it("never mentions a channel", async () => {
     const interaction = fakeInteraction();
     await command.execute(interaction);
-    expect(sentEmbed(interaction).description).toContain(translate("en", "helpChannelLine", { channel: `<#${CHANNEL_ID}>` }));
+    expect(JSON.stringify(sentEmbed(interaction))).not.toMatch(/<#\d+>/);
   });
 
   it("refuses members without Manage Server", async () => {
@@ -82,7 +80,7 @@ describe("/country-help", () => {
   });
 
   it("uses BOT_LANGUAGE when it is set", async () => {
-    const forced = createCountryHelpCommand({ channelSettings, forcedLanguage: "ar" });
+    const forced = createCountryHelpCommand({ forcedLanguage: "ar" });
     const interaction = fakeInteraction({ guildLocale: "fr" });
     await forced.execute(interaction);
     expect(sentEmbed(interaction).title).toBe(translate("ar", "helpTitle"));
