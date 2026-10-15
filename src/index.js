@@ -1,6 +1,7 @@
 // Starts the bot. Slash commands are registered separately with `npm run register`.
 
 import { Client, Events, GatewayIntentBits } from "discord.js";
+import { createCountryChannelGuard } from "./channels/countryChannelGuard.js";
 import { createCommands } from "./commands/index.js";
 import { ConfigError, loadBotConfig } from "./config.js";
 import { createInteractionHandler } from "./interactionHandler.js";
@@ -20,12 +21,14 @@ async function start() {
   const config = loadBotConfig();
   registerSecret(config.token);
 
-  // The Guilds intent is all the bot needs: it keeps servers, roles and the
-  // bot's own member info up to date. No privileged intents.
-  const client = new Client({ intents: [GatewayIntentBits.Guilds] });
+  // Guilds keeps servers, roles, channels and the bot's own member info up to
+  // date. GuildMessages lets the bot see (but not read) new messages, so it can
+  // keep the /country channel clean. No privileged intents.
+  const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages] });
   const guildSettings = await GuildSettings.load();
   const commands = createCommands({ logger, guildSettings, forcedLanguage: config.forcedLanguage });
   const handleInteraction = createInteractionHandler({ commands, logger, forcedLanguage: config.forcedLanguage });
+  const guardCountryChannel = createCountryChannelGuard({ guildSettings, logger });
 
   client.once(Events.ClientReady, (readyClient) => {
     logger.info("Bot is online", {
@@ -37,6 +40,11 @@ async function start() {
 
   client.on(Events.InteractionCreate, (interaction) => {
     handleInteraction(interaction).catch((error) => logger.error("Interaction handler crashed", { error }));
+  });
+
+  // Delete every message posted in the /country channel, except the bot's own.
+  client.on(Events.MessageCreate, (message) => {
+    guardCountryChannel(message).catch((error) => logger.error("Couldn't clean the /country channel", { error }));
   });
 
   // If the channel /country was limited to is deleted, allow any channel again

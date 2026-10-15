@@ -1,7 +1,7 @@
 // The /settings command: server admins choose how the bot behaves in their server.
 //
 //   /settings staff-role role:@Staff             members with this role can use /country-staff
-//   /settings country-channel channel:#roles     only allow /country in #roles
+//   /settings country-channel channel:#roles     only allow /country in #roles; other messages there are deleted
 //   /settings clear setting:<staff role | /country channel>
 //   /settings show                               list the current settings
 //
@@ -21,6 +21,12 @@ const CLEARABLE = [
   { value: Setting.STAFF_ROLE, nameKey: "settingsStaffRoleName", clearedKey: "settingsStaffRoleCleared" },
   { value: Setting.COUNTRY_CHANNEL, nameKey: "settingsCountryChannelName", clearedKey: "settingsCountryChannelCleared" },
 ];
+
+// Whether the bot can delete other people's messages in `channel`.
+function botCanDeleteMessagesIn(channel, guild) {
+  const permissions = guild.members.me ? channel.permissionsFor?.(guild.members.me) : null;
+  return Boolean(permissions?.has([PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ManageMessages]));
+}
 
 // Shorthand for an English description plus its translations.
 function withDescription(builder, key) {
@@ -98,7 +104,13 @@ export function createSettingsCommand({ guildSettings, forcedLanguage }) {
       case "country-channel": {
         const channel = interaction.options.getChannel(CHANNEL_OPTION, true);
         await guildSettings.set(guildId, Setting.COUNTRY_CHANNEL, channel.id);
-        await reply("settingsCountryChannelSet", { channel: `<#${channel.id}>` });
+        const mention = `<#${channel.id}>`;
+        const lines = [text("settingsCountryChannelSet", { channel: mention })];
+        // Save it anyway, but tell the admin the channel won't be kept clean yet.
+        if (!botCanDeleteMessagesIn(channel, interaction.guild)) {
+          lines.push(text("settingsCountryChannelNeedsManageMessages", { channel: mention }));
+        }
+        await interaction.reply({ content: lines.join("\n"), flags: MessageFlags.Ephemeral });
         break;
       }
       case "clear": {

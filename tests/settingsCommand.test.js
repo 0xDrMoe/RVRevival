@@ -9,16 +9,25 @@ const CHANNEL_ID = "800000000000000001";
 const ROLE_ID = "700000000000000001";
 
 // A fake /settings <subcommand> interaction from someone with Manage Server.
-function fakeInteraction(subcommand, { setting, roleId = ROLE_ID, ...overrides } = {}) {
+function fakeInteraction(subcommand, { setting, roleId = ROLE_ID, canDeleteMessages = true, ...overrides } = {}) {
+  const botMember = {};
   return {
     commandName: "settings",
     locale: "en-US",
     guildId: GUILD_ID,
+    guild: { members: { me: botMember } },
     inCachedGuild: () => true,
     memberPermissions: { has: (permission) => permission === PermissionFlagsBits.ManageGuild },
     options: {
       getSubcommand: () => subcommand,
-      getChannel: () => ({ id: CHANNEL_ID }),
+      getChannel: () => ({
+        id: CHANNEL_ID,
+        permissionsFor: (member) => ({
+          has: (wanted) =>
+            member === botMember &&
+            [wanted].flat().every((bit) => bit !== PermissionFlagsBits.ManageMessages || canDeleteMessages),
+        }),
+      }),
       getRole: () => ({ id: roleId }),
       getString: () => setting,
     },
@@ -85,7 +94,22 @@ describe("/settings", () => {
     await command.execute(interaction);
 
     expect(guildSettings.get(GUILD_ID, Setting.COUNTRY_CHANNEL)).toBe(CHANNEL_ID);
-    expect(interaction.reply).toHaveBeenCalledWith(privateReply(`/country can now only be used in <#${CHANNEL_ID}>.`));
+    expect(interaction.reply).toHaveBeenCalledWith(
+      privateReply(`/country can now only be used in <#${CHANNEL_ID}>. Any other message posted there will be deleted.`),
+    );
+  });
+
+  it("warns when the bot can't delete messages in the new /country channel", async () => {
+    const interaction = fakeInteraction("country-channel", { canDeleteMessages: false });
+    await command.execute(interaction);
+
+    expect(guildSettings.get(GUILD_ID, Setting.COUNTRY_CHANNEL)).toBe(CHANNEL_ID);
+    const channel = { channel: `<#${CHANNEL_ID}>` };
+    expect(interaction.reply).toHaveBeenCalledWith(
+      privateReply(
+        `${translate("en", "settingsCountryChannelSet", channel)}\n${translate("en", "settingsCountryChannelNeedsManageMessages", channel)}`,
+      ),
+    );
   });
 
   it.each([

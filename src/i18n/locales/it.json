@@ -35,7 +35,7 @@
   "settingsCommandDescription": "Solo admin: scegli il ruolo staff e il canale di /country.",
   "settingsStaffRoleDescription": "Scegli il ruolo che può usare /country-staff.",
   "settingsRoleOptionDescription": "Il ruolo staff.",
-  "settingsCountryChannelDescription": "Consenti /country in un solo canale.",
+  "settingsCountryChannelDescription": "Consenti /country in un solo canale ed elimina lì gli altri messaggi.",
   "settingsChannelOptionDescription": "Il canale in cui /country è consentito.",
   "settingsClearDescription": "Reimposta un'impostazione.",
   "settingsSettingOptionDescription": "L'impostazione da reimpostare.",
@@ -46,8 +46,9 @@
   "settingsStaffRoleEveryone": "@everyone non può essere il ruolo staff. Scegli un ruolo che abbia solo lo staff.",
   "settingsStaffRoleSet": "I membri con il ruolo {role} ora possono usare /country-staff.",
   "settingsStaffRoleCleared": "Il ruolo staff è stato rimosso. Nessuno può usare /country-staff finché non ne imposti uno nuovo.",
-  "settingsCountryChannelSet": "Ora /country può essere usato solo in {channel}.",
+  "settingsCountryChannelSet": "Ora /country può essere usato solo in {channel}. Qualsiasi altro messaggio inviato lì verrà eliminato.",
   "settingsCountryChannelCleared": "Ora /country può essere usato in qualsiasi canale.",
+  "settingsCountryChannelNeedsManageMessages": "Non posso ancora eliminare messaggi in {channel}. Dammi lì i permessi **Visualizza canale** e **Gestisci messaggi**.",
   "settingsShowStaffRole": "Ruolo staff: {role}",
   "settingsShowNoStaffRole": "Ruolo staff: non impostato",
   "settingsShowCountryChannel": "Canale di /country: {channel}",
@@ -62,5 +63,6 @@
   "helpStepsTitle": "Come ottenerlo",
   "helpSteps": "1. Scrivi `/country` nella casella dei messaggi.\n2. Inizia a scrivere il paese in cui vivi e sceglilo dall'elenco.\n3. Premi Invio. Il ruolo appare subito sul tuo profilo.",
   "helpNotesTitle": "Buono a sapersi",
-  "helpNotes": "- Solo tu vedi la risposta del bot.\n- Funzionano anche nomi brevi comuni come USA o UK.\n- Puoi scegliere un solo paese. Hai sbagliato? Chiedi a un membro dello staff di cambiarlo.\n- Se qualcosa va storto, il bot te lo dirà. Se continua a succedere, contatta un admin del server."
+  "helpNotes": "- Solo tu vedi la risposta del bot.\n- Funzionano anche nomi brevi comuni come USA o UK.\n- Puoi scegliere un solo paese. Hai sbagliato? Chiedi a un membro dello staff di cambiarlo.\n- Se qualcosa va storto, il bot te lo dirà. Se continua a succedere, contatta un admin del server.",
+  "helpChannelNote": "- Questo canale è solo per `/country`. Qualsiasi altro messaggio inviato qui viene eliminato automaticamente."
 }

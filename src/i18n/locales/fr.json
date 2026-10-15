@@ -35,7 +35,7 @@
   "settingsCommandDescription": "Admins uniquement : choisir le rôle staff et le salon de /country.",
   "settingsStaffRoleDescription": "Choisir le rôle qui peut utiliser /country-staff.",
   "settingsRoleOptionDescription": "Le rôle staff.",
-  "settingsCountryChannelDescription": "Autoriser /country dans un seul salon.",
+  "settingsCountryChannelDescription": "Autoriser /country dans un seul salon et y supprimer les autres messages.",
   "settingsChannelOptionDescription": "Le salon où /country est autorisée.",
   "settingsClearDescription": "Réinitialiser un réglage.",
   "settingsSettingOptionDescription": "Le réglage à réinitialiser.",
@@ -46,8 +46,9 @@
   "settingsStaffRoleEveryone": "@everyone ne peut pas être le rôle staff. Choisissez un rôle que seul le staff possède.",
   "settingsStaffRoleSet": "Les membres ayant le rôle {role} peuvent maintenant utiliser /country-staff.",
   "settingsStaffRoleCleared": "Le rôle staff a été retiré. Personne ne peut utiliser /country-staff tant que vous n'en choisissez pas un nouveau.",
-  "settingsCountryChannelSet": "/country ne peut désormais être utilisée que dans {channel}.",
+  "settingsCountryChannelSet": "/country ne peut désormais être utilisée que dans {channel}. Tout autre message publié là-bas sera supprimé.",
   "settingsCountryChannelCleared": "/country peut désormais être utilisée dans n'importe quel salon.",
+  "settingsCountryChannelNeedsManageMessages": "Je ne peux pas encore supprimer de messages dans {channel}. Donne-moi les permissions **Voir le salon** et **Gérer les messages** là-bas.",
   "settingsShowStaffRole": "Rôle staff : {role}",
   "settingsShowNoStaffRole": "Rôle staff : non défini",
   "settingsShowCountryChannel": "Salon de /country : {channel}",
@@ -62,5 +63,6 @@
   "helpStepsTitle": "Comment l'obtenir",
   "helpSteps": "1. Tape `/country` dans la zone de message.\n2. Commence à écrire le pays où tu vis et choisis-le dans la liste.\n3. Appuie sur Entrée. Le rôle apparaît tout de suite sur ton profil.",
   "helpNotesTitle": "Bon à savoir",
-  "helpNotes": "- Toi seul vois la réponse du bot.\n- Les noms courts courants comme USA ou UK fonctionnent aussi.\n- Tu ne peux choisir qu'un seul pays. Tu t'es trompé ? Demande à un membre du staff de le changer.\n- Si quelque chose ne va pas, le bot te le dira. Si ça continue, contacte un admin du serveur."
+  "helpNotes": "- Toi seul vois la réponse du bot.\n- Les noms courts courants comme USA ou UK fonctionnent aussi.\n- Tu ne peux choisir qu'un seul pays. Tu t'es trompé ? Demande à un membre du staff de le changer.\n- Si quelque chose ne va pas, le bot te le dira. Si ça continue, contacte un admin du serveur.",
+  "helpChannelNote": "- Ce salon est réservé à `/country`. Tout autre message publié ici est supprimé automatiquement."
 }
