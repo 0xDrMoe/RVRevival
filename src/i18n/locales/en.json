@@ -27,6 +27,8 @@
 
   "helpCommandDescription": "Admins only: post how to get a country role in this channel.",
   "helpNoPermission": "You need the **Manage Server** permission to use this command.",
+  "helpPosted": "The /country guide has been posted in this channel.",
+  "helpCannotPost": "I can't post in this channel. Give me the **View Channel**, **Send Messages** and **Embed Links** permissions here, then try again.",
   "helpTitle": "Get your country role",
   "helpIntro": "Show the community where you're playing from! Add a country role to your profile in a few seconds.",
   "helpStepsTitle": "How to get it",

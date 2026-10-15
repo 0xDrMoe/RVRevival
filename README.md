@@ -22,9 +22,9 @@ Members pick the country they live in and get a role named after it.
   - The bot never removes roles or touches anyone else's. Picking a second country adds that role and keeps the first.
   - Replies are only visible to the member.
 - **`/country-channel set | clear | show`** (Manage Server only) limits `/country` to one channel.
-- **`/country-help`** (Manage Server only) posts a public message in the current channel telling members how to use `/country`.
+- **`/country-help`** (Manage Server only) posts a standalone message in the current channel telling members how to use `/country`, and confirms privately to the admin.
 
-Needs: the **Manage Roles** permission, and the bot's role above every country role (see [Setup](#setup), step 3).
+Needs: the **Manage Roles** permission, and the bot's role above every country role (see [Setup](#setup), step 3). `/country-help` also needs **View Channel**, **Send Messages** (or **Send Messages in Threads**) and **Embed Links** in the channel it posts to.
 
 Country names are the English ISO names, with a few shortened (for example *United States*, *Russia*, *Taiwan*). These live in `NAME_OVERRIDES` in `src/countries/countries.js`. Renaming one after roles exist makes the bot create a new role, so rename the Discord role too.
 
@@ -40,10 +40,10 @@ Country names are the English ISO names, with a few shortened (for example *Unit
 2. **Invite it.** Replace `YOUR_CLIENT_ID` and open:
 
    ```
-   https://discord.com/oauth2/authorize?client_id=YOUR_CLIENT_ID&scope=bot+applications.commands&permissions=268435456
+   https://discord.com/oauth2/authorize?client_id=YOUR_CLIENT_ID&scope=bot+applications.commands&permissions=275146361856
    ```
 
-   `permissions=268435456` is **Manage Roles**, the only permission the current features need. If a new feature needs more, update this number and re-invite the bot.
+   `permissions=275146361856` is **Manage Roles**, **View Channels**, **Send Messages**, **Send Messages in Threads** and **Embed Links**, which is what the current features need. If a new feature needs more, update this number and re-invite the bot.
 
 3. **Fix the role hierarchy.** In *Server Settings > Roles*, drag the bot's role above any roles it manages (existing country roles; new ones are created below it automatically) and below your staff roles.
 
@@ -130,6 +130,7 @@ Replies use each user's Discord language when it's supported, otherwise English.
 | "The application did not respond" | The bot isn't running. Check the `npm start` terminal. |
 | "I can't manage roles…" / role is above mine | Give the bot's role **Manage Roles** and move it above the country roles. |
 | Role limit reached | The server has 250 roles. Remove unused ones. |
+| `/country-help` says it can't post | Give the bot **View Channel**, **Send Messages** and **Embed Links** in that channel. |
 
 Set `LOG_LEVEL=debug` for more detail.
 
@@ -143,4 +144,4 @@ Set `LOG_LEVEL=debug` for more detail.
 - Secrets come only from environment variables. `.env` is git-ignored; `.env.example` has placeholders only.
 - Logs redact anything that looks like a Discord token, plus the configured token.
 - Users only see fixed, friendly messages; errors and stack traces stay in the log.
-- The bot uses only the non-privileged Guilds intent and the permissions its features need (currently Manage Roles). Roles it creates have zero permissions.
+- The bot uses only the non-privileged Guilds intent and the permissions its features need (see the invite link in [Setup](#setup)). Roles it creates have zero permissions.
