@@ -35,7 +35,7 @@
   "settingsCommandDescription": "للمشرفين فقط: اختيار دور الطاقم وقناة /country.",
   "settingsStaffRoleDescription": "اختيار الدور الذي يمكنه استخدام /country-staff.",
   "settingsRoleOptionDescription": "دور الطاقم.",
-  "settingsCountryChannelDescription": "السماح باستخدام /country في قناة واحدة فقط.",
+  "settingsCountryChannelDescription": "السماح باستخدام /country في قناة واحدة فقط وحذف الرسائل الأخرى فيها.",
   "settingsChannelOptionDescription": "القناة التي يُسمح فيها باستخدام /country.",
   "settingsClearDescription": "إعادة تعيين إعداد.",
   "settingsSettingOptionDescription": "الإعداد المراد إعادة تعيينه.",
@@ -46,8 +46,9 @@
   "settingsStaffRoleEveryone": "لا يمكن أن يكون @everyone دور الطاقم. اختر دورًا لا يملكه إلا الطاقم.",
   "settingsStaffRoleSet": "يمكن الآن للأعضاء الذين لديهم دور {role} استخدام /country-staff.",
   "settingsStaffRoleCleared": "تمت إزالة دور الطاقم. لن يتمكن أحد من استخدام /country-staff حتى تعيّن دورًا جديدًا.",
-  "settingsCountryChannelSet": "أصبح من الممكن الآن استخدام /country في {channel} فقط.",
+  "settingsCountryChannelSet": "أصبح من الممكن الآن استخدام /country في {channel} فقط. سيتم حذف أي رسالة أخرى تُنشر هناك.",
   "settingsCountryChannelCleared": "أصبح من الممكن الآن استخدام /country في أي قناة.",
+  "settingsCountryChannelNeedsManageMessages": "لا أستطيع حذف الرسائل في {channel} بعد. امنحني صلاحيتي **عرض القناة** و**إدارة الرسائل** هناك.",
   "settingsShowStaffRole": "دور الطاقم: {role}",
   "settingsShowNoStaffRole": "دور الطاقم: غير معيّن",
   "settingsShowCountryChannel": "قناة /country: {channel}",
@@ -62,5 +63,6 @@
   "helpStepsTitle": "طريقة الحصول عليه",
   "helpSteps": "1. اكتب `/country` في مربع الرسائل.\n2. ابدأ بكتابة اسم الدولة التي تعيش فيها واخترها من القائمة.\n3. اضغط Enter. سيظهر الدور في ملفك الشخصي فورًا.",
   "helpNotesTitle": "معلومات مفيدة",
-  "helpNotes": "- لا يرى رد البوت أحد غيرك.\n- الأسماء المختصرة الشائعة مثل USA أو UK تعمل أيضًا.\n- يمكنك اختيار دولة واحدة فقط. اخترت الدولة الخطأ؟ اطلب من أحد أعضاء الطاقم تغييرها.\n- إذا حدث خطأ، سيخبرك البوت. وإذا تكرر ذلك، تواصل مع أحد مشرفي الخادم."
+  "helpNotes": "- لا يرى رد البوت أحد غيرك.\n- الأسماء المختصرة الشائعة مثل USA أو UK تعمل أيضًا.\n- يمكنك اختيار دولة واحدة فقط. اخترت الدولة الخطأ؟ اطلب من أحد أعضاء الطاقم تغييرها.\n- إذا حدث خطأ، سيخبرك البوت. وإذا تكرر ذلك، تواصل مع أحد مشرفي الخادم.",
+  "helpChannelNote": "- هذه القناة مخصصة لأمر `/country` فقط. يتم حذف أي رسالة أخرى تُنشر هنا تلقائيًا."
 }

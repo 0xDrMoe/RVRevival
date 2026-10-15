@@ -35,7 +35,7 @@
   "settingsCommandDescription": "Só admins: escolha o cargo de staff e o canal do /country.",
   "settingsStaffRoleDescription": "Escolha o cargo que pode usar /country-staff.",
   "settingsRoleOptionDescription": "O cargo de staff.",
-  "settingsCountryChannelDescription": "Permitir /country em apenas um canal.",
+  "settingsCountryChannelDescription": "Permitir /country em apenas um canal e apagar as outras mensagens nele.",
   "settingsChannelOptionDescription": "O canal onde /country é permitido.",
   "settingsClearDescription": "Redefine uma configuração.",
   "settingsSettingOptionDescription": "A configuração a redefinir.",
@@ -46,8 +46,9 @@
   "settingsStaffRoleEveryone": "@everyone não pode ser o cargo de staff. Escolha um cargo que só a staff tenha.",
   "settingsStaffRoleSet": "Membros com o cargo {role} agora podem usar /country-staff.",
   "settingsStaffRoleCleared": "O cargo de staff foi removido. Ninguém pode usar /country-staff até você definir um novo.",
-  "settingsCountryChannelSet": "Agora /country só pode ser usado em {channel}.",
+  "settingsCountryChannelSet": "Agora /country só pode ser usado em {channel}. Qualquer outra mensagem enviada lá será apagada.",
   "settingsCountryChannelCleared": "Agora /country pode ser usado em qualquer canal.",
+  "settingsCountryChannelNeedsManageMessages": "Ainda não consigo apagar mensagens em {channel}. Dê-me as permissões **Ver canal** e **Gerenciar mensagens** lá.",
   "settingsShowStaffRole": "Cargo de staff: {role}",
   "settingsShowNoStaffRole": "Cargo de staff: não definido",
   "settingsShowCountryChannel": "Canal do /country: {channel}",
@@ -62,5 +63,6 @@
   "helpStepsTitle": "Como pegar",
   "helpSteps": "1. Digite `/country` na caixa de mensagem.\n2. Comece a digitar o país onde você mora e escolha-o na lista.\n3. Aperte Enter. O cargo aparece no seu perfil na hora.",
   "helpNotesTitle": "Bom saber",
-  "helpNotes": "- Só você vê a resposta do bot.\n- Nomes curtos comuns como USA ou UK também funcionam.\n- Você só pode escolher um país. Escolheu errado? Peça a alguém da staff para mudar.\n- Se algo der errado, o bot vai avisar. Se continuar acontecendo, fale com um admin do servidor."
+  "helpNotes": "- Só você vê a resposta do bot.\n- Nomes curtos comuns como USA ou UK também funcionam.\n- Você só pode escolher um país. Escolheu errado? Peça a alguém da staff para mudar.\n- Se algo der errado, o bot vai avisar. Se continuar acontecendo, fale com um admin do servidor.",
+  "helpChannelNote": "- Este canal é só para o `/country`. Qualquer outra mensagem enviada aqui é apagada automaticamente."
 }

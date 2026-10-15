@@ -14,7 +14,7 @@ export function createCommands({ logger, guildSettings, forcedLanguage }) {
   const commands = [
     createCountryCommand({ logger, guildSettings, forcedLanguage, roleService }),
     createCountryStaffCommand({ logger, guildSettings, forcedLanguage, roleService }),
-    createCountryHelpCommand({ forcedLanguage }),
+    createCountryHelpCommand({ guildSettings, forcedLanguage }),
     createSettingsCommand({ guildSettings, forcedLanguage }),
   ];
   return new Map(commands.map((command) => [command.name, command]));

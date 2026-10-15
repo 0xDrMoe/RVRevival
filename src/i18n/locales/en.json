@@ -35,7 +35,7 @@
   "settingsCommandDescription": "Admins only: choose the staff role and the /country channel.",
   "settingsStaffRoleDescription": "Choose the role that can use /country-staff.",
   "settingsRoleOptionDescription": "The staff role.",
-  "settingsCountryChannelDescription": "Only allow /country in one channel.",
+  "settingsCountryChannelDescription": "Only allow /country in one channel, and delete other messages there.",
   "settingsChannelOptionDescription": "The channel where /country is allowed.",
   "settingsClearDescription": "Reset a setting.",
   "settingsSettingOptionDescription": "The setting to reset.",
@@ -46,8 +46,9 @@
   "settingsStaffRoleEveryone": "@everyone can't be the staff role. Pick a role that only staff have.",
   "settingsStaffRoleSet": "Members with the {role} role can now use /country-staff.",
   "settingsStaffRoleCleared": "The staff role has been removed. Nobody can use /country-staff until you set a new one.",
-  "settingsCountryChannelSet": "/country can now only be used in {channel}.",
+  "settingsCountryChannelSet": "/country can now only be used in {channel}. Any other message posted there will be deleted.",
   "settingsCountryChannelCleared": "/country can now be used in any channel.",
+  "settingsCountryChannelNeedsManageMessages": "I can't delete messages in {channel} yet. Give me the **View Channel** and **Manage Messages** permissions there.",
   "settingsShowStaffRole": "Staff role: {role}",
   "settingsShowNoStaffRole": "Staff role: not set",
   "settingsShowCountryChannel": "/country channel: {channel}",
@@ -62,5 +63,6 @@
   "helpStepsTitle": "How to get it",
   "helpSteps": "1. Type `/country` in the message box.\n2. Start typing the country you live in and pick it from the list.\n3. Press Enter. The role shows up on your profile right away.",
   "helpNotesTitle": "Good to know",
-  "helpNotes": "- Only you can see the bot's reply.\n- Common short names like USA or UK work too.\n- You can only pick one country. Picked the wrong one? Ask a staff member to change it.\n- If something goes wrong, the bot will tell you. If it keeps happening, contact a server admin."
+  "helpNotes": "- Only you can see the bot's reply.\n- Common short names like USA or UK work too.\n- You can only pick one country. Picked the wrong one? Ask a staff member to change it.\n- If something goes wrong, the bot will tell you. If it keeps happening, contact a server admin.",
+  "helpChannelNote": "- This channel is only for `/country`. Any other message posted here is deleted automatically."
 }

@@ -16,7 +16,7 @@ Every reply is translated into English, Spanish, German, French, Portuguese, Ita
 **`/settings`** (Manage Server only) holds every per-server setting. Replies are only visible to the admin.
 
 - **`/settings staff-role role:<role>`** chooses the staff role. Only members with it can use `/country-staff`. `@everyone` is refused.
-- **`/settings country-channel channel:<channel>`** limits `/country` to one channel (threads inside it work too).
+- **`/settings country-channel channel:<channel>`** limits `/country` to one channel (threads inside it work too) and keeps that channel clean: every message posted in it is deleted right away, including staff's and admins', so it only holds `/country` and the bot's own posts (like the `/country-help` guide). Threads inside it are not cleaned. The bot needs **View Channel** and **Manage Messages** there; `/settings` warns the admin if it doesn't have them. Messages already in the channel before it was set are left alone.
 - **`/settings clear setting:<Staff role | /country channel>`** resets one setting.
 - **`/settings show`** lists the current settings.
 
@@ -39,9 +39,9 @@ Members pick the country they live in and get a role named after it. They can on
   - Discord can't hide a command by role, so everyone sees `/country-staff`, but the bot refuses anyone without the staff role (server admins included, unless they have it). To hide it, use *Server Settings > Integrations > the bot > /country-staff*.
   - Nothing works until an admin runs `/settings staff-role`.
   - Every change is logged with who made it.
-- **`/country-help`** (Manage Server only) posts a standalone message in the current channel telling members how to use `/country`, and confirms privately to the admin.
+- **`/country-help`** (Manage Server only) posts a standalone message in the current channel telling members how to use `/country`, and confirms privately to the admin. When posted in the `/country` channel, it also says that any other message there is deleted automatically.
 
-Needs: the **Manage Roles** permission, and the bot's role above every country role (including ones staff remove) (see [Setup](#setup), step 3). `/country-help` also needs **View Channel**, **Send Messages** (or **Send Messages in Threads**) and **Embed Links** in the channel it posts to.
+Needs: the **Manage Roles** permission, and the bot's role above every country role (including ones staff remove) (see [Setup](#setup), step 3). `/country-help` also needs **View Channel**, **Send Messages** (or **Send Messages in Threads**) and **Embed Links** in the channel it posts to. Keeping the `/country` channel clean needs **Manage Messages** in that channel.
 
 Country names are the English ISO names, with a few shortened (for example *United States*, *Russia*, *Taiwan*). These live in `NAME_OVERRIDES` in `src/countries/countries.js`. Renaming one after roles exist makes the bot create a new role, so rename the Discord role too.
 
@@ -57,10 +57,10 @@ Country names are the English ISO names, with a few shortened (for example *Unit
 2. **Invite it.** Replace `YOUR_CLIENT_ID` and open:
 
    ```
-   https://discord.com/oauth2/authorize?client_id=YOUR_CLIENT_ID&scope=bot+applications.commands&permissions=275146361856
+   https://discord.com/oauth2/authorize?client_id=YOUR_CLIENT_ID&scope=bot+applications.commands&permissions=275146370048
    ```
 
-   `permissions=275146361856` is **Manage Roles**, **View Channels**, **Send Messages**, **Send Messages in Threads** and **Embed Links**, which is what the current features need. If a new feature needs more, update this number and re-invite the bot.
+   `permissions=275146370048` is **Manage Roles**, **Manage Messages**, **View Channels**, **Send Messages**, **Send Messages in Threads** and **Embed Links**, which is what the current features need. If the bot was invited before Manage Messages was added, either re-invite it with this link or give its role **Manage Messages** in the `/country` channel. If a new feature needs more, update this number and re-invite the bot.
 
 3. **Fix the role hierarchy.** In *Server Settings > Roles*, drag the bot's role above any roles it manages (existing country roles; new ones are created below it automatically) and below your staff roles.
 
@@ -119,6 +119,7 @@ src/
     countryHelp.js       Country roles: /country-help
   countries/             Country roles: country list, name matching and search
   roles/                 Country roles: find, create, assign and remove roles
+  channels/              Country roles: keeps the /country channel clean
   settings/              Per-server settings (saved to data/settings.json, git-ignored)
   i18n/                  Language selection and locales/*.json (all features)
   utils/                 Shared: logger with token redaction, keyed lock, Discord error codes
@@ -149,6 +150,7 @@ Replies use each user's Discord language when it's supported, otherwise English.
 | "I can't manage roles…" / role is above mine | Give the bot's role **Manage Roles** and move it above the country roles. |
 | Role limit reached | The server has 250 roles. Remove unused ones. |
 | `/country-help` says it can't post | Give the bot **View Channel**, **Send Messages** and **Embed Links** in that channel. |
+| Messages in the `/country` channel aren't deleted | Give the bot **View Channel** and **Manage Messages** in that channel (the log warns once when it can't). |
 | `/country-staff` says no staff role is set | An admin runs `/settings staff-role`. |
 | A member needs a different country | Staff run `/country-staff set`. |
 
@@ -164,4 +166,4 @@ Set `LOG_LEVEL=debug` for more detail.
 - Secrets come only from environment variables. `.env` is git-ignored; `.env.example` has placeholders only.
 - Logs redact anything that looks like a Discord token, plus the configured token.
 - Users only see fixed, friendly messages; errors and stack traces stay in the log.
-- The bot uses only the non-privileged Guilds intent and the permissions its features need (see the invite link in [Setup](#setup)). Roles it creates have zero permissions.
+- The bot uses only the non-privileged Guilds and Guild Messages intents (it never reads message content) and the permissions its features need (see the invite link in [Setup](#setup)). Roles it creates have zero permissions.

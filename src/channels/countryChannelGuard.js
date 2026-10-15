@@ -1,0 +1,57 @@
+// Keeps the /country channel clean: any message posted there is deleted, so the
+// channel only holds the bot's own posts (such as the /country-help guide).
+// Everyone's messages are deleted, staff and admins included. Threads inside
+// the channel are left alone.
+//
+// Needs the GuildMessages intent (not privileged) and the Manage Messages
+// permission in that channel. Message content is never read.
+
+import { RESTJSONErrorCodes } from "discord.js";
+import { Setting } from "../settings/guildSettings.js";
+import { getDiscordErrorCode, isPermissionError } from "../utils/discordErrors.js";
+
+// Errors that just mean there's nothing to delete.
+const IGNORED_ERRORS = new Set([
+  RESTJSONErrorCodes.UnknownMessage, // someone else deleted it first
+  RESTJSONErrorCodes.CannotExecuteActionOnSystemMessage, // some system messages can't be deleted
+]);
+
+// Options:
+//   guildSettings   where the /country channel is stored (GuildSettings)
+//   logger
+export function createCountryChannelGuard({ guildSettings, logger }) {
+  // Servers already warned about missing permissions, so a busy channel can't
+  // flood the log. A server is warned again once a delete has worked.
+  const warnedGuilds = new Set();
+
+  return async function handleMessage(message) {
+    if (!message.inGuild()) {
+      return;
+    }
+    if (guildSettings.get(message.guildId, Setting.COUNTRY_CHANNEL) !== message.channelId) {
+      return;
+    }
+    if (message.author.id === message.client.user.id) {
+      return;
+    }
+
+    try {
+      await message.delete();
+      warnedGuilds.delete(message.guildId);
+    } catch (error) {
+      if (IGNORED_ERRORS.has(getDiscordErrorCode(error))) {
+        return;
+      }
+      if (!isPermissionError(error)) {
+        throw error;
+      }
+      if (!warnedGuilds.has(message.guildId)) {
+        warnedGuilds.add(message.guildId);
+        logger.warn("Can't delete messages in the /country channel. Give the bot View Channel and Manage Messages there.", {
+          guildId: message.guildId,
+          channelId: message.channelId,
+        });
+      }
+    }
+  };
+}

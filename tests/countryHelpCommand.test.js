@@ -2,9 +2,11 @@ import { MessageFlags, PermissionFlagsBits, RESTJSONErrorCodes } from "discord.j
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createCountryHelpCommand } from "../src/commands/countryHelp.js";
 import { translate } from "../src/i18n/i18n.js";
+import { GuildSettings, Setting } from "../src/settings/guildSettings.js";
 import { discordError } from "./helpers/fakes.js";
 
 const GUILD_ID = "900000000000000001";
+const CHANNEL_ID = "800000000000000001";
 const POST_PERMISSIONS = [
   PermissionFlagsBits.ViewChannel,
   PermissionFlagsBits.SendMessages,
@@ -25,7 +27,7 @@ function fakeInteraction({ botPermissions = POST_PERMISSIONS, isThread = false, 
     inCachedGuild: () => true,
     memberPermissions: permissions([PermissionFlagsBits.ManageGuild]),
     appPermissions: permissions(botPermissions),
-    channel: { isThread: () => isThread, send: vi.fn(async () => {}) },
+    channel: { id: CHANNEL_ID, isThread: () => isThread, send: vi.fn(async () => {}) },
     reply: vi.fn(async () => {}),
     deferReply: vi.fn(async () => {}),
     editReply: vi.fn(async () => {}),
@@ -67,6 +69,29 @@ describe("/country-help", () => {
       { name: translate("en", "helpStepsTitle"), value: translate("en", "helpSteps") },
       { name: translate("en", "helpNotesTitle"), value: translate("en", "helpNotes") },
     ]);
+  });
+
+  it("says other messages are deleted when posted in the /country channel", async () => {
+    const guildSettings = new GuildSettings();
+    await guildSettings.set(GUILD_ID, Setting.COUNTRY_CHANNEL, CHANNEL_ID);
+    const interaction = fakeInteraction();
+    await createCountryHelpCommand({ guildSettings }).execute(interaction);
+
+    expect(postedEmbed(interaction).fields[1].value).toBe(
+      `${translate("en", "helpNotes")}\n${translate("en", "helpChannelNote")}`,
+    );
+  });
+
+  it("leaves the deletion note out in other channels", async () => {
+    const guildSettings = new GuildSettings();
+    await guildSettings.set(GUILD_ID, Setting.COUNTRY_CHANNEL, "800000000000000002");
+    const elsewhere = fakeInteraction();
+    await createCountryHelpCommand({ guildSettings }).execute(elsewhere);
+    expect(postedEmbed(elsewhere).fields[1].value).toBe(translate("en", "helpNotes"));
+
+    const notSet = fakeInteraction();
+    await createCountryHelpCommand({ guildSettings: new GuildSettings() }).execute(notSet);
+    expect(postedEmbed(notSet).fields[1].value).toBe(translate("en", "helpNotes"));
   });
 
   it("never mentions a channel", async () => {

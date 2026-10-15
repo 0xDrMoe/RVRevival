@@ -12,6 +12,7 @@ import {
   SlashCommandBuilder,
 } from "discord.js";
 import { discordLocalizations, pickLanguage, translate } from "../i18n/i18n.js";
+import { Setting } from "../settings/guildSettings.js";
 import { isPermissionError } from "../utils/discordErrors.js";
 
 const COMMAND_NAME = "country-help";
@@ -28,15 +29,17 @@ export function buildCountryHelpCommandData() {
 }
 
 // The public message. It only holds what members need to use /country.
-export function buildHelpEmbed(language) {
+// `isCountryChannel` adds a note that other messages there are deleted.
+export function buildHelpEmbed(language, { isCountryChannel = false } = {}) {
   const text = (key) => translate(language, key);
+  const notes = isCountryChannel ? `${text("helpNotes")}\n${text("helpChannelNote")}` : text("helpNotes");
   return new EmbedBuilder()
     .setColor(EMBED_COLOR)
     .setTitle(text("helpTitle"))
     .setDescription(text("helpIntro"))
     .addFields(
       { name: text("helpStepsTitle"), value: text("helpSteps") },
-      { name: text("helpNotesTitle"), value: text("helpNotes") },
+      { name: text("helpNotesTitle"), value: notes },
     );
 }
 
@@ -49,8 +52,9 @@ function canPostHere(interaction) {
 }
 
 // Options:
+//   guildSettings    where the /country channel is stored (GuildSettings)
 //   forcedLanguage   reply in this language for everyone (BOT_LANGUAGE)
-export function createCountryHelpCommand({ forcedLanguage } = {}) {
+export function createCountryHelpCommand({ guildSettings, forcedLanguage } = {}) {
   async function execute(interaction) {
     // Errors go only to the admin, in their own language.
     const adminLanguage = pickLanguage(interaction.locale, forcedLanguage);
@@ -76,8 +80,10 @@ export function createCountryHelpCommand({ forcedLanguage } = {}) {
 
     // Everyone reads the post, so it uses the server's language, not the admin's.
     const serverLanguage = pickLanguage(interaction.guildLocale, forcedLanguage);
+    const countryChannelId = guildSettings?.get(interaction.guildId, Setting.COUNTRY_CHANNEL);
+    const isCountryChannel = countryChannelId !== undefined && countryChannelId === channel.id;
     try {
-      await channel.send({ embeds: [buildHelpEmbed(serverLanguage)] });
+      await channel.send({ embeds: [buildHelpEmbed(serverLanguage, { isCountryChannel })] });
     } catch (error) {
       // Permissions can change between the check above and the send.
       if (!isPermissionError(error)) {

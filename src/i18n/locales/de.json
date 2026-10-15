@@ -35,7 +35,7 @@
   "settingsCommandDescription": "Nur Admins: Team-Rolle und /country-Kanal festlegen.",
   "settingsStaffRoleDescription": "Rolle festlegen, die /country-staff verwenden darf.",
   "settingsRoleOptionDescription": "Die Team-Rolle.",
-  "settingsCountryChannelDescription": "/country nur in einem Kanal erlauben.",
+  "settingsCountryChannelDescription": "/country nur in einem Kanal erlauben und andere Nachrichten dort löschen.",
   "settingsChannelOptionDescription": "Der Kanal, in dem /country erlaubt ist.",
   "settingsClearDescription": "Eine Einstellung zurücksetzen.",
   "settingsSettingOptionDescription": "Die Einstellung, die zurückgesetzt werden soll.",
@@ -46,8 +46,9 @@
   "settingsStaffRoleEveryone": "@everyone kann nicht die Team-Rolle sein. Wähle eine Rolle, die nur das Team hat.",
   "settingsStaffRoleSet": "Mitglieder mit der Rolle {role} können jetzt /country-staff verwenden.",
   "settingsStaffRoleCleared": "Die Team-Rolle wurde entfernt. Niemand kann /country-staff verwenden, bis du eine neue festlegst.",
-  "settingsCountryChannelSet": "/country kann jetzt nur noch in {channel} verwendet werden.",
+  "settingsCountryChannelSet": "/country kann jetzt nur noch in {channel} verwendet werden. Alle anderen Nachrichten dort werden gelöscht.",
   "settingsCountryChannelCleared": "/country kann jetzt in jedem Kanal verwendet werden.",
+  "settingsCountryChannelNeedsManageMessages": "Ich kann in {channel} noch keine Nachrichten löschen. Gib mir dort die Berechtigungen **Kanal ansehen** und **Nachrichten verwalten**.",
   "settingsShowStaffRole": "Team-Rolle: {role}",
   "settingsShowNoStaffRole": "Team-Rolle: nicht festgelegt",
   "settingsShowCountryChannel": "/country-Kanal: {channel}",
@@ -62,5 +63,6 @@
   "helpStepsTitle": "So geht's",
   "helpSteps": "1. Gib `/country` in das Nachrichtenfeld ein.\n2. Tippe das Land, in dem du wohnst, und wähle es aus der Liste.\n3. Drücke Enter. Die Rolle erscheint sofort in deinem Profil.",
   "helpNotesTitle": "Gut zu wissen",
-  "helpNotes": "- Nur du siehst die Antwort des Bots.\n- Gängige Kurzformen wie USA oder UK funktionieren auch.\n- Du kannst nur ein Land wählen. Falsches Land gewählt? Bitte ein Teammitglied, es zu ändern.\n- Wenn etwas schiefgeht, sagt dir der Bot Bescheid. Passiert es immer wieder, wende dich an einen Server-Admin."
+  "helpNotes": "- Nur du siehst die Antwort des Bots.\n- Gängige Kurzformen wie USA oder UK funktionieren auch.\n- Du kannst nur ein Land wählen. Falsches Land gewählt? Bitte ein Teammitglied, es zu ändern.\n- Wenn etwas schiefgeht, sagt dir der Bot Bescheid. Passiert es immer wieder, wende dich an einen Server-Admin.",
+  "helpChannelNote": "- Dieser Kanal ist nur für `/country`. Alle anderen Nachrichten hier werden automatisch gelöscht."
 }
