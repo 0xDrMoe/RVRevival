@@ -25,18 +25,9 @@
   "channelShowNone": "/country peut être utilisée dans n'importe quel salon.",
   "channelNoPermission": "Vous avez besoin de la permission **Gérer le serveur** pour modifier ce réglage.",
 
-  "helpCommandDescription": "Admins uniquement : comment utiliser et configurer le bot de pays.",
+  "helpCommandDescription": "Admins uniquement : publie ici comment obtenir un rôle de pays.",
   "helpNoPermission": "Vous avez besoin de la permission **Gérer le serveur** pour utiliser cette commande.",
-  "helpTitle": "Comment utiliser le bot de pays",
-  "helpMembersTitle": "Pour les membres",
-  "helpMembers": "Les membres utilisent `/country` et choisissent dans les suggestions le pays où ils vivent. Le bot leur donne un rôle portant le nom de ce pays et le crée si nécessaire. Seul le membre voit les réponses.",
-  "helpChannelTitle": "Choisir un salon",
-  "helpChannel": "`/country-channel set` - autoriser `/country` dans un seul salon (et ses fils).\n`/country-channel clear` - autoriser `/country` dans tous les salons.\n`/country-channel show` - voir le réglage actuel.",
-  "helpSetupTitle": "Liste de configuration",
-  "helpSetup": "- Le rôle du bot a besoin de la permission **Gérer les rôles**.\n- Dans Paramètres du serveur > Rôles, le rôle du bot doit être au-dessus de tous les rôles de pays.\n- Les rôles de pays sont créés sans permissions. Les membres gardent leurs anciens rôles de pays ; retirez-les à la main si besoin.",
-  "helpLanguageTitle": "Langues",
-  "helpLanguage": "Les réponses utilisent la langue Discord de chaque membre : anglais, espagnol, allemand, français, portugais ou italien, sinon l'anglais. Définissez `BOT_LANGUAGE` dans le fichier .env du bot pour utiliser une seule langue pour tout le monde (par exemple `ar` pour l'arabe).",
-  "helpStatusTitle": "État sur ce serveur",
-  "helpStatusCanManageRoles": "✅ Le bot a la permission Gérer les rôles.",
-  "helpStatusCannotManageRoles": "❌ Il manque au bot la permission Gérer les rôles."
+  "helpTitle": "Obtiens ton rôle de pays",
+  "helpBody": "Tape `/country` et choisis dans les suggestions le pays où tu vis. Tu recevras un rôle portant le nom de ce pays. Toi seul peux voir la réponse du bot.",
+  "helpChannelLine": "Utilise `/country` dans {channel}."
 }

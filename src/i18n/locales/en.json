@@ -25,18 +25,9 @@
   "channelShowNone": "/country can be used in any channel.",
   "channelNoPermission": "You need the **Manage Server** permission to change this.",
 
-  "helpCommandDescription": "Admins only: how to use and set up the country bot.",
+  "helpCommandDescription": "Admins only: post how to get a country role in this channel.",
   "helpNoPermission": "You need the **Manage Server** permission to use this command.",
-  "helpTitle": "How to use the country bot",
-  "helpMembersTitle": "For members",
-  "helpMembers": "Members run `/country` and pick the country they live in from the suggestions. The bot gives them a role with that country's name, creating the role if needed. Replies are only visible to the member.",
-  "helpChannelTitle": "Choosing a channel",
-  "helpChannel": "`/country-channel set` - only allow `/country` in one channel (and its threads).\n`/country-channel clear` - allow `/country` in every channel.\n`/country-channel show` - see the current setting.",
-  "helpSetupTitle": "Setup checklist",
-  "helpSetup": "- The bot's role needs the **Manage Roles** permission.\n- In Server Settings > Roles, the bot's role must be above every country role.\n- Country roles are created with no permissions. Members keep old country roles; remove them by hand if needed.",
-  "helpLanguageTitle": "Languages",
-  "helpLanguage": "Replies use each member's Discord language: English, Spanish, German, French, Portuguese or Italian, otherwise English. Set `BOT_LANGUAGE` in the bot's .env file to use one language for everyone (for example `ar` for Arabic).",
-  "helpStatusTitle": "Status in this server",
-  "helpStatusCanManageRoles": "✅ The bot has the Manage Roles permission.",
-  "helpStatusCannotManageRoles": "❌ The bot is missing the Manage Roles permission."
+  "helpTitle": "Get your country role",
+  "helpBody": "Type `/country` and pick the country you live in from the suggestions. You'll get a role with that country's name. Only you can see the bot's reply.",
+  "helpChannelLine": "Use `/country` in {channel}."
 }

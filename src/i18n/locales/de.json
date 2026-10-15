@@ -25,18 +25,9 @@
   "channelShowNone": "/country kann in jedem Kanal verwendet werden.",
   "channelNoPermission": "Du brauchst die Berechtigung **Server verwalten**, um das zu ändern.",
 
-  "helpCommandDescription": "Nur für Admins: So nutzt und richtest du den Länder-Bot ein.",
+  "helpCommandDescription": "Nur für Admins: Postet in diesem Kanal, wie man eine Länderrolle bekommt.",
   "helpNoPermission": "Du brauchst die Berechtigung **Server verwalten**, um diesen Befehl zu verwenden.",
-  "helpTitle": "So nutzt du den Länder-Bot",
-  "helpMembersTitle": "Für Mitglieder",
-  "helpMembers": "Mitglieder verwenden `/country` und wählen aus den Vorschlägen das Land, in dem sie wohnen. Der Bot gibt ihnen eine Rolle mit dem Namen des Landes und erstellt sie bei Bedarf. Antworten sieht nur das Mitglied selbst.",
-  "helpChannelTitle": "Kanal festlegen",
-  "helpChannel": "`/country-channel set` - `/country` nur in einem Kanal (und seinen Threads) erlauben.\n`/country-channel clear` - `/country` in allen Kanälen erlauben.\n`/country-channel show` - aktuelle Einstellung anzeigen.",
-  "helpSetupTitle": "Einrichtungs-Checkliste",
-  "helpSetup": "- Die Rolle des Bots braucht die Berechtigung **Rollen verwalten**.\n- Unter Servereinstellungen > Rollen muss die Rolle des Bots über allen Länderrollen stehen.\n- Länderrollen werden ohne Berechtigungen erstellt. Mitglieder behalten alte Länderrollen; entferne sie bei Bedarf von Hand.",
-  "helpLanguageTitle": "Sprachen",
-  "helpLanguage": "Antworten erscheinen in der Discord-Sprache des Mitglieds: Englisch, Spanisch, Deutsch, Französisch, Portugiesisch oder Italienisch, sonst Englisch. Setze `BOT_LANGUAGE` in der .env-Datei des Bots, um für alle eine Sprache zu verwenden (zum Beispiel `ar` für Arabisch).",
-  "helpStatusTitle": "Status auf diesem Server",
-  "helpStatusCanManageRoles": "✅ Der Bot hat die Berechtigung Rollen verwalten.",
-  "helpStatusCannotManageRoles": "❌ Dem Bot fehlt die Berechtigung Rollen verwalten."
+  "helpTitle": "Hol dir deine Länderrolle",
+  "helpBody": "Gib `/country` ein und wähle aus den Vorschlägen das Land, in dem du wohnst. Du bekommst eine Rolle mit dem Namen des Landes. Nur du siehst die Antwort des Bots.",
+  "helpChannelLine": "Verwende `/country` in {channel}."
 }

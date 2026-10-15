@@ -11,8 +11,8 @@ A small Discord bot for the Rumbleverse Revival server. Members run `/country`, 
   - New roles have no permissions, no color, and are not hoisted or mentionable.
   - The bot never removes roles or touches anyone else's.
 - **`/country-channel set | clear | show`** (Manage Server only) limits `/country` to one channel.
-- **`/country-help`** (Manage Server only) shows a private admin guide and a live setup check.
-- All replies are ephemeral and translated into English, Spanish, German, French, Portuguese, Italian or Arabic.
+- **`/country-help`** (Manage Server only) posts a public message in the current channel telling members how to use `/country`.
+- All other replies are ephemeral. Everything is translated into English, Spanish, German, French, Portuguese, Italian or Arabic.
 
 ## Requirements
 
