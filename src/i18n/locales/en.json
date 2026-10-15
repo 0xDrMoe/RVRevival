@@ -28,6 +28,9 @@
   "helpCommandDescription": "Admins only: post how to get a country role in this channel.",
   "helpNoPermission": "You need the **Manage Server** permission to use this command.",
   "helpTitle": "Get your country role",
-  "helpBody": "Type `/country` and pick the country you live in from the suggestions. You'll get a role with that country's name. Only you can see the bot's reply.",
-  "helpChannelLine": "Use `/country` in {channel}."
+  "helpIntro": "Show the community where you're playing from! Add a country role to your profile in a few seconds.",
+  "helpStepsTitle": "How to get it",
+  "helpSteps": "1. Type `/country` in the message box.\n2. Start typing the country you live in and pick it from the list.\n3. Press Enter. The role shows up on your profile right away.",
+  "helpNotesTitle": "Good to know",
+  "helpNotes": "- Only you can see the bot's reply.\n- Common short names like USA or UK work too.\n- Picked the wrong country? Ask a server admin to remove the role.\n- If something goes wrong, the bot will tell you. If it keeps happening, contact a server admin."
 }

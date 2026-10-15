@@ -28,6 +28,9 @@
   "helpCommandDescription": "Nur für Admins: Postet in diesem Kanal, wie man eine Länderrolle bekommt.",
   "helpNoPermission": "Du brauchst die Berechtigung **Server verwalten**, um diesen Befehl zu verwenden.",
   "helpTitle": "Hol dir deine Länderrolle",
-  "helpBody": "Gib `/country` ein und wähle aus den Vorschlägen das Land, in dem du wohnst. Du bekommst eine Rolle mit dem Namen des Landes. Nur du siehst die Antwort des Bots.",
-  "helpChannelLine": "Verwende `/country` in {channel}."
+  "helpIntro": "Zeig der Community, von wo aus du spielst! Füge deinem Profil in wenigen Sekunden eine Länderrolle hinzu.",
+  "helpStepsTitle": "So geht's",
+  "helpSteps": "1. Gib `/country` in das Nachrichtenfeld ein.\n2. Tippe das Land, in dem du wohnst, und wähle es aus der Liste.\n3. Drücke Enter. Die Rolle erscheint sofort in deinem Profil.",
+  "helpNotesTitle": "Gut zu wissen",
+  "helpNotes": "- Nur du siehst die Antwort des Bots.\n- Gängige Kurzformen wie USA oder UK funktionieren auch.\n- Falsches Land gewählt? Bitte einen Server-Admin, die Rolle zu entfernen.\n- Wenn etwas schiefgeht, sagt dir der Bot Bescheid. Passiert es immer wieder, wende dich an einen Server-Admin."
 }

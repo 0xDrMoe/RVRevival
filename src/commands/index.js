@@ -10,7 +10,7 @@ export function createCommands({ logger, channelSettings, forcedLanguage }) {
   const commands = [
     createCountryCommand({ logger, channelSettings, forcedLanguage }),
     createCountryChannelCommand({ channelSettings, forcedLanguage }),
-    createCountryHelpCommand({ channelSettings, forcedLanguage }),
+    createCountryHelpCommand({ forcedLanguage }),
   ];
   return new Map(commands.map((command) => [command.name, command]));
 }

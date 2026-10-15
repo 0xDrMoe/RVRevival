@@ -28,6 +28,9 @@
   "helpCommandDescription": "Só admins: publica neste canal como obter um cargo de país.",
   "helpNoPermission": "Você precisa da permissão **Gerenciar servidor** para usar este comando.",
   "helpTitle": "Pegue seu cargo de país",
-  "helpBody": "Digite `/country` e escolha nas sugestões o país onde você mora. Você receberá um cargo com o nome desse país. Só você vê a resposta do bot.",
-  "helpChannelLine": "Use `/country` em {channel}."
+  "helpIntro": "Mostre para a comunidade de onde você joga! Adicione um cargo de país ao seu perfil em poucos segundos.",
+  "helpStepsTitle": "Como pegar",
+  "helpSteps": "1. Digite `/country` na caixa de mensagem.\n2. Comece a digitar o país onde você mora e escolha-o na lista.\n3. Aperte Enter. O cargo aparece no seu perfil na hora.",
+  "helpNotesTitle": "Bom saber",
+  "helpNotes": "- Só você vê a resposta do bot.\n- Nomes curtos comuns como USA ou UK também funcionam.\n- Escolheu o país errado? Peça a um admin do servidor para remover o cargo.\n- Se algo der errado, o bot vai avisar. Se continuar acontecendo, fale com um admin do servidor."
 }
