@@ -11,7 +11,7 @@
 import { REST, Routes } from "discord.js";
 import { createCommands } from "./commands/index.js";
 import { ConfigError, loadRegisterConfig } from "./config.js";
-import { ChannelSettings } from "./settings/channelSettings.js";
+import { GuildSettings } from "./settings/guildSettings.js";
 import { logger, registerSecret } from "./utils/logger.js";
 
 const MODES = {
@@ -34,7 +34,7 @@ async function register() {
   const config = loadRegisterConfig(process.env, { needsGuildId: !mode.global });
   registerSecret(config.token);
 
-  const commands = mode.clear ? [] : [...createCommands({ logger, channelSettings: new ChannelSettings() }).values()].map((command) => command.data);
+  const commands = mode.clear ? [] : [...createCommands({ logger, guildSettings: new GuildSettings() }).values()].map((command) => command.data);
   const route = mode.global
     ? Routes.applicationCommands(config.clientId)
     : Routes.applicationGuildCommands(config.clientId, config.guildId);

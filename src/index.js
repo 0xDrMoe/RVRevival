@@ -4,7 +4,7 @@ import { Client, Events, GatewayIntentBits } from "discord.js";
 import { createCommands } from "./commands/index.js";
 import { ConfigError, loadBotConfig } from "./config.js";
 import { createInteractionHandler } from "./interactionHandler.js";
-import { ChannelSettings } from "./settings/channelSettings.js";
+import { GuildSettings, Setting } from "./settings/guildSettings.js";
 import { logger, registerSecret } from "./utils/logger.js";
 
 // Log unexpected errors instead of letting them silently kill the bot.
@@ -23,8 +23,8 @@ async function start() {
   // The Guilds intent is all the bot needs: it keeps servers, roles and the
   // bot's own member info up to date. No privileged intents.
   const client = new Client({ intents: [GatewayIntentBits.Guilds] });
-  const channelSettings = await ChannelSettings.load();
-  const commands = createCommands({ logger, channelSettings, forcedLanguage: config.forcedLanguage });
+  const guildSettings = await GuildSettings.load();
+  const commands = createCommands({ logger, guildSettings, forcedLanguage: config.forcedLanguage });
   const handleInteraction = createInteractionHandler({ commands, logger, forcedLanguage: config.forcedLanguage });
 
   client.once(Events.ClientReady, (readyClient) => {
@@ -42,11 +42,21 @@ async function start() {
   // If the channel /country was limited to is deleted, allow any channel again
   // instead of leaving the command unusable.
   client.on(Events.ChannelDelete, (channel) => {
-    if (channel.guildId && channelSettings.get(channel.guildId) === channel.id) {
-      channelSettings
-        .clear(channel.guildId)
+    if (channel.guildId && guildSettings.get(channel.guildId, Setting.COUNTRY_CHANNEL) === channel.id) {
+      guildSettings
+        .clear(channel.guildId, Setting.COUNTRY_CHANNEL)
         .then(() => logger.info("The /country channel was deleted; /country now works in any channel", { guildId: channel.guildId }))
         .catch((error) => logger.error("Couldn't clear the deleted /country channel", { error }));
+    }
+  });
+
+  // Forget a deleted staff role, so /settings show never points at a role that is gone.
+  client.on(Events.GuildRoleDelete, (role) => {
+    if (guildSettings.get(role.guild.id, Setting.STAFF_ROLE) === role.id) {
+      guildSettings
+        .clear(role.guild.id, Setting.STAFF_ROLE)
+        .then(() => logger.info("The staff role was deleted; set a new one with /settings staff-role", { guildId: role.guild.id }))
+        .catch((error) => logger.error("Couldn't clear the deleted staff role", { error }));
     }
   });
 

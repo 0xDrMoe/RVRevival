@@ -1,11 +1,13 @@
 // The /country command: a member picks the country they live in and gets a
-// role with that country's name.
+// role with that country's name. They can only pick once; after that, only
+// staff can change it (see countryStaff.js).
 
 import { MessageFlags, SlashCommandBuilder, InteractionContextType } from "discord.js";
 import { countryList, MAX_NAME_LENGTH } from "../countries/countries.js";
 import { discordLocalizations, pickLanguage, translate } from "../i18n/i18n.js";
-import { CountryRoleService } from "../roles/countryRoles.js";
+import { CountryRoleService, Outcome } from "../roles/countryRoles.js";
 import { wrapMember, wrapServer } from "../roles/discordAdapters.js";
+import { Setting } from "../settings/guildSettings.js";
 import { isExpiredInteractionError } from "../utils/discordErrors.js";
 
 const COMMAND_NAME = "country";
@@ -37,18 +39,43 @@ function isInChannel(interaction, channelId) {
   return interaction.channelId === channelId || interaction.channel?.parentId === channelId;
 }
 
+// Answers an autocomplete request with countries matching what was typed.
+// Shared with /country-staff.
+export async function suggestCountries(interaction, { countries, logger }) {
+  let suggestions = [];
+  try {
+    const typed = String(interaction.options.getFocused() ?? "");
+    suggestions = countries
+      .search(typed, MAX_SUGGESTIONS)
+      .map((country) => ({ name: country.name, value: country.name }));
+  } catch (error) {
+    logger.warn("Couldn't build autocomplete suggestions", { error });
+  }
+
+  try {
+    await interaction.respond(suggestions);
+  } catch (error) {
+    // Expected when the user keeps typing: Discord drops the older request.
+    if (isExpiredInteractionError(error)) {
+      logger.debug("Autocomplete request expired before we answered");
+    } else {
+      logger.warn("Couldn't send autocomplete suggestions", { error });
+    }
+  }
+}
+
 // Options:
 //   logger           required
-//   channelSettings  the channel admins limited /country to, if any (ChannelSettings)
+//   guildSettings    per-server settings, for the channel /country is limited to (GuildSettings)
 //   forcedLanguage   reply in this language for everyone (BOT_LANGUAGE)
 //   countries, roleService, wrapServer, wrapMember   replaceable in tests
 export function createCountryCommand(options) {
   const {
     logger,
-    channelSettings,
+    guildSettings,
     forcedLanguage,
     countries = countryList,
-    roleService = new CountryRoleService(logger),
+    roleService = new CountryRoleService(logger, countries),
     wrapServer: toServer = wrapServer,
     wrapMember: toMember = wrapMember,
   } = options;
@@ -62,7 +89,7 @@ export function createCountryCommand(options) {
       return;
     }
 
-    const allowedChannelId = channelSettings?.get(interaction.guildId);
+    const allowedChannelId = guildSettings?.get(interaction.guildId, Setting.COUNTRY_CHANNEL);
     if (allowedChannelId && !isInChannel(interaction, allowedChannelId)) {
       await interaction.reply({
         ...message("wrongChannel", { channel: `<#${allowedChannelId}>` }),
@@ -91,31 +118,12 @@ export function createCountryCommand(options) {
       toMember(interaction.member),
       country,
     );
-    await interaction.editReply(message(result.outcome, { country: country.name }));
+    // When they already have a country, name the one they have.
+    const shownCountry = result.outcome === Outcome.LOCKED ? result.role.name : country.name;
+    await interaction.editReply(message(result.outcome, { country: shownCountry }));
   }
 
-  async function autocomplete(interaction) {
-    let suggestions = [];
-    try {
-      const typed = String(interaction.options.getFocused() ?? "");
-      suggestions = countries
-        .search(typed, MAX_SUGGESTIONS)
-        .map((country) => ({ name: country.name, value: country.name }));
-    } catch (error) {
-      logger.warn("Couldn't build autocomplete suggestions", { error });
-    }
-
-    try {
-      await interaction.respond(suggestions);
-    } catch (error) {
-      // Expected when the user keeps typing: Discord drops the older request.
-      if (isExpiredInteractionError(error)) {
-        logger.debug("Autocomplete request expired before we answered");
-      } else {
-        logger.warn("Couldn't send autocomplete suggestions", { error });
-      }
-    }
-  }
+  const autocomplete = (interaction) => suggestCountries(interaction, { countries, logger });
 
   return { name: COMMAND_NAME, data: buildCountryCommandData(), execute, autocomplete };
 }

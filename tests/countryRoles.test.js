@@ -83,11 +83,123 @@ describe("CountryRoleService", () => {
     });
   });
 
+  describe("one country per member", () => {
+    it("refuses a second country and names the one they have", async () => {
+      const japanRole = server.addRole("Japan");
+      const alice = server.member(ALICE, [japanRole.id]);
+
+      const result = await service.giveCountryRole(server, alice, canada);
+
+      expect(result).toEqual({ outcome: Outcome.LOCKED, role: japanRole });
+      expect(alice.addRole).not.toHaveBeenCalled();
+      expect(server.createRole).not.toHaveBeenCalled();
+    });
+
+    it("ignores roles that aren't countries", async () => {
+      const moderator = server.addRole("Moderator");
+      const result = await service.giveCountryRole(server, server.member(ALICE, [moderator.id]), canada);
+      expect(result).toMatchObject({ outcome: Outcome.ASSIGNED });
+    });
+
+    it("counts a country role however its name is written", async () => {
+      const japanRole = server.addRole("  JAPAN ");
+      const result = await service.giveCountryRole(server, server.member(ALICE, [japanRole.id]), canada);
+      expect(result).toEqual({ outcome: Outcome.LOCKED, role: japanRole });
+    });
+
+    it("gives only one country when a member picks two at the same moment", async () => {
+      server.createDelayMs = 10;
+      const results = await Promise.all([
+        service.giveCountryRole(server, server.member(ALICE), canada),
+        service.giveCountryRole(server, server.member(ALICE), japan),
+      ]);
+
+      expect(results.map((result) => result.outcome)).toEqual([Outcome.ASSIGNED, Outcome.LOCKED]);
+      expect(server.rolesByUser.get(ALICE).size).toBe(1);
+    });
+  });
+
+  describe("staff changes", () => {
+    const STAFF = "300000000000000009";
+
+    it("replaces a member's country with another one", async () => {
+      const japanRole = server.addRole("Japan");
+      const alice = server.member(ALICE, [japanRole.id]);
+
+      const result = await service.setCountryRole(server, alice, canada, STAFF);
+
+      expect(result).toMatchObject({ outcome: Outcome.ASSIGNED, role: { name: "Canada" }, removed: [japanRole] });
+      expect([...server.rolesByUser.get(ALICE)]).toEqual([result.role.id]);
+    });
+
+    it("cleans up members who picked several countries before the lock existed", async () => {
+      const japanRole = server.addRole("Japan");
+      const canadaRole = server.addRole("Canada");
+      const alice = server.member(ALICE, [japanRole.id, canadaRole.id]);
+
+      const result = await service.setCountryRole(server, alice, canada, STAFF);
+
+      expect(result).toMatchObject({ outcome: Outcome.ASSIGNED, role: canadaRole, removed: [japanRole] });
+      expect(alice.addRole).not.toHaveBeenCalled();
+      expect([...server.rolesByUser.get(ALICE)]).toEqual([canadaRole.id]);
+    });
+
+    it("says when the member already has exactly that country", async () => {
+      const canadaRole = server.addRole("Canada");
+      const result = await service.setCountryRole(server, server.member(ALICE, [canadaRole.id]), canada, STAFF);
+      expect(result).toEqual({ outcome: Outcome.ALREADY_ASSIGNED, role: canadaRole });
+    });
+
+    it("changes nothing when an old country role is above the bot", async () => {
+      const japanRole = server.addRole("Japan", { position: 60 });
+      const alice = server.member(ALICE, [japanRole.id]);
+
+      const result = await service.setCountryRole(server, alice, canada, STAFF);
+
+      expect(result).toEqual({ outcome: Outcome.HIERARCHY, role: japanRole });
+      expect(alice.addRole).not.toHaveBeenCalled();
+      expect(alice.removeRole).not.toHaveBeenCalled();
+    });
+
+    it("reports a failed removal", async () => {
+      const japanRole = server.addRole("Japan");
+      const alice = server.member(ALICE, [japanRole.id]);
+      alice.removeRole.mockRejectedValueOnce(new Error("timeout"));
+
+      const result = await service.setCountryRole(server, alice, canada, STAFF);
+      expect(result).toEqual({ outcome: Outcome.REMOVE_FAILED, role: japanRole });
+    });
+
+    it("removes every country role and leaves other roles alone", async () => {
+      const japanRole = server.addRole("Japan");
+      const canadaRole = server.addRole("Canada");
+      const moderator = server.addRole("Moderator");
+      const alice = server.member(ALICE, [japanRole.id, canadaRole.id, moderator.id]);
+
+      const result = await service.removeCountryRoles(server, alice, STAFF);
+
+      expect(result).toEqual({ outcome: Outcome.REMOVED, role: japanRole, removed: [japanRole, canadaRole] });
+      expect([...server.rolesByUser.get(ALICE)]).toEqual([moderator.id]);
+    });
+
+    it("says when there is nothing to remove", async () => {
+      const result = await service.removeCountryRoles(server, server.member(ALICE), STAFF);
+      expect(result).toEqual({ outcome: Outcome.NOTHING_TO_REMOVE });
+    });
+
+    it("lets the member pick again after staff remove their country", async () => {
+      const japanRole = server.addRole("Japan");
+      await service.removeCountryRoles(server, server.member(ALICE, [japanRole.id]), STAFF);
+      const result = await service.giveCountryRole(server, server.member(ALICE), canada);
+      expect(result).toMatchObject({ outcome: Outcome.ASSIGNED });
+    });
+  });
+
   describe("safety", () => {
     it("only changes the member who ran the command, and never removes roles", async () => {
       const japanRole = server.addRole("Japan");
       const moderator = server.addRole("Moderator");
-      const alice = server.member(ALICE, [japanRole.id, moderator.id]);
+      const alice = server.member(ALICE, [moderator.id]);
       const bob = server.member(BOB, [japanRole.id]);
 
       await service.giveCountryRole(server, alice, canada);
@@ -95,9 +207,9 @@ describe("CountryRoleService", () => {
       expect(bob.addRole).not.toHaveBeenCalled();
       expect([...server.rolesByUser.get(BOB)]).toEqual([japanRole.id]);
       const aliceRoles = server.rolesByUser.get(ALICE);
-      expect(aliceRoles.has(japanRole.id)).toBe(true);
       expect(aliceRoles.has(moderator.id)).toBe(true);
-      expect(aliceRoles.size).toBe(3);
+      expect(aliceRoles.size).toBe(2);
+      expect(alice.removeRole).not.toHaveBeenCalled();
     });
 
     it("stops early when the bot lacks Manage Roles", async () => {

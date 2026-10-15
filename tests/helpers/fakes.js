@@ -65,6 +65,9 @@ export class FakeServer {
       addRole: vi.fn(async (roleId) => {
         roles.add(roleId);
       }),
+      removeRole: vi.fn(async (roleId) => {
+        roles.delete(roleId);
+      }),
     };
   }
 }

@@ -7,6 +7,7 @@ import {
   pickLanguage,
   translate,
 } from "../src/i18n/i18n.js";
+import { STAFF_MESSAGES } from "../src/commands/countryStaff.js";
 import { Outcome } from "../src/roles/countryRoles.js";
 
 const placeholders = (text) => [...text.matchAll(/\{(\w+)\}/g)].map((match) => match[1]).sort();
@@ -32,6 +33,9 @@ describe("language files", () => {
   it("has a message for every possible outcome", () => {
     for (const outcome of Object.values(Outcome)) {
       expect(english).toHaveProperty(outcome);
+    }
+    for (const key of Object.values(STAFF_MESSAGES)) {
+      expect(english).toHaveProperty(key);
     }
   });
 
