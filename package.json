@@ -1,0 +1,25 @@
+{
+  "name": "rumbleverse-country-bot",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Discord bot for the Rumbleverse Revival server that assigns country roles via /country.",
+  "license": "UNLICENSED",
+  "type": "module",
+  "main": "src/index.js",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "start": "node --env-file-if-exists=.env src/index.js",
+    "register": "node --env-file-if-exists=.env src/register-commands.js",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "discord.js": "14.27.0",
+    "i18n-iso-countries": "7.14.0"
+  },
+  "devDependencies": {
+    "vitest": "4.1.11"
+  }
+}
