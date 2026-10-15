@@ -32,7 +32,7 @@
   "nothingToRemove": "{member} non ha un ruolo paese.",
   "removeFailed": "Non sono riuscito a rimuovere il ruolo {country} a {member}. Controlla i miei permessi e riprova.",
 
-  "settingsCommandDescription": "Solo admin: scegli il ruolo staff e il canale di /country.",
+  "settingsCommandDescription": "Solo admin: scegli il ruolo staff, il canale di /country e il canale dei log.",
   "settingsStaffRoleDescription": "Scegli il ruolo che può usare /country-staff.",
   "settingsRoleOptionDescription": "Il ruolo staff.",
   "settingsCountryChannelDescription": "Consenti /country in un solo canale ed elimina lì gli altri messaggi.",
@@ -53,6 +53,14 @@
   "settingsShowNoStaffRole": "Ruolo staff: non impostato",
   "settingsShowCountryChannel": "Canale di /country: {channel}",
   "settingsShowNoCountryChannel": "Canale di /country: qualsiasi canale",
+  "settingsLogsChannelDescription": "Registra in un canale tutto ciò che i membri fanno con il bot.",
+  "settingsLogsChannelOptionDescription": "Il canale per i log del bot.",
+  "settingsLogsChannelName": "Canale dei log",
+  "settingsLogsChannelSet": "Tutto ciò che i membri fanno con il bot verrà ora registrato in {channel}.",
+  "settingsLogsChannelCleared": "Il canale dei log è stato rimosso. Il bot non pubblica più log.",
+  "settingsLogsChannelNeedsPermissions": "Non posso ancora scrivere in {channel}. Dammi lì i permessi **Visualizza canale**, **Invia messaggi** e **Incorpora link**.",
+  "settingsShowLogsChannel": "Canale dei log: {channel}",
+  "settingsShowNoLogsChannel": "Canale dei log: non impostato",
 
   "helpCommandDescription": "Solo admin: pubblica in questo canale come ottenere un ruolo paese.",
   "helpNoPermission": "Ti serve il permesso **Gestisci server** per usare questo comando.",

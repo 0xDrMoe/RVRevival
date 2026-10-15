@@ -2,6 +2,7 @@ import { MessageFlags, PermissionFlagsBits, RESTJSONErrorCodes } from "discord.j
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createCountryHelpCommand } from "../src/commands/countryHelp.js";
 import { translate } from "../src/i18n/i18n.js";
+import { Status } from "../src/logs/actionLog.js";
 import { GuildSettings, Setting } from "../src/settings/guildSettings.js";
 import { discordError } from "./helpers/fakes.js";
 
@@ -55,8 +56,9 @@ describe("/country-help", () => {
 
   it("posts the guide as its own channel message and confirms privately", async () => {
     const interaction = fakeInteraction();
-    await command.execute(interaction);
+    const outcome = await command.execute(interaction);
 
+    expect(outcome).toMatchObject({ status: Status.SUCCESS, key: "helpPosted" });
     expect(interaction.reply).not.toHaveBeenCalled();
     expect(interaction.deferReply).toHaveBeenCalledWith({ flags: MessageFlags.Ephemeral });
     expect(interaction.channel.send).toHaveBeenCalledTimes(1);

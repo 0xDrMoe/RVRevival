@@ -32,7 +32,7 @@
   "nothingToRemove": "{member} hat keine Länderrolle.",
   "removeFailed": "Ich konnte {member} die Rolle {country} nicht entfernen. Bitte prüfe meine Berechtigungen und versuche es erneut.",
 
-  "settingsCommandDescription": "Nur Admins: Team-Rolle und /country-Kanal festlegen.",
+  "settingsCommandDescription": "Nur Admins: Team-Rolle, /country-Kanal und Log-Kanal festlegen.",
   "settingsStaffRoleDescription": "Rolle festlegen, die /country-staff verwenden darf.",
   "settingsRoleOptionDescription": "Die Team-Rolle.",
   "settingsCountryChannelDescription": "/country nur in einem Kanal erlauben und andere Nachrichten dort löschen.",
@@ -53,6 +53,14 @@
   "settingsShowNoStaffRole": "Team-Rolle: nicht festgelegt",
   "settingsShowCountryChannel": "/country-Kanal: {channel}",
   "settingsShowNoCountryChannel": "/country-Kanal: jeder Kanal",
+  "settingsLogsChannelDescription": "Alles, was Mitglieder mit dem Bot machen, in einem Kanal protokollieren.",
+  "settingsLogsChannelOptionDescription": "Der Kanal für die Logs des Bots.",
+  "settingsLogsChannelName": "Log-Kanal",
+  "settingsLogsChannelSet": "Alles, was Mitglieder mit dem Bot machen, wird jetzt in {channel} protokolliert.",
+  "settingsLogsChannelCleared": "Der Log-Kanal wurde entfernt. Der Bot postet keine Logs mehr.",
+  "settingsLogsChannelNeedsPermissions": "Ich kann in {channel} noch nicht posten. Gib mir dort die Berechtigungen **Kanal ansehen**, **Nachrichten senden** und **Links einbetten**.",
+  "settingsShowLogsChannel": "Log-Kanal: {channel}",
+  "settingsShowNoLogsChannel": "Log-Kanal: nicht festgelegt",
 
   "helpCommandDescription": "Nur für Admins: Postet in diesem Kanal, wie man eine Länderrolle bekommt.",
   "helpNoPermission": "Du brauchst die Berechtigung **Server verwalten**, um diesen Befehl zu verwenden.",

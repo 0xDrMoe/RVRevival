@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MAX_SUGGESTIONS, createCountryCommand } from "../src/commands/country.js";
 import { countryList } from "../src/countries/countries.js";
 import { translate } from "../src/i18n/i18n.js";
+import { Status } from "../src/logs/actionLog.js";
 import { CountryRoleService } from "../src/roles/countryRoles.js";
 import { GuildSettings, Setting } from "../src/settings/guildSettings.js";
 import { FakeServer, discordError, fakeLogger } from "./helpers/fakes.js";
@@ -93,7 +94,8 @@ describe("/country", () => {
 
   it("acknowledges privately, creates and assigns the role, and confirms", async () => {
     const interaction = fakeCommandInteraction("  canada ");
-    await makeCommand().execute(interaction);
+    const outcome = await makeCommand().execute(interaction);
+    expect(outcome).toEqual({ status: Status.SUCCESS, key: "assigned", values: { country: "Canada" } });
 
     expect(interaction.deferReply).toHaveBeenCalledWith({ flags: MessageFlags.Ephemeral });
     expect(interaction.editReply).toHaveBeenCalledWith({ content: "Your country role has been set to Canada." });
@@ -116,9 +118,10 @@ describe("/country", () => {
     server.member(USER_ID, [japanRole.id]);
     const interaction = fakeCommandInteraction("Canada");
 
-    await makeCommand().execute(interaction);
+    const outcome = await makeCommand().execute(interaction);
 
     expect(interaction.editReply).toHaveBeenCalledWith({ content: translate("en", "countryLocked", { country: "Japan" }) });
+    expect(outcome).toMatchObject({ status: Status.REFUSED, key: "countryLocked" });
     expect(server.createRole).not.toHaveBeenCalled();
     expect([...server.rolesByUser.get(USER_ID)]).toEqual([japanRole.id]);
   });
@@ -127,9 +130,10 @@ describe("/country", () => {
     const giveCountryRole = vi.spyOn(roleService, "giveCountryRole");
     const interaction = fakeCommandInteraction(typed);
 
-    await makeCommand().execute(interaction);
+    const outcome = await makeCommand().execute(interaction);
 
     expect(interaction.editReply).toHaveBeenCalledWith({ content: translate("en", "invalidCountry") });
+    expect(outcome).toMatchObject({ status: Status.REFUSED, key: "invalidCountry" });
     expect(giveCountryRole).not.toHaveBeenCalled();
     expect(server.createRole).not.toHaveBeenCalled();
   });

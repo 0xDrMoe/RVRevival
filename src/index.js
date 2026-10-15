@@ -5,6 +5,7 @@ import { createCountryChannelGuard } from "./channels/countryChannelGuard.js";
 import { createCommands } from "./commands/index.js";
 import { ConfigError, loadBotConfig } from "./config.js";
 import { createInteractionHandler } from "./interactionHandler.js";
+import { createActionLog } from "./logs/actionLog.js";
 import { GuildSettings, Setting } from "./settings/guildSettings.js";
 import { logger, registerSecret } from "./utils/logger.js";
 
@@ -27,8 +28,10 @@ async function start() {
   const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages] });
   const guildSettings = await GuildSettings.load();
   const commands = createCommands({ logger, guildSettings, forcedLanguage: config.forcedLanguage });
-  const handleInteraction = createInteractionHandler({ commands, logger, forcedLanguage: config.forcedLanguage });
-  const guardCountryChannel = createCountryChannelGuard({ guildSettings, logger });
+  // Posts what members do with the bot in each server's logs channel (/settings logs-channel).
+  const actionLog = createActionLog({ guildSettings, logger });
+  const handleInteraction = createInteractionHandler({ commands, logger, forcedLanguage: config.forcedLanguage, actionLog });
+  const guardCountryChannel = createCountryChannelGuard({ guildSettings, logger, actionLog });
 
   client.once(Events.ClientReady, (readyClient) => {
     logger.info("Bot is online", {
@@ -47,14 +50,20 @@ async function start() {
     guardCountryChannel(message).catch((error) => logger.error("Couldn't clean the /country channel", { error }));
   });
 
-  // If the channel /country was limited to is deleted, allow any channel again
-  // instead of leaving the command unusable.
+  // If the /country channel is deleted, allow any channel again instead of
+  // leaving the command unusable. If the logs channel is deleted, stop logging.
+  const CHANNEL_SETTINGS = [
+    [Setting.COUNTRY_CHANNEL, "The /country channel was deleted; /country now works in any channel"],
+    [Setting.LOGS_CHANNEL, "The logs channel was deleted; set a new one with /settings logs-channel"],
+  ];
   client.on(Events.ChannelDelete, (channel) => {
-    if (channel.guildId && guildSettings.get(channel.guildId, Setting.COUNTRY_CHANNEL) === channel.id) {
-      guildSettings
-        .clear(channel.guildId, Setting.COUNTRY_CHANNEL)
-        .then(() => logger.info("The /country channel was deleted; /country now works in any channel", { guildId: channel.guildId }))
-        .catch((error) => logger.error("Couldn't clear the deleted /country channel", { error }));
+    for (const [setting, message] of CHANNEL_SETTINGS) {
+      if (channel.guildId && guildSettings.get(channel.guildId, setting) === channel.id) {
+        guildSettings
+          .clear(channel.guildId, setting)
+          .then(() => logger.info(message, { guildId: channel.guildId }))
+          .catch((error) => logger.error("Couldn't clear a deleted channel from the settings", { setting, error }));
+      }
     }
   });
 

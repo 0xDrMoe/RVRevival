@@ -2,13 +2,15 @@
 //
 //   /settings staff-role role:@Staff             members with this role can use /country-staff
 //   /settings country-channel channel:#roles     only allow /country in #roles; other messages there are deleted
-//   /settings clear setting:<staff role | /country channel>
+//   /settings logs-channel channel:#bot-logs     log everything members do with the bot in #bot-logs
+//   /settings clear setting:<staff role | /country channel | logs channel>
 //   /settings show                               list the current settings
 //
 // Only members with the Manage Server permission can see or use it.
 
 import { ChannelType, InteractionContextType, MessageFlags, PermissionFlagsBits, SlashCommandBuilder } from "discord.js";
 import { discordLocalizations, pickLanguage, translate } from "../i18n/i18n.js";
+import { result, Status } from "../logs/actionLog.js";
 import { Setting } from "../settings/guildSettings.js";
 
 const COMMAND_NAME = "settings";
@@ -20,12 +22,23 @@ const SETTING_OPTION = "setting";
 const CLEARABLE = [
   { value: Setting.STAFF_ROLE, nameKey: "settingsStaffRoleName", clearedKey: "settingsStaffRoleCleared" },
   { value: Setting.COUNTRY_CHANNEL, nameKey: "settingsCountryChannelName", clearedKey: "settingsCountryChannelCleared" },
+  { value: Setting.LOGS_CHANNEL, nameKey: "settingsLogsChannelName", clearedKey: "settingsLogsChannelCleared" },
 ];
 
-// Whether the bot can delete other people's messages in `channel`.
-function botCanDeleteMessagesIn(channel, guild) {
+// Whether the bot has every permission in `wanted` in `channel`.
+function botHasPermissionsIn(channel, guild, wanted) {
   const permissions = guild.members.me ? channel.permissionsFor?.(guild.members.me) : null;
-  return Boolean(permissions?.has([PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ManageMessages]));
+  return Boolean(permissions?.has(wanted));
+}
+
+const DELETE_MESSAGES = [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ManageMessages];
+const POST_LOGS = [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.EmbedLinks];
+
+// A required text or announcement channel option.
+function channelOption(option, descriptionKey) {
+  return withDescription(option.setName(CHANNEL_OPTION), descriptionKey)
+    .setRequired(true)
+    .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement);
 }
 
 // Shorthand for an English description plus its translations.
@@ -47,9 +60,12 @@ export function buildSettingsCommandData() {
     )
     .addSubcommand((sub) =>
       withDescription(sub.setName("country-channel"), "settingsCountryChannelDescription").addChannelOption((option) =>
-        withDescription(option.setName(CHANNEL_OPTION), "settingsChannelOptionDescription")
-          .setRequired(true)
-          .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement),
+        channelOption(option, "settingsChannelOptionDescription"),
+      ),
+    )
+    .addSubcommand((sub) =>
+      withDescription(sub.setName("logs-channel"), "settingsLogsChannelDescription").addChannelOption((option) =>
+        channelOption(option, "settingsLogsChannelOptionDescription"),
       ),
     )
     .addSubcommand((sub) =>
@@ -76,65 +92,81 @@ export function createSettingsCommand({ guildSettings, forcedLanguage }) {
   async function execute(interaction) {
     const language = pickLanguage(interaction.locale, forcedLanguage);
     const text = (key, values) => translate(language, key, values);
-    const reply = (key, values) => interaction.reply({ content: text(key, values), flags: MessageFlags.Ephemeral });
+    const guildId = interaction.guildId;
+    // Answers privately and reports how the command ended.
+    const reply = async (status, key, values) => {
+      await interaction.reply({ content: text(key, values), flags: MessageFlags.Ephemeral });
+      return result(status, key, values);
+    };
+    // Saves a channel setting, warning the admin (in the same reply) when the
+    // bot is missing permissions there. It's saved anyway, so it starts working
+    // as soon as the permissions are fixed.
+    const setChannel = async (setting, setKey, wanted, warningKey) => {
+      const channel = interaction.options.getChannel(CHANNEL_OPTION, true);
+      await guildSettings.set(guildId, setting, channel.id);
+      const values = { channel: `<#${channel.id}>` };
+      const lines = [text(setKey, values)];
+      if (!botHasPermissionsIn(channel, interaction.guild, wanted)) {
+        lines.push(text(warningKey, values));
+      }
+      await interaction.reply({ content: lines.join("\n"), flags: MessageFlags.Ephemeral });
+      if (lines.length === 1) {
+        return result(Status.SUCCESS, setKey, values);
+      }
+      // The log is always English, so build the same two lines in English.
+      return { status: Status.SUCCESS, note: [setKey, warningKey].map((key) => translate("en", key, values)).join("\n") };
+    };
 
     if (!interaction.inCachedGuild()) {
-      await reply("guildOnly");
-      return;
+      return reply(Status.REFUSED, "guildOnly");
     }
     // Discord already hides the command from everyone else, but check anyway.
     if (!interaction.memberPermissions.has(PermissionFlagsBits.ManageGuild)) {
-      await reply("settingsNoPermission");
-      return;
+      return reply(Status.REFUSED, "settingsNoPermission");
     }
 
-    const guildId = interaction.guildId;
     switch (interaction.options.getSubcommand()) {
       case "staff-role": {
         const role = interaction.options.getRole(ROLE_OPTION, true);
         // @everyone has the server's ID. Making it the staff role would let anyone change countries.
         if (role.id === guildId) {
-          await reply("settingsStaffRoleEveryone");
-          return;
+          return reply(Status.REFUSED, "settingsStaffRoleEveryone");
         }
         await guildSettings.set(guildId, Setting.STAFF_ROLE, role.id);
-        await reply("settingsStaffRoleSet", { role: `<@&${role.id}>` });
-        break;
+        return reply(Status.SUCCESS, "settingsStaffRoleSet", { role: `<@&${role.id}>` });
       }
-      case "country-channel": {
-        const channel = interaction.options.getChannel(CHANNEL_OPTION, true);
-        await guildSettings.set(guildId, Setting.COUNTRY_CHANNEL, channel.id);
-        const mention = `<#${channel.id}>`;
-        const lines = [text("settingsCountryChannelSet", { channel: mention })];
-        // Save it anyway, but tell the admin the channel won't be kept clean yet.
-        if (!botCanDeleteMessagesIn(channel, interaction.guild)) {
-          lines.push(text("settingsCountryChannelNeedsManageMessages", { channel: mention }));
-        }
-        await interaction.reply({ content: lines.join("\n"), flags: MessageFlags.Ephemeral });
-        break;
-      }
+      case "country-channel":
+        return setChannel(
+          Setting.COUNTRY_CHANNEL,
+          "settingsCountryChannelSet",
+          DELETE_MESSAGES,
+          "settingsCountryChannelNeedsManageMessages",
+        );
+      case "logs-channel":
+        return setChannel(Setting.LOGS_CHANNEL, "settingsLogsChannelSet", POST_LOGS, "settingsLogsChannelNeedsPermissions");
       case "clear": {
         const choice = CLEARABLE.find(({ value }) => value === interaction.options.getString(SETTING_OPTION, true));
         if (!choice) {
-          await reply("unexpected");
-          return;
+          return reply(Status.FAILED, "unexpected");
         }
         await guildSettings.clear(guildId, choice.value);
-        await reply(choice.clearedKey);
-        break;
+        return reply(Status.SUCCESS, choice.clearedKey);
       }
       case "show": {
         const staffRoleId = guildSettings.get(guildId, Setting.STAFF_ROLE);
         const channelId = guildSettings.get(guildId, Setting.COUNTRY_CHANNEL);
+        const logsChannelId = guildSettings.get(guildId, Setting.LOGS_CHANNEL);
         const lines = [
           staffRoleId ? text("settingsShowStaffRole", { role: `<@&${staffRoleId}>` }) : text("settingsShowNoStaffRole"),
           channelId ? text("settingsShowCountryChannel", { channel: `<#${channelId}>` }) : text("settingsShowNoCountryChannel"),
+          logsChannelId ? text("settingsShowLogsChannel", { channel: `<#${logsChannelId}>` }) : text("settingsShowNoLogsChannel"),
         ];
         // Mentions in an ephemeral reply never ping, but say so explicitly anyway.
         await interaction.reply({ content: lines.join("\n"), flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] } });
-        break;
+        return result(Status.SUCCESS);
       }
     }
+    return reply(Status.FAILED, "unexpected");
   }
 
   return { name: COMMAND_NAME, data: buildSettingsCommandData(), execute };

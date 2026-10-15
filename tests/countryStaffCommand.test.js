@@ -2,6 +2,7 @@ import { ApplicationCommandOptionType, InteractionContextType, MessageFlags } fr
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createCountryStaffCommand } from "../src/commands/countryStaff.js";
 import { translate } from "../src/i18n/i18n.js";
+import { Status } from "../src/logs/actionLog.js";
 import { CountryRoleService } from "../src/roles/countryRoles.js";
 import { GuildSettings, Setting } from "../src/settings/guildSettings.js";
 import { FakeServer, fakeLogger } from "./helpers/fakes.js";
@@ -100,7 +101,8 @@ describe("/country-staff", () => {
     server.member(TARGET_ID, [japanRole.id]);
     const interaction = fakeInteraction("remove");
 
-    await makeCommand().execute(interaction);
+    const outcome = await makeCommand().execute(interaction);
+    expect(outcome).toMatchObject({ status: Status.SUCCESS, key: "removed" });
 
     expect(interaction.editReply).toHaveBeenCalledWith({ content: `Removed the Japan role from <@${TARGET_ID}>.`, ...noPings });
     expect(server.rolesByUser.get(TARGET_ID).size).toBe(0);
@@ -114,7 +116,8 @@ describe("/country-staff", () => {
 
   it("refuses members without the staff role, even admins", async () => {
     const interaction = fakeInteraction("set", { country: "Canada", callerRoles: [] });
-    await makeCommand().execute(interaction);
+    const outcome = await makeCommand().execute(interaction);
+    expect(outcome).toMatchObject({ status: Status.REFUSED, key: "staffOnly" });
 
     expect(interaction.reply).toHaveBeenCalledWith({
       content: translate("en", "staffOnly", { role: `<@&${STAFF_ROLE_ID}>` }),

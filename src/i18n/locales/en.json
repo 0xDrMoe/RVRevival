@@ -32,7 +32,7 @@
   "nothingToRemove": "{member} doesn't have a country role.",
   "removeFailed": "I couldn't remove the {country} role from {member}. Please check my permissions and try again.",
 
-  "settingsCommandDescription": "Admins only: choose the staff role and the /country channel.",
+  "settingsCommandDescription": "Admins only: choose the staff role, the /country channel and the logs channel.",
   "settingsStaffRoleDescription": "Choose the role that can use /country-staff.",
   "settingsRoleOptionDescription": "The staff role.",
   "settingsCountryChannelDescription": "Only allow /country in one channel, and delete other messages there.",
@@ -53,6 +53,14 @@
   "settingsShowNoStaffRole": "Staff role: not set",
   "settingsShowCountryChannel": "/country channel: {channel}",
   "settingsShowNoCountryChannel": "/country channel: any channel",
+  "settingsLogsChannelDescription": "Log everything members do with the bot in one channel.",
+  "settingsLogsChannelOptionDescription": "The channel for the bot's logs.",
+  "settingsLogsChannelName": "Logs channel",
+  "settingsLogsChannelSet": "Everything members do with the bot will now be logged in {channel}.",
+  "settingsLogsChannelCleared": "The logs channel has been removed. The bot no longer posts logs.",
+  "settingsLogsChannelNeedsPermissions": "I can't post in {channel} yet. Give me the **View Channel**, **Send Messages** and **Embed Links** permissions there.",
+  "settingsShowLogsChannel": "Logs channel: {channel}",
+  "settingsShowNoLogsChannel": "Logs channel: not set",
 
   "helpCommandDescription": "Admins only: post how to get a country role in this channel.",
   "helpNoPermission": "You need the **Manage Server** permission to use this command.",

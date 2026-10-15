@@ -32,7 +32,7 @@
   "nothingToRemove": "{member} n'a pas de rôle de pays.",
   "removeFailed": "Je n'ai pas pu retirer le rôle {country} à {member}. Vérifiez mes permissions et réessayez.",
 
-  "settingsCommandDescription": "Admins uniquement : choisir le rôle staff et le salon de /country.",
+  "settingsCommandDescription": "Admins uniquement : choisir le rôle staff, le salon de /country et le salon des logs.",
   "settingsStaffRoleDescription": "Choisir le rôle qui peut utiliser /country-staff.",
   "settingsRoleOptionDescription": "Le rôle staff.",
   "settingsCountryChannelDescription": "Autoriser /country dans un seul salon et y supprimer les autres messages.",
@@ -53,6 +53,14 @@
   "settingsShowNoStaffRole": "Rôle staff : non défini",
   "settingsShowCountryChannel": "Salon de /country : {channel}",
   "settingsShowNoCountryChannel": "Salon de /country : n'importe quel salon",
+  "settingsLogsChannelDescription": "Enregistrer dans un salon tout ce que les membres font avec le bot.",
+  "settingsLogsChannelOptionDescription": "Le salon pour les logs du bot.",
+  "settingsLogsChannelName": "Salon des logs",
+  "settingsLogsChannelSet": "Tout ce que les membres font avec le bot sera désormais enregistré dans {channel}.",
+  "settingsLogsChannelCleared": "Le salon des logs a été retiré. Le bot ne publie plus de logs.",
+  "settingsLogsChannelNeedsPermissions": "Je ne peux pas encore publier dans {channel}. Donne-moi les permissions **Voir le salon**, **Envoyer des messages** et **Intégrer des liens** là-bas.",
+  "settingsShowLogsChannel": "Salon des logs : {channel}",
+  "settingsShowNoLogsChannel": "Salon des logs : non défini",
 
   "helpCommandDescription": "Admins uniquement : publie ici comment obtenir un rôle de pays.",
   "helpNoPermission": "Vous avez besoin de la permission **Gérer le serveur** pour utiliser cette commande.",

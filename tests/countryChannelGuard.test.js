@@ -1,6 +1,7 @@
 import { RESTJSONErrorCodes } from "discord.js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createCountryChannelGuard } from "../src/channels/countryChannelGuard.js";
+import { Status } from "../src/logs/actionLog.js";
 import { GuildSettings, Setting } from "../src/settings/guildSettings.js";
 import { discordError, fakeLogger } from "./helpers/fakes.js";
 
@@ -90,5 +91,23 @@ describe("/country channel guard", () => {
     const message = fakeMessage();
     message.delete.mockRejectedValue(new Error("network down"));
     await expect(guard(message)).rejects.toThrow("network down");
+  });
+
+  it("records each deletion, and the first permission failure, in the logs channel", async () => {
+    const actionLog = { logCommand: vi.fn(), logDeletedMessage: vi.fn(async () => {}) };
+    guard = createCountryChannelGuard({ guildSettings, logger, actionLog });
+
+    const deleted = fakeMessage();
+    await guard(deleted);
+    const denied = fakeMessage();
+    denied.delete.mockRejectedValue(discordError(RESTJSONErrorCodes.MissingPermissions));
+    await guard(denied);
+    await guard(denied);
+    await guard(fakeMessage({ authorId: BOT_ID }));
+
+    expect(actionLog.logDeletedMessage.mock.calls.map(([message, outcome]) => [message, outcome.status])).toEqual([
+      [deleted, Status.SUCCESS],
+      [denied, Status.FAILED],
+    ]);
   });
 });

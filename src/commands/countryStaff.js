@@ -11,6 +11,7 @@
 import { InteractionContextType, MessageFlags, SlashCommandBuilder } from "discord.js";
 import { countryList, MAX_NAME_LENGTH } from "../countries/countries.js";
 import { discordLocalizations, pickLanguage, translate } from "../i18n/i18n.js";
+import { result, Status, statusForOutcome } from "../logs/actionLog.js";
 import { CountryRoleService, Outcome } from "../roles/countryRoles.js";
 import { wrapMember, wrapServer } from "../roles/discordAdapters.js";
 import { Setting } from "../settings/guildSettings.js";
@@ -79,27 +80,27 @@ export function createCountryStaffCommand(options) {
       // Replies mention the member and the staff role; never ping them.
       allowedMentions: { parse: [] },
     });
-    const replyPrivately = (key, values) => interaction.reply({ ...message(key, values), flags: MessageFlags.Ephemeral });
+    // Answers privately and reports the command as refused.
+    const refuse = async (key, values) => {
+      await interaction.reply({ ...message(key, values), flags: MessageFlags.Ephemeral });
+      return result(Status.REFUSED, key, values);
+    };
 
     if (!interaction.inCachedGuild()) {
-      await replyPrivately("guildOnly");
-      return;
+      return refuse("guildOnly");
     }
 
     const staffRoleId = guildSettings?.get(interaction.guildId, Setting.STAFF_ROLE);
     if (!staffRoleId) {
-      await replyPrivately("staffRoleNotSet");
-      return;
+      return refuse("staffRoleNotSet");
     }
     if (!interaction.member.roles.cache.has(staffRoleId)) {
-      await replyPrivately("staffOnly", { role: `<@&${staffRoleId}>` });
-      return;
+      return refuse("staffOnly", { role: `<@&${staffRoleId}>` });
     }
 
     const target = interaction.options.getMember(MEMBER_OPTION);
     if (!target) {
-      await replyPrivately("staffMemberNotFound");
-      return;
+      return refuse("staffMemberNotFound");
     }
     const memberMention = `<@${target.id}>`;
 
@@ -108,8 +109,7 @@ export function createCountryStaffCommand(options) {
     if (subcommand === "set") {
       country = countries.find(interaction.options.getString(COUNTRY_OPTION));
       if (!country) {
-        await replyPrivately("invalidCountry");
-        return;
+        return refuse("invalidCountry");
       }
     }
 
@@ -119,29 +119,31 @@ export function createCountryStaffCommand(options) {
     const server = toServer(interaction.guild);
     const member = toMember(target);
     const staffUserId = interaction.user.id;
-    const result =
+    const change =
       subcommand === "set"
         ? await roleService.setCountryRole(server, member, country, staffUserId)
         : await roleService.removeCountryRoles(server, member, staffUserId);
 
-    if (result.outcome === Outcome.ASSIGNED || result.outcome === Outcome.REMOVED) {
+    if (change.outcome === Outcome.ASSIGNED || change.outcome === Outcome.REMOVED) {
       logger.info("Staff changed a member's country role", {
         guildId: interaction.guildId,
         staffUserId,
         userId: target.id,
         action: subcommand,
         country: country?.name,
-        removedRoleIds: result.removed?.map((role) => role.id),
+        removedRoleIds: change.removed?.map((role) => role.id),
       });
     }
 
-    const key = STAFF_MESSAGES[result.outcome] ?? result.outcome;
+    const key = STAFF_MESSAGES[change.outcome] ?? change.outcome;
     // Name the roles actually involved: all removed ones, or the one that failed.
     const shownCountry =
-      result.outcome === Outcome.REMOVED
-        ? result.removed.map((role) => role.name).join(", ")
-        : (result.role?.name ?? country?.name ?? "");
-    await interaction.editReply(message(key, { member: memberMention, country: shownCountry }));
+      change.outcome === Outcome.REMOVED
+        ? change.removed.map((role) => role.name).join(", ")
+        : (change.role?.name ?? country?.name ?? "");
+    const values = { member: memberMention, country: shownCountry };
+    await interaction.editReply(message(key, values));
+    return result(statusForOutcome(change.outcome), key, values);
   }
 
   const autocomplete = (interaction) => suggestCountries(interaction, { countries, logger });

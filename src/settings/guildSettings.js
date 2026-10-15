@@ -1,7 +1,7 @@
 // Per-server settings that admins choose with /settings. They're saved to a
 // JSON file so they survive restarts:
 //
-//   { "<server id>": { "countryChannelId": "<channel id>", "staffRoleId": "<role id>" }, ... }
+//   { "<server id>": { "countryChannelId": "<channel id>", "staffRoleId": "<role id>", "logsChannelId": "<channel id>" }, ... }
 //
 // Without a file path (as in tests and `npm run register`) nothing is saved.
 
@@ -18,6 +18,7 @@ export const LEGACY_CHANNELS_FILE = fileURLToPath(new URL("../../data/country-ch
 export const Setting = Object.freeze({
   COUNTRY_CHANNEL: "countryChannelId",
   STAFF_ROLE: "staffRoleId",
+  LOGS_CHANNEL: "logsChannelId",
 });
 
 const KNOWN_SETTINGS = new Set(Object.values(Setting));
