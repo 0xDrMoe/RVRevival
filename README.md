@@ -18,7 +18,7 @@ Every reply is translated into English, Spanish, German, French, Portuguese, Ita
 
 - **`/settings staff-role role:<role>`** chooses the staff role. Only members with it can use `/country-staff`. `@everyone` is refused.
 - **`/settings country-channel channel:<channel>`** limits `/country` to one channel (threads inside it work too) and keeps that channel clean: every message posted in it is deleted right away, including staff's and admins', so it only holds `/country` and the bot's own posts (like the `/country-help` guide). Threads inside it are not cleaned. The bot needs **View Channel** and **Manage Messages** there; `/settings` warns the admin if it doesn't have them. Messages already in the channel before it was set are left alone.
-- **`/settings logs-channel channel:<channel>`** chooses the channel where the bot logs everything members do with it (see [Logs channel](#logs-channel)). The bot needs **View Channel**, **Send Messages** and **Embed Links** there; `/settings` warns the admin if it doesn't have them.
+- **`/settings logs-channel channel:<channel>`** chooses the channel where the bot logs everything members do with it (see [Logs channel](#logs-channel)). The bot needs **View Channel**, **Send Messages**, **Embed Links** and **Attach Files** there; `/settings` warns the admin if it doesn't have them.
 - **`/settings clear setting:<Staff role | /country channel | Logs channel>`** resets one setting. Clearing the logs channel stops logging.
 - **`/settings show`** lists the current settings.
 
@@ -26,7 +26,7 @@ If the staff role, the `/country` channel or the logs channel is deleted, the bo
 
 ### Logs channel
 
-Once an admin runs `/settings logs-channel`, the bot posts a short embed there for:
+Once an admin runs `/settings logs-channel`, the bot posts a compact embed there (member name and avatar, two or three lines, user ID in the footer) for:
 
 - **Every command anyone runs**, with who ran it, the channel, the options they picked or typed, and how it ended:
   - **Success** (green): it did what was asked.
@@ -34,9 +34,11 @@ Once an admin runs `/settings logs-channel`, the bot posts a short embed there f
   - **Failed** (orange): allowed, but the bot couldn't do it, usually because of a missing permission or the role hierarchy.
   - **Error** (red): the command crashed, or Discord cancelled it. The details stay in the bot's console log.
   The embed includes the reply the member got, in English.
-- **Every message deleted from the `/country` channel**, with its author and the channel. The bot can't read message content, so the content isn't logged. If the bot can't delete messages there, that is logged once until a delete works again.
+- **Every message deleted from the `/country` channel**, with its author, the full text exactly as written (in a code block, so it can't ping or format anything), every attachment and sticker, and the user and message IDs. Attachments are downloaded before the message is deleted and re-uploaded with the log entry, since their links stop working once the message is gone (up to 8 MB and 10 files per message; anything bigger is listed with its name and size). If the bot can't delete messages there, that is logged once until a delete works again.
 
-Autocomplete suggestions aren't logged. Log entries are always in English, since only staff read them. Mentions in log entries never ping anyone, and typed text is shown as code, so it can't add formatting. If the bot can't post in the logs channel, commands keep working and the console log warns once until posting works again. Make the logs channel visible to staff only.
+Showing the text needs the **Message Content** intent (see [Setup](#setup), step 1). If it's off, the bot still starts, warns in the console, and logs deleted messages without their text.
+
+Autocomplete suggestions aren't logged. Log entries are always in English, since only staff read them. Mentions in log entries never ping anyone, and typed text is shown as code, so it can't add formatting. The bot needs **View Channel**, **Send Messages**, **Embed Links** and **Attach Files** in the logs channel; without Attach Files, entries are posted without the saved files. If the bot can't post there at all, commands keep working and the console log warns once until posting works again. Log entries contain what members wrote, so make the logs channel visible to staff only.
 
 ### Country roles
 
@@ -68,15 +70,15 @@ Country names are the English ISO names, with a few shortened (for example *Unit
 
 ## Setup
 
-1. **Create the bot.** In the [Discord Developer Portal](https://discord.com/developers/applications), create an application. Copy the **Application ID** from *General Information*. On the **Bot** tab, click **Reset Token** and copy the token. Leave all privileged intents off.
+1. **Create the bot.** In the [Discord Developer Portal](https://discord.com/developers/applications), create an application. Copy the **Application ID** from *General Information*. On the **Bot** tab, click **Reset Token** and copy the token. Under *Privileged Gateway Intents*, turn on **Message Content Intent** (the logs channel uses it to show what deleted messages said) and leave the others off.
 
 2. **Invite it.** Replace `YOUR_CLIENT_ID` and open:
 
    ```
-   https://discord.com/oauth2/authorize?client_id=YOUR_CLIENT_ID&scope=bot+applications.commands&permissions=275146370048
+   https://discord.com/oauth2/authorize?client_id=YOUR_CLIENT_ID&scope=bot+applications.commands&permissions=275146402816
    ```
 
-   `permissions=275146370048` is **Manage Roles**, **Manage Messages**, **View Channels**, **Send Messages**, **Send Messages in Threads** and **Embed Links**, which is what the current features need. If the bot was invited before Manage Messages was added, either re-invite it with this link or give its role **Manage Messages** in the `/country` channel. If a new feature needs more, update this number and re-invite the bot.
+   `permissions=275146402816` is **Manage Roles**, **Manage Messages**, **View Channels**, **Send Messages**, **Send Messages in Threads**, **Embed Links** and **Attach Files**, which is what the current features need. If the bot was invited with fewer, either re-invite it with this link or give its role the missing permissions in the channels that need them (**Manage Messages** in the `/country` channel, **Attach Files** in the logs channel). If a new feature needs more, update this number and re-invite the bot.
 
 3. **Fix the role hierarchy.** In *Server Settings > Roles*, drag the bot's role above any roles it manages (existing country roles; new ones are created below it automatically) and below your staff roles.
 
@@ -169,7 +171,8 @@ Replies use each user's Discord language when it's supported, otherwise English.
 | `/country-help` says it can't post | Give the bot **View Channel**, **Send Messages** and **Embed Links** in that channel. |
 | Messages in the `/country` channel aren't deleted | Give the bot **View Channel** and **Manage Messages** in that channel (the log warns once when it can't). |
 | `/country-staff` says no staff role is set | An admin runs `/settings staff-role`. |
-| Nothing shows up in the logs channel | Check `/settings show`, then give the bot **View Channel**, **Send Messages** and **Embed Links** there (the console log warns once when it can't post). |
+| Nothing shows up in the logs channel | Check `/settings show`, then give the bot **View Channel**, **Send Messages**, **Embed Links** and **Attach Files** there (the console log warns once when it can't post). |
+| Deleted messages are logged without their text | Turn on **Message Content Intent** in the Developer Portal (*Bot* tab), then restart the bot. |
 | A member needs a different country | Staff run `/country-staff set`. |
 
 Set `LOG_LEVEL=debug` for more detail.
@@ -184,4 +187,4 @@ Set `LOG_LEVEL=debug` for more detail.
 - Secrets come only from environment variables. `.env` is git-ignored; `.env.example` has placeholders only.
 - Logs redact anything that looks like a Discord token, plus the configured token.
 - Users only see fixed, friendly messages; errors and stack traces stay in the log.
-- The bot uses only the non-privileged Guilds and Guild Messages intents (it never reads message content) and the permissions its features need (see the invite link in [Setup](#setup)). Roles it creates have zero permissions.
+- The bot uses the Guilds and Guild Messages intents, plus the privileged Message Content intent, which it only uses to copy messages it deletes from the `/country` channel into the logs channel. It uses only the permissions its features need (see the invite link in [Setup](#setup)). Roles it creates have zero permissions.

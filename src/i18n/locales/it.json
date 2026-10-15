@@ -58,7 +58,7 @@
   "settingsLogsChannelName": "Canale dei log",
   "settingsLogsChannelSet": "Tutto ciò che i membri fanno con il bot verrà ora registrato in {channel}.",
   "settingsLogsChannelCleared": "Il canale dei log è stato rimosso. Il bot non pubblica più log.",
-  "settingsLogsChannelNeedsPermissions": "Non posso ancora scrivere in {channel}. Dammi lì i permessi **Visualizza canale**, **Invia messaggi** e **Incorpora link**.",
+  "settingsLogsChannelNeedsPermissions": "Non posso ancora scrivere in {channel}. Dammi lì i permessi **Visualizza canale**, **Invia messaggi**, **Incorpora link** e **Allega file**.",
   "settingsShowLogsChannel": "Canale dei log: {channel}",
   "settingsShowNoLogsChannel": "Canale dei log: non impostato",
 

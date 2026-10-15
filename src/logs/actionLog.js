@@ -1,14 +1,20 @@
-// Posts a short embed in the server's logs channel (set with /settings
+// Posts a compact embed in the server's logs channel (set with /settings
 // logs-channel) for everything members do with the bot: every command, whether
 // it worked, was refused or crashed, and every message deleted from the
-// /country channel.
+// /country channel, with its text, attachments and stickers.
 //
 // Log entries are in English, since only staff read them. Posting a log entry
 // never throws: if the logs channel is missing or the bot can't post there, the
 // command still works and a warning goes to the console (once, until posting
 // works again).
 
-import { ApplicationCommandOptionType, EmbedBuilder } from "discord.js";
+import {
+  ApplicationCommandOptionType,
+  AttachmentBuilder,
+  EmbedBuilder,
+  GatewayIntentBits,
+  PermissionFlagsBits,
+} from "discord.js";
 import { translate } from "../i18n/i18n.js";
 import { Outcome } from "../roles/countryRoles.js";
 import { Setting } from "../settings/guildSettings.js";
@@ -50,6 +56,13 @@ export function result(status, key, values) {
 
 // Longest text shown for one option, so a pasted wall of text can't fill the log.
 const MAX_VALUE_LENGTH = 100;
+// Room left for a deleted message's text in one embed (Discord allows 4096).
+const MAX_CONTENT_LENGTH = 3500;
+// Attachments are re-uploaded to the log, since their links die with the
+// message. Discord lets bots upload 10 MB per message and 10 files.
+const MAX_SAVED_BYTES = 8 * 1024 * 1024;
+const MAX_SAVED_FILES = 10;
+const DOWNLOAD_TIMEOUT_MS = 15_000;
 
 // Shows typed text as inline code, so it can't add formatting or mentions.
 function quote(value) {
@@ -73,7 +86,7 @@ function formatOptionValue(option) {
   }
 }
 
-// "/country-staff set" plus "member: @someone" lines for the options used.
+// "/country-staff set" plus "member: @someone" for each option used.
 export function describeCommand(interaction) {
   const words = [`/${interaction.commandName}`];
   let options = interaction.options?.data ?? [];
@@ -106,94 +119,230 @@ function describeResult(outcome) {
   return "";
 }
 
-function statusLine(outcome) {
-  const style = STATUS_STYLE[outcome.status] ?? STATUS_STYLE[Status.ERROR];
-  const detail = describeResult(outcome);
-  return { style, text: detail ? `**${style.label}:** ${detail}` : `**${style.label}**` };
+const styleOf = (outcome) => STATUS_STYLE[outcome.status] ?? STATUS_STYLE[Status.ERROR];
+
+// Prefixes every line with "> " so it shows as a quote.
+const asQuote = (text) => text.split("\n").map((line) => `> ${line}`).join("\n");
+
+// The member's name and avatar at the top of every entry.
+function authorOf(user) {
+  const name = user.tag ?? user.username ?? user.id;
+  const iconURL = user.displayAvatarURL?.();
+  return iconURL ? { name, iconURL } : { name };
 }
 
+function formatBytes(bytes) {
+  if (bytes >= 1024 * 1024) {
+    return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  }
+  return bytes >= 1024 ? `${Math.round(bytes / 1024)} KB` : `${bytes} B`;
+}
+
+// Text in a code block, so it shows exactly as typed and can't ping or format.
+function codeBlock(text) {
+  let shown = text;
+  let cut = "";
+  if (shown.length > MAX_CONTENT_LENGTH) {
+    cut = `\n*…${shown.length - MAX_CONTENT_LENGTH} more characters not shown*`;
+    shown = shown.slice(0, MAX_CONTENT_LENGTH);
+  }
+  // A zero-width space keeps ``` inside the message from closing the block.
+  return `\`\`\`\n${shown.replace(/```/g, "`\u200b``")}\n\`\`\`${cut}`;
+}
+
+// One compact entry:
+//   [avatar] name
+//   **Refused** · `/country-staff set` in #channel
+//   member: @someone · country: `Canada`
+//   > Only members with the @Staff role can use this command.
+//   User ID 123 · today at 21:43
 export function buildCommandLogEmbed(interaction, outcome) {
   const { command, options } = describeCommand(interaction);
-  const { style, text } = statusLine(outcome);
-  const embed = new EmbedBuilder()
-    .setColor(style.color)
-    .setTitle(command)
-    .setDescription(text.slice(0, 4000))
-    .addFields({ name: "User", value: `<@${interaction.user.id}> (${interaction.user.id})`, inline: true });
-  if (interaction.channelId) {
-    embed.addFields({ name: "Channel", value: `<#${interaction.channelId}>`, inline: true });
-  }
+  const style = styleOf(outcome);
+  const where = interaction.channelId ? ` in <#${interaction.channelId}>` : "";
+  const lines = [`**${style.label}** · \`${command}\`${where}`];
   if (options.length > 0) {
-    embed.addFields({ name: "Options", value: options.join("\n").slice(0, 1024) });
+    lines.push(options.join(" · "));
   }
-  return embed.setTimestamp();
-}
-
-export function buildDeletedMessageLogEmbed(message, outcome) {
-  const deleted = outcome.status === Status.SUCCESS;
-  const { style, text } = statusLine(outcome);
+  const detail = describeResult(outcome);
+  if (detail) {
+    lines.push(asQuote(detail));
+  }
   return new EmbedBuilder()
     .setColor(style.color)
-    .setTitle(deleted ? "Message deleted in the /country channel" : "Couldn't delete a message in the /country channel")
-    .setDescription(text)
-    .addFields(
-      { name: "User", value: `<@${message.author.id}> (${message.author.id})`, inline: true },
-      { name: "Channel", value: `<#${message.channelId}>`, inline: true },
-    )
+    .setAuthor(authorOf(interaction.user))
+    .setDescription(lines.join("\n").slice(0, 4096))
+    .setFooter({ text: `User ID ${interaction.user.id}` })
     .setTimestamp();
+}
+
+// Whether the bot was allowed to read message text (the Message Content intent).
+export function canReadContent(message) {
+  return Boolean(message.client?.options?.intents?.has?.(GatewayIntentBits.MessageContent));
+}
+
+// What a deleted message held: its text, attachments and stickers. `saved` is
+// the list from saveAttachments(), shown as "saved below" or why not.
+export function buildDeletedMessageLogEmbed(message, outcome, saved = []) {
+  const style = styleOf(outcome);
+  const deleted = outcome.status === Status.SUCCESS;
+  const lines = [`**${deleted ? "Message deleted" : "Couldn't delete a message"}** in <#${message.channelId}>`];
+
+  if (message.content) {
+    lines.push(codeBlock(message.content));
+  } else if (!canReadContent(message)) {
+    lines.push("*Text not available: the Message Content intent is off.*");
+  } else if (message.attachments?.size === 0 && !message.stickers?.size) {
+    lines.push("*No text.*");
+  }
+
+  const savedById = new Map(saved.map((entry) => [entry.id, entry]));
+  const attachments = [...(message.attachments?.values() ?? [])];
+  if (attachments.length > 0) {
+    lines.push(`**Attachments (${attachments.length})**`);
+    for (const attachment of attachments) {
+      const entry = savedById.get(attachment.id);
+      const status = deleted ? ` · ${entry?.file ? "saved below" : (entry?.reason ?? "not saved")}` : "";
+      lines.push(`- [${attachment.name}](${attachment.url}) · ${formatBytes(attachment.size ?? 0)}${status}`);
+    }
+  }
+  const stickers = [...(message.stickers?.values() ?? [])];
+  if (stickers.length > 0) {
+    lines.push(`**Stickers:** ${stickers.map((sticker) => quote(sticker.name)).join(", ")}`);
+  }
+  if (outcome.note) {
+    lines.push(asQuote(outcome.note));
+  }
+
+  return new EmbedBuilder()
+    .setColor(style.color)
+    .setAuthor(authorOf(message.author))
+    .setDescription(lines.join("\n").slice(0, 4096))
+    .setFooter({ text: `User ID ${message.author.id} · Message ID ${message.id}` })
+    .setTimestamp(message.createdTimestamp ?? Date.now());
+}
+
+// Downloads a message's attachments (within Discord's upload limit), so they
+// can be re-uploaded to the log after the message is gone. Never throws.
+// Returns [{ id, file?, reason? }] in the message's order.
+export async function saveAttachments(message, { fetchFile = fetch } = {}) {
+  const results = [];
+  let total = 0;
+  for (const attachment of message.attachments?.values() ?? []) {
+    const size = attachment.size ?? 0;
+    if (results.filter((entry) => entry.attachment).length >= MAX_SAVED_FILES) {
+      results.push({ id: attachment.id, reason: "too many files to keep" });
+      continue;
+    }
+    if (total + size > MAX_SAVED_BYTES) {
+      results.push({ id: attachment.id, reason: "too large to keep" });
+      continue;
+    }
+    total += size;
+    results.push({ id: attachment.id, attachment });
+  }
+
+  return Promise.all(
+    results.map(async (entry) => {
+      if (!entry.attachment) {
+        return entry;
+      }
+      const { id, attachment } = entry;
+      try {
+        const response = await fetchFile(attachment.url, { signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS) });
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        const data = Buffer.from(await response.arrayBuffer());
+        return { id, file: new AttachmentBuilder(data, { name: attachment.name, description: attachment.description }) };
+      } catch {
+        return { id, reason: "couldn't be downloaded" };
+      }
+    }),
+  );
 }
 
 // Options:
 //   guildSettings   where the logs channel is stored (GuildSettings)
 //   logger
-export function createActionLog({ guildSettings, logger }) {
+//   fetchFile       downloads attachments (replaceable in tests)
+export function createActionLog({ guildSettings, logger, fetchFile = fetch }) {
   // Servers already warned about a broken logs channel, so every command
   // doesn't add a console warning. Cleared once posting works again.
   const warnedGuilds = new Set();
 
-  async function post(guild, embed) {
-    if (!guild) {
-      return;
-    }
-    const channelId = guildSettings.get(guild.id, Setting.LOGS_CHANNEL);
+  // The logs channel, or undefined if none is set. Throws if it's gone.
+  function logsChannelOf(guild) {
+    const channelId = guild ? guildSettings.get(guild.id, Setting.LOGS_CHANNEL) : undefined;
     if (!channelId) {
-      return;
+      return undefined;
     }
-    try {
-      const channel = guild.channels.cache.get(channelId);
-      if (!channel?.isTextBased?.()) {
-        throw new Error("The logs channel no longer exists or isn't a text channel");
-      }
-      await channel.send({ embeds: [embed], allowedMentions: { parse: [] } });
-      warnedGuilds.delete(guild.id);
-    } catch (error) {
-      if (!warnedGuilds.has(guild.id)) {
-        warnedGuilds.add(guild.id);
-        logger.warn(
-          "Couldn't post in the logs channel. Give the bot View Channel, Send Messages and Embed Links there.",
-          { guildId: guild.id, channelId, error },
-        );
-      }
+    const channel = guild.channels.cache.get(channelId);
+    if (!channel?.isTextBased?.()) {
+      throw new Error("The logs channel no longer exists or isn't a text channel");
+    }
+    return channel;
+  }
+
+  function warnOnce(guild, error) {
+    if (!warnedGuilds.has(guild.id)) {
+      warnedGuilds.add(guild.id);
+      logger.warn(
+        "Couldn't post in the logs channel. Give the bot View Channel, Send Messages, Embed Links and Attach Files there.",
+        { guildId: guild.id, channelId: guildSettings.get(guild.id, Setting.LOGS_CHANNEL), error },
+      );
     }
   }
 
-  // Never throws, so a logging problem can't break the command being logged.
-  async function safely(build, guild) {
+  // Never throws, so a logging problem can't break what's being logged.
+  // `build({ canAttach })` returns { embed, files? }.
+  async function post(guild, build) {
+    if (!guild) {
+      return;
+    }
     try {
-      await post(guild, build());
+      const channel = logsChannelOf(guild);
+      if (!channel) {
+        return;
+      }
+      // Without Attach Files the whole message would be refused, so post the
+      // entry without files instead.
+      const me = guild.members?.me;
+      const canAttach = Boolean(me && channel.permissionsFor?.(me)?.has(PermissionFlagsBits.AttachFiles));
+      const { embed, files = [] } = build({ canAttach });
+      await channel.send({ embeds: [embed], files: canAttach ? files : [], allowedMentions: { parse: [] } });
+      warnedGuilds.delete(guild.id);
     } catch (error) {
-      logger.warn("Couldn't build a log entry", { error });
+      warnOnce(guild, error);
     }
   }
 
   return {
-    logCommand: (interaction, outcome) => safely(() => buildCommandLogEmbed(interaction, outcome), interaction.guild),
-    logDeletedMessage: (message, outcome) => safely(() => buildDeletedMessageLogEmbed(message, outcome), message.guild),
+    logCommand: (interaction, outcome) =>
+      post(interaction.guild, () => ({ embed: buildCommandLogEmbed(interaction, outcome) })),
+
+    // Call before deleting a message: starts downloading its attachments while
+    // their links still work. Skipped when the server has no logs channel.
+    saveAttachments: async (message) =>
+      message.guild && guildSettings.get(message.guild.id, Setting.LOGS_CHANNEL) ? saveAttachments(message, { fetchFile }) : [],
+
+    // `saved` is what saveAttachments() returned, re-uploaded with the entry.
+    logDeletedMessage: (message, outcome, saved = []) =>
+      post(message.guild, ({ canAttach }) => {
+        const shown = canAttach
+          ? saved
+          : saved.map(({ id, file, reason }) => ({ id, reason: file ? "not saved: the bot needs Attach Files here" : reason }));
+        return {
+          embed: buildDeletedMessageLogEmbed(message, outcome, shown),
+          files: shown.flatMap((entry) => (entry.file ? [entry.file] : [])),
+        };
+      }),
   };
 }
 
 // Used where no logs channel is wanted (tests, `npm run register`).
 export const noActionLog = Object.freeze({
   logCommand: async () => {},
+  saveAttachments: async () => [],
   logDeletedMessage: async () => {},
 });

@@ -58,7 +58,7 @@
   "settingsLogsChannelName": "قناة السجلات",
   "settingsLogsChannelSet": "سيتم الآن تسجيل كل ما يفعله الأعضاء مع البوت في {channel}.",
   "settingsLogsChannelCleared": "تمت إزالة قناة السجلات. لم يعد البوت ينشر السجلات.",
-  "settingsLogsChannelNeedsPermissions": "لا أستطيع النشر في {channel} بعد. امنحني صلاحيات **عرض القناة** و**إرسال الرسائل** و**تضمين الروابط** هناك.",
+  "settingsLogsChannelNeedsPermissions": "لا أستطيع النشر في {channel} بعد. امنحني صلاحيات **عرض القناة** و**إرسال الرسائل** و**تضمين الروابط** و**إرفاق الملفات** هناك.",
   "settingsShowLogsChannel": "قناة السجلات: {channel}",
   "settingsShowNoLogsChannel": "قناة السجلات: غير معيّنة",
 

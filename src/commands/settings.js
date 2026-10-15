@@ -32,7 +32,12 @@ function botHasPermissionsIn(channel, guild, wanted) {
 }
 
 const DELETE_MESSAGES = [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ManageMessages];
-const POST_LOGS = [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.EmbedLinks];
+const POST_LOGS = [
+  PermissionFlagsBits.ViewChannel,
+  PermissionFlagsBits.SendMessages,
+  PermissionFlagsBits.EmbedLinks,
+  PermissionFlagsBits.AttachFiles,
+];
 
 // A required text or announcement channel option.
 function channelOption(option, descriptionKey) {
