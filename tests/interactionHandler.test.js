@@ -168,6 +168,22 @@ describe("interaction handler", () => {
       );
     });
 
+    it("routes buttons whose custom ID starts with a registered prefix", async () => {
+      const handle = vi.fn(async () => null);
+      const exact = vi.fn(async () => null);
+      const handler = handlerFor({
+        components: { "rp:help": { label: "Exact", handle: exact } },
+        componentPrefixes: { "rp:": { label: "Role panel button", handle } },
+      });
+      const interaction = fakeButtonInteraction("rp:3:700000000000000001");
+      await handler(interaction);
+      expect(handle).toHaveBeenCalledWith(interaction);
+
+      await handler(fakeButtonInteraction("rp:help"));
+      expect(exact).toHaveBeenCalledTimes(1);
+      expect(handle).toHaveBeenCalledTimes(1);
+    });
+
     it("answers buttons the bot doesn't know", async () => {
       const interaction = fakeButtonInteraction("gone:button");
       await withButton(vi.fn())(interaction);

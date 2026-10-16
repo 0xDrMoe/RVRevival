@@ -5,6 +5,7 @@ import { createAutomod } from "./automod/automod.js";
 import { normalizeAutomod } from "./automod/config.js";
 import { createCountryChannelGuard } from "./channels/countryChannelGuard.js";
 import { createCommands } from "./commands/index.js";
+import { createWelcomer } from "./community/welcome.js";
 import { ConfigError, loadBotConfig } from "./config.js";
 import { createInteractionHandler } from "./interactionHandler.js";
 import { createActionLog } from "./logs/actionLog.js";
@@ -89,6 +90,9 @@ async function start() {
   // Automod (/settings automod): spam, banned words, invites, links, mentions, capitals.
   const automod = createAutomod({ guildSettings, moderation, modLog, logger, forcedLanguage, botDeletions });
 
+  // Welcome and leave messages, the welcome DM and autoroles (/welcome).
+  const welcomer = createWelcomer({ guildSettings, logger, forcedLanguage });
+
   const commands = createCommands({ logger, guildSettings, forcedLanguage, moderation, modLog, botDeletions });
   const handleInteraction = createInteractionHandler({ commands, logger, forcedLanguage, actionLog });
   const guardCountryChannel = createCountryChannelGuard({ guildSettings, logger, actionLog, botDeletions });
@@ -100,6 +104,8 @@ async function start() {
     [Setting.LOGS_CHANNEL, "The logs channel was deleted; set a new one with /settings logs-channel"],
     [Setting.MOD_LOG_CHANNEL, "The mod-log channel was deleted; cases go to the logs channel until a new one is set"],
     [Setting.SERVER_LOG_CHANNEL, "The server-log channel was deleted; set a new one with /settings server-log-channel"],
+    [Setting.WELCOME_CHANNEL, "The welcome channel was deleted; set a new one with /welcome channel"],
+    [Setting.LEAVE_CHANNEL, "The leave channel was deleted; set a new one with /welcome leave-channel"],
   ];
 
   // Runs an event handler, logging instead of crashing if it fails.
@@ -163,6 +169,9 @@ async function start() {
     client.on(Events.MessageUpdate, safely("an edited message", (before, after) => serverLog.messageEdited(before, after)));
     client.on(Events.MessageUpdate, safely("automod on an edit", (before, after) => automod.handleEdit(before, after)));
     client.on(Events.GuildMemberAdd, safely("a member joining", (member) => serverLog.memberJoined(member)));
+    client.on(Events.GuildMemberAdd, safely("welcoming a member", (member) => welcomer.memberJoined(member)));
+    client.on(Events.GuildMemberRemove, safely("a leave message", (member) => welcomer.memberLeft(member)));
+    client.on(Events.GuildMemberUpdate, safely("autoroles after screening", (before, after) => welcomer.memberUpdated(before, after)));
     client.on(
       Events.GuildMemberRemove,
       safely("a member leaving", async (member) => {
@@ -211,6 +220,11 @@ async function start() {
         }
       }
       forgetAutomodExemption(role.guild.id, "exemptRoleIds", role.id);
+      if (guildSettings.getList(role.guild.id, Setting.AUTOROLES).includes(role.id)) {
+        guildSettings
+          .toggleInList(role.guild.id, Setting.AUTOROLES, role.id)
+          .catch((error) => logger.error("Couldn't remove a deleted autorole", { error }));
+      }
       if (guildSettings.getList(role.guild.id, Setting.DASHBOARD_ROLES).includes(role.id)) {
         guildSettings
           .toggleInList(role.guild.id, Setting.DASHBOARD_ROLES, role.id)

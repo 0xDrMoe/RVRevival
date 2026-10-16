@@ -28,6 +28,7 @@ import fastifyRateLimit from "@fastify/rate-limit";
 import fastifyStatic from "@fastify/static";
 import Fastify from "fastify";
 import { normalizeAutomod } from "../automod/config.js";
+import { pickLanguage, translate } from "../i18n/i18n.js";
 import { CaseAction } from "../moderation/caseStore.js";
 import { buildCaseEmbed } from "../moderation/modLog.js";
 import { Setting } from "../settings/guildSettings.js";
@@ -329,6 +330,14 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     [Setting.AUTOMOD]: normalizeAutomod(guildSettings.get(guildId, Setting.AUTOMOD)),
   });
 
+  const communityDefaults = (guild) => {
+    const language = pickLanguage(guild.preferred_locale, config.forcedLanguage);
+    return {
+      [Setting.WELCOME_MESSAGE]: translate(language, "welcomeDefaultWelcome"),
+      [Setting.LEAVE_MESSAGE]: translate(language, "welcomeDefaultLeave"),
+    };
+  };
+
   // Posts what someone did on the dashboard in the server's logs channel.
   async function logAction(guildId, session, summary, lines = []) {
     const channelId = guildSettings.get(guildId, Setting.LOGS_CHANNEL);
@@ -407,6 +416,8 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
             .sort((a, b) => b.position - a.position)
         : [],
       caseCounts: store.countGuildCases(guildId),
+      // What the bot posts when no welcome or leave message is set, in the server's language.
+      communityDefaults: manage ? communityDefaults(guild) : null,
     };
   });
 

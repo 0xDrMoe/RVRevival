@@ -311,6 +311,51 @@ describe("dashboard", () => {
     expect(foreign.statusCode).toBe(400);
   });
 
+  it("saves the community settings and shows the default messages", async () => {
+    await guildSettings.set(GUILD_ID, Setting.LOGS_CHANNEL, LOGS_ID);
+    const cookies = await login();
+    const guild = await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}`, cookies });
+    expect(guild.json().communityDefaults.welcomeMessage).toContain("{user}");
+
+    const saved = await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, {
+      welcomeChannelId: TEXT_ID,
+      welcomeMessage: "  Hi {user}\r\nWelcome!  ",
+      welcomeDm: "   ",
+      autoroleIds: [ROLE_ID],
+    });
+    expect(saved.statusCode).toBe(200);
+    expect(saved.json().settings).toMatchObject({ welcomeChannelId: TEXT_ID, welcomeMessage: "Hi {user}\nWelcome!", autoroleIds: [ROLE_ID] });
+    expect(guildSettings.get(GUILD_ID, Setting.WELCOME_DM)).toBeUndefined();
+    const [, logged] = discord.postMessage.mock.calls.at(-1);
+    expect(logged.embeds[0].description).toContain('**Welcome message:** *none* → "Hi {user} Welcome!"');
+
+    const tooLong = await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, { leaveMessage: "x".repeat(1001) });
+    expect(tooLong.json()).toMatchObject({ error: "invalid-setting", setting: "leaveMessage" });
+    const voice = await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, { leaveChannelId: VOICE_ID });
+    expect(voice.statusCode).toBe(400);
+
+    const ADMIN_ROLE = "700000000000000002";
+    const BOT_ROLE = "700000000000000003";
+    discord.guild.mockImplementation(async (id) => ({
+      id,
+      name: "Rumbleverse Revival",
+      roles: [
+        { id: ADMIN_ROLE, name: "Admins", position: 5, managed: false, permissions: String(1 << 3) },
+        { id: BOT_ROLE, name: "Some bot", position: 4, managed: true, permissions: "0" },
+      ],
+    }));
+    for (const roleId of [ADMIN_ROLE, BOT_ROLE]) {
+      const refused = await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, { autoroleIds: [roleId] });
+      expect(refused.json()).toMatchObject({ error: "invalid-setting", setting: "autoroleIds" });
+    }
+  });
+
+  it("never saves role panels from the dashboard", async () => {
+    const cookies = await login();
+    const response = await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, { rolePanels: [] });
+    expect(response.statusCode).toBe(400);
+  });
+
   it("filters cases by moderator, actions, dates and text", async () => {
     const cookies = await login();
     const moderator = "300000000000000009";

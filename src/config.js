@@ -102,5 +102,7 @@ export function loadDashboardConfig(env = process.env) {
     url: dashboardUrl(env),
     port: dashboardPort(env),
     sessionSecret: sessionSecret(env),
+    // The language of the default welcome and leave messages shown on the Community page.
+    forcedLanguage: botLanguage(env),
   };
 }

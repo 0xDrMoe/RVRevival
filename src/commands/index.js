@@ -10,11 +10,14 @@ import { createCountryStaffCommand } from "./countryStaff.js";
 import { createMemberToolCommands } from "./memberTools.js";
 import { createModerationCommands } from "./moderation.js";
 import { createPurgeCommand } from "./purge.js";
+import { createRolePanelCommand } from "./rolePanel.js";
 import { createSettingsCommand } from "./settings.js";
+import { createWelcomeCommand } from "./welcome.js";
 
 // Each command is { name, data, execute(interaction), autocomplete?(interaction),
-// components? }. `components` maps a button, form or menu custom ID to
-// { label, handle(interaction) } (see countryPicker.js).
+// components?, componentPrefixes? }. `components` maps a button, form or menu
+// custom ID to { label, handle(interaction) } (see countryPicker.js);
+// `componentPrefixes` does the same for IDs that start with a prefix (rolePanel.js).
 //
 // `moderation` (moderation/moderationService.js), `modLog` and `botDeletions`
 // are only needed to run the moderation commands, not to register them.
@@ -41,6 +44,8 @@ export function createCommands({
     createClearWarnsCommand({ moderation, modLog, forcedLanguage }),
     ...createChannelToolCommands({ guildSettings, modLog, forcedLanguage }),
     ...createMemberToolCommands({ guildSettings, modLog, forcedLanguage }),
+    createWelcomeCommand({ guildSettings, forcedLanguage }),
+    createRolePanelCommand({ guildSettings, logger, forcedLanguage }),
   ];
   return new Map(commands.map((command) => [command.name, command]));
 }
