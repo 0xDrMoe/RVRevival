@@ -39,6 +39,7 @@ describe("command list", () => {
       "raid",
       "antinuke",
       "quarantine",
+      "temprole",
       "voice",
       "autoresponder",
       "schedule",

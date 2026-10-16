@@ -41,6 +41,7 @@ import { CaseAction } from "../moderation/caseStore.js";
 import { MemberEventStore } from "../members/memberEventStore.js";
 import { TicketStore } from "../tickets/ticketStore.js";
 import { SavedRoles, SavedRoleStore } from "../members/savedRoleStore.js";
+import { TempRoleStore } from "../tempRoles/tempRoleStore.js";
 import { ScheduledMessageStore } from "../scheduled/scheduledMessageStore.js";
 import { MAX_DELAY_MS, MAX_INTERVAL_MS, MAX_SCHEDULED, MAX_SCHEDULED_LENGTH, MIN_INTERVAL_MS } from "../scheduled/scheduler.js";
 import { buildCaseEmbed } from "../moderation/modLog.js";
@@ -177,6 +178,7 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
   const scheduledMessages = new ScheduledMessageStore(db);
   const activity = new ActivityStore(db);
   const savedRoles = new SavedRoleStore(db);
+  const tempRoles = new TempRoleStore(db);
   const secureCookies = config.url.startsWith("https://");
   const cookieOptions = { path: "/", httpOnly: true, secure: secureCookies, sameSite: "lax" };
 
@@ -733,6 +735,11 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
         return saved ? { since: saved.savedAt, reason: saved.reason, moderatorId: saved.moderatorId, roleIds: saved.roleIds } : null;
       })(),
       tempBanEndsAt: tempBan?.expiresAt ?? null,
+      tempRoles: tempRoles.listForUser(guildId, userId).map((entry) => ({
+        roleId: entry.roleId,
+        roleName: rolesById.get(entry.roleId)?.name ?? null,
+        expiresAt: entry.expiresAt,
+      })),
       caseCounts: store.countCases(guildId, userId),
       cases: cases.map(caseJson),
       events: memberEvents.list(guildId, userId),

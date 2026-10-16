@@ -552,5 +552,6 @@
   "sectionPersist": "Cargos ao voltar",
   "persistEnabled": "Devolver os cargos quando um membro volta",
   "persistHelp": "O bot lembra os cargos de quem sai, para que sair não tire um cargo restrito. Cargos com permissões de moderação, cargos de bot e cargos acima do bot nunca são devolvidos sozinhos.",
-  "persistIgnoreHelp": "Cargos nunca devolvidos:"
+  "persistIgnoreHelp": "Cargos nunca devolvidos:",
+  "memberTempRole": "{role} até {date}"
 }

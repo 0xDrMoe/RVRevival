@@ -948,5 +948,21 @@
   "welcomePersistOn": "Les membres qui partent et reviennent récupèrent leurs rôles. Les rôles avec des permissions de modération, les rôles de bot et ceux au-dessus du mien ne sont jamais rendus automatiquement.",
   "welcomePersistOff": "Les membres qui reviennent ne récupéreront pas leurs anciens rôles.",
   "welcomeShowPersistOn": "**Rôles au retour :** rendus",
-  "welcomeShowPersistOff": "**Rôles au retour :** non rendus"
+  "welcomeShowPersistOff": "**Rôles au retour :** non rendus",
+
+  "temproleCommandDescription": "Donne un rôle qui est retiré tout seul ensuite",
+  "temproleAddDescription": "Donner un rôle à un membre pour un temps (le redonner déplace la fin)",
+  "temproleRemoveDescription": "Retirer un rôle temporaire maintenant",
+  "temproleListDescription": "Lister les rôles temporaires, ceux qui finissent bientôt d'abord",
+  "temproleDurationOptionDescription": "Combien de temps : 30m, 12h, 3d, 2w (1 minute à 365 jours)",
+  "temproleBadDuration": "Cette durée n'est pas valide. Utilisez par exemple 30m, 12h, 3d ou 2w (1 minute à 365 jours).",
+  "temproleAlreadyHas": "{user} a déjà {role} de façon permanente. Retirez-le d'abord s'il doit s'arrêter.",
+  "temproleFull": "Ce serveur a déjà {max} rôles temporaires en cours.",
+  "temproleAdded": "{user} a {role} jusqu'à {when}.",
+  "temproleExtended": "{user} garde maintenant {role} jusqu'à {when}.",
+  "temproleNotTemporary": "{user} n'a pas {role} comme rôle temporaire.",
+  "temproleRemoved": "{role} a été retiré à {user}.",
+  "temproleListEmpty": "Aucun rôle temporaire en cours.",
+  "temproleList": "**Rôles temporaires :**\n{list}",
+  "temproleListMore": "…et {count} de plus."
 }

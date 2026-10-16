@@ -948,5 +948,21 @@
   "welcomePersistOn": "Members who leave and rejoin get their roles back. Roles with moderator permissions, bot roles and roles above mine are never given back automatically.",
   "welcomePersistOff": "Members who rejoin won't get their old roles back.",
   "welcomeShowPersistOn": "**Roles on rejoin:** given back",
-  "welcomeShowPersistOff": "**Roles on rejoin:** not given back"
+  "welcomeShowPersistOff": "**Roles on rejoin:** not given back",
+
+  "temproleCommandDescription": "Give a role that's taken away again by itself",
+  "temproleAddDescription": "Give a member a role for a while (giving it again moves the end)",
+  "temproleRemoveDescription": "Take a temporary role away now",
+  "temproleListDescription": "List temporary roles, soonest to end first",
+  "temproleDurationOptionDescription": "How long: 30m, 12h, 3d, 2w (1 minute to 365 days)",
+  "temproleBadDuration": "That isn't a valid duration. Use something like 30m, 12h, 3d or 2w (1 minute to 365 days).",
+  "temproleAlreadyHas": "{user} already has {role} for good. Take it away first if it should end.",
+  "temproleFull": "This server already has {max} temporary roles running.",
+  "temproleAdded": "{user} has {role} until {when}.",
+  "temproleExtended": "{user} now keeps {role} until {when}.",
+  "temproleNotTemporary": "{user} doesn't have {role} as a temporary role.",
+  "temproleRemoved": "{role} was taken from {user}.",
+  "temproleListEmpty": "No temporary roles are running.",
+  "temproleList": "**Temporary roles:**\n{list}",
+  "temproleListMore": "…and {count} more."
 }

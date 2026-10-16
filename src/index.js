@@ -16,6 +16,8 @@ import { createAntiNuke } from "./raid/antiNuke.js";
 import { createQuarantine } from "./moderation/quarantine.js";
 import { SavedRoleStore } from "./members/savedRoleStore.js";
 import { createRolePersistence } from "./members/rolePersistence.js";
+import { TempRoleStore } from "./tempRoles/tempRoleStore.js";
+import { createTempRoleScheduler } from "./tempRoles/tempRoleScheduler.js";
 import { createRaidGuard } from "./raid/raid.js";
 import { createTempVoice } from "./voice/tempVoice.js";
 import { createAutoResponder } from "./community/autoResponders.js";
@@ -145,6 +147,8 @@ async function start() {
   // Quarantined members' roles (/quarantine), saved so they can be given back.
   const savedRoles = new SavedRoleStore(db);
   const quarantine = createQuarantine({ guildSettings, store: savedRoles, modLog, logger });
+  // Roles that end by themselves (/temprole).
+  const tempRoles = new TempRoleStore(db);
   // Gives members their roles back when they rejoin (/welcome persist).
   const rolePersistence = createRolePersistence({
     guildSettings,
@@ -183,6 +187,7 @@ async function start() {
     scheduledMessages,
     birthdays: birthdayStore,
     quarantine,
+    tempRoles,
     giveaways,
     tickets,
     levels,
@@ -230,6 +235,7 @@ async function start() {
   let giveawayScheduler;
   let scheduledMessageScheduler;
   let birthdays;
+  let tempRoleScheduler;
 
   function connect(intents) {
     client = new Client({ intents, partials: PARTIALS });
@@ -261,6 +267,9 @@ async function start() {
       birthdays = createBirthdays({ client: readyClient, guildSettings, store: birthdayStore, logger, forcedLanguage });
       birthdays.start();
       leveling.startVoiceXp(readyClient);
+      tempRoleScheduler?.stop();
+      tempRoleScheduler = createTempRoleScheduler({ client: readyClient, store: tempRoles, modLog, logger });
+      tempRoleScheduler.start();
     });
 
     client.on(Events.InteractionCreate, (interaction) => {
@@ -394,6 +403,7 @@ async function start() {
         }
       }
       forgetAutomodExemption(role.guild.id, "exemptRoleIds", role.id);
+      tempRoles.deleteRole(role.guild.id, role.id);
       if (guildSettings.getList(role.guild.id, Setting.AUTOROLES).includes(role.id)) {
         guildSettings
           .toggleInList(role.guild.id, Setting.AUTOROLES, role.id)
@@ -428,6 +438,7 @@ async function start() {
       giveawayScheduler?.stop();
       scheduledMessageScheduler?.stop();
       birthdays?.stop();
+      tempRoleScheduler?.stop();
       leveling.stopVoiceXp();
       automod.stop();
       await client?.destroy().catch(() => {});

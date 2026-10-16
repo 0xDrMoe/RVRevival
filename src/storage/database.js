@@ -241,6 +241,21 @@ const MIGRATIONS = [
   ) WITHOUT ROWID;
   CREATE INDEX saved_roles_by_kind ON saved_roles (kind, saved_at);
   `,
+  // 16: temporary roles (/temprole): taken away again at expires_at.
+  `
+  CREATE TABLE temp_roles (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    guild_id      TEXT    NOT NULL,
+    user_id       TEXT    NOT NULL,
+    role_id       TEXT    NOT NULL,
+    expires_at    INTEGER NOT NULL,
+    moderator_id  TEXT    NOT NULL,
+    reason        TEXT,
+    created_at    INTEGER NOT NULL,
+    UNIQUE (guild_id, user_id, role_id)
+  );
+  CREATE INDEX temp_roles_by_expiry ON temp_roles (expires_at);
+  `,
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS.length;

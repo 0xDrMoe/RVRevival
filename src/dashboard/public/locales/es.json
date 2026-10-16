@@ -552,5 +552,6 @@
   "sectionPersist": "Roles al volver",
   "persistEnabled": "Devolver los roles cuando un miembro vuelve",
   "persistHelp": "El bot recuerda los roles de quien se va, así que irse no quita un rol restringido. Los roles con permisos de moderación, los de bots y los que están por encima del bot nunca se devuelven solos.",
-  "persistIgnoreHelp": "Roles que nunca se devuelven:"
+  "persistIgnoreHelp": "Roles que nunca se devuelven:",
+  "memberTempRole": "{role} hasta {date}"
 }

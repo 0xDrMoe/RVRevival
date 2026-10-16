@@ -552,5 +552,6 @@
   "sectionPersist": "Ruoli al rientro",
   "persistEnabled": "Ridare i ruoli quando un membro rientra",
   "persistHelp": "Il bot ricorda i ruoli di chi esce, così uscire non toglie un ruolo restrittivo. Ruoli con permessi di moderazione, ruoli dei bot e ruoli sopra il bot non vengono mai restituiti in automatico.",
-  "persistIgnoreHelp": "Ruoli mai restituiti:"
+  "persistIgnoreHelp": "Ruoli mai restituiti:",
+  "memberTempRole": "{role} fino al {date}"
 }
