@@ -46,6 +46,7 @@ export const Setting = Object.freeze({
   TICKETS: "tickets", // the ticket panel, { channelId, messageId, staffRoleId } (see tickets/tickets.js)
   JOIN_GATE: "joinGate", // new-account gate and join alerts, an object (see raid/raid.js)
   LOCKDOWN: "lockdown", // a running /raid lockdown and what to restore, an object (see raid/raid.js)
+  TEMP_VOICE: "tempVoice", // join-to-create voice, { hubChannelId, categoryId, nameTemplate, userLimit } (see voice/tempVoice.js)
 });
 
 const KNOWN_SETTINGS = new Set(Object.values(Setting));

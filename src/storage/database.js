@@ -168,6 +168,17 @@ const MIGRATIONS = [
   ALTER TABLE tickets ADD COLUMN message_count INTEGER;
   CREATE INDEX tickets_by_number ON tickets (guild_id, number DESC);
   `,
+  // 11: join-to-create voice channels (/voice): the channels the bot made, so
+  // they're cleaned up when empty, even after a restart.
+  `
+  CREATE TABLE temp_voice_channels (
+    channel_id TEXT    PRIMARY KEY,
+    guild_id   TEXT    NOT NULL,
+    owner_id   TEXT    NOT NULL,
+    created_at INTEGER NOT NULL
+  ) WITHOUT ROWID;
+  CREATE INDEX temp_voice_by_owner ON temp_voice_channels (guild_id, owner_id);
+  `,
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS.length;
