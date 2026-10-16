@@ -1000,6 +1000,17 @@ describe("dashboard", () => {
     expect((await write(cookies, "DELETE", `${url}/${TEXT_ID}`)).statusCode).toBe(404);
   });
 
+  it("shows the leaderboard for the last 7 days", async () => {
+    const levels = new LevelStore(db);
+    levels.setXp(GUILD_ID, USER_ID, 5000, "moe");
+    levels.addXp({ guildId: GUILD_ID, userId: "300000000000000002", userTag: "kaz", amount: 30 });
+    const cookies = await login();
+    const week = (await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}/levels?period=week`, cookies })).json();
+    expect(week).toMatchObject({ period: "week", total: 1, entries: [{ rank: 1, userTag: "kaz", gained: 30, xp: 30 }] });
+    const all = (await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}/levels?period=bogus`, cookies })).json();
+    expect(all).toMatchObject({ period: "all", total: 2, entries: [{ userTag: "moe", gained: null }, { userTag: "kaz" }] });
+  });
+
   it("logs out and forgets the session", async () => {
     const cookies = await login();
     expect((await write(cookies, "POST", "/auth/logout")).statusCode).toBe(200);

@@ -416,7 +416,7 @@ Members earn XP for chatting and level up; reward roles are given automatically.
 
 - Each message earns 15 to 25 XP, at most once a minute per member, so spamming doesn't pay. Bots, webhooks and the `/country` channel never earn XP.
 - Each level takes a little more XP than the last (100 to reach level 1, then 155, 220, 295…), up to level 500.
-- `/rank [member]` shows a level, XP, progress to the next level and place on the leaderboard. `/leaderboard [page]` shows the top members, 10 per page. Both answer publicly.
+- `/rank [member]` shows a level, XP, progress to the next level and place on the leaderboard. `/leaderboard [period] [page]` shows the top members, 10 per page: all time, or by the XP earned this week (the last 7 days) or this month (the last 30 days). Both answer publicly.
 - `/levels announce where:` picks where level-ups are posted: in the channel the member is chatting in (default), in one channel, by DM, or nowhere. `/levels message text:` changes the text (`{user}`, `{username}`, `{level}`, `{server}`); leave it empty for the default.
 - `/levels reward-add level: role:` gives a role at a level (up to 25), `/levels reward-remove level:` takes it off the list. `/levels reward-mode` picks whether members keep every reward role they reached (default) or only the highest. Reward roles are checked again on every level-up, and the bot never gives bot roles or roles with Administrator or Manage Server.
 - `/levels no-xp channel:` or `role:` switches XP off (or back on) in a channel, category or forum, or for members with a role.
@@ -424,7 +424,7 @@ Members earn XP for chatting and level up; reward roles are given automatically.
 - `/levels boost multiplier:` gives server boosters more XP (for example `1.5`), and `/levels boost multiplier: role:` gives a role more XP (up to 10 roles). Boosts go from 1 to 5 in steps of 0.1; set `1` to remove one. Boosts don't add up: a member gets their highest one.
 - `/levels set member: level:` moves someone to a level, `/levels reset member:` clears their XP. `/levels show` lists the settings, `/levels off` pauses leveling and keeps everyone's XP.
 
-The dashboard's **Leveling** page has all the same settings plus the full leaderboard, and each member's history page shows their level and rank. `/levels` needs **Manage Server**; the bot needs **Manage Roles** (with its role above the reward roles) to give rewards.
+The dashboard's **Leveling** page has all the same settings plus the full leaderboard (all time, 7 days or 30 days), and each member's history page shows their level and rank. `/levels` needs **Manage Server**; the bot needs **Manage Roles** (with its role above the reward roles) to give rewards.
 
 ### Country roles
 
@@ -473,7 +473,7 @@ A website where admins log in with Discord and manage the bot without slash comm
 - **Autoroles:** roles given on joining, giving roles back on rejoin (with roles to never give back), and the server's role panels (read-only; change them with `/rolepanel`). Community servers get a tip recommending Discord's Onboarding.
 - **Starboard:** channel, stars needed and emoji.
 - **Birthdays:** channel, role, time zone and greeting.
-- **Leveling:** the main switch, where and how level-ups are announced, reward roles, voice XP and XP boosts, channels and roles that earn no XP, and the leaderboard with each member's level and progress (see [Leveling](#leveling)).
+- **Leveling:** the main switch, where and how level-ups are announced, reward roles, voice XP and XP boosts, channels and roles that earn no XP, and the leaderboard for all time, the last 7 days or the last 30 days, with each member's level and progress (see [Leveling](#leveling)).
 - **Country:** the `/country` channel.
 - **Custom commands:** every saved answer for `/tag`, with its name and text; add, edit or remove them (see [Custom commands](#custom-commands)).
 - **Auto-responders:** each trigger, match, channel and reply (see [Auto-responders](#auto-responders)).

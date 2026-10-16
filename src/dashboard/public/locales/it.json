@@ -757,5 +757,12 @@
   "stickyRemoveConfirm": "Rimuovere questo messaggio fisso? Anche la sua ultima copia viene eliminata.",
   "stickyNone": "Ancora nessun messaggio fisso.",
   "stickyListHelp": "Fino a 10 per server, uno per canale.",
-  "stickyUpdated": "Aggiornato {date}"
+  "stickyUpdated": "Aggiornato {date}",
+  "levelsPeriod_all": "Sempre",
+  "levelsPeriod_week": "7 giorni",
+  "levelsPeriod_month": "30 giorni",
+  "levelsBoardHelp_week": "{count} membri hanno guadagnato XP negli ultimi 7 giorni. I membri lo vedono con /leaderboard period:Questa settimana.",
+  "levelsBoardHelp_month": "{count} membri hanno guadagnato XP negli ultimi 30 giorni. I membri lo vedono con /leaderboard period:Questo mese.",
+  "levelsBoardEmptyPeriod": "Nessuno ha guadagnato XP in questo periodo.",
+  "levelsBoardGained": "+{gained} XP · {xp} XP in totale"
 }

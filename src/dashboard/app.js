@@ -13,7 +13,7 @@
 //   DELETE /api/guilds/:id/cases/:number  delete a case
 //   GET  /api/guilds/:id/members          find members by name, or a user by ID (?q=)
 //   GET  /api/guilds/:id/members/:user    one person's history: cases, tickets, joins, leaves, roles, level
-//   GET  /api/guilds/:id/levels           the XP leaderboard (?page=)
+//   GET  /api/guilds/:id/levels           the XP leaderboard (?page=&period=all|week|month)
 //   GET  /api/guilds/:id/tickets          support tickets (?status=open|closed|all&user=&before=)
 //   GET  /api/guilds/:id/tickets/:number  one ticket and its transcript (?download=1 for a .txt file)
 //
@@ -35,7 +35,7 @@ import Fastify from "fastify";
 import { normalizeAutomod } from "../automod/config.js";
 import { normalizeAntiNuke } from "../raid/antiNuke.js";
 import { levelProgress, normalizeLeveling } from "../leveling/config.js";
-import { LevelStore } from "../leveling/levelStore.js";
+import { LevelStore, Period, PERIODS, periodStart } from "../leveling/levelStore.js";
 import { pickLanguage, translate } from "../i18n/i18n.js";
 import { CaseAction } from "../moderation/caseStore.js";
 import { MemberEventStore } from "../members/memberEventStore.js";
@@ -908,17 +908,23 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     const requested = Number.parseInt(request.query?.page ?? "1", 10);
     const page = Number.isInteger(requested) ? Math.min(Math.max(requested, 1), MAX_LEADERBOARD_PAGE) : 1;
     const offset = (page - 1) * LEADERBOARD_PAGE;
-    const total = levels.count(guildId);
+    const period = PERIODS.includes(request.query?.period) ? request.query.period : Period.ALL;
+    const since = periodStart(period);
+    const total = since === undefined ? levels.count(guildId) : levels.countSince(guildId, since);
+    const range = { limit: LEADERBOARD_PAGE, offset };
+    const entries = since === undefined ? levels.top(guildId, range) : levels.topSince(guildId, since, range);
     return {
       enabled: normalizeLeveling(guildSettings.get(guildId, Setting.LEVELING)).enabled,
+      period,
       page,
       pageSize: LEADERBOARD_PAGE,
       total,
-      entries: levels.top(guildId, { limit: LEADERBOARD_PAGE, offset }).map((entry, index) => ({
+      entries: entries.map((entry, index) => ({
         rank: offset + index + 1,
         userId: entry.userId,
         userTag: entry.userTag,
         xp: entry.xp,
+        gained: entry.gained ?? null,
         messages: entry.messages,
         ...levelProgress(entry.xp),
       })),

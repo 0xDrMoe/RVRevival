@@ -2371,14 +2371,26 @@ function readLeveling(form, saved) {
   };
 }
 
-// The XP leaderboard, a page at a time, below the settings.
-async function leaderboardCard(guildId, page) {
-  const board = await api(`/api/guilds/${guildId}/levels?page=${page}`);
+// The XP leaderboard, a page at a time, below the settings: all time, or
+// the XP earned in the last 7 or 30 days.
+const LEADERBOARD_PERIODS = ["all", "week", "month"];
+
+async function leaderboardCard(guildId, page, period) {
+  const board = await api(`/api/guilds/${guildId}/levels?page=${page}&period=${period}`);
   const pages = Math.max(1, Math.ceil(board.total / board.pageSize));
-  const go = (next) => `#/g/${guildId}/levels${next > 1 ? `?page=${next}` : ""}`;
+  const go = (next, nextPeriod = period) => {
+    const query = new URLSearchParams();
+    if (next > 1) {
+      query.set("page", String(next));
+    }
+    if (nextPeriod !== "all") {
+      query.set("period", nextPeriod);
+    }
+    return `#/g/${guildId}/levels${query.size > 0 ? `?${query}` : ""}`;
+  };
   const rows =
     board.entries.length === 0
-      ? h("p", { class: "muted empty" }, t("levelsBoardEmpty"))
+      ? h("p", { class: "muted empty" }, t(period === "all" ? "levelsBoardEmpty" : "levelsBoardEmptyPeriod"))
       : h(
           "ol",
           { class: "leaderboard" },
@@ -2391,18 +2403,31 @@ async function leaderboardCard(guildId, page) {
                 "a",
                 { class: "board-name grow", href: memberLink(guildId, entry.userId) },
                 h("strong", {}, entry.userTag ?? entry.userId),
-                h("span", { class: "muted" }, t("levelsBoardSub", { xp: formatNumber(entry.xp), messages: formatNumber(entry.messages) })),
+                h(
+                  "span",
+                  { class: "muted" },
+                  period === "all"
+                    ? t("levelsBoardSub", { xp: formatNumber(entry.xp), messages: formatNumber(entry.messages) })
+                    : t("levelsBoardGained", { gained: formatNumber(entry.gained ?? 0), xp: formatNumber(entry.xp) }),
+                ),
               ),
               h("span", { class: "progress board-progress", title: `${formatNumber(entry.current)} / ${formatNumber(entry.needed)} XP` }, fillBar("progress-fill", entry.current / entry.needed)),
               h("span", { class: "badge badge-green" }, t("levelsLevel", { level: entry.level })),
             ),
           ),
         );
+  const tabs = h(
+    "div",
+    { class: "segmented", role: "tablist", "aria-label": t("levelsBoard") },
+    LEADERBOARD_PERIODS.map((value) =>
+      h("a", { class: "button segment", role: "tab", href: go(1, value), "aria-selected": String(value === period), "aria-pressed": String(value === period) }, t(`levelsPeriod_${value}`)),
+    ),
+  );
   return card(
     t("levelsBoard"),
     "trophy",
     "amber",
-    h("p", { class: "help" }, t("levelsBoardHelp", { count: formatNumber(board.total) })),
+    h("div", { class: "toolbar board-head" }, h("p", { class: "help grow" }, t(period === "all" ? "levelsBoardHelp" : `levelsBoardHelp_${period}`, { count: formatNumber(board.total) })), tabs),
     rows,
     pages > 1
       ? h(
@@ -2423,6 +2448,7 @@ async function showLevels(guildId) {
   }
   const query = new URLSearchParams(location.hash.split("?")[1] ?? "");
   const page = Math.max(1, Number.parseInt(query.get("page") ?? "1", 10) || 1);
+  const period = LEADERBOARD_PERIODS.includes(query.get("period")) ? query.get("period") : "all";
   const config = data.settings.leveling;
   const defaults = data.communityDefaults ?? {};
   // Reward roles: the bot never hands out bot roles or Administrator / Manage Server.
@@ -2498,7 +2524,7 @@ async function showLevels(guildId) {
     addKey: "levelsBoostAdd",
   });
 
-  const board = await leaderboardCard(guildId, page).catch((error) => {
+  const board = await leaderboardCard(guildId, page, period).catch((error) => {
     failed(error);
     return null;
   });

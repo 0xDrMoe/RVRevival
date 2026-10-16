@@ -1,7 +1,7 @@
 // Leveling commands.
 //
 //   /rank [member]                 a member's level, XP and place (everyone)
-//   /leaderboard [page]            the most active members (everyone)
+//   /leaderboard [period] [page]   the most active members, all time or the last 7 or 30 days (everyone)
 //   /levels show|on|off            the settings, and switching leveling on or off
 //   /levels announce where:<…> [channel]   where level-ups are announced
 //   /levels message [text]         the level-up message ({user}, {username}, {level}, {server})
@@ -35,6 +35,7 @@ import {
   totalXpForLevel,
 } from "../leveling/config.js";
 import { result, Status } from "../logs/actionLog.js";
+import { Period, PERIODS, periodStart } from "../leveling/levelStore.js";
 import { Setting } from "../settings/guildSettings.js";
 
 const LEADERBOARD_PAGE = 10;
@@ -71,6 +72,11 @@ export function buildLeaderboardCommandData() {
     new SlashCommandBuilder().setName("leaderboard").setContexts(InteractionContextType.Guild),
     "leaderboardCommandDescription",
   )
+    .addStringOption((option) =>
+      withDescription(option.setName("period"), "leaderboardPeriodOptionDescription").addChoices(
+        ...PERIODS.map((period) => ({ name: translate("en", `leaderboardPeriod_${period}`), name_localizations: discordLocalizations(`leaderboardPeriod_${period}`), value: period })),
+      ),
+    )
     .addIntegerOption((option) => withDescription(option.setName("page"), "leaderboardPageOptionDescription").setMinValue(1))
     .toJSON();
 }
@@ -161,7 +167,7 @@ export function progressBar(current, needed) {
 }
 
 // Options: levels (LevelStore, only to run them), leveling (leveling/leveling.js), guildSettings, forcedLanguage
-export function createLevelCommands({ levels, leveling, guildSettings, forcedLanguage }) {
+export function createLevelCommands({ levels, leveling, guildSettings, forcedLanguage, now = Date.now }) {
   const configFor = (guildId) => normalizeLeveling(guildSettings.get(guildId, Setting.LEVELING));
 
   function answerer(interaction) {
@@ -221,28 +227,32 @@ export function createLevelCommands({ levels, leveling, guildSettings, forcedLan
     if (!configFor(interaction.guildId).enabled) {
       return answer(Status.REFUSED, "levelsDisabled");
     }
-    const total = levels.count(interaction.guildId);
+    const period = PERIODS.includes(interaction.options.getString("period")) ? interaction.options.getString("period") : Period.ALL;
+    const since = periodStart(period, now());
+    const total = since === undefined ? levels.count(interaction.guildId) : levels.countSince(interaction.guildId, since);
     if (total === 0) {
-      return answer(Status.SUCCESS, "leaderboardEmpty");
+      return answer(Status.SUCCESS, since === undefined ? "leaderboardEmpty" : "leaderboardEmptyPeriod");
     }
     const pages = Math.ceil(total / LEADERBOARD_PAGE);
     const page = Math.min(interaction.options.getInteger("page") ?? 1, pages);
-    const entries = levels.top(interaction.guildId, { limit: LEADERBOARD_PAGE, offset: (page - 1) * LEADERBOARD_PAGE });
+    const range = { limit: LEADERBOARD_PAGE, offset: (page - 1) * LEADERBOARD_PAGE };
+    const entries = since === undefined ? levels.top(interaction.guildId, range) : levels.topSince(interaction.guildId, since, range);
     const medals = ["🥇", "🥈", "🥉"];
     const lines = entries.map((entry, index) => {
-      const place = (page - 1) * LEADERBOARD_PAGE + index + 1;
-      return text("leaderboardLine", {
+      const place = range.offset + index + 1;
+      const values = {
         place: medals[place - 1] ?? `**${place}.**`,
         member: `<@${entry.userId}>`,
         level: number(levelProgress(entry.xp).level),
         xp: number(entry.xp),
-      });
+      };
+      return since === undefined ? text("leaderboardLine", values) : text("leaderboardLinePeriod", { ...values, gained: number(entry.gained) });
     });
-    const myRank = levels.rank(interaction.guildId, interaction.user.id);
+    const myRank = since === undefined ? levels.rank(interaction.guildId, interaction.user.id) : levels.rankSince(interaction.guildId, interaction.user.id, since);
     const footer = text("leaderboardFooter", { page, pages }) + (myRank ? ` · ${text("leaderboardYou", { rank: number(myRank) })}` : "");
     const embed = new EmbedBuilder()
       .setColor(LEVEL_COLOR)
-      .setTitle(text("leaderboardTitle", { server: interaction.guild.name }))
+      .setTitle(text(since === undefined ? "leaderboardTitle" : `leaderboardTitle_${period}`, { server: interaction.guild.name }))
       .setDescription(lines.join("\n"))
       .setFooter({ text: footer });
     await interaction.reply({ embeds: [embed], allowedMentions: { parse: [] } });

@@ -13,7 +13,7 @@ import {
   xpToNextLevel,
 } from "../src/leveling/config.js";
 import { createLeveling, fillLevelMessage, rewardRolesFor } from "../src/leveling/leveling.js";
-import { LevelStore } from "../src/leveling/levelStore.js";
+import { dayNumber, KEEP_DAYS, LevelStore, periodStart } from "../src/leveling/levelStore.js";
 import { Status } from "../src/logs/actionLog.js";
 import { GuildSettings, Setting } from "../src/settings/guildSettings.js";
 
@@ -201,6 +201,38 @@ function setup({ config = {}, roles = [fakeRole(ROLE_5), fakeRole(ROLE_10)] } = 
   }
   return { guildSettings, store, leveling, message, member, guild, sent, chatUntil, advance: (ms) => (clock += ms) };
 }
+
+describe("weekly and monthly XP", () => {
+  const DAY = 24 * 60 * 60 * 1000;
+  const NOW = 1_800_000_000_000;
+
+  it("ranks the XP earned in the last 7 or 30 days", () => {
+    const store = new LevelStore();
+    store.award({ guildId: GUILD_ID, userId: MEMBER_ID, amount: 20, now: NOW - 10 * DAY, cooldownMs: 60_000 });
+    store.addXp({ guildId: GUILD_ID, userId: MEMBER_ID, amount: 15, now: NOW - DAY });
+    store.addXp({ guildId: GUILD_ID, userId: ADMIN_ID, amount: 25, now: NOW });
+    store.setXp(GUILD_ID, "300000000000000003", 999);
+
+    const week = periodStart("week", NOW);
+    expect(week).toBe(dayNumber(NOW) - 6);
+    expect(periodStart("all", NOW)).toBeUndefined();
+    expect(store.topSince(GUILD_ID, week).map((entry) => [entry.userId, entry.gained, entry.xp])).toEqual([
+      [ADMIN_ID, 25, 25],
+      [MEMBER_ID, 15, 35],
+    ]);
+    expect(store.countSince(GUILD_ID, week)).toBe(2);
+    expect(store.rankSince(GUILD_ID, MEMBER_ID, week)).toBe(2);
+    expect(store.rankSince(GUILD_ID, "300000000000000003", week)).toBeUndefined();
+
+    const month = periodStart("month", NOW);
+    expect(store.topSince(GUILD_ID, month)[0]).toMatchObject({ userId: MEMBER_ID, gained: 35 });
+    expect(store.topSince(GUILD_ID, month, { limit: 1, offset: 1 })).toMatchObject([{ userId: ADMIN_ID }]);
+
+    expect(store.prune(NOW + (KEEP_DAYS - 5) * DAY)).toBe(1);
+    store.reset(GUILD_ID, ADMIN_ID);
+    expect(store.countSince(GUILD_ID, 0)).toBe(1);
+  });
+});
 
 describe("earning XP", () => {
   it("gives XP once a minute and announces level-ups in the channel", async () => {
@@ -446,6 +478,18 @@ describe("level commands", () => {
     const board = await t.run({ name: "leaderboard" });
     const description = board.target.reply.mock.calls[0][0].embeds[0].toJSON().description;
     expect(description.split("\n")).toEqual([`🥇 <@${MEMBER_ID}> · Level 2 · 300 XP`, `🥈 <@${ADMIN_ID}> · Level 0 · 50 XP`]);
+  });
+
+  it("shows this week's leaderboard", async () => {
+    const t = commandSetup();
+    t.store.setXp(GUILD_ID, MEMBER_ID, 5000, "champ");
+    expect((await t.run({ name: "leaderboard", options: { period: "week" } })).outcome.key).toBe("leaderboardEmptyPeriod");
+    t.store.addXp({ guildId: GUILD_ID, userId: ADMIN_ID, amount: 40 });
+    const board = await t.run({ name: "leaderboard", options: { period: "week" } });
+    const embed = board.target.reply.mock.calls[0][0].embeds[0].toJSON();
+    expect(embed.title).toContain("this week");
+    expect(embed.description).toBe(`🥇 <@${ADMIN_ID}> · +40 XP · Level 0`);
+    expect(embed.footer.text).toContain("You're #1");
   });
 
   it("says leveling is off, or that someone has no XP yet", async () => {
