@@ -961,6 +961,27 @@ describe("dashboard", () => {
     expect((await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}/feeds`, cookies })).json().feeds).toEqual([]);
   });
 
+  it("adds, renames and removes server stats counters", async () => {
+    discord.deleteChannel = vi.fn(async () => {});
+    const cookies = await login();
+    const base = `/api/guilds/${GUILD_ID}/counters`;
+    expect((await write(cookies, "POST", base, { template: "no number" })).statusCode).toBe(400);
+    expect((await write(cookies, "POST", base, { template: "{members}", categoryId: TEXT_ID })).statusCode).toBe(400);
+    const added = await write(cookies, "POST", base, { template: "👥 Members: {members}" });
+    expect(added.statusCode).toBe(200);
+    const { id } = added.json().counter;
+    expect(guildSettings.get(GUILD_ID, Setting.STATS_COUNTERS)).toEqual([{ id, template: "👥 Members: {members}", channelId: null, categoryId: null, error: null }]);
+
+    expect((await write(cookies, "PATCH", `${base}/${id}`, { template: "Members {members}" })).json().counter.template).toBe("Members {members}");
+    expect((await write(cookies, "PATCH", `${base}/ffffffff`, { template: "{members}" })).statusCode).toBe(404);
+    expect((await app.inject({ method: "GET", url: base, cookies })).json()).toMatchObject({ max: 5, counters: [{ id, template: "Members {members}" }], presets: { members: expect.any(String) } });
+
+    await guildSettings.set(GUILD_ID, Setting.STATS_COUNTERS, [{ id, template: "{members}", channelId: VOICE_ID }]);
+    expect((await write(cookies, "DELETE", `${base}/${id}`)).json()).toEqual({ ok: true, channelDeleted: true });
+    expect(discord.deleteChannel).toHaveBeenCalledWith(GUILD_ID, VOICE_ID, expect.any(String));
+    expect(guildSettings.get(GUILD_ID, Setting.STATS_COUNTERS)).toEqual([]);
+  });
+
   it("logs out and forgets the session", async () => {
     const cookies = await login();
     expect((await write(cookies, "POST", "/auth/logout")).statusCode).toBe(200);

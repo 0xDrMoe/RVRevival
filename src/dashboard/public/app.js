@@ -127,6 +127,7 @@ const NAV = [
       { id: "birthdays", icon: "cake", tone: "pink", manage: true, on: (s) => Boolean(s.birthdays) },
       { id: "levels", icon: "trophy", tone: "green", manage: true, on: (s) => Boolean(s.leveling?.enabled) },
       { id: "country", icon: "globe", tone: "cyan", manage: true, on: (s) => Boolean(s.countryChannelId) },
+      { id: "counters", icon: "chart", tone: "blue", manage: true },
     ],
   },
   {
@@ -4659,6 +4660,163 @@ async function showFeeds(guildId) {
   await load();
 }
 
+// --- Server stats ------------------------------------------------------------------
+
+const COUNTER_PRESET_NAMES = ["members", "humans", "bots", "boosts", "channels", "roles"];
+const COUNTER_TEMPLATE_MAX = 60;
+
+// A counter: its channel's current name (or that it's being created), and its
+// name template, editable in place.
+function counterRow(guildId, counter, data, onChanged) {
+  const channel = counter.channelId && data.channels.find((item) => item.id === counter.channelId);
+  const input = h("input", { type: "text", value: counter.template, maxLength: COUNTER_TEMPLATE_MAX, "aria-label": t("countersName") });
+  const save = h("button", { class: "small", type: "button", hidden: true }, t("save"));
+  input.addEventListener("input", () => {
+    save.hidden = input.value.trim() === counter.template;
+  });
+  save.addEventListener("click", async () => {
+    save.disabled = true;
+    try {
+      await api(`/api/guilds/${guildId}/counters/${counter.id}`, { method: "PATCH", body: { template: input.value } });
+      toast(t("countersSaved"));
+      onChanged();
+    } catch (error) {
+      failed(error);
+      save.disabled = false;
+    }
+  });
+  const remove = h(
+    "button",
+    {
+      class: "ghost small",
+      type: "button",
+      onclick: async () => {
+        if (!confirm(t("countersRemoveConfirm"))) {
+          return;
+        }
+        try {
+          const result = await api(`/api/guilds/${guildId}/counters/${counter.id}`, { method: "DELETE" });
+          toast(t(result.channelDeleted ? "countersRemoved" : "countersRemovedKeptChannel"));
+          onChanged();
+        } catch (error) {
+          failed(error);
+        }
+      },
+    },
+    t("tagRemove"),
+  );
+  const status = counter.channelId
+    ? h("span", { class: "muted" }, icon("volume", "icon small"), " ", channel ? channel.name : t("countersChannelPending"))
+    : counter.error
+      ? null
+      : h("span", { class: "muted" }, t("countersCreating"));
+  return h(
+    "li",
+    { class: "sent-row counter-row" },
+    iconChip("chart", "blue", "sm"),
+    h("span", { class: "ticket-main" }, h("span", { class: "counter-edit" }, input, save), status, counter.error ? h("span", { class: "danger-text small-text" }, t("feedsProblem", { error: counter.error })) : null),
+    remove,
+  );
+}
+
+async function showCounters(guildId) {
+  const data = await loadManagedGuild(guildId);
+  if (!data) {
+    return;
+  }
+  const list = h("ul", { class: "ticket-list" });
+  const empty = h("p", { class: "muted empty" }, t("countersNone"));
+  const countPill = h("span", { class: "count-pill" });
+  const add = h("button", { class: "primary", type: "submit" }, icon("plus", "icon small"), t("countersAdd"));
+  let presets = {};
+  const nameInput = h("input", { id: "counterName", type: "text", required: true, maxLength: COUNTER_TEMPLATE_MAX });
+  const categories = data.channels.filter((channel) => channel.type === CHANNEL.CATEGORY).map((channel) => ({ id: channel.id, label: channel.name }));
+  let refreshTimer;
+
+  async function load() {
+    const result = await api(`/api/guilds/${guildId}/counters`);
+    presets = result.presets;
+    if (!nameInput.value) {
+      nameInput.value = presets.members;
+    }
+    list.replaceChildren(...result.counters.map((counter) => counterRow(guildId, counter, data, () => load().catch(failed))));
+    empty.hidden = result.counters.length > 0;
+    countPill.textContent = t("tagsCount", { count: result.counters.length, max: result.max });
+    add.disabled = result.counters.length >= result.max;
+    // New counters get their channel from the bot within a minute; check back.
+    clearTimeout(refreshTimer);
+    if (result.counters.some((counter) => !counter.channelId && !counter.error)) {
+      refreshTimer = setTimeout(() => {
+        if (document.body.contains(list)) {
+          loadManagedGuild(guildId, { fresh: true })
+            .then((fresh) => {
+              if (fresh) {
+                data.channels = fresh.channels;
+              }
+              return load();
+            })
+            .catch(() => {});
+        }
+      }, 15_000);
+    }
+  }
+
+  const form = h(
+    "form",
+    {
+      onsubmit: async (event) => {
+        event.preventDefault();
+        add.disabled = true;
+        try {
+          await api(`/api/guilds/${guildId}/counters`, {
+            method: "POST",
+            body: { template: nameInput.value, categoryId: form.querySelector("#counterCategory").value || null },
+          });
+          toast(t("countersAdded"));
+          await load();
+        } catch (error) {
+          failed(error);
+          add.disabled = false;
+        }
+      },
+    },
+    field(
+      "countersPreset",
+      null,
+      h(
+        "div",
+        { class: "segmented wrap" },
+        COUNTER_PRESET_NAMES.map((name, index) => {
+          const button = h("button", { type: "button", class: "segment", "aria-pressed": String(index === 0) }, t(`countersPreset_${name}`));
+          button.addEventListener("click", (event) => {
+            pickOne([...event.currentTarget.parentElement.children], event.currentTarget);
+            nameInput.value = presets[name] ?? nameInput.value;
+          });
+          return button;
+        }),
+      ),
+    ),
+    h(
+      "div",
+      { class: "embed-grid" },
+      field("countersName", "countersNameHelp", nameInput),
+      field("countersCategory", "countersCategoryHelp", picker({ id: "counterCategory", options: categories, value: null, emptyLabel: t("countersNoCategory") })),
+    ),
+    h("div", { class: "toolbar" }, h("span", { class: "grow" }), add),
+  );
+
+  show(
+    guildLayout(
+      data,
+      "counters",
+      pageHero("counters", t("countersIntro"), data),
+      card(t("countersNew"), "plus", "green", form),
+      card(t("page_counters"), "chart", "blue", h("div", { class: "toolbar" }, h("p", { class: "help grow" }, t("countersListHelp")), countPill), empty, list),
+    ),
+  );
+  await load();
+}
+
 // --- Activity ----------------------------------------------------------------------
 
 // A line of a dashboard change: **bold** as bold, and channel and role mentions as names.
@@ -4741,6 +4899,7 @@ const SHOW_PAGE = {
   scheduled: showScheduled,
   embeds: showEmbeds,
   feeds: showFeeds,
+  counters: showCounters,
   moderation: showModeration,
   logging: showLogging,
   access: showAccess,

@@ -20,6 +20,7 @@ import { createRolePersistence } from "./members/rolePersistence.js";
 import { TempRoleStore } from "./tempRoles/tempRoleStore.js";
 import { FeedStore } from "./feeds/feedStore.js";
 import { createFeedPoller } from "./feeds/feedPoller.js";
+import { createStatsUpdater } from "./stats/statsUpdater.js";
 import { createTempRoleScheduler } from "./tempRoles/tempRoleScheduler.js";
 import { createRaidGuard } from "./raid/raid.js";
 import { createTempVoice } from "./voice/tempVoice.js";
@@ -159,6 +160,8 @@ async function start() {
   const tempRoles = new TempRoleStore(db);
   // YouTube channels, subreddits and RSS feeds followed with /feed.
   const feeds = new FeedStore(db);
+  // Server stats channels (/stats): voice channels named after live counts.
+  const statsUpdater = createStatsUpdater({ guildSettings, logger });
   // Gives members their roles back when they rejoin (/welcome persist).
   const rolePersistence = createRolePersistence({
     guildSettings,
@@ -199,6 +202,7 @@ async function start() {
     quarantine,
     tempRoles,
     feeds,
+    statsUpdater,
     giveaways,
     tickets,
     levels,
@@ -285,6 +289,7 @@ async function start() {
       feedPoller?.stop();
       feedPoller = createFeedPoller({ client: readyClient, store: feeds, logger, forcedLanguage });
       feedPoller.start();
+      statsUpdater.start(readyClient);
     });
 
     client.on(Events.InteractionCreate, (interaction) => {
@@ -379,6 +384,7 @@ async function start() {
       }
       forgetAutomodExemption(channel.guildId, "exemptChannelIds", channel.id);
       tempVoice.channelDeleted(channel);
+      statsUpdater.channelDeleted(channel).catch((error) => logger.error("Couldn't forget a deleted stats channel", { error }));
       if (channel.guildId && guildSettings.get(channel.guildId, Setting.TEMP_VOICE)?.hubChannelId === channel.id) {
         guildSettings
           .clear(channel.guildId, Setting.TEMP_VOICE)
@@ -454,6 +460,8 @@ async function start() {
       scheduledMessageScheduler?.stop();
       birthdays?.stop();
       tempRoleScheduler?.stop();
+      feedPoller?.stop();
+      statsUpdater.stop();
       leveling.stopVoiceXp();
       automod.stop();
       await client?.destroy().catch(() => {});

@@ -50,6 +50,7 @@ import { SentMessageStore } from "../messages/sentMessageStore.js";
 import { addFeed, FeedDuplicate, FeedError, FeedLimit } from "../feeds/feeds.js";
 import { FEED_KINDS } from "../feeds/fetchFeed.js";
 import { FeedStore, MAX_FEEDS } from "../feeds/feedStore.js";
+import { checkTemplate, COUNTER_PRESETS, InvalidCounter, MAX_COUNTERS, newCounterId, normalizeCounters } from "../stats/statsCounters.js";
 import { buildPanelButtons, buildPanelMessage } from "../tickets/tickets.js";
 import { ScheduledMessageStore } from "../scheduled/scheduledMessageStore.js";
 import { MAX_DELAY_MS, MAX_INTERVAL_MS, MAX_SCHEDULED, MAX_SCHEDULED_LENGTH, MIN_INTERVAL_MS } from "../scheduled/scheduler.js";
@@ -1454,6 +1455,117 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     feeds.delete(access.guildId, id);
     await logAction(access.guildId, access.session, `**Feed removed:** ${feed.name}`, []);
     return { ok: true };
+  });
+
+  // --- Server stats ---------------------------------------------------------
+  // The bot creates the channel for a new counter within a minute and renames
+  // them as counts change (stats/statsUpdater.js); the dashboard only edits the list.
+
+  const statsCounters = (guildId) => normalizeCounters(guildSettings.get(guildId, Setting.STATS_COUNTERS));
+
+  app.get("/api/guilds/:id/counters", async (request, reply) => {
+    const access = await requireGuild(request, reply, { manage: true });
+    if (!access) {
+      return reply;
+    }
+    return { counters: statsCounters(access.guildId), presets: COUNTER_PRESETS, max: MAX_COUNTERS };
+  });
+
+  // Checks a template and category from the request body; null after replying 400.
+  async function counterBody(request, reply, guildId) {
+    let template;
+    try {
+      template = checkTemplate(request.body?.template);
+    } catch (error) {
+      if (error instanceof InvalidCounter) {
+        reply.code(400).send({ error: "bad-template", message: error.message });
+        return null;
+      }
+      throw error;
+    }
+    const categoryId = request.body?.categoryId ?? null;
+    if (categoryId !== null && !(await discord.channels(guildId)).some((channel) => channel.id === categoryId && channel.type === 4 /* category */)) {
+      reply.code(400).send({ error: "bad-category", message: "Pick a category from this server." });
+      return null;
+    }
+    return { template, categoryId };
+  }
+
+  app.post("/api/guilds/:id/counters", async (request, reply) => {
+    const access = await requireGuild(request, reply, { manage: true });
+    if (!access) {
+      return reply;
+    }
+    const { guildId, session } = access;
+    const counters = statsCounters(guildId);
+    if (counters.length >= MAX_COUNTERS) {
+      return reply.code(409).send({ error: "stats-full", message: `A server can have up to ${MAX_COUNTERS} counters.` });
+    }
+    const body = await counterBody(request, reply, guildId);
+    if (!body) {
+      return reply;
+    }
+    const counter = { id: newCounterId(), ...body, channelId: null, error: null };
+    await guildSettings.set(guildId, Setting.STATS_COUNTERS, [...counters, counter]);
+    await logAction(guildId, session, `**Stats counter added:** ${counter.template}`, []);
+    return { counter };
+  });
+
+  app.patch("/api/guilds/:id/counters/:counterId", async (request, reply) => {
+    const access = await requireGuild(request, reply, { manage: true });
+    if (!access) {
+      return reply;
+    }
+    const { guildId, session } = access;
+    const counters = statsCounters(guildId);
+    const counter = counters.find((each) => each.id === request.params.counterId);
+    if (!counter) {
+      return reply.code(404).send({ error: "not-found" });
+    }
+    let template;
+    try {
+      template = checkTemplate(request.body?.template);
+    } catch (error) {
+      if (error instanceof InvalidCounter) {
+        return reply.code(400).send({ error: "bad-template", message: error.message });
+      }
+      throw error;
+    }
+    const updated = { ...counter, template };
+    await guildSettings.set(
+      guildId,
+      Setting.STATS_COUNTERS,
+      counters.map((each) => (each.id === counter.id ? updated : each)),
+    );
+    await logAction(guildId, session, `**Stats counter renamed:** ${counter.template} → ${template}`, []);
+    return { counter: updated };
+  });
+
+  app.delete("/api/guilds/:id/counters/:counterId", async (request, reply) => {
+    const access = await requireGuild(request, reply, { manage: true });
+    if (!access) {
+      return reply;
+    }
+    const { guildId, session } = access;
+    const counters = statsCounters(guildId);
+    const counter = counters.find((each) => each.id === request.params.counterId);
+    if (!counter) {
+      return reply.code(404).send({ error: "not-found" });
+    }
+    await guildSettings.set(
+      guildId,
+      Setting.STATS_COUNTERS,
+      counters.filter((each) => each.id !== counter.id),
+    );
+    let channelDeleted = !counter.channelId;
+    if (counter.channelId) {
+      channelDeleted = await discord
+        .deleteChannel(guildId, counter.channelId, "Server stats counter removed on the dashboard")
+        .then(() => true)
+        .catch((error) => error?.status === 404);
+    }
+    await logAction(guildId, session, `**Stats counter removed:** ${counter.template}`, []);
+    return { ok: true, channelDeleted };
   });
 
   // --- Activity -------------------------------------------------------------
