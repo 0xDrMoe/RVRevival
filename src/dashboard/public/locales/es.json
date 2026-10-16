@@ -764,5 +764,11 @@
   "levelsBoardHelp_week": "{count} miembros ganaron XP en los últimos 7 días. Los miembros lo ven con /leaderboard period:Esta semana.",
   "levelsBoardHelp_month": "{count} miembros ganaron XP en los últimos 30 días. Los miembros lo ven con /leaderboard period:Este mes.",
   "levelsBoardEmptyPeriod": "Nadie ganó XP en este tiempo.",
-  "levelsBoardGained": "+{gained} XP · {xp} XP en total"
+  "levelsBoardGained": "+{gained} XP · {xp} XP en total",
+  "mediaOnlyTitle": "Canales solo multimedia",
+  "mediaOnlyHelp": "En estos canales, los mensajes sin imagen, video, archivo o enlace se borran con una nota breve. El staff con Gestionar mensajes está exento, y los hilos quedan abiertos para comentar. Hasta 10 canales. El bot necesita Gestionar mensajes allí.",
+  "mediaOnlyNativeTip": "Tu servidor es un servidor de comunidad, así que también puede usar los canales multimedia de Discord (Crear canal → Multimedia), pensados para galerías. Usa esto para canales de texto normales.",
+  "mediaOnlyLinks": "Los enlaces cuentan como multimedia",
+  "mediaOnlyLinksHelp": "Activado: basta con un enlace (YouTube, clips). Desactivado: solo archivos subidos.",
+  "mediaOnlyPick": "Marca los canales que serán solo multimedia."
 }

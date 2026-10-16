@@ -30,6 +30,7 @@ The Discord bot for the Rumbleverse Revival server. It is built as a set of inde
 | [Feeds](#feeds) | `/feed`, or the dashboard's Feeds page | Manage Server or a dashboard role that can change settings |
 | [Server stats](#server-stats) | `/stats`, or the dashboard's Server stats page | Manage Server or a dashboard role that can change settings |
 | [Sticky messages](#sticky-messages) | `/sticky`, or the dashboard's Sticky messages page | Manage Messages (dashboard: Manage Server or a dashboard role that can change settings) |
+| [Media-only channels](#media-only-channels) | `/mediaonly`, or the dashboard's Automod page | Manage Channels (dashboard: Manage Server or a dashboard role that can change settings) |
 | [Highlights](#highlights) | `/highlight` | Everyone |
 | [AFK](#afk) | `/afk` | Everyone |
 | [Ban appeals](#ban-appeals) | The dashboard's Ban appeals page | Manage Server or a dashboard role that can change settings (banned members fill in the form) |
@@ -386,6 +387,15 @@ A server can have up to 5 counters. Discord lets the bot rename a channel only t
 
 When people talk, the bot waits a few seconds, deletes its last copy and posts the message again, at most once every 15 seconds per channel. Up to 10 per server, one per channel. Mentions never ping anyone. Needs **Manage Messages**. The bot needs View Channel and Send Messages.
 
+### Media-only channels
+
+`/mediaonly` (or the **Media-only channels** card on the dashboard's Automod page) makes text channels where only pictures, videos, files and links can be posted, like a clips or fan-art channel.
+
+- **`/mediaonly add channel`** and **`/mediaonly remove channel`** pick the channels (up to 10). **`/mediaonly list`** shows them.
+- **`/mediaonly links allow`** decides whether a link alone counts (on by default, so YouTube and clip links are fine). Off means uploads only.
+
+Other messages are deleted, with a note that deletes itself after a few seconds (at most one note per member every 30 seconds). Members with **Manage Messages** in the channel are exempt, and threads in the channel stay open for comments. Community servers can also use Discord's own **media channels** (Create Channel → Media), which are built for galleries; this is for normal text channels. Needs **Manage Channels**. The bot needs **Manage Messages** in the channel.
+
 ### Highlights
 
 **`/highlight add word`** gets you a DM when someone says that word (or short phrase) in a channel you can see. **`/highlight remove word`**, **`/highlight list`** and **`/highlight clear`** manage your words; up to 10 per server.
@@ -637,11 +647,12 @@ src/
     afk.js               AFK: /afk
     sticky.js            Sticky messages: /sticky
     highlight.js         Highlights: /highlight
+    mediaOnly.js         Media-only channels: /mediaonly
     commandHelpers.js    Shared start of moderation-style commands (language, permission check)
   countries/             Country roles: country list, name matching and search
   roles/                 Country roles: find, create, assign and remove roles
   channels/              Country roles: keeps the /country channel clean
-  community/             Community: welcome and leave messages, autoroles (welcome.js), role panels (rolePanels.js), custom commands (tags.js), auto-responders (autoResponders.js), the starboard (starboard.js, starboardStore.js)
+  community/             Community: welcome and leave messages, autoroles (welcome.js), role panels (rolePanels.js), custom commands (tags.js), auto-responders (autoResponders.js), the starboard (starboard.js, starboardStore.js), media-only channels (mediaOnly.js)
   giveaways/             Giveaways: saved in SQLite (giveawayStore.js), drawing winners (giveaways.js), ended on time (giveawayScheduler.js)
   tickets/               Support tickets: saved in SQLite (ticketStore.js), the panel, staff and messages (tickets.js), transcripts (transcript.js)
   raid/                  Raid protection: lockdown planning and restoring, the new-account gate and join alerts (raid.js), anti-nuke (antiNuke.js)

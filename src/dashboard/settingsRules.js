@@ -13,6 +13,7 @@ import { MAX_AUTOROLES, MAX_MESSAGE_LENGTH } from "../community/welcome.js";
 import { checkLeveling, InvalidLeveling, normalizeLeveling } from "../leveling/config.js";
 import { checkAntiNuke, describeAntiNuke, InvalidAntiNuke } from "../raid/antiNuke.js";
 import { checkRolePersist, InvalidRolePersist } from "../members/rolePersistence.js";
+import { checkMediaOnly, describeMediaOnly, InvalidMediaOnly } from "../community/mediaOnly.js";
 import { checkAppeals, InvalidAppeals } from "../appeals/config.js";
 import { checkCategories, describeCategories, InvalidCategories } from "../tickets/categories.js";
 import { checkJoinGate, InvalidJoinGate } from "../raid/raid.js";
@@ -81,6 +82,7 @@ export const SETTING_RULES = Object.freeze({
   [Setting.ANTI_NUKE]: { kind: "antiNuke", label: "Anti-nuke", ownerOnly: true },
   [Setting.BIRTHDAYS]: { kind: "birthdays", types: POSTING_CHANNELS, label: "Birthdays" },
   [Setting.AUTO_RESPONDERS]: { kind: "autoResponders", types: RESPONDER_CHANNELS, label: "Auto-responders" },
+  [Setting.MEDIA_ONLY]: { kind: "mediaOnly", types: [ChannelType.GuildText, ChannelType.GuildAnnouncement], label: "Media-only channels" },
 });
 
 // Checks one value. Returns what to save: null clears the setting, and empty
@@ -241,6 +243,15 @@ function checkValue(setting, value, { guildId, channels, roles }) {
         }
         throw error;
       }
+    case "mediaOnly":
+      try {
+        return checkMediaOnly(value, { isChannel: (id) => typeof id === "string" && channelOk(id, rule.types) });
+      } catch (error) {
+        if (error instanceof InvalidMediaOnly) {
+          throw new InvalidSetting(setting, error.message);
+        }
+        throw error;
+      }
     case "rolePersist":
       try {
         return checkRolePersist(value, { isRole: roleOk });
@@ -346,6 +357,8 @@ export function describeValue(setting, value) {
       return describeCategories(value);
     case "appeals":
       return `${value.enabled ? "open" : "closed"} · ${value.channelId ? `<#${value.channelId}>` : "mod-log channel"} · ${value.questions.length} question(s) · wait ${value.cooldownDays} days after a denial`;
+    case "mediaOnly":
+      return value.channelIds.length > 0 ? describeMediaOnly(value) : `none · links ${value.allowLinks ? "allowed" : "not allowed"}`;
     case "rolePersist":
       return `${value.enabled ? "given back" : "not given back"}${value.ignoredRoleIds.length > 0 ? ` · ignoring ${value.ignoredRoleIds.map((id) => `<@&${id}>`).join(", ")}` : ""}`;
     case "joinGate":

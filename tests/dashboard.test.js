@@ -1011,6 +1011,16 @@ describe("dashboard", () => {
     expect(all).toMatchObject({ period: "all", total: 2, entries: [{ userTag: "moe", gained: null }, { userTag: "kaz" }] });
   });
 
+  it("saves media-only channels", async () => {
+    const cookies = await login();
+    const url = `/api/guilds/${GUILD_ID}/settings`;
+    expect((await write(cookies, "PUT", url, { mediaOnly: { channelIds: [VOICE_ID], allowLinks: true } })).statusCode).toBe(400);
+    expect((await write(cookies, "PUT", url, { mediaOnly: { channelIds: [TEXT_ID], allowLinks: false } })).statusCode).toBe(200);
+    expect(guildSettings.get(GUILD_ID, Setting.MEDIA_ONLY)).toEqual({ channelIds: [TEXT_ID], allowLinks: false });
+    const settings = (await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}`, cookies })).json().settings;
+    expect(settings.mediaOnly).toEqual({ channelIds: [TEXT_ID], allowLinks: false });
+  });
+
   it("logs out and forgets the session", async () => {
     const cookies = await login();
     expect((await write(cookies, "POST", "/auth/logout")).statusCode).toBe(200);

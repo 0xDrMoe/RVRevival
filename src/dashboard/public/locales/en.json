@@ -764,5 +764,11 @@
   "levelsBoardHelp_week": "{count} members earned XP in the last 7 days. Members see this with /leaderboard period:This week.",
   "levelsBoardHelp_month": "{count} members earned XP in the last 30 days. Members see this with /leaderboard period:This month.",
   "levelsBoardEmptyPeriod": "Nobody earned XP in this time.",
-  "levelsBoardGained": "+{gained} XP · {xp} XP in total"
+  "levelsBoardGained": "+{gained} XP · {xp} XP in total",
+  "mediaOnlyTitle": "Media-only channels",
+  "mediaOnlyHelp": "In these channels, messages without a picture, video, file or link are deleted with a short note. Staff with Manage Messages are exempt, and threads stay open for comments. Up to 10 channels. The bot needs Manage Messages there.",
+  "mediaOnlyNativeTip": "Your server is a Community server, so it can also use Discord's own media channels (Create Channel → Media), which are built for galleries. Use this for normal text channels.",
+  "mediaOnlyLinks": "Links count as media",
+  "mediaOnlyLinksHelp": "On: a link alone (YouTube, clips) is fine. Off: only uploads.",
+  "mediaOnlyPick": "Tick the channels to make media-only."
 }

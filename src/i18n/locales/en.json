@@ -1077,5 +1077,27 @@
   "leaderboardEmptyPeriod": "Nobody earned XP in that time. Start chatting!",
   "leaderboardLinePeriod": "{place} {member} · +{gained} XP · Level {level}",
   "leaderboardTitle_week": "🏆 {server} · this week",
-  "leaderboardTitle_month": "🏆 {server} · this month"
+  "leaderboardTitle_month": "🏆 {server} · this month",
+
+  "mediaOnlyCommandDescription": "Channels where only pictures, videos, files and links can be posted",
+  "mediaOnlyAddDescription": "Make a channel media-only",
+  "mediaOnlyRemoveDescription": "Make a channel normal again",
+  "mediaOnlyLinksDescription": "Whether links count as media",
+  "mediaOnlyAllowOptionDescription": "True to allow links, false for uploads only",
+  "mediaOnlyListDescription": "The media-only channels",
+  "mediaOnlyChannelOptionDescription": "The channel",
+  "mediaOnlyAlready": "{channel} is already media-only.",
+  "mediaOnlyFull": "Up to {max} channels can be media-only. Remove one with `/mediaonly remove` first.",
+  "mediaOnlyNeedsManageMessages": "I need View Channel and Manage Messages in {channel} to delete text-only messages there.",
+  "mediaOnlyAdded": "{channel} is now media-only: messages need a picture, video, file or link. Staff with Manage Messages can still talk, and threads stay open for comments.",
+  "mediaOnlyAddedNoLinks": "{channel} is now media-only: messages need a picture, video or file. Staff with Manage Messages can still talk, and threads stay open for comments.",
+  "mediaOnlyNot": "{channel} isn't media-only.",
+  "mediaOnlyRemoved": "{channel} is a normal channel again.",
+  "mediaOnlyLinksOn": "Links now count as media.",
+  "mediaOnlyLinksOff": "Only uploads count as media now; links alone get deleted.",
+  "mediaOnlyListEmpty": "No media-only channels. Add one with `/mediaonly add`.",
+  "mediaOnlyList": "**Media-only channels:** {list}\nLinks count as media.",
+  "mediaOnlyListNoLinks": "**Media-only channels:** {list}\nOnly uploads count as media.",
+  "mediaOnlyNote": "{user} this channel is for pictures, videos, files and links. Comment in a thread instead.",
+  "mediaOnlyNoteNoLinks": "{user} this channel is for pictures, videos and files. Comment in a thread instead."
 }

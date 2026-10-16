@@ -764,5 +764,11 @@
   "levelsBoardHelp_week": "{count} Mitglieder haben in den letzten 7 Tagen XP bekommen. Mitglieder sehen das mit /leaderboard period:Diese Woche.",
   "levelsBoardHelp_month": "{count} Mitglieder haben in den letzten 30 Tagen XP bekommen. Mitglieder sehen das mit /leaderboard period:Diesen Monat.",
   "levelsBoardEmptyPeriod": "In dieser Zeit hat niemand XP bekommen.",
-  "levelsBoardGained": "+{gained} XP · {xp} XP insgesamt"
+  "levelsBoardGained": "+{gained} XP · {xp} XP insgesamt",
+  "mediaOnlyTitle": "Medienkanäle",
+  "mediaOnlyHelp": "In diesen Kanälen werden Nachrichten ohne Bild, Video, Datei oder Link mit einem kurzen Hinweis gelöscht. Team mit Nachrichten verwalten ist ausgenommen, und Threads bleiben für Kommentare offen. Bis zu 10 Kanäle. Der Bot braucht dort Nachrichten verwalten.",
+  "mediaOnlyNativeTip": "Dein Server ist ein Community-Server und kann auch Discords eigene Medienkanäle nutzen (Kanal erstellen → Medien), die für Galerien gemacht sind. Nutze dies für normale Textkanäle.",
+  "mediaOnlyLinks": "Links zählen als Medien",
+  "mediaOnlyLinksHelp": "An: ein Link allein (YouTube, Clips) reicht. Aus: nur Uploads.",
+  "mediaOnlyPick": "Hake die Kanäle an, die nur für Medien sein sollen."
 }

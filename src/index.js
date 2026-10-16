@@ -27,6 +27,7 @@ import { createStickies } from "./sticky/stickies.js";
 import { StickyStore } from "./sticky/stickyStore.js";
 import { createHighlights } from "./highlights/highlights.js";
 import { HighlightStore } from "./highlights/highlightStore.js";
+import { createMediaOnly } from "./community/mediaOnly.js";
 import { createTempRoleScheduler } from "./tempRoles/tempRoleScheduler.js";
 import { createRaidGuard } from "./raid/raid.js";
 import { createTempVoice } from "./voice/tempVoice.js";
@@ -188,6 +189,8 @@ async function start() {
 
   // Automod (/settings automod): spam, banned words, invites, links, mentions, capitals.
   const automod = createAutomod({ guildSettings, moderation, modLog, logger, forcedLanguage, botDeletions });
+  // Media-only channels (/mediaonly): text-only messages are deleted.
+  const mediaOnly = createMediaOnly({ guildSettings, logger, forcedLanguage, botDeletions });
   // Raid protection (/raid): the new-account gate and join alerts.
   const raidGuard = createRaidGuard({ guildSettings, moderation, modLog, logger });
 
@@ -319,10 +322,13 @@ async function start() {
     client.on(Events.MessageCreate, (message) => {
       guardCountryChannel(message).catch((error) => logger.error("Couldn't clean the /country channel", { error }));
     });
-    // Auto-responders only answer messages automod let through.
+    // Auto-responders only answer messages automod (and media-only channels) let through.
     client.on(
       Events.MessageCreate,
       safely("automod", async (message) => {
+        if (await mediaOnly.messageCreated(message)) {
+          return;
+        }
         if (!(await automod.handleMessage(message))) {
           await autoResponder.handleMessage(message);
         }
@@ -409,6 +415,7 @@ async function start() {
       forgetAutomodExemption(channel.guildId, "exemptChannelIds", channel.id);
       tempVoice.channelDeleted(channel);
       stickies.channelDeleted(channel);
+      mediaOnly.channelDeleted(channel).catch((error) => logger.error("Couldn't forget a deleted media-only channel", { error }));
       statsUpdater.channelDeleted(channel).catch((error) => logger.error("Couldn't forget a deleted stats channel", { error }));
       if (channel.guildId && guildSettings.get(channel.guildId, Setting.TEMP_VOICE)?.hubChannelId === channel.id) {
         guildSettings

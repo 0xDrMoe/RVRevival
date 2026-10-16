@@ -1077,5 +1077,27 @@
   "leaderboardEmptyPeriod": "Ninguém ganhou XP nesse período. Bora conversar!",
   "leaderboardLinePeriod": "{place} {member} · +{gained} XP · Nível {level}",
   "leaderboardTitle_week": "🏆 {server} · esta semana",
-  "leaderboardTitle_month": "🏆 {server} · este mês"
+  "leaderboardTitle_month": "🏆 {server} · este mês",
+
+  "mediaOnlyCommandDescription": "Canais onde só se podem postar imagens, vídeos, arquivos e links",
+  "mediaOnlyAddDescription": "Torne um canal só de mídia",
+  "mediaOnlyRemoveDescription": "Torne um canal normal de novo",
+  "mediaOnlyLinksDescription": "Se links contam como mídia",
+  "mediaOnlyAllowOptionDescription": "Verdadeiro para permitir links, falso só para arquivos enviados",
+  "mediaOnlyListDescription": "Os canais só de mídia",
+  "mediaOnlyChannelOptionDescription": "O canal",
+  "mediaOnlyAlready": "{channel} já é só de mídia.",
+  "mediaOnlyFull": "Até {max} canais podem ser só de mídia. Remova um com `/mediaonly remove` primeiro.",
+  "mediaOnlyNeedsManageMessages": "Preciso de Ver canal e Gerenciar mensagens em {channel} para apagar lá as mensagens sem mídia.",
+  "mediaOnlyAdded": "{channel} agora é só de mídia: as mensagens precisam de uma imagem, vídeo, arquivo ou link. A equipe com Gerenciar mensagens ainda pode falar, e os tópicos ficam abertos para comentários.",
+  "mediaOnlyAddedNoLinks": "{channel} agora é só de mídia: as mensagens precisam de uma imagem, vídeo ou arquivo. A equipe com Gerenciar mensagens ainda pode falar, e os tópicos ficam abertos para comentários.",
+  "mediaOnlyNot": "{channel} não é só de mídia.",
+  "mediaOnlyRemoved": "{channel} é um canal normal de novo.",
+  "mediaOnlyLinksOn": "Links agora contam como mídia.",
+  "mediaOnlyLinksOff": "Agora só arquivos enviados contam; links sozinhos são apagados.",
+  "mediaOnlyListEmpty": "Nenhum canal só de mídia. Adicione um com `/mediaonly add`.",
+  "mediaOnlyList": "**Canais só de mídia:** {list}\nLinks contam como mídia.",
+  "mediaOnlyListNoLinks": "**Canais só de mídia:** {list}\nSó arquivos enviados contam.",
+  "mediaOnlyNote": "{user} este canal é para imagens, vídeos, arquivos e links. Comente em um tópico.",
+  "mediaOnlyNoteNoLinks": "{user} este canal é para imagens, vídeos e arquivos. Comente em um tópico."
 }
