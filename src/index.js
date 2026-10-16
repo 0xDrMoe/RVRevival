@@ -21,6 +21,8 @@ import { TempRoleStore } from "./tempRoles/tempRoleStore.js";
 import { FeedStore } from "./feeds/feedStore.js";
 import { createFeedPoller } from "./feeds/feedPoller.js";
 import { createStatsUpdater } from "./stats/statsUpdater.js";
+import { createAfk } from "./afk/afk.js";
+import { AfkStore } from "./afk/afkStore.js";
 import { createTempRoleScheduler } from "./tempRoles/tempRoleScheduler.js";
 import { createRaidGuard } from "./raid/raid.js";
 import { createTempVoice } from "./voice/tempVoice.js";
@@ -162,6 +164,8 @@ async function start() {
   const feeds = new FeedStore(db);
   // Server stats channels (/stats): voice channels named after live counts.
   const statsUpdater = createStatsUpdater({ guildSettings, logger });
+  // Members who are away (/afk).
+  const afk = createAfk({ store: new AfkStore(db), logger, forcedLanguage });
   // Gives members their roles back when they rejoin (/welcome persist).
   const rolePersistence = createRolePersistence({
     guildSettings,
@@ -203,6 +207,7 @@ async function start() {
     tempRoles,
     feeds,
     statsUpdater,
+    afk,
     giveaways,
     tickets,
     levels,
@@ -310,6 +315,7 @@ async function start() {
       }),
     );
     client.on(Events.MessageCreate, safely("leveling", (message) => leveling.handleMessage(message)));
+    client.on(Events.MessageCreate, safely("AFK", (message) => afk.messageCreated(message)));
 
     // The server log (/settings server-log-channel).
     client.on(Events.MessageDelete, safely("a deleted message", (message) => serverLog.messageDeleted(message)));
@@ -351,6 +357,7 @@ async function start() {
     client.on(Events.GuildMemberRemove, safely("saving roles", (member) => rolePersistence.memberLeft(member)));
     client.on(Events.GuildMemberRemove, safely("a leave message", (member) => welcomer.memberLeft(member)));
     client.on(Events.GuildMemberRemove, safely("forgetting a birthday", (member) => birthdayStore.remove(member.guild.id, member.id)));
+    client.on(Events.GuildMemberRemove, safely("forgetting an AFK", (member) => afk.memberLeft(member)));
     client.on(Events.GuildMemberUpdate, safely("autoroles after screening", (before, after) => welcomer.memberUpdated(before, after)));
     client.on(
       Events.GuildMemberRemove,
