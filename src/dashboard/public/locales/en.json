@@ -270,5 +270,17 @@
   "rolePanelMode_unique": "Only one role",
   "setupWelcome": "Welcome new members",
   "onboardingTip": "This is a Community server, so we recommend Discord's own Onboarding (Server Settings → Onboarding) for giving new members roles. Use autoroles only if you don't use Onboarding.",
-  "rolePanelsOnboardingTip": "This is a Community server, so we recommend Discord's own Onboarding (Server Settings → Onboarding) for letting members pick roles. Role panels are best for servers that don't use Onboarding."
+  "rolePanelsOnboardingTip": "This is a Community server, so we recommend Discord's own Onboarding (Server Settings → Onboarding) for letting members pick roles. Role panels are best for servers that don't use Onboarding.",
+  "page_tags": "Custom commands",
+  "tagsIntro": "Saved answers anyone can post with /tag: the download link, how to report a bug, the FAQ.",
+  "sectionTags": "Saved answers",
+  "tagsHelp": "Names use letters, numbers and dashes. Staff can also manage these in Discord with /tags.",
+  "tagsCount": "{count}/{max}",
+  "tagAdd": "Add",
+  "tagsNone": "No custom commands yet. Add one to get started.",
+  "tagRemove": "Remove",
+  "tagName": "Name",
+  "tagNamePlaceholder": "download",
+  "tagContent": "Text",
+  "tagContentPlaceholder": "What /tag posts (up to 2000 characters)"
 }

@@ -351,6 +351,32 @@ describe("dashboard", () => {
     }
   });
 
+  it("saves custom commands, cleaned and sorted, and refuses bad ones", async () => {
+    const cookies = await login();
+    const saved = await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, {
+      tags: [
+        { name: "Rules", content: " Be nice\r\nNo spam " },
+        { name: "download", content: "https://example.com" },
+      ],
+    });
+    expect(saved.statusCode).toBe(200);
+    expect(saved.json().settings.tags).toEqual([
+      { name: "download", content: "https://example.com" },
+      { name: "rules", content: "Be nice\nNo spam" },
+    ]);
+    for (const tags of [
+      [{ name: "a:b", content: "x" }],
+      [{ name: "faq", content: "  " }],
+      [{ name: "faq", content: "x" }, { name: "FAQ", content: "y" }],
+      [{ name: "faq", content: "x".repeat(2001) }],
+    ]) {
+      const refused = await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, { tags });
+      expect(refused.json()).toMatchObject({ error: "invalid-setting", setting: "tags" });
+    }
+    const cleared = await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, { tags: [] });
+    expect(cleared.json().settings.tags).toBeUndefined();
+  });
+
   it("never saves role panels from the dashboard", async () => {
     const cookies = await login();
     const response = await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, { rolePanels: [] });

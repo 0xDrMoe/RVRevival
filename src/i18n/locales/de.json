@@ -482,5 +482,28 @@
 
   "welcomeOnboardingTip": "Tipp: Das ist ein Community-Server, daher ist Discords eigenes **Onboarding** (Servereinstellungen → Onboarding) der bessere Weg, neuen Mitgliedern Rollen zu geben. Nutze Autorollen nur, wenn du kein Onboarding verwendest.",
 
-  "rolePanelOnboardingTip": "Tipp: Das ist ein Community-Server, daher können Mitglieder über Discords eigenes **Onboarding** (Servereinstellungen → Onboarding) Rollen ohne Panel wählen. Rollen-Panels eignen sich am besten für Server ohne Onboarding."
+  "rolePanelOnboardingTip": "Tipp: Das ist ein Community-Server, daher können Mitglieder über Discords eigenes **Onboarding** (Servereinstellungen → Onboarding) Rollen ohne Panel wählen. Rollen-Panels eignen sich am besten für Server ohne Onboarding.",
+
+  "tagCommandDescription": "Poste eine gespeicherte Antwort (einen eigenen Befehl) in diesem Kanal.",
+  "tagNameOptionDescription": "Welche gespeicherte Antwort gepostet wird.",
+  "tagUserOptionDescription": "Jemand, der dabei erwähnt wird.",
+  "tagsCommandDescription": "Team: gespeicherte Antworten für /tag hinzufügen, ändern oder löschen.",
+  "tagsAddDescription": "Schreibe eine neue gespeicherte Antwort.",
+  "tagsNewNameOptionDescription": "Ihr Name, z. B. download oder bug-report (Buchstaben, Zahlen und Bindestriche).",
+  "tagsEditDescription": "Ändere den Text einer gespeicherten Antwort.",
+  "tagsRemoveDescription": "Lösche eine gespeicherte Antwort.",
+  "tagsListDescription": "Zeigt die gespeicherten Antworten.",
+  "tagsFormTitle": "Gespeicherte Antwort: {name}",
+  "tagsFormLabel": "Was /tag postet",
+  "tagNotFound": "Es gibt keine gespeicherte Antwort mit diesem Namen. `/tags list` zeigt alle.",
+  "tagCooldown": "Warte ein paar Sekunden, bevor du die nächste gespeicherte Antwort postest.",
+  "tagsBadName": "Namen dürfen nur Buchstaben, Zahlen und Bindestriche enthalten, bis zu {max} Zeichen.",
+  "tagsExists": "Es gibt schon eine gespeicherte Antwort namens `{name}`. Ändere sie mit `/tags edit`.",
+  "tagsFull": "Dieser Server hat schon {max} gespeicherte Antworten. Lösche zuerst eine.",
+  "tagsAdded": "Gespeichert. Jetzt kann sie jeder mit `/tag name:{name}` posten.",
+  "tagsEdited": "`{name}` wurde aktualisiert.",
+  "tagsRemoved": "`{name}` wurde gelöscht.",
+  "tagsListEmpty": "Es gibt noch keine gespeicherten Antworten. Füge eine mit `/tags add` hinzu.",
+  "tagsListTitle": "**Gespeicherte Antworten ({count}/{max})**",
+  "tagsEmpty": "Der Text darf nicht leer sein."
 }

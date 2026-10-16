@@ -1689,3 +1689,49 @@ dialog textarea {
   background: var(--surface);
   border: 1px solid var(--border);
 }
+
+/* --- Custom commands ------------------------------------------------------------ */
+
+.tag-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.tag-row {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.tag-row input,
+.tag-row textarea {
+  background: var(--surface);
+}
+
+.tag-slash {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--muted);
+}
+
+.tag-name {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.tag-row .toolbar {
+  flex-wrap: nowrap;
+}
+
+.tag-list,
+.tag-row {
+  min-width: 0;
+}
+
+.tag-row .tag-name {
+  width: 0;
+  min-width: 0;
+  flex: 1;
+}

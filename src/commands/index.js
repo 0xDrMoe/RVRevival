@@ -12,6 +12,7 @@ import { createModerationCommands } from "./moderation.js";
 import { createPurgeCommand } from "./purge.js";
 import { createRolePanelCommand } from "./rolePanel.js";
 import { createSettingsCommand } from "./settings.js";
+import { createTagCommands } from "./tags.js";
 import { createWelcomeCommand } from "./welcome.js";
 
 // Each command is { name, data, execute(interaction), autocomplete?(interaction),
@@ -46,6 +47,7 @@ export function createCommands({
     ...createMemberToolCommands({ guildSettings, modLog, forcedLanguage }),
     createWelcomeCommand({ guildSettings, forcedLanguage }),
     createRolePanelCommand({ guildSettings, logger, forcedLanguage }),
+    ...createTagCommands({ guildSettings, forcedLanguage }),
   ];
   return new Map(commands.map((command) => [command.name, command]));
 }

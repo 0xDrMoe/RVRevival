@@ -14,6 +14,7 @@ The Discord bot for the Rumbleverse Revival server. It is built as a set of inde
 | [Automod](#automod) | `/settings automod …`, or the dashboard's Automod page | Manage Server |
 | [Welcome and leave messages](#welcome-and-leave-messages) | `/welcome`, or the dashboard's Community page | Manage Server |
 | [Role panels](#role-panels) | `/rolepanel` | Manage Roles (members click the buttons) |
+| [Custom commands](#custom-commands) | `/tag`, `/tags`, or the dashboard's Custom commands page | Everyone (`/tag`), Manage Messages or the mod role (`/tags`) |
 | [Country roles](#country-roles) | `/country`, `/country-staff`, `/country-help` | Everyone (`/country`), the staff role (`/country-staff`), Manage Server (`/country-help`) |
 | [Web dashboard](#web-dashboard) | https://rumbleverse.cedartechsolutions.ca | Manage Server, or a dashboard role |
 
@@ -168,6 +169,16 @@ A role panel is a message with a button per role. Members click a button to get 
 
 Panels are edited in place; if the message was deleted, the next change posts it again. Roles with moderator or admin permissions (Administrator, Manage Server/Roles/Channels/Messages, Ban, Kick, Timeout, Mention Everyone and similar), bot roles, `@everyone`, roles above the bot and roles above your own top role can't go on a panel, and each click checks the role again.
 
+### Custom commands
+
+Saved answers that staff write once and anyone can post: the download link, how to report a bug, the FAQ.
+
+- `/tag name:<tag> user:<member>` posts the saved answer in the channel. `user` is optional and pings that member above it; nothing in the saved text itself can ping anyone. Each member can post one every 5 seconds.
+- `/tags add name:<name>` opens a form to write a new one (several lines are fine, up to 2000 characters). Names use lowercase letters, numbers and dashes, up to 32 characters; `Download Link` becomes `download-link`.
+- `/tags edit name:<tag>` opens the form with the current text. `/tags remove name:<tag>` deletes one. `/tags list` lists them.
+
+`/tags` needs **Manage Messages** or the mod role. Up to 50 per server. Admins can also add, edit and remove them on the dashboard's **Custom commands** page.
+
 ### Country roles
 
 Members pick the country they live in and get a role named after it. They can only pick once; after that, only staff can change it.
@@ -209,6 +220,7 @@ A website where admins log in with Discord and manage the bot without slash comm
 - **Logging:** the logs and server-log channels, a switch for each server-log event, and ignored channels or categories (with a filter).
 - **Automod:** the main switch, each rule with its action and numbers, banned words and allowed websites (one per line), timeout length and escalation, and exempt roles and channels (see [Automod](#automod)).
 - **Community:** the welcome and leave channels and messages (empty boxes show the default), the welcome DM, autoroles, and the server's role panels (read-only; change them with `/rolepanel`).
+- **Custom commands:** every saved answer for `/tag`, with its name and text; add, edit or remove them (see [Custom commands](#custom-commands)).
 - **Country:** the `/country` channel.
 - **Roles & access:** the **dashboard roles** (see below), and a table of every role with its color, its strongest permissions and what the bot uses it for, filterable by name or kind.
 
@@ -348,11 +360,12 @@ src/
     memberTools.js       Member tools: /role, /nick
     welcome.js           Community: /welcome
     rolePanel.js         Community: /rolepanel and its buttons
+    tags.js              Custom commands: /tag, /tags and the form
     commandHelpers.js    Shared start of moderation-style commands (language, permission check)
   countries/             Country roles: country list, name matching and search
   roles/                 Country roles: find, create, assign and remove roles
   channels/              Country roles: keeps the /country channel clean
-  community/             Community: welcome and leave messages, autoroles (welcome.js), role panels (rolePanels.js)
+  community/             Community: welcome and leave messages, autoroles (welcome.js), role panels (rolePanels.js), custom commands (tags.js)
   automod/               Automod: settings (config.js), what each rule matches (rules.js), acting on messages
   logs/                  Logs channel, server log, and posting to log channels
   moderation/            Moderation: cases (SQLite), checks, actions, mod log, temporary bans

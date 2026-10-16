@@ -40,6 +40,7 @@ export const Setting = Object.freeze({
   WELCOME_DM: "welcomeDm", // text DMed to new members; unset = no DM
   AUTOROLES: "autoroleIds", // roles given to every new member, a list of IDs
   ROLE_PANELS: "rolePanels", // button role panels, a list of objects (see community/rolePanels.js)
+  TAGS: "tags", // custom commands for /tag, a list of { name, content } (see community/tags.js)
 });
 
 const KNOWN_SETTINGS = new Set(Object.values(Setting));

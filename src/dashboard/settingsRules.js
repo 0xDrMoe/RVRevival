@@ -4,6 +4,7 @@
 
 import { ChannelType } from "discord.js";
 import { activeRules, checkAutomod, InvalidAutomod, normalizeAutomod, RULE_LABELS } from "../automod/config.js";
+import { cleanTagContent, cleanTagName, MAX_TAG_LENGTH, MAX_TAGS, sortTags } from "../community/tags.js";
 import { MAX_AUTOROLES, MAX_MESSAGE_LENGTH } from "../community/welcome.js";
 import { LogEvent } from "../logs/serverLog.js";
 import { Setting } from "../settings/guildSettings.js";
@@ -48,6 +49,7 @@ export const SETTING_RULES = Object.freeze({
   [Setting.LEAVE_MESSAGE]: { kind: "text", label: "Leave message" },
   [Setting.WELCOME_DM]: { kind: "text", label: "Welcome DM" },
   [Setting.AUTOROLES]: { kind: "autoroles", label: "Autoroles" },
+  [Setting.TAGS]: { kind: "tags", label: "Custom commands" },
 });
 
 // Checks one value. Returns what to save: null clears the setting, and empty
@@ -125,6 +127,26 @@ function checkValue(setting, value, { guildId, channels, roles }) {
       }
       return ids.length > 0 ? ids : null;
     }
+    case "tags": {
+      if (!Array.isArray(value) || value.length > MAX_TAGS) {
+        throw new InvalidSetting(setting, `Add at most ${MAX_TAGS} custom commands.`);
+      }
+      const tags = value.map((tag) => ({ name: cleanTagName(tag?.name), content: cleanTagContent(tag?.content) }));
+      const bad = tags.find((tag) => !tag.name);
+      if (bad) {
+        throw new InvalidSetting(setting, "Custom command names can only use letters, numbers and dashes (up to 32).");
+      }
+      const empty = tags.find((tag) => !tag.content || tag.content.length > MAX_TAG_LENGTH);
+      if (empty) {
+        throw new InvalidSetting(setting, `"${empty.name}" needs a text of 1 to ${MAX_TAG_LENGTH} characters.`);
+      }
+      const names = tags.map((tag) => tag.name);
+      const duplicate = names.find((name, index) => names.indexOf(name) !== index);
+      if (duplicate) {
+        throw new InvalidSetting(setting, `There are two custom commands called "${duplicate}".`);
+      }
+      return tags.length > 0 ? sortTags(tags) : null;
+    }
     case "automod":
       try {
         return checkAutomod(value, {
@@ -165,6 +187,8 @@ export function describeValue(setting, value) {
     case "roles":
     case "autoroles":
       return value.map((id) => `<@&${id}>`).join(", ");
+    case "tags":
+      return value.map((tag) => `\`${tag.name}\``).join(", ");
     case "text":
       return `"${value.length > 80 ? `${value.slice(0, 80)}…` : value}"`.replace(/\n/g, " ");
     case "automod": {
