@@ -51,6 +51,7 @@ import { addFeed, FeedDuplicate, FeedError, FeedLimit } from "../feeds/feeds.js"
 import { FEED_KINDS } from "../feeds/fetchFeed.js";
 import { FeedStore, MAX_FEEDS } from "../feeds/feedStore.js";
 import { normalizeMediaOnly } from "../community/mediaOnly.js";
+import { buildBackup, InvalidBackup, planRestore, settingLabel } from "./backup.js";
 import { MAX_STICKIES, MAX_STICKY_LENGTH, StickyStore } from "../sticky/stickyStore.js";
 import { checkTemplate, COUNTER_PRESETS, InvalidCounter, MAX_COUNTERS, newCounterId, normalizeCounters } from "../stats/statsCounters.js";
 import { buildPanelButtons, buildPanelMessage } from "../tickets/tickets.js";
@@ -1643,6 +1644,68 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     }
     await logAction(access.guildId, access.session, `**Sticky message removed** from <#${sticky.channelId}>`, []);
     return { ok: true };
+  });
+
+  // --- Backup ---------------------------------------------------------------
+
+  app.get("/api/guilds/:id/backup", async (request, reply) => {
+    const access = await requireGuild(request, reply, { manage: true });
+    if (!access) {
+      return reply;
+    }
+    const { guildId, session } = access;
+    const guild = await discord.guild(guildId);
+    const backup = buildBackup({ guildId, guildName: guild.name, settings: guildSettings.all(guildId) });
+    await logAction(guildId, session, "**Settings backup downloaded**", []);
+    const day = backup.exportedAt.slice(0, 10);
+    return reply
+      .header("Content-Type", "application/json; charset=utf-8")
+      .header("Content-Disposition", `attachment; filename="settings-${guildId}-${day}.json"`)
+      .send(JSON.stringify(backup, null, 2));
+  });
+
+  // { backup, dryRun }: what would change (dryRun), or restores it.
+  app.post("/api/guilds/:id/backup/restore", { bodyLimit: 1024 * 1024, config: { rateLimit: { max: 10, timeWindow: "1 minute" } } }, async (request, reply) => {
+    const access = await requireGuild(request, reply, { manage: true });
+    if (!access) {
+      return reply;
+    }
+    const { guildId, session } = access;
+    const [guild, channels] = await Promise.all([discord.guild(guildId), discord.channels(guildId)]);
+    let plan;
+    try {
+      plan = planRestore(request.body?.backup, { guildId, channels, roles: guild.roles, isOwner: guild.owner_id === session.userId, current: guildSettings.all(guildId) });
+    } catch (error) {
+      if (error instanceof InvalidBackup) {
+        return reply.code(400).send({ error: "invalid-backup", message: error.message });
+      }
+      throw error;
+    }
+    const summary = {
+      changes: Object.keys(plan.apply).map((setting) => ({ setting, label: settingLabel(setting) })),
+      skipped: plan.skipped.map((entry) => ({ ...entry, label: settingLabel(entry.setting) })),
+      unchanged: plan.unchanged,
+    };
+    if (request.body?.dryRun !== false) {
+      return { dryRun: true, ...summary };
+    }
+    for (const [setting, value] of Object.entries(plan.apply)) {
+      if (value === null) {
+        await guildSettings.clear(guildId, setting);
+      } else {
+        await guildSettings.set(guildId, setting, value);
+      }
+    }
+    if (Setting.TICKET_CATEGORIES in plan.apply) {
+      await redrawTicketPanel(guildId, guild);
+    }
+    await logAction(
+      guildId,
+      session,
+      `**Settings restored from a backup** (${summary.changes.length} changed, ${summary.skipped.length} skipped)`,
+      summary.changes.map((change) => change.label),
+    );
+    return { dryRun: false, ...summary };
   });
 
   // --- Activity -------------------------------------------------------------

@@ -1000,6 +1000,37 @@ describe("dashboard", () => {
     expect((await write(cookies, "DELETE", `${url}/${TEXT_ID}`)).statusCode).toBe(404);
   });
 
+  it("downloads a settings backup and restores it after a preview", async () => {
+    await guildSettings.set(GUILD_ID, Setting.LOGS_CHANNEL, LOGS_ID);
+    await guildSettings.set(GUILD_ID, Setting.STAFF_ROLE, ROLE_ID);
+    const cookies = await login();
+    const download = await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}/backup`, cookies });
+    expect(download.statusCode).toBe(200);
+    expect(download.headers["content-disposition"]).toMatch(new RegExp(`attachment; filename="settings-${GUILD_ID}-\\d{4}-\\d{2}-\\d{2}\\.json"`));
+    const backup = download.json();
+    expect(backup.settings).toEqual({ [Setting.LOGS_CHANNEL]: LOGS_ID, [Setting.STAFF_ROLE]: ROLE_ID });
+
+    await guildSettings.set(GUILD_ID, Setting.LOGS_CHANNEL, TEXT_ID);
+    const url = `/api/guilds/${GUILD_ID}/backup/restore`;
+    backup.settings[Setting.MOD_LOG_CHANNEL] = VOICE_ID;
+    const preview = (await write(cookies, "POST", url, { backup, dryRun: true })).json();
+    expect(preview).toMatchObject({
+      dryRun: true,
+      changes: [{ setting: Setting.LOGS_CHANNEL, label: "Logs channel" }],
+      skipped: [{ setting: Setting.MOD_LOG_CHANNEL, reason: "invalid", label: "Mod-log channel" }],
+      unchanged: 1,
+    });
+    expect(guildSettings.get(GUILD_ID, Setting.LOGS_CHANNEL)).toBe(TEXT_ID);
+
+    expect((await write(cookies, "POST", url, { backup, dryRun: false })).json()).toMatchObject({ dryRun: false, changes: [{ setting: Setting.LOGS_CHANNEL }] });
+    expect(guildSettings.get(GUILD_ID, Setting.LOGS_CHANNEL)).toBe(LOGS_ID);
+    expect(guildSettings.get(GUILD_ID, Setting.MOD_LOG_CHANNEL)).toBeUndefined();
+
+    const refused = await write(cookies, "POST", url, { backup: { format: "nope" } });
+    expect(refused.statusCode).toBe(400);
+    expect(refused.json()).toMatchObject({ error: "invalid-backup" });
+  });
+
   it("shows the leaderboard for the last 7 days", async () => {
     const levels = new LevelStore(db);
     levels.setXp(GUILD_ID, USER_ID, 5000, "moe");

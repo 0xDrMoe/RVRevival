@@ -147,6 +147,7 @@ const NAV = [
       { id: "moderation", icon: "sliders", tone: "red", manage: true },
       { id: "logging", icon: "list", tone: "amber", manage: true, on: (s) => Boolean(s.logsChannelId || s.serverLogChannelId) },
       { id: "access", icon: "key", tone: "purple", manage: true },
+      { id: "backup", icon: "archive", tone: "cyan", manage: true },
     ],
   },
 ];
@@ -4817,6 +4818,95 @@ async function showStickies(guildId) {
   await load();
 }
 
+// --- Backup ------------------------------------------------------------------
+
+// Download every setting as a file, or restore one: the file is checked first
+// and the page lists what would change before anything is saved.
+async function showBackup(guildId) {
+  const data = await loadManagedGuild(guildId);
+  if (!data) {
+    return;
+  }
+  const download = h("a", { class: "button primary", href: `/api/guilds/${guildId}/backup`, download: "" }, icon("download", "icon small"), t("backupDownload"));
+  const file = h("input", { id: "backupFile", type: "file", accept: ".json,application/json" });
+  const review = h("div", { class: "backup-review", hidden: true });
+  let backup = null;
+
+  const itemList = (items, line) => h("ul", { class: "backup-list" }, ...items.map((item) => h("li", {}, line(item))));
+
+  function showPlan(plan) {
+    const parts = [];
+    if (plan.changes.length === 0) {
+      parts.push(h("p", { class: "muted" }, t("backupNothing")));
+    } else {
+      parts.push(h("h3", {}, t("backupChanges", { count: plan.changes.length })), itemList(plan.changes, (change) => change.label));
+    }
+    if (plan.skipped.length > 0) {
+      parts.push(
+        h("h3", {}, t("backupSkipped", { count: plan.skipped.length })),
+        itemList(plan.skipped, (entry) => [h("strong", {}, entry.label), " ", h("span", { class: "muted" }, entry.reason === "invalid" && entry.message ? entry.message : t(`backupReason_${entry.reason}`))]),
+      );
+    }
+    if (plan.unchanged > 0) {
+      parts.push(h("p", { class: "muted small-text" }, t("backupUnchanged", { count: plan.unchanged })));
+    }
+    if (plan.changes.length > 0) {
+      const confirmButton = h("button", { class: "primary", type: "button" }, icon("upload", "icon small"), t("backupRestore"));
+      confirmButton.addEventListener("click", async () => {
+        if (!confirm(t("backupRestoreConfirm", { count: plan.changes.length }))) {
+          return;
+        }
+        confirmButton.disabled = true;
+        try {
+          const result = await api(`/api/guilds/${guildId}/backup/restore`, { method: "POST", body: { backup, dryRun: false } });
+          toast(t("backupRestored", { count: result.changes.length }));
+          await showBackup(guildId);
+        } catch (error) {
+          failed(error);
+          confirmButton.disabled = false;
+        }
+      });
+      parts.push(h("div", { class: "toolbar" }, h("span", { class: "grow" }), confirmButton));
+    }
+    review.replaceChildren(...parts);
+    review.hidden = false;
+  }
+
+  file.addEventListener("change", async () => {
+    review.hidden = true;
+    backup = null;
+    const chosen = file.files?.[0];
+    if (!chosen) {
+      return;
+    }
+    if (chosen.size > 1_000_000) {
+      toast(t("backupTooBig"), "error");
+      return;
+    }
+    try {
+      backup = JSON.parse(await chosen.text());
+    } catch {
+      toast(t("backupNotJson"), "error");
+      return;
+    }
+    try {
+      showPlan(await api(`/api/guilds/${guildId}/backup/restore`, { method: "POST", body: { backup, dryRun: true } }));
+    } catch (error) {
+      failed(error);
+    }
+  });
+
+  show(
+    guildLayout(
+      data,
+      "backup",
+      pageHero("backup", t("backupIntro"), data),
+      card(t("backupDownloadTitle"), "download", "cyan", h("p", { class: "help" }, t("backupDownloadHelp")), h("div", { class: "toolbar" }, download)),
+      card(t("backupRestoreTitle"), "upload", "amber", field("backupFile", "backupFileHelp", file), review),
+    ),
+  );
+}
+
 // --- Server stats ------------------------------------------------------------------
 
 const COUNTER_PRESET_NAMES = ["members", "humans", "bots", "boosts", "channels", "roles"];
@@ -5058,6 +5148,7 @@ const SHOW_PAGE = {
   feeds: showFeeds,
   counters: showCounters,
   sticky: showStickies,
+  backup: showBackup,
   moderation: showModeration,
   logging: showLogging,
   access: showAccess,

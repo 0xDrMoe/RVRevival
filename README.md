@@ -31,6 +31,7 @@ The Discord bot for the Rumbleverse Revival server. It is built as a set of inde
 | [Server stats](#server-stats) | `/stats`, or the dashboard's Server stats page | Manage Server or a dashboard role that can change settings |
 | [Sticky messages](#sticky-messages) | `/sticky`, or the dashboard's Sticky messages page | Manage Messages (dashboard: Manage Server or a dashboard role that can change settings) |
 | [Media-only channels](#media-only-channels) | `/mediaonly`, or the dashboard's Automod page | Manage Channels (dashboard: Manage Server or a dashboard role that can change settings) |
+| [Settings backup](#settings-backup) | The dashboard's Backup page | Manage Server or a dashboard role that can change settings (anti-nuke: the server owner) |
 | [Highlights](#highlights) | `/highlight` | Everyone |
 | [AFK](#afk) | `/afk` | Everyone |
 | [Ban appeals](#ban-appeals) | The dashboard's Ban appeals page | Manage Server or a dashboard role that can change settings (banned members fill in the form) |
@@ -396,6 +397,15 @@ When people talk, the bot waits a few seconds, deletes its last copy and posts t
 
 Other messages are deleted, with a note that deletes itself after a few seconds (at most one note per member every 30 seconds). Members with **Manage Messages** in the channel are exempt, and threads in the channel stay open for comments. Community servers can also use Discord's own **media channels** (Create Channel → Media), which are built for galleries; this is for normal text channels. Needs **Manage Channels**. The bot needs **Manage Messages** in the channel.
 
+### Settings backup
+
+The dashboard's **Backup** page saves every setting of a server to a `.json` file, and restores one later or on another server.
+
+- **Download backup** gets the file. It has every setting on the dashboard's pages, plus `/rolepanel` panels, the ticket panel, join-to-create voice and server stats. It doesn't hold cases, tickets, levels, feeds, stickies or anyone's personal data.
+- **Restore a backup:** pick a file and the page lists what would change and what's skipped, with the reason, before anything is saved. Press **Restore** to save it. Settings missing from the file stay as they are.
+- Each setting is checked against the server it goes to: a channel or role that doesn't exist there is skipped. Role panels, the ticket panel and join-to-create voice point at messages and channels of their own server, so they're only restored there. Stats counters get new channels on another server. Anti-nuke is only restored by the server owner.
+- Downloads and restores are listed on the Activity page and in the logs channel.
+
 ### Highlights
 
 **`/highlight add word`** gets you a DM when someone says that word (or short phrase) in a channel you can see. **`/highlight remove word`**, **`/highlight list`** and **`/highlight clear`** manage your words; up to 10 per server.
@@ -490,6 +500,7 @@ A website where admins log in with Discord and manage the bot without slash comm
 - **Scheduled:** schedule a message (channel, first post in your own time zone, repeat), and see or delete the upcoming ones (see [Scheduled messages](#scheduled-messages)).
 - **Staff roles:** staff and mod roles, the quarantine role, and the mod-log channel.
 - **Logging:** the logs and server-log channels, a switch for each server-log event, and ignored channels or categories (with a filter).
+- **Backup:** download every setting as a file, or restore one after seeing what would change (see [Settings backup](#settings-backup)).
 - **Roles & access:** the **dashboard roles** (see below), and a table of every role with its color, its strongest permissions and what the bot uses it for, filterable by name or kind.
 
 Settings pages show a save bar when something changed, and ask before you leave with unsaved changes.
@@ -675,7 +686,7 @@ src/
   moderation/            Moderation: cases (SQLite), checks, actions, mod log, temporary bans
   settings/              Per-server settings (saved in data/bot.db)
   storage/               The SQLite database: opening it and schema migrations
-  dashboard/             Web dashboard: server.js (start), app.js (routes), Discord login, sessions
+  dashboard/             Web dashboard: server.js (start), app.js (routes), Discord login, sessions, settings backup and restore (backup.js)
     public/              The dashboard page (plain HTML, CSS and JavaScript, no build step) and its locales
   i18n/                  Language selection and locales/*.json (all features)
   utils/                 Shared: logger with token redaction, keyed lock, Discord error codes
