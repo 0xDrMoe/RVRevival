@@ -8,16 +8,19 @@
 //   /settings mod-role role:@Mods                members with this role can use the moderation commands
 //   /settings log-event event:<…> enabled:false  switch one kind of server-log event off (or back on)
 //   /settings log-ignore channel:#spam           stop (or start again) logging messages from #spam
+//   /settings automod …                          set up automod (see automodSettings.js)
 //   /settings clear setting:<any of the above>
 //   /settings show                               list the current settings
 //
 // Only members with the Manage Server permission can see or use it.
 
 import { ChannelType, InteractionContextType, MessageFlags, PermissionFlagsBits, SlashCommandBuilder } from "discord.js";
+import { normalizeAutomod } from "../automod/config.js";
 import { discordLocalizations, pickLanguage, translate } from "../i18n/i18n.js";
 import { result, Status } from "../logs/actionLog.js";
 import { LogEvent } from "../logs/serverLog.js";
 import { Setting } from "../settings/guildSettings.js";
+import { addAutomodGroup, AUTOMOD_GROUP, runAutomodSubcommand } from "./automodSettings.js";
 
 const COMMAND_NAME = "settings";
 const ROLE_OPTION = "role";
@@ -50,6 +53,7 @@ const CLEARABLE = [
   { value: Setting.MOD_ROLE, nameKey: "settingsModRoleName", clearedKey: "settingsModRoleCleared" },
   { value: Setting.DISABLED_LOG_EVENTS, nameKey: "settingsLogEventsName", clearedKey: "settingsLogEventsCleared" },
   { value: Setting.LOG_IGNORED_CHANNELS, nameKey: "settingsLogIgnoreName", clearedKey: "settingsLogIgnoreCleared" },
+  { value: Setting.AUTOMOD, nameKey: "settingsAutomodName", clearedKey: "settingsAutomodCleared" },
 ];
 
 // Discord choices for `entries` ({ value, nameKey }), named in every language.
@@ -88,7 +92,7 @@ export function buildSettingsCommandData() {
     .setContexts(InteractionContextType.Guild)
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild);
 
-  return withDescription(command, "settingsCommandDescription")
+  const built = withDescription(command, "settingsCommandDescription")
     .addSubcommand((sub) =>
       withDescription(sub.setName("staff-role"), "settingsStaffRoleDescription").addRoleOption((option) =>
         withDescription(option.setName(ROLE_OPTION), "settingsRoleOptionDescription").setRequired(true),
@@ -150,8 +154,8 @@ export function buildSettingsCommandData() {
           .addChoices(...choicesOf(CLEARABLE)),
       ),
     )
-    .addSubcommand((sub) => withDescription(sub.setName("show"), "settingsShowDescription"))
-    .toJSON();
+    .addSubcommand((sub) => withDescription(sub.setName("show"), "settingsShowDescription"));
+  return addAutomodGroup(built).toJSON();
 }
 
 // Options:
@@ -192,6 +196,30 @@ export function createSettingsCommand({ guildSettings, forcedLanguage }) {
     // Discord already hides the command from everyone else, but check anyway.
     if (!interaction.memberPermissions.has(PermissionFlagsBits.ManageGuild)) {
       return reply(Status.REFUSED, "settingsNoPermission");
+    }
+
+    if (interaction.options.getSubcommandGroup(false) === AUTOMOD_GROUP) {
+      return runAutomodSubcommand(interaction, {
+        guildSettings,
+        text,
+        // Some answers add a line or two (keys in `extraKeys`) with the same values.
+        reply: async (status, key, values, extraKeys = []) => {
+          const keys = [key, ...extraKeys];
+          await interaction.reply({
+            content: keys.map((entry) => text(entry, values)).join("\n"),
+            flags: MessageFlags.Ephemeral,
+            allowedMentions: { parse: [] },
+          });
+          if (extraKeys.length === 0) {
+            return result(status, key, values);
+          }
+          return { status, note: keys.map((entry) => translate("en", entry, values)).join("\n") };
+        },
+        show: async (lines) => {
+          await interaction.reply({ content: lines.join("\n").slice(0, 2000), flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] } });
+          return result(Status.SUCCESS);
+        },
+      });
     }
 
     switch (interaction.options.getSubcommand()) {
@@ -288,6 +316,9 @@ export function createSettingsCommand({ guildSettings, forcedLanguage }) {
           ignored.length > 0
             ? text("settingsShowLogIgnore", { channels: ignored.map((id) => `<#${id}>`).join(", ") })
             : text("settingsShowNoLogIgnore"),
+          text("settingsShowAutomod", {
+            status: text(normalizeAutomod(guildSettings.get(guildId, Setting.AUTOMOD)).enabled ? "automodStatusOn" : "automodStatusOff"),
+          }),
         ];
         // Mentions in an ephemeral reply never ping, but say so explicitly anyway.
         await interaction.reply({ content: lines.join("\n"), flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] } });

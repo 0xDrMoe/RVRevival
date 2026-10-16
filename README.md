@@ -11,6 +11,7 @@ The Discord bot for the Rumbleverse Revival server. It is built as a set of inde
 | [Moderation](#moderation) | `/ban`, `/unban`, `/softban`, `/kick`, `/timeout`, `/untimeout`, `/warn`, `/note`, `/purge`, `/case`, `/modlogs`, `/clearwarns` | The matching Discord permission, or the mod role |
 | [Channel and member tools](#channel-and-member-tools) | `/lock`, `/unlock`, `/slowmode`, `/role`, `/nick` | The matching Discord permission, or the mod role |
 | [Server log](#server-log) | `/settings server-log-channel`, `/settings log-event`, `/settings log-ignore` | Manage Server |
+| [Automod](#automod) | `/settings automod …`, or the dashboard's Automod page | Manage Server |
 | [Country roles](#country-roles) | `/country`, `/country-staff`, `/country-help` | Everyone (`/country`), the staff role (`/country-staff`), Manage Server (`/country-help`) |
 | [Web dashboard](#web-dashboard) | https://rumbleverse.cedartechsolutions.ca | Manage Server, or a dashboard role |
 
@@ -28,7 +29,8 @@ Every reply is translated into English, Spanish, German, French, Portuguese, Ita
 - **`/settings mod-role role:<role>`** chooses the role that can use the moderation, channel and member commands without the Discord permission. Until one is set, the staff role does. `@everyone` is refused.
 - **`/settings log-event event:<event> enabled:<true | false>`** switches one kind of server-log event off or back on: edited messages, deleted messages, bulk deletions, members joining, members leaving, or nickname, role and timeout changes.
 - **`/settings log-ignore channel:<channel or category>`** stops logging edited and deleted messages from a channel (and its threads), or every channel in a category. Run it again on the same channel to log it again.
-- **`/settings clear setting:<Staff role | /country channel | Logs channel | Mod-log channel | Server-log channel | Mod role | Switched-off log events | Ignored log channels>`** resets one setting. Clearing the logs channel stops logging; clearing the log events switches them all back on.
+- **`/settings automod …`** sets up automod (see [Automod](#automod)).
+- **`/settings clear setting:<Staff role | /country channel | Logs channel | Mod-log channel | Server-log channel | Mod role | Switched-off log events | Ignored log channels | Automod>`** resets one setting. Clearing Automod switches it off and resets every automod setting. Clearing the logs channel stops logging; clearing the log events switches them all back on.
 - **`/settings show`** lists the current settings.
 
 Settings are saved in `data/bot.db` (see [Operational notes](#operational-notes)). If the staff role, the mod role or any of these channels is deleted, the bot forgets it automatically. The log channels need **View Channel**, **Send Messages**, **Embed Links** and **Attach Files**; `/settings` warns the admin if any is missing.
@@ -102,6 +104,39 @@ Once an admin runs `/settings server-log-channel`, the bot posts there when:
 
 Admins can switch any of these off with `/settings log-event`, and stop logging messages from noisy channels or whole categories with `/settings log-ignore`. Messages from bots and webhooks, and messages the bot deletes itself (the `/country` channel and `/purge`, which are already logged), are skipped. Message text needs the **Message Content** intent; joins, leaves and member changes need the **Server Members** intent (see [Setup](#setup), step 1). If either is off, the bot still starts and logs what it can. Entries are in English and never ping anyone. Make this channel visible to staff only.
 
+### Automod
+
+Automod checks every new and edited message and acts on the first rule it breaks. It's off until an admin switches it on, and each rule is off until switched on.
+
+| Rule | Catches |
+| --- | --- |
+| Banned words | A word or phrase from the server's list. Whole words only, unless it starts or ends with `*` (`bad*` catches "badly"). Capitals, accents and number swaps (`n00b`) don't hide a word. |
+| Invite links | Discord invites to other servers (`discord.gg`, `discord.com/invite`, `dsc.gg`, `discord.me`). Invites to this server are allowed. |
+| Links | Links to websites that aren't on the allowed list. GIFs from Tenor and Discord's own links are always allowed. |
+| Mass mentions | A message mentioning at least N different members or roles (default 5). |
+| Spam | N messages within S seconds (default 6 in 5). The whole burst is deleted. |
+| Repeated messages | The same text sent N times within a minute (default 3). |
+| Too many capitals | At least P% capitals (default 70%) in a message with at least L letters (default 15). |
+
+Each rule's action is one of: **delete the message**, **delete and warn** (a warning case, DMed to the member), or **delete and time out** (a timeout case, default 10 minutes). Every time, the member is told in the channel (the notice disappears after a few seconds); deletions without a case are noted in the mod log. Cases are recorded with the bot as the moderator and `Automod · <rule>: "<message>"` as the reason, so `/modlogs` and the dashboard show them like any other. If the bot can't time out a member (their role is above the bot's), it warns instead. After it warns or times out a member, more broken rules in the next 10 seconds only delete, so one burst of spam doesn't stack up cases.
+
+**Escalation** (off by default): once a member has N warnings in 24 hours (from automod or moderators), automod also times them out, kicks or bans them.
+
+**Never checked:** bots, webhooks, members with **Manage Messages** in the channel or the mod role, exempt roles, exempt channels (including their threads, and every channel of an exempt category), and the `/country` channel.
+
+Admins set it up on the dashboard's **Automod** page, or with:
+
+- `/settings automod toggle enabled:<true | false>` switches automod on or off.
+- `/settings automod rule rule:<rule> enabled:<true | false> action:<action>` switches a rule on or off and picks its action (left out: unchanged).
+- `/settings automod limit setting:<limit> value:<number>` changes a number: mentions per message, spam messages and seconds, repeats, capitals percent and minimum letters, timeout length, escalation timeout length.
+- `/settings automod word word:<word>` adds a banned word, or removes it if it's already listed (up to 200).
+- `/settings automod allow-site site:<website>` allows links to a website and its subdomains, or stops allowing it.
+- `/settings automod exempt-role role:<role>` and `exempt-channel channel:<channel or category>` add or remove an exemption.
+- `/settings automod escalate warnings:<0-20> action:<Time out | Kick | Ban>` sets up escalation (0 switches it off).
+- `/settings automod show` lists everything (banned words as spoilers).
+
+Reading messages needs the **Message Content** intent; without it only spam and mention counts work. Deleting needs **Manage Messages**, timeouts **Moderate Members**, which the invite link already includes.
+
 ### Country roles
 
 Members pick the country they live in and get a role named after it. They can only pick once; after that, only staff can change it.
@@ -141,6 +176,7 @@ A website where admins log in with Discord and manage the bot without slash comm
 - **Cases:** every moderation case, newest first. Search reasons and names, pick one or more actions, and filter by member ID, moderator ID and date range; clicking a name shows only their cases. Active filters show as chips you can remove. **Export CSV** downloads the filtered list (up to 10,000 cases). Reasons can be edited (the mod-log post is updated too) and cases deleted.
 - **Moderation:** staff and mod roles, and the mod-log channel.
 - **Logging:** the logs and server-log channels, a switch for each server-log event, and ignored channels or categories (with a filter).
+- **Automod:** the main switch, each rule with its action and numbers, banned words and allowed websites (one per line), timeout length and escalation, and exempt roles and channels (see [Automod](#automod)).
 - **Country:** the `/country` channel.
 - **Roles & access:** the **dashboard roles** (see below), and a table of every role with its color, its strongest permissions and what the bot uses it for, filterable by name or kind.
 
@@ -268,6 +304,7 @@ src/
   commands/
     index.js             The list of all commands (add new ones here)
     settings.js          Settings: /settings
+    automodSettings.js   Settings: /settings automod
     country.js           Country roles: /country
     countryPicker.js     Country roles: the guide's continent buttons, form and lists
     countryStaff.js      Country roles: /country-staff
@@ -281,6 +318,7 @@ src/
   countries/             Country roles: country list, name matching and search
   roles/                 Country roles: find, create, assign and remove roles
   channels/              Country roles: keeps the /country channel clean
+  automod/               Automod: settings (config.js), what each rule matches (rules.js), acting on messages
   logs/                  Logs channel, server log, and posting to log channels
   moderation/            Moderation: cases (SQLite), checks, actions, mod log, temporary bans
   settings/              Per-server settings (saved in data/bot.db)

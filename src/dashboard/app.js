@@ -27,6 +27,7 @@ import fastifyCookie from "@fastify/cookie";
 import fastifyRateLimit from "@fastify/rate-limit";
 import fastifyStatic from "@fastify/static";
 import Fastify from "fastify";
+import { normalizeAutomod } from "../automod/config.js";
 import { CaseAction } from "../moderation/caseStore.js";
 import { buildCaseEmbed } from "../moderation/modLog.js";
 import { Setting } from "../settings/guildSettings.js";
@@ -321,6 +322,13 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     return { session, guildId, access };
   }
 
+  // A server's settings for the browser. Automod always comes with every
+  // default filled in, so the page can show it as it is.
+  const settingsJson = (guildId) => ({
+    ...guildSettings.all(guildId),
+    [Setting.AUTOMOD]: normalizeAutomod(guildSettings.get(guildId, Setting.AUTOMOD)),
+  });
+
   // Posts what someone did on the dashboard in the server's logs channel.
   async function logAction(guildId, session, summary, lines = []) {
     const channelId = guildSettings.get(guildId, Setting.LOGS_CHANNEL);
@@ -388,7 +396,7 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
       },
       access: access.access,
       // People with a dashboard role only see the cases, not how the server is set up.
-      settings: manage ? guildSettings.all(guildId) : null,
+      settings: manage ? settingsJson(guildId) : null,
       channels: channels
         .map(({ id, name, type, parent_id: parentId, position }) => ({ id, name, type, parentId: parentId ?? null, position }))
         .sort((a, b) => a.position - b.position),
@@ -448,7 +456,9 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
 
     const lines = [];
     for (const [setting, value] of Object.entries(changes)) {
-      const before = guildSettings.get(guildId, setting);
+      const saved = guildSettings.get(guildId, setting);
+      // Unsaved automod means the defaults, which is what the page was shown.
+      const before = setting === Setting.AUTOMOD ? normalizeAutomod(saved) : saved;
       if (JSON.stringify(before ?? null) === JSON.stringify(value)) {
         continue;
       }
@@ -463,7 +473,7 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
       logger.info("Dashboard settings change", { guildId, userId: session.userId, settings: Object.keys(changes) });
       await logAction(guildId, session, "**Settings changed**", lines);
     }
-    return { settings: guildSettings.all(guildId) };
+    return { settings: settingsJson(guildId) };
   });
 
   app.get("/api/guilds/:id/cases", async (request, reply) => {

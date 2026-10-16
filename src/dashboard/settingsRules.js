@@ -3,6 +3,7 @@
 // real channels and roles.
 
 import { ChannelType } from "discord.js";
+import { activeRules, checkAutomod, InvalidAutomod, normalizeAutomod, RULE_LABELS } from "../automod/config.js";
 import { LogEvent } from "../logs/serverLog.js";
 import { Setting } from "../settings/guildSettings.js";
 
@@ -37,6 +38,7 @@ export const SETTING_RULES = Object.freeze({
   [Setting.DISABLED_LOG_EVENTS]: { kind: "events", label: "Switched-off log events" },
   [Setting.LOG_IGNORED_CHANNELS]: { kind: "channels", types: IGNORABLE_CHANNELS, label: "Ignored log channels" },
   [Setting.DASHBOARD_ROLES]: { kind: "roles", label: "Dashboard access roles" },
+  [Setting.AUTOMOD]: { kind: "automod", label: "Automod" },
 });
 
 // Checks one value. Returns what to save: null clears the setting, and empty
@@ -90,6 +92,18 @@ function checkValue(setting, value, { guildId, channels, roles }) {
       }
       return ids.length > 0 ? ids : null;
     }
+    case "automod":
+      try {
+        return checkAutomod(value, {
+          isRole: roleOk,
+          isChannel: (id) => typeof id === "string" && channelOk(id, IGNORABLE_CHANNELS),
+        });
+      } catch (error) {
+        if (error instanceof InvalidAutomod) {
+          throw new InvalidSetting(setting, error.message);
+        }
+        throw error;
+      }
   }
   throw new InvalidSetting(setting, "Unknown setting");
 }
@@ -117,6 +131,11 @@ export function describeValue(setting, value) {
       return value.map((id) => `<#${id}>`).join(", ");
     case "roles":
       return value.map((id) => `<@&${id}>`).join(", ");
+    case "automod": {
+      const config = normalizeAutomod(value);
+      const rules = activeRules(config).map((rule) => `${RULE_LABELS[rule]} (${config.rules[rule].action})`);
+      return `${config.enabled ? "on" : "off"}${rules.length > 0 ? ` · ${rules.join(", ")}` : ""}`;
+    }
     default:
       return Array.isArray(value) ? value.join(", ") : String(value);
   }

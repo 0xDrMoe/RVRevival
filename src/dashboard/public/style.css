@@ -1596,3 +1596,51 @@ dialog textarea {
     transition: none !important;
   }
 }
+
+/* --- Automod ---------------------------------------------------------------------- */
+
+.rules {
+  display: grid;
+  gap: 10px;
+}
+
+.rule {
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+
+.rule:has(.rule-head input:checked) {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  background: color-mix(in srgb, var(--accent) 6%, var(--surface));
+}
+
+.rule-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: pointer;
+}
+
+.rule-body {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  align-items: start;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.rule-body .field {
+  margin-bottom: 0;
+}
+
+.rule-body .field.wide {
+  grid-column: 1 / -1;
+  max-width: none;
+}
+
+.rule:not(:has(.rule-head input:checked)) .rule-body {
+  opacity: 0.6;
+}

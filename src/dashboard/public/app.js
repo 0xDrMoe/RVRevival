@@ -6,6 +6,7 @@
 //   #/g/<id>/cases         moderation cases (?q=&action=&user=&moderator=&from=&to=)
 //   #/g/<id>/moderation    staff and mod roles, the mod log
 //   #/g/<id>/logging       log channels, events and ignored channels
+//   #/g/<id>/automod       automod rules, punishments and exemptions
 //   #/g/<id>/country       the /country channel
 //   #/g/<id>/access        roles: who can open the dashboard, and every role
 //
@@ -15,6 +16,22 @@
 const LANGUAGES = { en: "English", es: "Español", de: "Deutsch", fr: "Français", pt: "Português", it: "Italiano", ar: "العربية" };
 const LOG_EVENTS = ["messageEdit", "messageDelete", "bulkDelete", "memberJoin", "memberLeave", "memberUpdate"];
 const CASE_ACTIONS = ["ban", "softban", "unban", "kick", "timeout", "untimeout", "warn", "note"];
+const AUTOMOD_RULES = ["bannedWords", "invites", "links", "mentions", "spam", "duplicates", "caps"];
+const AUTOMOD_ACTIONS = ["delete", "warn", "timeout"];
+const ESCALATION_ACTIONS = ["timeout", "kick", "ban"];
+// The numbers each rule uses: where they live in the automod settings, and their range.
+const AUTOMOD_NUMBERS = {
+  mentions: [{ path: "rules.mentions.limit", key: "amMentionsLimit", min: 2, max: 50 }],
+  spam: [
+    { path: "rules.spam.messages", key: "amSpamMessages", min: 3, max: 20 },
+    { path: "rules.spam.seconds", key: "amSpamSeconds", min: 2, max: 60 },
+  ],
+  duplicates: [{ path: "rules.duplicates.count", key: "amDuplicatesCount", min: 2, max: 10 }],
+  caps: [
+    { path: "rules.caps.percent", key: "amCapsPercent", min: 50, max: 100 },
+    { path: "rules.caps.minLength", key: "amCapsMinLength", min: 5, max: 200 },
+  ],
+};
 const CHANNEL = { TEXT: 0, VOICE: 2, CATEGORY: 4, ANNOUNCEMENT: 5, FORUM: 15 };
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -30,6 +47,7 @@ const PAGES = [
   { id: "cases", icon: "🗂️", tone: "pink" },
   { id: "moderation", icon: "🛡️", tone: "red", settings: true },
   { id: "logging", icon: "📜", tone: "amber", settings: true },
+  { id: "automod", icon: "🤖", tone: "blue", settings: true },
   { id: "country", icon: "🌍", tone: "green", settings: true },
   { id: "access", icon: "🎭", tone: "purple", settings: true },
 ];
@@ -632,10 +650,14 @@ function checkList({ name, items, checked, filterKey }) {
 // --- Settings pages -----------------------------------------------------------
 
 // Compares values the way the server stores them: empty lists are "not set",
-// and list order doesn't matter.
+// and neither list order nor key order matters.
 function normalized(value) {
   if (Array.isArray(value)) {
-    return value.length > 0 ? JSON.stringify([...value].sort()) : "null";
+    return value.length > 0 ? `[${value.map(normalized).sort().join(",")}]` : "null";
+  }
+  if (value && typeof value === "object") {
+    const keys = Object.keys(value).sort();
+    return `{${keys.map((key) => `${JSON.stringify(key)}:${normalized(value[key])}`).join(",")}}`;
   }
   return JSON.stringify(value ?? null);
 }
@@ -837,6 +859,182 @@ async function showLogging(guildId) {
       },
       logIgnoredChannels: checkedList("ignore"),
     },
+  });
+}
+
+// --- Automod ---------------------------------------------------------------------
+
+// "https://www.YouTube.com/x" -> "youtube.com", the way the bot saves websites.
+const cleanSite = (text) =>
+  text.trim().toLowerCase().replace(/^[a-z]+:\/\//, "").split(/[/?#:]/)[0].replace(/^www\./, "").replace(/\.$/, "");
+const lines = (text) => [...new Set(text.split("\n").map((line) => line.trim()).filter(Boolean))];
+
+// An on/off switch whose checkbox is read into the automod settings at `path`.
+function automodSwitch(path, checked, label) {
+  return h(
+    "span",
+    { class: "switch" },
+    h("input", { type: "checkbox", role: "switch", checked, "data-path": path, "data-kind": "bool", "aria-label": label }),
+  );
+}
+
+function automodNumber({ path, key, min, max }, config) {
+  const value = path.split(".").reduce((object, part) => object[part], config);
+  return field(key, null, h("input", { type: "number", min, max, step: 1, required: true, value, "data-path": path, "data-kind": "int" }));
+}
+
+function automodSelect(path, options, value, labelPrefix) {
+  return h(
+    "select",
+    { "data-path": path, "data-kind": "text" },
+    options.map((option) => h("option", { value: option, selected: option === value }, t(`${labelPrefix}${option}`))),
+  );
+}
+
+// One rule: its switch, what it does, and its own settings.
+function automodRule(rule, config) {
+  const settings = config.rules[rule];
+  const extra = [];
+  if (rule === "bannedWords") {
+    extra.push(
+      h(
+        "label",
+        { class: "field wide" },
+        h("span", { class: "field-label" }, t("amWords")),
+        h("textarea", { rows: 4, "data-path": "rules.bannedWords.words", "data-kind": "words", spellcheck: false }, settings.words.join("\n")),
+        h("span", { class: "help" }, t("amWordsHelp")),
+      ),
+    );
+  }
+  if (rule === "links") {
+    extra.push(
+      h(
+        "label",
+        { class: "field wide" },
+        h("span", { class: "field-label" }, t("amSites")),
+        h("textarea", { rows: 3, "data-path": "rules.links.allowedDomains", "data-kind": "sites", spellcheck: false }, settings.allowedDomains.join("\n")),
+        h("span", { class: "help" }, t("amSitesHelp")),
+      ),
+    );
+  }
+  return h(
+    "div",
+    { class: "rule" },
+    h(
+      "label",
+      { class: "rule-head" },
+      h("span", { class: "switch-text" }, h("strong", {}, t(`amRule_${rule}`)), h("span", { class: "help" }, t(`amRuleHelp_${rule}`))),
+      automodSwitch(`rules.${rule}.enabled`, settings.enabled, t(`amRule_${rule}`)),
+    ),
+    h(
+      "div",
+      { class: "rule-body" },
+      field("amAction", null, automodSelect(`rules.${rule}.action`, AUTOMOD_ACTIONS, settings.action, "amAction_")),
+      (AUTOMOD_NUMBERS[rule] ?? []).map((number) => automodNumber(number, config)),
+      extra,
+    ),
+  );
+}
+
+// Reads the whole automod settings back from the page.
+function readAutomod(form, saved) {
+  const config = structuredClone(saved);
+  for (const input of form.querySelectorAll("[data-path]")) {
+    const parts = input.dataset.path.split(".");
+    const parent = parts.slice(0, -1).reduce((object, part) => object[part], config);
+    const kind = input.dataset.kind;
+    parent[parts.at(-1)] =
+      kind === "bool"
+        ? input.checked
+        : kind === "int"
+          ? Number.parseInt(input.value, 10)
+          : kind === "words"
+            ? lines(input.value.toLowerCase().replace(/[ \t]+/g, " "))
+            : kind === "sites"
+              ? [...new Set(lines(input.value.replace(/[,\s]+/g, "\n")).map(cleanSite).filter(Boolean))]
+              : input.value;
+  }
+  config.exemptRoleIds = [...form.querySelectorAll('input[name="amRole"]:checked')].map((box) => box.value);
+  config.exemptChannelIds = [...form.querySelectorAll('input[name="amChannel"]:checked')].map((box) => box.value);
+  return config;
+}
+
+async function showAutomod(guildId) {
+  const data = await loadManagedGuild(guildId);
+  if (!data) {
+    return;
+  }
+  const config = data.settings.automod;
+  const roles = data.roles.filter((role) => !role.managed).map((role) => ({ id: role.id, label: role.name, dot: roleDot(role) }));
+  const channels = data.channels
+    .filter((channel) => [CHANNEL.TEXT, CHANNEL.ANNOUNCEMENT, CHANNEL.FORUM, CHANNEL.VOICE, CHANNEL.CATEGORY].includes(channel.type))
+    .map((channel) => ({ id: channel.id, label: channelLabel(channel, data.channels) }));
+
+  settingsPage({
+    data,
+    pageId: "automod",
+    intro: t("automodIntro"),
+    cards: [
+      card(
+        t("amMaster"),
+        "🤖",
+        "blue",
+        h(
+          "label",
+          { class: "switch-card" },
+          h("span", { class: "switch-text" }, h("strong", {}, t("amMaster")), h("span", { class: "help" }, t("amMasterHelp"))),
+          automodSwitch("enabled", config.enabled, t("amMaster")),
+        ),
+        h("p", { class: "help" }, t("amAlwaysExempt")),
+      ),
+      card(
+        t("amRulesTitle"),
+        "🧹",
+        "pink",
+        h("p", { class: "help" }, t("amRulesHelp")),
+        h("div", { class: "rules" }, AUTOMOD_RULES.map((rule) => automodRule(rule, config))),
+      ),
+      card(
+        t("amPunishTitle"),
+        "⚖️",
+        "red",
+        h(
+          "div",
+          { class: "rule-body" },
+          field(
+            "amTimeoutMinutes",
+            "amTimeoutMinutesHelp",
+            h("input", { type: "number", min: 1, max: 40320, step: 1, required: true, value: config.timeoutMinutes, "data-path": "timeoutMinutes", "data-kind": "int" }),
+          ),
+          field(
+            "amEscalationWarnings",
+            "amEscalationWarningsHelp",
+            h("input", { type: "number", min: 0, max: 20, step: 1, required: true, value: config.escalation.warnings, "data-path": "escalation.warnings", "data-kind": "int" }),
+          ),
+          field("amEscalationAction", null, automodSelect("escalation.action", ESCALATION_ACTIONS, config.escalation.action, "amEscalation_")),
+          field(
+            "amEscalationMinutes",
+            null,
+            h("input", { type: "number", min: 1, max: 40320, step: 1, required: true, value: config.escalation.timeoutMinutes, "data-path": "escalation.timeoutMinutes", "data-kind": "int" }),
+          ),
+        ),
+      ),
+      card(
+        t("amExemptRoles"),
+        "🎟️",
+        "purple",
+        h("p", { class: "help" }, t("amExemptRolesHelp")),
+        checkList({ name: "amRole", items: roles, checked: config.exemptRoleIds, filterKey: "filterRoles" }),
+      ),
+      card(
+        t("amExemptChannels"),
+        "🙈",
+        "gray",
+        h("p", { class: "help" }, t("amExemptChannelsHelp")),
+        checkList({ name: "amChannel", items: channels, checked: config.exemptChannelIds, filterKey: "filterChannels" }),
+      ),
+    ],
+    fields: { automod: (form) => readAutomod(form, data.settings.automod) },
   });
 }
 
@@ -1200,6 +1398,7 @@ function setupCard(data) {
     { key: "setupModRole", done: Boolean(settings.modRoleId), page: "moderation" },
     { key: "setupCountry", done: Boolean(settings.countryChannelId), page: "country" },
     { key: "setupDashboard", done: (settings.dashboardRoleIds ?? []).length > 0, page: "access" },
+    { key: "setupAutomod", done: Boolean(settings.automod?.enabled), page: "automod" },
   ];
   const done = steps.filter((step) => step.done).length;
   return h(
@@ -1548,6 +1747,7 @@ const SHOW_PAGE = {
   cases: showCases,
   moderation: showModeration,
   logging: showLogging,
+  automod: showAutomod,
   country: showCountry,
   access: showAccess,
 };
