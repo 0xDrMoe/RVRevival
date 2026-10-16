@@ -10,6 +10,7 @@ import { createCountryStaffCommand } from "./countryStaff.js";
 import { createMemberToolCommands } from "./memberTools.js";
 import { createModerationCommands } from "./moderation.js";
 import { createPurgeCommand } from "./purge.js";
+import { createRemindCommand } from "./remind.js";
 import { createRolePanelCommand } from "./rolePanel.js";
 import { createSettingsCommand } from "./settings.js";
 import { createTagCommands } from "./tags.js";
@@ -21,7 +22,8 @@ import { createWelcomeCommand } from "./welcome.js";
 // `componentPrefixes` does the same for IDs that start with a prefix (rolePanel.js).
 //
 // `moderation` (moderation/moderationService.js), `modLog` and `botDeletions`
-// are only needed to run the moderation commands, not to register them.
+// are only needed to run the moderation commands, and `reminders`
+// (reminders/reminderStore.js) to run /remind, not to register them.
 export function createCommands({
   logger,
   guildSettings,
@@ -29,6 +31,7 @@ export function createCommands({
   moderation,
   modLog,
   botDeletions,
+  reminders,
 }) {
   // Shared, so /country and /country-staff can't change the same member at the same time.
   const roleService = new CountryRoleService(logger);
@@ -48,6 +51,7 @@ export function createCommands({
     createWelcomeCommand({ guildSettings, forcedLanguage }),
     createRolePanelCommand({ guildSettings, logger, forcedLanguage }),
     ...createTagCommands({ guildSettings, forcedLanguage }),
+    createRemindCommand({ reminders, forcedLanguage }),
   ];
   return new Map(commands.map((command) => [command.name, command]));
 }
