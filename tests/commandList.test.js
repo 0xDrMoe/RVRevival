@@ -43,6 +43,7 @@ describe("command list", () => {
       "voice",
       "autoresponder",
       "schedule",
+      "feed",
       "birthday",
       "rank",
       "leaderboard",

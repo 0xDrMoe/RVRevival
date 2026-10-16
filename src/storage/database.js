@@ -297,6 +297,30 @@ const MIGRATIONS = [
   ) WITHOUT ROWID;
   CREATE INDEX sent_messages_by_time ON sent_messages (guild_id, sent_at);
   `,
+  // 20: followed YouTube channels, subreddits and RSS feeds (/feed). seen is a
+  // JSON array of the newest item IDs already posted.
+  `
+  CREATE TABLE feeds (
+    id          INTEGER PRIMARY KEY,
+    guild_id    TEXT    NOT NULL,
+    kind        TEXT    NOT NULL,
+    source      TEXT    NOT NULL,
+    url         TEXT    NOT NULL,
+    name        TEXT    NOT NULL,
+    channel_id  TEXT    NOT NULL,
+    role_id     TEXT,
+    message     TEXT,
+    seen        TEXT    NOT NULL DEFAULT '[]',
+    created_by  TEXT    NOT NULL,
+    created_at  INTEGER NOT NULL,
+    checked_at  INTEGER,
+    posted_at   INTEGER,
+    last_error  TEXT,
+    failures    INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE INDEX feeds_by_guild ON feeds (guild_id);
+  CREATE INDEX feeds_due ON feeds (checked_at);
+  `,
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS.length;
