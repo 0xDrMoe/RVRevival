@@ -5,6 +5,7 @@
 //   #/g/<id>/overview      a server's numbers at a glance
 //   #/g/<id>/cases         moderation cases (?q=&action=&user=&moderator=&from=&to=)
 //   #/g/<id>/members       find a member (?q=), or one member's history (?user=)
+//   #/g/<id>/tickets       support tickets (?status=&user=), or one ticket's transcript (?ticket=)
 //   #/g/<id>/moderation    staff and mod roles, the mod log
 //   #/g/<id>/logging       log channels, events and ignored channels
 //   #/g/<id>/automod       automod rules, punishments and exemptions
@@ -64,6 +65,7 @@ const PAGES = [
   { id: "overview", icon: "📊", tone: "blue" },
   { id: "cases", icon: "🗂️", tone: "pink" },
   { id: "members", icon: "👤", tone: "purple" },
+  { id: "tickets", icon: "🎫", tone: "cyan" },
   { id: "moderation", icon: "🛡️", tone: "red", settings: true },
   { id: "logging", icon: "📜", tone: "amber", settings: true },
   { id: "automod", icon: "🤖", tone: "blue", settings: true },
@@ -2502,13 +2504,7 @@ async function showMemberHistory(guildId, userId) {
               h(
                 "span",
                 { class: "recent-text" },
-                ticket.threadId
-                  ? h(
-                      "a",
-                      { href: `https://discord.com/channels/${guildId}/${ticket.threadId}`, target: "_blank", rel: "noopener" },
-                      `#${ticket.number}`,
-                    )
-                  : h("strong", {}, `#${ticket.number}`),
+                h("a", { href: ticketLink(guildId, ticket.number) }, `#${ticket.number}`),
                 h("span", { class: "muted" }, ticket.subject),
               ),
               h("span", { class: "muted recent-date" }, formatDay(ticket.createdAt)),
@@ -2548,12 +2544,168 @@ async function showMemberHistory(guildId, userId) {
   );
 }
 
+// --- Tickets -----------------------------------------------------------------------
+
+const ticketLink = (guildId, number) => `#/g/${guildId}/tickets?ticket=${number}`;
+const TICKET_STATUSES = ["open", "closed", "all"];
+
+function ticketBadge(ticket) {
+  return h("span", { class: `badge ${ticket.closedAt ? "" : "badge-cyan"}` }, t(ticket.closedAt ? "memberTicketClosed" : "memberTicketOpen"));
+}
+
+// A person on a ticket: their name (or ID), linking to their history.
+const ticketPerson = (guildId, id, name) => (id ? h("a", { href: memberLink(guildId, id) }, name ?? id) : h("span", { class: "muted" }, "—"));
+
+function ticketRow(guildId, ticket) {
+  return h(
+    "li",
+    {},
+    h(
+      "a",
+      { class: "ticket-row", href: ticketLink(guildId, ticket.number) },
+      h("strong", { class: "ticket-number" }, `#${ticket.number}`),
+      h(
+        "span",
+        { class: "ticket-main" },
+        h("span", { class: "ticket-subject" }, ticket.subject),
+        h(
+          "span",
+          { class: "muted" },
+          [ticket.userName ?? ticket.userId, formatDate(ticket.createdAt), ticket.hasTranscript ? `📄 ${t("ticketsMessages", { count: formatNumber(ticket.messageCount ?? 0) })}` : null]
+            .filter(Boolean)
+            .join(" · "),
+        ),
+      ),
+      ticketBadge(ticket),
+    ),
+  );
+}
+
+async function showTicketList(guildId, data, query) {
+  const status = TICKET_STATUSES.includes(query.get("status")) ? query.get("status") : "all";
+  const userId = /^\d{17,20}$/.test(query.get("user") ?? "") ? query.get("user") : "";
+  const go = (changes) => {
+    const next = new URLSearchParams({ status, user: userId, ...changes });
+    [...next.entries()].forEach(([key, value]) => (value === "" || (key === "status" && value === "all")) && next.delete(key));
+    location.hash = `#/g/${guildId}/tickets${next.size > 0 ? `?${next}` : ""}`;
+  };
+  const userInput = h("input", {
+    type: "search",
+    class: "grow",
+    value: userId,
+    inputMode: "numeric",
+    placeholder: t("ticketsUserPlaceholder"),
+    "aria-label": t("ticketsUserPlaceholder"),
+  });
+  const filters = h(
+    "form",
+    {
+      class: "card toolbar ticket-filters",
+      onsubmit: (event) => {
+        event.preventDefault();
+        go({ user: userInput.value.trim() });
+      },
+    },
+    segmented(
+      t("ticketsStatus"),
+      TICKET_STATUSES.map((value) => ({ value, text: t(`ticketsStatus_${value}`) })),
+      status,
+      (value) => go({ status: value }),
+    ),
+    userInput,
+    h("button", { class: "primary", type: "submit" }, `🔎 ${t("search")}`),
+  );
+  const list = h("ul", { class: "ticket-list" });
+  const more = h("button", { class: "ghost", type: "button", hidden: true }, t("loadMore"));
+  const summary = h("p", { class: "help" });
+  const empty = h("p", { class: "muted empty", hidden: true }, t("ticketsNone"));
+  let before = null;
+  const load = async () => {
+    more.disabled = true;
+    const params = new URLSearchParams({ status });
+    if (userId) {
+      params.set("user", userId);
+    }
+    if (before) {
+      params.set("before", before);
+    }
+    const page = await api(`/api/guilds/${guildId}/tickets?${params}`);
+    list.append(...page.tickets.map((ticket) => ticketRow(guildId, ticket)));
+    summary.textContent = t(page.panel ? "ticketsSummary" : "ticketsSummaryNoPanel", { count: formatNumber(page.openCount) });
+    empty.hidden = list.children.length > 0;
+    before = page.next;
+    more.hidden = !page.next;
+    more.disabled = false;
+  };
+  more.addEventListener("click", () => load().catch(failed));
+  show(
+    guildLayout(
+      data,
+      "tickets",
+      hero(t("page_tickets"), t("ticketsIntro"), "cyan"),
+      filters,
+      card(t("page_tickets"), "🎫", "cyan", summary, empty, list, h("div", { class: "center" }, more)),
+    ),
+  );
+  await load();
+}
+
+async function showTicket(guildId, data, number) {
+  const { ticket, transcript } = await api(`/api/guilds/${guildId}/tickets/${number}`);
+  const facts = [
+    [t("ticketsOpenedBy"), ticketPerson(guildId, ticket.userId, ticket.userName)],
+    [t("ticketsOpened"), formatDate(ticket.createdAt)],
+    ticket.closedAt ? [t("ticketsClosedBy"), ticketPerson(guildId, ticket.closedBy, ticket.closedByName)] : null,
+    ticket.closedAt ? [t("ticketsClosed"), formatDate(ticket.closedAt)] : null,
+    ticket.closeReason ? [t("ticketsReason"), ticket.closeReason] : null,
+  ].filter(Boolean);
+  const actions = h(
+    "div",
+    { class: "toolbar" },
+    ticket.threadId
+      ? h("a", { class: "button ghost small", href: `https://discord.com/channels/${guildId}/${ticket.threadId}`, target: "_blank", rel: "noopener" }, `💬 ${t("ticketsOpenThread")}`)
+      : null,
+    transcript !== null ? h("a", { class: "button ghost small", href: `/api/guilds/${guildId}/tickets/${number}?download=1` }, `⬇️ ${t("ticketsDownload")}`) : null,
+  );
+  show(
+    guildLayout(
+      data,
+      "tickets",
+      h("a", { class: "back", href: `#/g/${guildId}/tickets` }, t("ticketsBack")),
+      h(
+        "section",
+        { class: "card" },
+        h("div", { class: "toolbar" }, h("h1", { class: "grow ticket-title" }, `🎫 #${ticket.number}`), ticketBadge(ticket)),
+        h("p", { class: "ticket-subject-full" }, ticket.subject),
+        h("dl", { class: "facts" }, facts.flatMap(([label, value]) => [h("dt", {}, label), h("dd", {}, value)])),
+        actions,
+      ),
+      card(
+        t("ticketsTranscript"),
+        "📄",
+        "blue",
+        transcript === null
+          ? h("p", { class: "muted" }, t(ticket.closedAt ? "ticketsNoTranscript" : "ticketsTranscriptLater"))
+          : h("pre", { class: "transcript" }, transcript),
+      ),
+    ),
+  );
+}
+
+async function showTickets(guildId) {
+  const query = new URLSearchParams(location.hash.split("?")[1] ?? "");
+  const data = await loadGuild(guildId);
+  const number = Number.parseInt(query.get("ticket") ?? "", 10);
+  return Number.isInteger(number) && number > 0 ? showTicket(guildId, data, number) : showTicketList(guildId, data, query);
+}
+
 // --- Routing -----------------------------------------------------------------
 
 const SHOW_PAGE = {
   overview: showOverview,
   cases: showCases,
   members: showMembers,
+  tickets: showTickets,
   moderation: showModeration,
   logging: showLogging,
   automod: showAutomod,

@@ -11,6 +11,7 @@ import { checkSettingChanges, InvalidSetting } from "../src/dashboard/settingsRu
 import { defaultAutomod } from "../src/automod/config.js";
 import { DEFAULT_LEVELING } from "../src/leveling/config.js";
 import { LevelStore } from "../src/leveling/levelStore.js";
+import { TicketStore } from "../src/tickets/ticketStore.js";
 import { MemberEvent, MemberEventStore } from "../src/members/memberEventStore.js";
 import { CaseAction, CaseStore } from "../src/moderation/caseStore.js";
 import { GuildSettings, Setting } from "../src/settings/guildSettings.js";
@@ -636,6 +637,45 @@ describe("dashboard", () => {
     store.createCase({ guildId: OTHER_GUILD_ID, action: CaseAction.WARN, userId: "300000000000000009", moderatorId: USER_ID });
     const response = await app.inject({ method: "GET", url: `/api/guilds/${OTHER_GUILD_ID}/members/300000000000000009`, cookies });
     expect(response.statusCode).toBe(200);
+  });
+
+  it("lists tickets with names, filters them, and shows and downloads a transcript", async () => {
+    const MEMBER_ID = "300000000000000009";
+    const ticketStore = new TicketStore(db);
+    for (let index = 0; index < 30; index += 1) {
+      const ticket = ticketStore.open({ guildId: GUILD_ID, userId: index === 29 ? MEMBER_ID : `3000000000000002${String(index).padStart(2, "0")}`, subject: `Ticket ${index}`, createdAt: index });
+      if (index < 28) {
+        ticketStore.close(ticket.id, { closedBy: USER_ID, closedAt: 100 + index, reason: "Done" });
+      }
+    }
+    ticketStore.setTranscript(ticketStore.byNumber(GUILD_ID, 1).id, "Ticket #1 · Rumbleverse Revival\nhello", 2);
+    discord.member.mockImplementation(async (guildId, userId) =>
+      userId === MEMBER_ID ? { nick: "Champ", roles: [], user: { id: MEMBER_ID, username: "rumbler" } } : null,
+    );
+    const cookies = await login();
+
+    const first = (await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}/tickets`, cookies })).json();
+    expect(first.tickets).toHaveLength(25);
+    expect(first.tickets[0]).toMatchObject({ number: 30, userId: MEMBER_ID, userName: "Champ", closedAt: null, hasTranscript: false });
+    expect(first).toMatchObject({ next: 6, openCount: 2, panel: false });
+    const rest = (await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}/tickets?before=6`, cookies })).json();
+    expect(rest.tickets.map((ticket) => ticket.number)).toEqual([5, 4, 3, 2, 1]);
+    expect(rest.next).toBeNull();
+    const open = (await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}/tickets?status=open`, cookies })).json();
+    expect(open.tickets.map((ticket) => ticket.number)).toEqual([30, 29]);
+    const mine = (await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}/tickets?user=${MEMBER_ID}`, cookies })).json();
+    expect(mine.tickets.map((ticket) => ticket.number)).toEqual([30]);
+    const bad = await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}/tickets?user=nope`, cookies });
+    expect(bad.statusCode).toBe(400);
+
+    const one = (await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}/tickets/1`, cookies })).json();
+    expect(one.ticket).toMatchObject({ number: 1, closeReason: "Done", hasTranscript: true, messageCount: 2 });
+    expect(one.transcript).toContain("hello");
+    const file = await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}/tickets/1?download=1`, cookies });
+    expect(file.headers["content-disposition"]).toBe('attachment; filename="ticket-0001.txt"');
+    expect(file.body).toContain("hello");
+    expect((await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}/tickets/2?download=1`, cookies })).statusCode).toBe(404);
+    expect((await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}/tickets/99`, cookies })).statusCode).toBe(404);
   });
 
   it("logs out and forgets the session", async () => {

@@ -1,5 +1,6 @@
 // Stores support tickets (/tickets) in the bot's SQLite database. Each ticket
-// is a private thread; the row remembers who opened it, why, and how it ended.
+// is a private thread; the row remembers who opened it, why, how it ended, and
+// the conversation (saved as a transcript when it's closed).
 
 import { inTransaction, openDatabase } from "../storage/database.js";
 
@@ -16,6 +17,8 @@ function toTicket(row) {
         closedAt: row.closed_at ?? null,
         closedBy: row.closed_by ?? null,
         closeReason: row.close_reason ?? null,
+        hasTranscript: row.transcript !== null && row.transcript !== undefined,
+        messageCount: row.message_count ?? null,
       }
     : undefined;
 }
@@ -41,6 +44,18 @@ export class TicketStore {
         UPDATE tickets SET closed_at = ?, closed_by = ?, close_reason = ? WHERE id = ? AND closed_at IS NULL RETURNING *`),
       delete: this.#db.prepare("DELETE FROM tickets WHERE id = ?"),
       listForUser: this.#db.prepare("SELECT * FROM tickets WHERE guild_id = ? AND user_id = ? ORDER BY number DESC LIMIT ?"),
+      byNumber: this.#db.prepare("SELECT * FROM tickets WHERE guild_id = ? AND number = ?"),
+      setTranscript: this.#db.prepare("UPDATE tickets SET transcript = ?, message_count = ? WHERE id = ?"),
+      transcript: this.#db.prepare("SELECT transcript FROM tickets WHERE guild_id = ? AND number = ?"),
+      // Newest first. :status is "open", "closed" or "all"; :userId and :before are optional.
+      search: this.#db.prepare(`
+        SELECT * FROM tickets
+        WHERE guild_id = :guildId
+          AND (:status = 'all' OR (:status = 'open' AND closed_at IS NULL) OR (:status = 'closed' AND closed_at IS NOT NULL))
+          AND (:userId IS NULL OR user_id = :userId)
+          AND (:before IS NULL OR number < :before)
+        ORDER BY number DESC
+        LIMIT :limit`),
     };
   }
 
@@ -79,6 +94,24 @@ export class TicketStore {
   // A member's newest tickets, open or closed.
   listForUser(guildId, userId, limit = 20) {
     return this.#statements.listForUser.all(guildId, userId, limit).map(toTicket);
+  }
+
+  byNumber(guildId, number) {
+    return toTicket(this.#statements.byNumber.get(guildId, number));
+  }
+
+  // Tickets newest first, a page at a time (`before` = the last number on the previous page).
+  search(guildId, { status = "all", userId = null, before = null, limit = 50 } = {}) {
+    return this.#statements.search.all({ guildId, status, userId, before, limit }).map(toTicket);
+  }
+
+  setTranscript(id, transcript, messageCount) {
+    this.#statements.setTranscript.run(transcript, messageCount, id);
+  }
+
+  // The saved transcript text, or undefined.
+  transcript(guildId, number) {
+    return this.#statements.transcript.get(guildId, number)?.transcript ?? undefined;
   }
 
   setThread(id, threadId) {
