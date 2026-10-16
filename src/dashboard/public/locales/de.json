@@ -442,5 +442,15 @@
   "scheduledDeleteConfirm": "Geplante Nachricht #{number} löschen?",
   "scheduledDeleted": "Gelöscht",
   "scheduledBy": "Geplant von {name}. Erwähnungen pingen nicht.",
-  "scheduledByPings": "Geplant von {name}. Erwähnungen pingen."
+  "scheduledByPings": "Geplant von {name}. Erwähnungen pingen.",
+  "sectionBirthdays": "Geburtstage",
+  "birthdaysHelp": "Mitglieder speichern ihren Geburtstag mit /birthday set (Monat und Tag, kein Jahr). Wenn der Tag beginnt, postet der Bot einen Glückwunsch und gibt die Geburtstagsrolle bis zum nächsten Tag. Wähle einen Kanal, eine Rolle oder beides.",
+  "birthdayChannel": "Kanal für Glückwünsche",
+  "birthdayChannelHelp": "Wo der Glückwunsch gepostet wird.",
+  "birthdayRole": "Geburtstagsrolle",
+  "birthdayRoleHelp": "Wird für den Tag vergeben. Rollen mit Moderationsrechten werden nicht angezeigt.",
+  "birthdayTimezone": "Zeitzone",
+  "birthdayTimezoneHelp": "Wann der Tag beginnt, z. B. Europe/Berlin.",
+  "birthdayMessage": "Glückwunsch",
+  "birthdayMessageHelp": "{user} ist das Mitglied (mehrere am selben Tag werden zusammen genannt), {server} der Server. Leer lassen für den Standardtext."
 }

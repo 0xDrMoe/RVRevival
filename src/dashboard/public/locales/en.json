@@ -442,5 +442,15 @@
   "scheduledDeleteConfirm": "Delete scheduled message #{number}?",
   "scheduledDeleted": "Deleted",
   "scheduledBy": "Scheduled by {name}. Mentions won't ping.",
-  "scheduledByPings": "Scheduled by {name}. Mentions ping."
+  "scheduledByPings": "Scheduled by {name}. Mentions ping.",
+  "sectionBirthdays": "Birthdays",
+  "birthdaysHelp": "Members save their birthday with /birthday set (month and day, no year). When the day starts, the bot posts a greeting and gives the birthday role until the next day. Pick a channel, a role, or both.",
+  "birthdayChannel": "Greetings channel",
+  "birthdayChannelHelp": "Where the greeting is posted.",
+  "birthdayRole": "Birthday role",
+  "birthdayRoleHelp": "Given for the day. Roles with moderator permissions aren't listed.",
+  "birthdayTimezone": "Time zone",
+  "birthdayTimezoneHelp": "When the day starts, like Europe/London or America/Toronto.",
+  "birthdayMessage": "Greeting",
+  "birthdayMessageHelp": "{user} is the member (several on the same day are listed together), {server} the server. Leave empty for the default."
 }

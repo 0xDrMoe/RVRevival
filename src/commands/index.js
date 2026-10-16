@@ -22,6 +22,7 @@ import { createTicketsCommand } from "./tickets.js";
 import { createVoiceCommand } from "./voice.js";
 import { createAutoResponderCommand } from "./autoResponder.js";
 import { createScheduleCommand } from "./schedule.js";
+import { createBirthdayCommand } from "./birthday.js";
 import { createWelcomeCommand } from "./welcome.js";
 
 // Each command is { name, data, execute(interaction), autocomplete?(interaction),
@@ -36,7 +37,8 @@ import { createWelcomeCommand } from "./welcome.js";
 // (tickets/ticketStore.js) to run /tickets, and `levels` (leveling/levelStore.js)
 // with `leveling` (leveling/leveling.js) to run /rank, /leaderboard and /levels,
 // `tempVoice` (voice/tempVoiceStore.js) to run /voice, `scheduledMessages`
-// (scheduled/scheduledMessageStore.js) to run /schedule,
+// (scheduled/scheduledMessageStore.js) to run /schedule, `birthdays`
+// (birthdays/birthdayStore.js) to run /birthday,
 // not to register them.
 export function createCommands({
   logger,
@@ -52,6 +54,7 @@ export function createCommands({
   leveling,
   tempVoice,
   scheduledMessages,
+  birthdays,
 }) {
   // Shared, so /country and /country-staff can't change the same member at the same time.
   const roleService = new CountryRoleService(logger);
@@ -79,6 +82,7 @@ export function createCommands({
     createVoiceCommand({ guildSettings, store: tempVoice, forcedLanguage }),
     createAutoResponderCommand({ guildSettings, forcedLanguage }),
     createScheduleCommand({ store: scheduledMessages, forcedLanguage }),
+    createBirthdayCommand({ guildSettings, store: birthdays, forcedLanguage }),
     ...createLevelCommands({ levels, leveling, guildSettings, forcedLanguage }),
   ];
   return new Map(commands.map((command) => [command.name, command]));

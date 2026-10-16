@@ -4,6 +4,7 @@
 
 import { ChannelType } from "discord.js";
 import { activeRules, checkAutomod, InvalidAutomod, normalizeAutomod, RULE_LABELS } from "../automod/config.js";
+import { isValidTimeZone, MAX_BIRTHDAY_MESSAGE_LENGTH } from "../birthdays/birthdays.js";
 import { checkResponders, InvalidResponders } from "../community/autoResponders.js";
 import { cleanEmoji } from "../community/rolePanels.js";
 import { MAX_THRESHOLD, MIN_THRESHOLD } from "../community/starboard.js";
@@ -43,6 +44,8 @@ const MAX_DASHBOARD_ROLES = 25;
 const LOG_EVENTS = Object.values(LogEvent);
 // Roles new members must never get automatically: Administrator and Manage Server.
 const AUTOROLE_FORBIDDEN = (1n << 3n) | (1n << 5n);
+// Roles the birthday role can't be: any with moderator permissions (as for role panels).
+const BIRTHDAY_ROLE_FORBIDDEN = [3n, 5n, 28n, 4n, 13n, 29n, 27n, 30n, 33n, 34n, 2n, 1n, 40n, 17n, 7n].reduce((bits, bit) => bits | (1n << bit), 0n);
 
 // Each setting: the kind of value, and (for lists) what each item may be.
 export const SETTING_RULES = Object.freeze({
@@ -66,6 +69,7 @@ export const SETTING_RULES = Object.freeze({
   [Setting.STARBOARD]: { kind: "starboard", types: POSTING_CHANNELS, label: "Starboard" },
   [Setting.LEVELING]: { kind: "leveling", label: "Leveling" },
   [Setting.JOIN_GATE]: { kind: "joinGate", label: "Raid protection" },
+  [Setting.BIRTHDAYS]: { kind: "birthdays", types: POSTING_CHANNELS, label: "Birthdays" },
   [Setting.AUTO_RESPONDERS]: { kind: "autoResponders", types: RESPONDER_CHANNELS, label: "Auto-responders" },
 });
 
@@ -177,6 +181,29 @@ function checkValue(setting, value, { guildId, channels, roles }) {
       }
       return { channelId: value.channelId, threshold: value.threshold, emoji };
     }
+    case "birthdays": {
+      if (typeof value !== "object" || Array.isArray(value)) {
+        throw new InvalidSetting(setting, "Send the birthday settings as an object.");
+      }
+      const channelId = value.channelId || null;
+      const roleId = value.roleId || null;
+      if (channelId && !channelOk(channelId, rule.types)) {
+        throw new InvalidSetting(setting, "Pick a text or announcement channel from this server for birthday greetings.");
+      }
+      const role = roles.find((entry) => entry.id === roleId);
+      if (roleId && (!roleOk(roleId) || role.managed || (BigInt(role.permissions ?? 0) & BIRTHDAY_ROLE_FORBIDDEN) !== 0n)) {
+        throw new InvalidSetting(setting, "Pick a birthday role without moderator permissions that isn't a bot role.");
+      }
+      const timezone = value.timezone || "UTC";
+      if (!isValidTimeZone(timezone)) {
+        throw new InvalidSetting(setting, "Pick a time zone from the list, like Europe/London.");
+      }
+      const message = typeof value.message === "string" ? value.message.replace(/\r\n?/g, "\n").trim() : "";
+      if (message.length > MAX_BIRTHDAY_MESSAGE_LENGTH) {
+        throw new InvalidSetting(setting, `Keep the birthday message under ${MAX_BIRTHDAY_MESSAGE_LENGTH} characters.`);
+      }
+      return channelId || roleId ? { channelId, roleId, message: message || null, timezone } : null;
+    }
     case "autoResponders":
       try {
         return checkResponders(value, (id) => channelOk(id, rule.types));
@@ -261,6 +288,8 @@ export function describeValue(setting, value) {
       return value.map((id) => `<@&${id}>`).join(", ");
     case "tags":
       return value.map((tag) => `\`${tag.name}\``).join(", ");
+    case "birthdays":
+      return `${value.channelId ? `<#${value.channelId}>` : "no greetings"} · ${value.roleId ? `<@&${value.roleId}>` : "no role"} · ${value.timezone}`;
     case "autoResponders":
       return value.map((responder) => `\`${responder.trigger}\``).join(", ");
     case "starboard":

@@ -195,6 +195,22 @@ const MIGRATIONS = [
   CREATE INDEX scheduled_messages_due ON scheduled_messages (next_at);
   CREATE INDEX scheduled_messages_by_guild ON scheduled_messages (guild_id, next_at);
   `,
+  // 13: birthdays (/birthday): month and day only, no year. celebrated_on is
+  // the last day (YYYY-MM-DD, server time) it was announced; role_given_on the
+  // day the birthday role was given, so it's taken back the next day.
+  `
+  CREATE TABLE birthdays (
+    guild_id       TEXT    NOT NULL,
+    user_id        TEXT    NOT NULL,
+    month          INTEGER NOT NULL,
+    day            INTEGER NOT NULL,
+    celebrated_on  TEXT,
+    role_given_on  TEXT,
+    created_at     INTEGER NOT NULL,
+    PRIMARY KEY (guild_id, user_id)
+  ) WITHOUT ROWID;
+  CREATE INDEX birthdays_by_date ON birthdays (guild_id, month, day);
+  `,
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS.length;

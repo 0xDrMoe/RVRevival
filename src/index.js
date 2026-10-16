@@ -32,6 +32,8 @@ import { ReminderStore } from "./reminders/reminderStore.js";
 import { createReminderScheduler } from "./reminders/reminderScheduler.js";
 import { createScheduledMessageScheduler } from "./scheduled/scheduler.js";
 import { ScheduledMessageStore } from "./scheduled/scheduledMessageStore.js";
+import { createBirthdays } from "./birthdays/birthdays.js";
+import { BirthdayStore } from "./birthdays/birthdayStore.js";
 import { GuildSettings, Setting } from "./settings/guildSettings.js";
 import { TicketStore } from "./tickets/ticketStore.js";
 import { closeDatabase, DEFAULT_DATABASE_FILE, openDatabase } from "./storage/database.js";
@@ -92,6 +94,8 @@ async function start() {
   const giveaways = new GiveawayStore(db);
   // Scheduled and repeating messages (/schedule).
   const scheduledMessages = new ScheduledMessageStore(db);
+  // Members' birthdays (/birthday).
+  const birthdayStore = new BirthdayStore(db);
   // When members joined and left, for the dashboard's member history.
   const memberEvents = new MemberEventStore(db);
   // Support tickets opened from the /tickets panel.
@@ -148,6 +152,7 @@ async function start() {
     botDeletions,
     reminders,
     scheduledMessages,
+    birthdays: birthdayStore,
     giveaways,
     tickets,
     levels,
@@ -194,6 +199,7 @@ async function start() {
   let reminderScheduler;
   let giveawayScheduler;
   let scheduledMessageScheduler;
+  let birthdays;
 
   function connect(intents) {
     client = new Client({ intents, partials: PARTIALS });
@@ -221,6 +227,9 @@ async function start() {
       scheduledMessageScheduler?.stop();
       scheduledMessageScheduler = createScheduledMessageScheduler({ client: readyClient, store: scheduledMessages, logger });
       scheduledMessageScheduler.start();
+      birthdays?.stop();
+      birthdays = createBirthdays({ client: readyClient, guildSettings, store: birthdayStore, logger, forcedLanguage });
+      birthdays.start();
     });
 
     client.on(Events.InteractionCreate, (interaction) => {
@@ -278,6 +287,7 @@ async function start() {
     client.on(Events.GuildMemberAdd, safely("welcoming a member", (member) => welcomer.memberJoined(member)));
     client.on(Events.GuildMemberAdd, safely("the join gate", (member) => raidGuard.memberJoined(member)));
     client.on(Events.GuildMemberRemove, safely("a leave message", (member) => welcomer.memberLeft(member)));
+    client.on(Events.GuildMemberRemove, safely("forgetting a birthday", (member) => birthdayStore.remove(member.guild.id, member.id)));
     client.on(Events.GuildMemberUpdate, safely("autoroles after screening", (before, after) => welcomer.memberUpdated(before, after)));
     client.on(
       Events.GuildMemberRemove,
@@ -382,6 +392,7 @@ async function start() {
       reminderScheduler?.stop();
       giveawayScheduler?.stop();
       scheduledMessageScheduler?.stop();
+      birthdays?.stop();
       automod.stop();
       await client?.destroy().catch(() => {});
       closeDatabase(db);
