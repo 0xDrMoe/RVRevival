@@ -16,6 +16,7 @@ import { createActionLog } from "./logs/actionLog.js";
 import { createLogChannelPoster } from "./logs/logChannel.js";
 import { RecentIds } from "./logs/recentIds.js";
 import { createServerLog } from "./logs/serverLog.js";
+import { MemberEvent, MemberEventStore } from "./members/memberEventStore.js";
 import { CaseStore } from "./moderation/caseStore.js";
 import { createExternalActionRecorder } from "./moderation/externalActions.js";
 import { createModLog } from "./moderation/modLog.js";
@@ -79,6 +80,8 @@ async function start() {
   const reminders = new ReminderStore(db);
   // Giveaways started with /giveaway, and who entered them.
   const giveaways = new GiveawayStore(db);
+  // When members joined and left, for the dashboard's member history.
+  const memberEvents = new MemberEventStore(db);
   // Pick up settings changed on the web dashboard (another process).
   const settingsReload = setInterval(() => {
     try {
@@ -220,6 +223,14 @@ async function start() {
     );
     client.on(Events.MessageUpdate, safely("an edited message", (before, after) => serverLog.messageEdited(before, after)));
     client.on(Events.MessageUpdate, safely("automod on an edit", (before, after) => automod.handleEdit(before, after)));
+    client.on(
+      Events.GuildMemberAdd,
+      safely("remembering a join", (member) => memberEvents.record(member.guild.id, member.id, MemberEvent.JOIN)),
+    );
+    client.on(
+      Events.GuildMemberRemove,
+      safely("remembering a leave", (member) => memberEvents.record(member.guild.id, member.id, MemberEvent.LEAVE)),
+    );
     client.on(Events.GuildMemberAdd, safely("a member joining", (member) => serverLog.memberJoined(member)));
     client.on(Events.GuildMemberAdd, safely("welcoming a member", (member) => welcomer.memberJoined(member)));
     client.on(Events.GuildMemberRemove, safely("a leave message", (member) => welcomer.memberLeft(member)));

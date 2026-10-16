@@ -120,6 +120,17 @@ const MIGRATIONS = [
   ) WITHOUT ROWID;
   CREATE INDEX starboard_by_star_message ON starboard_posts (star_message_id);
   `,
+  // 7: when members joined and left, for their history on the dashboard.
+  `
+  CREATE TABLE member_events (
+    id       INTEGER PRIMARY KEY AUTOINCREMENT,
+    guild_id TEXT    NOT NULL,
+    user_id  TEXT    NOT NULL,
+    kind     TEXT    NOT NULL,
+    at       INTEGER NOT NULL
+  );
+  CREATE INDEX member_events_by_user ON member_events (guild_id, user_id, at);
+  `,
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS.length;

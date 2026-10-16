@@ -11,11 +11,13 @@
 //   GET  /api/guilds/:id/cases/export     the same search as a CSV file
 //   PATCH  /api/guilds/:id/cases/:number  change a case's reason
 //   DELETE /api/guilds/:id/cases/:number  delete a case
+//   GET  /api/guilds/:id/members          find members by name, or a user by ID (?q=)
+//   GET  /api/guilds/:id/members/:user    one person's history: cases, joins, leaves, roles
 //
 // Two levels of access to a server the bot is in:
 //   - "manage": Manage Server, Administrator or the owner. Everything.
 //   - "cases": anyone with one of the server's dashboard roles (a setting). The
-//     overview and the cases, but not the settings.
+//     overview, the cases and member history, but not the settings.
 // That is checked on every request: permissions against their Discord server
 // list (re-read at most every few minutes), roles against the bot's view of
 // the member (re-read at most every 30 seconds).
@@ -30,6 +32,7 @@ import Fastify from "fastify";
 import { normalizeAutomod } from "../automod/config.js";
 import { pickLanguage, translate } from "../i18n/i18n.js";
 import { CaseAction } from "../moderation/caseStore.js";
+import { MemberEventStore } from "../members/memberEventStore.js";
 import { buildCaseEmbed } from "../moderation/modLog.js";
 import { Setting } from "../settings/guildSettings.js";
 import { canManage, DiscordApiError } from "./discordApi.js";
@@ -49,6 +52,10 @@ const STATS_DAYS = 30;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DISCORD_ID = /^\d{17,20}$/;
 const CASE_ACTIONS = Object.values(CaseAction);
+const MAX_MEMBER_QUERY = 32;
+const HISTORY_CASES = 100;
+// Discord IDs hold the time they were made, counted from the start of 2015.
+const DISCORD_EPOCH = 1420070400000n;
 
 export const Access = Object.freeze({ MANAGE: "manage", CASES: "cases" });
 
@@ -124,6 +131,19 @@ function csvCell(value) {
   return /[",\r\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
 }
 
+// When a Discord account (or anything with an ID) was made.
+export const idCreatedAt = (id) => Number((BigInt(id) >> 22n) + DISCORD_EPOCH);
+
+// What the browser gets for a person in a member search.
+const memberResultJson = (user, member) => ({
+  id: user.id,
+  username: user.username,
+  displayName: member?.nick ?? user.global_name ?? user.username,
+  avatar: user.avatar ?? null,
+  bot: user.bot ?? false,
+  inServer: Boolean(member),
+});
+
 const sameText = (a, b) =>
   typeof a === "string" && typeof b === "string" && a.length === b.length && timingSafeEqual(Buffer.from(a), Buffer.from(b));
 
@@ -136,6 +156,7 @@ const sameText = (a, b) =>
 //   logger
 export async function buildDashboard({ config, db, discord, guildSettings, store, logger }) {
   const sessions = new SessionStore(db, { secret: config.sessionSecret });
+  const memberEvents = new MemberEventStore(db);
   const secureCookies = config.url.startsWith("https://");
   const cookieOptions = { path: "/", httpOnly: true, secure: secureCookies, sameSite: "lax" };
 
@@ -589,6 +610,80 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     }
     await logAction(guildId, session, `**Case #${number} deleted** (${existing.action} of <@${existing.userId}>)`);
     return { ok: true };
+  });
+
+  // --- Member history ------------------------------------------------------
+
+  const searchLimit = { config: { rateLimit: { max: 30, timeWindow: "1 minute" } } };
+
+  app.get("/api/guilds/:id/members", searchLimit, async (request, reply) => {
+    const access = await requireGuild(request, reply);
+    if (!access) {
+      return reply;
+    }
+    const query = typeof request.query?.q === "string" ? request.query.q.trim() : "";
+    if (query.length === 0 || query.length > MAX_MEMBER_QUERY) {
+      return reply.code(400).send({ error: "bad-search", message: `Search for 1 to ${MAX_MEMBER_QUERY} characters.` });
+    }
+    const { guildId } = access;
+    if (DISCORD_ID.test(query)) {
+      const member = await discord.member(guildId, query);
+      const user = member?.user ?? (await discord.user(query));
+      return { members: user ? [memberResultJson(user, member)] : [] };
+    }
+    const found = await discord.searchMembers(guildId, query);
+    return { members: found.map((member) => memberResultJson(member.user, member)) };
+  });
+
+  app.get("/api/guilds/:id/members/:user", async (request, reply) => {
+    const access = await requireGuild(request, reply);
+    if (!access) {
+      return reply;
+    }
+    const { guildId } = access;
+    const userId = request.params.user;
+    if (!DISCORD_ID.test(userId)) {
+      return reply.code(404).send({ error: "not-found" });
+    }
+    const [member, guild] = await Promise.all([discord.member(guildId, userId), discord.guild(guildId)]);
+    const user = member?.user ?? (await discord.user(userId));
+    const cases = store.listCases(guildId, userId, HISTORY_CASES);
+    if (!user && cases.length === 0) {
+      return reply.code(404).send({ error: "not-found" });
+    }
+    // Only looked up for people who aren't in the server. Without Ban Members, Discord refuses (403).
+    const ban = member ? null : await discord.ban(guildId, userId).catch(() => null);
+    const rolesById = new Map(guild.roles.map((role) => [role.id, role]));
+    const now = Date.now();
+    const tempBan = cases.find((entry) => entry.action === CaseAction.BAN && entry.pendingUnban && entry.expiresAt > now);
+    const timedOutUntil = member?.communication_disabled_until ? Date.parse(member.communication_disabled_until) : null;
+    return {
+      user: {
+        id: userId,
+        username: user?.username ?? cases[0].userTag ?? null,
+        displayName: member?.nick ?? user?.global_name ?? user?.username ?? cases[0].userTag ?? null,
+        avatar: user?.avatar ?? null,
+        bot: user?.bot ?? false,
+        createdAt: idCreatedAt(userId),
+      },
+      member: member
+        ? {
+            joinedAt: member.joined_at ? Date.parse(member.joined_at) : null,
+            timedOutUntil: timedOutUntil > now ? timedOutUntil : null,
+            roles: member.roles
+              .map((roleId) => rolesById.get(roleId))
+              .filter(Boolean)
+              .sort((a, b) => b.position - a.position)
+              .map(({ id, name, color }) => ({ id, name, color })),
+          }
+        : null,
+      banned: ban ? { reason: ban.reason ?? null } : null,
+      tempBanEndsAt: tempBan?.expiresAt ?? null,
+      caseCounts: store.countCases(guildId, userId),
+      cases: cases.map(caseJson),
+      events: memberEvents.list(guildId, userId),
+      joins: memberEvents.countJoins(guildId, userId),
+    };
   });
 
   return app;

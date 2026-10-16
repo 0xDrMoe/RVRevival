@@ -4,11 +4,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { loadDashboardConfig } from "../src/config.js";
-import { buildDashboard } from "../src/dashboard/app.js";
+import { buildDashboard, idCreatedAt } from "../src/dashboard/app.js";
 import { canManage, DiscordApiError } from "../src/dashboard/discordApi.js";
 import { SessionStore } from "../src/dashboard/sessions.js";
 import { checkSettingChanges, InvalidSetting } from "../src/dashboard/settingsRules.js";
 import { defaultAutomod } from "../src/automod/config.js";
+import { MemberEvent, MemberEventStore } from "../src/members/memberEventStore.js";
 import { CaseAction, CaseStore } from "../src/moderation/caseStore.js";
 import { GuildSettings, Setting } from "../src/settings/guildSettings.js";
 import { closeDatabase, openDatabase } from "../src/storage/database.js";
@@ -63,6 +64,9 @@ function fakeDiscord() {
       { id: VOICE_ID, name: "Voice", type: ChannelType.GuildVoice, position: 3 },
     ]),
     member: vi.fn(async () => null),
+    user: vi.fn(async () => null),
+    ban: vi.fn(async () => null),
+    searchMembers: vi.fn(async () => []),
     postMessage: vi.fn(async () => ({})),
     editMessage: vi.fn(async () => ({})),
   };
@@ -453,6 +457,113 @@ describe("dashboard", () => {
     expect(second.nextBefore).toBeNull();
   });
 
+  it("finds members by name, or anyone by user ID", async () => {
+    const cookies = await login();
+    const MEMBER_ID = "300000000000000009";
+    discord.searchMembers.mockResolvedValue([
+      { nick: "Champ", user: { id: MEMBER_ID, username: "rumbler", global_name: "Rumbler", avatar: null } },
+    ]);
+    const byName = await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}/members?q=rum`, cookies });
+    expect(byName.json().members).toEqual([
+      { id: MEMBER_ID, username: "rumbler", displayName: "Champ", avatar: null, bot: false, inServer: true },
+    ]);
+    expect(discord.searchMembers).toHaveBeenCalledWith(GUILD_ID, "rum");
+
+    discord.user.mockResolvedValue({ id: MEMBER_ID, username: "rumbler", global_name: null, avatar: "abc" });
+    const byId = await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}/members?q=${MEMBER_ID}`, cookies });
+    expect(byId.json().members).toEqual([
+      { id: MEMBER_ID, username: "rumbler", displayName: "rumbler", avatar: "abc", bot: false, inServer: false },
+    ]);
+
+    const empty = await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}/members?q=`, cookies });
+    expect(empty.statusCode).toBe(400);
+    const tooLong = await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}/members?q=${"a".repeat(33)}`, cookies });
+    expect(tooLong.statusCode).toBe(400);
+  });
+
+  it("shows a member's history: cases, roles, joins and leaves", async () => {
+    const cookies = await login();
+    const MEMBER_ID = "300000000000000009";
+    const events = new MemberEventStore(db);
+    events.record(GUILD_ID, MEMBER_ID, MemberEvent.JOIN, 1000);
+    events.record(GUILD_ID, MEMBER_ID, MemberEvent.LEAVE, 2000);
+    events.record(GUILD_ID, MEMBER_ID, MemberEvent.JOIN, 3000);
+    store.createCase({ guildId: GUILD_ID, action: CaseAction.WARN, userId: MEMBER_ID, userTag: "rumbler", moderatorId: USER_ID, reason: "Spam" });
+    store.createCase({ guildId: GUILD_ID, action: CaseAction.NOTE, userId: MEMBER_ID, moderatorId: USER_ID, reason: "Alt?" });
+    const timeoutEnd = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    discord.member.mockImplementation(async (guildId, userId) =>
+      userId === MEMBER_ID
+        ? {
+            nick: null,
+            joined_at: "2026-01-02T00:00:00.000Z",
+            communication_disabled_until: timeoutEnd,
+            roles: [ROLE_ID, "700000000000000099"],
+            user: { id: MEMBER_ID, username: "rumbler", global_name: "Rumbler", avatar: null },
+          }
+        : null,
+    );
+
+    const response = await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}/members/${MEMBER_ID}`, cookies });
+    expect(response.statusCode).toBe(200);
+    const history = response.json();
+    expect(history.user).toMatchObject({ id: MEMBER_ID, username: "rumbler", displayName: "Rumbler", createdAt: idCreatedAt(MEMBER_ID) });
+    expect(history.member).toEqual({
+      joinedAt: Date.parse("2026-01-02T00:00:00.000Z"),
+      timedOutUntil: Date.parse(timeoutEnd),
+      // Roles the server no longer has are left out.
+      roles: [{ id: ROLE_ID, name: "Mods", color: 0 }],
+    });
+    expect(history.caseCounts).toEqual({ warn: 1, note: 1 });
+    expect(history.cases.map((entry) => entry.action)).toEqual(["note", "warn"]);
+    expect(history.events).toEqual([
+      { kind: "join", at: 3000 },
+      { kind: "leave", at: 2000 },
+      { kind: "join", at: 1000 },
+    ]);
+    expect(history.joins).toBe(2);
+    expect(history.banned).toBeNull();
+    expect(discord.ban).not.toHaveBeenCalled();
+  });
+
+  it("shows someone who left and was banned, from their cases alone if Discord doesn't know them", async () => {
+    const cookies = await login();
+    const GONE_ID = "300000000000000008";
+    store.createCase({
+      guildId: GUILD_ID,
+      action: CaseAction.BAN,
+      userId: GONE_ID,
+      userTag: "spammer",
+      moderatorId: USER_ID,
+      durationMs: 60 * 60 * 1000,
+      expiresAt: Date.now() + 60 * 60 * 1000,
+      pendingUnban: true,
+    });
+    discord.ban.mockResolvedValue({ reason: "Scam links" });
+    const response = await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}/members/${GONE_ID}`, cookies });
+    const history = response.json();
+    expect(history.member).toBeNull();
+    expect(history.user).toMatchObject({ id: GONE_ID, username: "spammer", displayName: "spammer" });
+    expect(history.banned).toEqual({ reason: "Scam links" });
+    expect(history.tempBanEndsAt).toBeGreaterThan(Date.now());
+
+    // Nobody Discord knows and no cases: not found.
+    const unknown = await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}/members/300000000000000007`, cookies });
+    expect(unknown.statusCode).toBe(404);
+    // A failed ban lookup (no Ban Members permission) doesn't break the page.
+    discord.ban.mockRejectedValue(Object.assign(new Error("Missing Permissions"), { status: 403 }));
+    const noPermission = await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}/members/${GONE_ID}`, cookies });
+    expect(noPermission.json().banned).toBeNull();
+  });
+
+  it("lets members with a dashboard role see member history", async () => {
+    await guildSettings.set(OTHER_GUILD_ID, Setting.DASHBOARD_ROLES, [ROLE_ID]);
+    discord.member.mockImplementation(async (guildId, userId) => (userId === USER_ID ? { roles: [ROLE_ID] } : null));
+    const cookies = await login();
+    store.createCase({ guildId: OTHER_GUILD_ID, action: CaseAction.WARN, userId: "300000000000000009", moderatorId: USER_ID });
+    const response = await app.inject({ method: "GET", url: `/api/guilds/${OTHER_GUILD_ID}/members/300000000000000009`, cookies });
+    expect(response.statusCode).toBe(200);
+  });
+
   it("logs out and forgets the session", async () => {
     const cookies = await login();
     expect((await write(cookies, "POST", "/auth/logout")).statusCode).toBe(200);
@@ -489,6 +600,11 @@ describe("dashboard sessions", () => {
 });
 
 describe("dashboard helpers", () => {
+  it("reads when an account was made from its ID", () => {
+    expect(idCreatedAt("175928847299117063")).toBe(Date.parse("2016-04-30T11:18:25.796Z"));
+  });
+
+
   it("knows who can manage a server", () => {
     expect(canManage({ owner: true, permissions: "0" })).toBe(true);
     expect(canManage({ permissions: String(1 << 5) })).toBe(true);

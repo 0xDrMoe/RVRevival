@@ -1735,3 +1735,192 @@ dialog textarea {
   min-width: 0;
   flex: 1;
 }
+
+/* --- Members ---------------------------------------------------------------------- */
+
+.tip.danger {
+  background: rgb(239 68 68 / 10%);
+  border-color: color-mix(in srgb, #ef4444 40%, var(--border));
+}
+
+.stack {
+  display: grid;
+  gap: var(--gap);
+  align-content: start;
+}
+
+.stack > .card {
+  margin: 0;
+}
+
+.member-avatar {
+  flex: none;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.member-avatar.md {
+  width: 40px;
+  height: 40px;
+}
+
+.member-avatar.lg {
+  width: 72px;
+  height: 72px;
+}
+
+.member-avatar.placeholder {
+  display: inline-grid;
+  place-items: center;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: #fff;
+  font-weight: 800;
+}
+
+.member-avatar.lg.placeholder {
+  font-size: 1.5rem;
+}
+
+.member-names {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.member-names > * {
+  overflow-wrap: anywhere;
+}
+
+.member-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.member-header h1 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.member-header .badges {
+  margin-top: 6px;
+}
+
+.member-list {
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+}
+
+.member-list a {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.member-list a:hover {
+  background: var(--surface-2);
+}
+
+.member-list .member-names {
+  flex: 1;
+}
+
+.member-list .muted {
+  font-size: 0.85rem;
+}
+
+.member-grid {
+  align-items: start;
+}
+
+.member-summary {
+  margin-bottom: 12px;
+}
+
+.timeline {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: grid;
+  gap: 0;
+}
+
+.timeline li {
+  display: grid;
+  grid-template-columns: 14px 1fr;
+  gap: 10px;
+  position: relative;
+  padding-bottom: 14px;
+}
+
+.timeline li:not(:last-child)::before {
+  content: "";
+  position: absolute;
+  inset-inline-start: 6px;
+  top: 16px;
+  bottom: 0;
+  width: 2px;
+  background: var(--border);
+}
+
+.timeline-dot {
+  width: 14px;
+  height: 14px;
+  margin-top: 4px;
+  border-radius: 50%;
+  background: var(--act, var(--accent));
+}
+
+.timeline-body {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.timeline-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 0.85rem;
+}
+
+.timeline-reason {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.timeline-by {
+  font-size: 0.8rem;
+}
+
+.role-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.role-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.history-link {
+  display: inline-block;
+  margin-top: 4px;
+  font-size: 0.78rem;
+  font-weight: 600;
+}

@@ -2,8 +2,8 @@
 //
 //   - as the person logged in (OAuth2): who they are and which servers they're in;
 //   - as the bot (its token): the servers it's in, their channels and roles, a
-//     member's roles (for role-based dashboard access), and
-//     posting in or editing messages of the log channels.
+//     member's roles (for role-based dashboard access and member history),
+//     member search, bans, and posting in or editing messages of the log channels.
 //
 // Bot calls go through discord.js's REST client, which waits and retries when
 // Discord rate-limits us. Server details are cached for a short while, since
@@ -16,6 +16,9 @@ const API = "https://discord.com/api/v10";
 // their server list (with their permissions in each).
 const SCOPES = ["identify", "guilds"];
 const CACHE_MS = 30_000;
+// Expired cache entries are cleared out once a cache holds this many.
+const CACHE_SWEEP_SIZE = 1000;
+const MEMBER_SEARCH_LIMIT = 10;
 
 const MANAGE_GUILD = 1n << 5n;
 const ADMINISTRATOR = 1n << 3n;
@@ -47,11 +50,27 @@ function cached(load) {
         return entry.value;
       }
       const value = await load(key);
+      if (entries.size >= CACHE_SWEEP_SIZE) {
+        const now = Date.now();
+        entries.forEach((old, oldKey) => old.expiresAt <= now && entries.delete(oldKey));
+      }
       entries.set(key, { value, expiresAt: Date.now() + CACHE_MS });
       return value;
     },
     forget: (key) => entries.delete(key),
   };
+}
+
+// The answer, or null when Discord says there's no such thing (404).
+async function orNull(request) {
+  try {
+    return await request;
+  } catch (error) {
+    if (error.status === 404) {
+      return null;
+    }
+    throw error;
+  }
 }
 
 // Options:
@@ -103,6 +122,10 @@ export function createDiscordApi({ config, fetch = globalThis.fetch, rest }) {
     }
   });
   const channels = cached((guildId) => bot.get(Routes.guildChannels(guildId)));
+  // Any Discord user (also people who left), or null if there's no such user.
+  const users = cached((userId) => orNull(bot.get(Routes.user(userId))));
+  // A ban { reason, user }, or null if they aren't banned. Keyed "guild:user".
+  const bans = cached((key) => orNull(bot.get(Routes.guildBan(...key.split(":")))));
 
   return {
     // Where the "Log in with Discord" button sends people.
@@ -157,6 +180,13 @@ export function createDiscordApi({ config, fetch = globalThis.fetch, rest }) {
     guild: (guildId) => guilds.get(guildId),
     channels: (guildId) => channels.get(guildId),
     member: (guildId, userId) => members.get(`${guildId}:${userId}`),
+    user: (userId) => users.get(userId),
+    ban: (guildId, userId) => bans.get(`${guildId}:${userId}`),
+    // Members whose username or nickname starts with `query`.
+    searchMembers: (guildId, query) =>
+      bot.get(Routes.guildMembersSearch(guildId), {
+        query: new URLSearchParams({ query, limit: String(MEMBER_SEARCH_LIMIT) }),
+      }),
 
     // Posts a message as the bot. Mentions never ping.
     postMessage: (channelId, payload) =>
