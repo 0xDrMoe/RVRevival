@@ -468,6 +468,39 @@ describe("dashboard", () => {
     expect(refused.json()).toMatchObject({ error: "invalid-setting", setting: "autoResponders" });
   });
 
+  it("schedules, lists and deletes messages", async () => {
+    const cookies = await login();
+    const at = Date.now() + 60 * 60 * 1000;
+    const added = await write(cookies, "POST", `/api/guilds/${GUILD_ID}/scheduled`, {
+      channelId: TEXT_ID,
+      content: " Weekly news\r\n ",
+      at,
+      intervalMs: 7 * 24 * 60 * 60 * 1000,
+    });
+    expect(added.statusCode).toBe(200);
+    // Without Mention Everyone, mentions won't ping.
+    expect(added.json().message).toMatchObject({ channelId: TEXT_ID, content: "Weekly news", nextAt: at, allowMentions: false });
+    const id = added.json().message.id;
+
+    const list = await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}/scheduled`, cookies });
+    expect(list.json()).toMatchObject({ max: 25, messages: [{ id, content: "Weekly news" }] });
+
+    for (const body of [
+      { channelId: VOICE_ID, content: "x", at, intervalMs: null },
+      { channelId: TEXT_ID, content: " ", at, intervalMs: null },
+      { channelId: TEXT_ID, content: "x", at: Date.now() - 1000, intervalMs: null },
+      { channelId: TEXT_ID, content: "x", at, intervalMs: 60_000 },
+    ]) {
+      const refused = await write(cookies, "POST", `/api/guilds/${GUILD_ID}/scheduled`, body);
+      expect(refused.statusCode).toBe(400);
+    }
+
+    const deleted = await write(cookies, "DELETE", `/api/guilds/${GUILD_ID}/scheduled/${id}`);
+    expect(deleted.json()).toEqual({ ok: true });
+    const again = await write(cookies, "DELETE", `/api/guilds/${GUILD_ID}/scheduled/${id}`);
+    expect(again.statusCode).toBe(404);
+  });
+
   it("never saves role panels from the dashboard", async () => {
     const cookies = await login();
     const response = await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, { rolePanels: [] });

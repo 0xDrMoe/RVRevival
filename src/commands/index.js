@@ -21,6 +21,7 @@ import { createRaidCommand } from "./raid.js";
 import { createTicketsCommand } from "./tickets.js";
 import { createVoiceCommand } from "./voice.js";
 import { createAutoResponderCommand } from "./autoResponder.js";
+import { createScheduleCommand } from "./schedule.js";
 import { createWelcomeCommand } from "./welcome.js";
 
 // Each command is { name, data, execute(interaction), autocomplete?(interaction),
@@ -34,7 +35,8 @@ import { createWelcomeCommand } from "./welcome.js";
 // (giveaways/giveawayStore.js) to run /giveaway, `tickets`
 // (tickets/ticketStore.js) to run /tickets, and `levels` (leveling/levelStore.js)
 // with `leveling` (leveling/leveling.js) to run /rank, /leaderboard and /levels,
-// `tempVoice` (voice/tempVoiceStore.js) to run /voice,
+// `tempVoice` (voice/tempVoiceStore.js) to run /voice, `scheduledMessages`
+// (scheduled/scheduledMessageStore.js) to run /schedule,
 // not to register them.
 export function createCommands({
   logger,
@@ -49,6 +51,7 @@ export function createCommands({
   levels,
   leveling,
   tempVoice,
+  scheduledMessages,
 }) {
   // Shared, so /country and /country-staff can't change the same member at the same time.
   const roleService = new CountryRoleService(logger);
@@ -75,6 +78,7 @@ export function createCommands({
     createRaidCommand({ guildSettings, modLog, forcedLanguage }),
     createVoiceCommand({ guildSettings, store: tempVoice, forcedLanguage }),
     createAutoResponderCommand({ guildSettings, forcedLanguage }),
+    createScheduleCommand({ store: scheduledMessages, forcedLanguage }),
     ...createLevelCommands({ levels, leveling, guildSettings, forcedLanguage }),
   ];
   return new Map(commands.map((command) => [command.name, command]));

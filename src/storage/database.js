@@ -179,6 +179,22 @@ const MIGRATIONS = [
   ) WITHOUT ROWID;
   CREATE INDEX temp_voice_by_owner ON temp_voice_channels (guild_id, owner_id);
   `,
+  // 12: scheduled messages (/schedule): posted once or on repeat.
+  `
+  CREATE TABLE scheduled_messages (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    guild_id       TEXT    NOT NULL,
+    channel_id     TEXT    NOT NULL,
+    content        TEXT    NOT NULL,
+    next_at        INTEGER NOT NULL,
+    interval_ms    INTEGER,
+    allow_mentions INTEGER NOT NULL DEFAULT 0,
+    created_by     TEXT    NOT NULL,
+    created_at     INTEGER NOT NULL
+  );
+  CREATE INDEX scheduled_messages_due ON scheduled_messages (next_at);
+  CREATE INDEX scheduled_messages_by_guild ON scheduled_messages (guild_id, next_at);
+  `,
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS.length;

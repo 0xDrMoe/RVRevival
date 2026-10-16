@@ -39,6 +39,8 @@ import { pickLanguage, translate } from "../i18n/i18n.js";
 import { CaseAction } from "../moderation/caseStore.js";
 import { MemberEventStore } from "../members/memberEventStore.js";
 import { TicketStore } from "../tickets/ticketStore.js";
+import { ScheduledMessageStore } from "../scheduled/scheduledMessageStore.js";
+import { MAX_DELAY_MS, MAX_INTERVAL_MS, MAX_SCHEDULED, MAX_SCHEDULED_LENGTH, MIN_INTERVAL_MS } from "../scheduled/scheduler.js";
 import { buildCaseEmbed } from "../moderation/modLog.js";
 import { Setting } from "../settings/guildSettings.js";
 import { canManage, DiscordApiError } from "./discordApi.js";
@@ -169,6 +171,7 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
   const memberEvents = new MemberEventStore(db);
   const tickets = new TicketStore(db);
   const levels = new LevelStore(db);
+  const scheduledMessages = new ScheduledMessageStore(db);
   const secureCookies = config.url.startsWith("https://");
   const cookieOptions = { path: "/", httpOnly: true, secure: secureCookies, sameSite: "lax" };
 
@@ -829,6 +832,102 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
         ...levelProgress(entry.xp),
       })),
     };
+  });
+
+  // --- Scheduled messages --------------------------------------------------
+
+  const SCHEDULE_CHANNELS = [0, 5]; // text, announcement
+  const MENTION_EVERYONE = (1n << 17n) | (1n << 3n); // Mention Everyone, or Administrator
+
+  // Whether someone may ping @everyone and roles in this server, from their roles.
+  async function canMentionEveryone(guild, userId) {
+    if (guild.owner_id === userId) {
+      return true;
+    }
+    const member = await discord.member(guild.id, userId).catch(() => null);
+    const roleIds = new Set([guild.id, ...(member?.roles ?? [])]);
+    const permissions = guild.roles
+      .filter((role) => roleIds.has(role.id))
+      .reduce((total, role) => total | BigInt(role.permissions ?? 0), 0n);
+    return (permissions & MENTION_EVERYONE) !== 0n;
+  }
+
+  const scheduledJson = (message, names = {}) => ({
+    id: message.id,
+    channelId: message.channelId,
+    content: message.content,
+    nextAt: message.nextAt,
+    intervalMs: message.intervalMs,
+    allowMentions: message.allowMentions,
+    createdBy: message.createdBy,
+    createdByName: names[message.createdBy] ?? null,
+    createdAt: message.createdAt,
+  });
+
+  app.get("/api/guilds/:id/scheduled", async (request, reply) => {
+    const access = await requireGuild(request, reply, { manage: true });
+    if (!access) {
+      return reply;
+    }
+    const messages = scheduledMessages.list(access.guildId);
+    const names = await peopleNames(access.guildId, messages.map((message) => message.createdBy));
+    return { messages: messages.map((message) => scheduledJson(message, names)), max: MAX_SCHEDULED };
+  });
+
+  app.post("/api/guilds/:id/scheduled", async (request, reply) => {
+    const access = await requireGuild(request, reply, { manage: true });
+    if (!access) {
+      return reply;
+    }
+    const { guildId, session } = access;
+    const body = request.body ?? {};
+    const refuse = (message) => reply.code(400).send({ error: "invalid-scheduled", message });
+    const [guild, channels] = await Promise.all([discord.guild(guildId), discord.channels(guildId)]);
+    if (!channels.some((channel) => channel.id === body.channelId && SCHEDULE_CHANNELS.includes(channel.type))) {
+      return refuse("Pick a text or announcement channel from this server.");
+    }
+    const content = typeof body.content === "string" ? body.content.replace(/\r\n?/g, "\n").trim() : "";
+    if (!content || content.length > MAX_SCHEDULED_LENGTH) {
+      return refuse(`Write a message of 1 to ${MAX_SCHEDULED_LENGTH} characters.`);
+    }
+    const now = Date.now();
+    if (!Number.isSafeInteger(body.at) || body.at <= now || body.at > now + MAX_DELAY_MS) {
+      return refuse("Pick a time in the future, within a year.");
+    }
+    const intervalMs = body.intervalMs ?? null;
+    if (intervalMs !== null && (!Number.isSafeInteger(intervalMs) || intervalMs < MIN_INTERVAL_MS || intervalMs > MAX_INTERVAL_MS)) {
+      return refuse("Repeat at most once an hour and at least once a year.");
+    }
+    if (scheduledMessages.count(guildId) >= MAX_SCHEDULED) {
+      return refuse(`This server already has ${MAX_SCHEDULED} scheduled messages. Delete one first.`);
+    }
+    const saved = scheduledMessages.add({
+      guildId,
+      channelId: body.channelId,
+      content,
+      nextAt: body.at,
+      intervalMs,
+      allowMentions: await canMentionEveryone(guild, session.userId),
+      createdBy: session.userId,
+      createdAt: now,
+    });
+    await logAction(guildId, session, `**Scheduled message #${saved.id} added** for <#${saved.channelId}>`, [
+      `First post: <t:${Math.floor(saved.nextAt / 1000)}:f>${intervalMs ? ` · repeats every ${Math.round(intervalMs / 3_600_000)}h` : ""}`,
+    ]);
+    return { message: scheduledJson(saved) };
+  });
+
+  app.delete("/api/guilds/:id/scheduled/:number", async (request, reply) => {
+    const access = await requireGuild(request, reply, { manage: true });
+    const number = access && caseNumber(request, reply);
+    if (!number) {
+      return reply;
+    }
+    if (!scheduledMessages.deleteInGuild(access.guildId, number)) {
+      return reply.code(404).send({ error: "not-found" });
+    }
+    await logAction(access.guildId, access.session, `**Scheduled message #${number} deleted**`);
+    return { ok: true };
   });
 
   return app;
