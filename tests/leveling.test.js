@@ -6,6 +6,7 @@ import {
   InvalidLeveling,
   levelForXp,
   levelProgress,
+  multiplierFor,
   normalizeLeveling,
   totalXpForLevel,
   XP_COOLDOWN_MS,
@@ -280,6 +281,98 @@ describe("earning XP", () => {
   });
 });
 
+describe("XP boosts and voice XP", () => {
+  const BOOST_ROLE = "700000000000000050";
+  const BIG_BOOST_ROLE = "700000000000000051";
+
+  it("uses the highest boost a member qualifies for", () => {
+    const config = normalizeLeveling({
+      boosterMultiplier: 1.5,
+      roleMultipliers: [
+        { roleId: BOOST_ROLE, multiplier: 2 },
+        { roleId: BIG_BOOST_ROLE, multiplier: 3 },
+        { roleId: "700000000000000052", multiplier: 1 },
+        { roleId: "nope", multiplier: 2 },
+        { roleId: "700000000000000053", multiplier: 1.25 },
+      ],
+    });
+    expect(config.roleMultipliers).toEqual([
+      { roleId: BIG_BOOST_ROLE, multiplier: 3 },
+      { roleId: BOOST_ROLE, multiplier: 2 },
+    ]);
+    const member = (roles, premiumSince = null) => ({ premiumSince, roles: { cache: new Map(roles.map((id) => [id, {}])) } });
+    expect(multiplierFor(config, member([]))).toBe(1);
+    expect(multiplierFor(config, member([], new Date()))).toBe(1.5);
+    expect(multiplierFor(config, member([BOOST_ROLE], new Date()))).toBe(2);
+    expect(multiplierFor(config, member([BOOST_ROLE, BIG_BOOST_ROLE]))).toBe(3);
+  });
+
+  it("checks boosts from the dashboard", () => {
+    const server = { isRole: (id) => id !== GUILD_ID, isRewardRole: () => true, isChannel: () => true };
+    const base = { enabled: true, announce: "here", message: null, rewards: [], stackRewards: true, noXpChannelIds: [], noXpRoleIds: [] };
+    expect(checkLeveling({ ...base, voiceXp: true, boosterMultiplier: 2, roleMultipliers: [{ roleId: BOOST_ROLE, multiplier: 1.5 }] }, server)).toMatchObject({
+      voiceXp: true,
+      boosterMultiplier: 2,
+      roleMultipliers: [{ roleId: BOOST_ROLE, multiplier: 1.5 }],
+    });
+    for (const bad of [
+      { boosterMultiplier: 6 },
+      { boosterMultiplier: 1.25 },
+      { voiceXp: "yes" },
+      { roleMultipliers: [{ roleId: BOOST_ROLE, multiplier: 1 }] },
+      { roleMultipliers: [{ roleId: GUILD_ID, multiplier: 2 }] },
+      { roleMultipliers: [{ roleId: BOOST_ROLE, multiplier: 2 }, { roleId: BOOST_ROLE, multiplier: 3 }] },
+    ]) {
+      expect(() => checkLeveling({ ...base, ...bad }, server)).toThrow(InvalidLeveling);
+    }
+  });
+
+  it("multiplies message XP", async () => {
+    const t = setup({ config: { roleMultipliers: [{ roleId: BOOST_ROLE, multiplier: 2 }] } });
+    t.member.roles.cache.set(BOOST_ROLE, {});
+    expect(await t.leveling.handleMessage(t.message())).toMatchObject({ xp: 50 });
+  });
+
+  function voiceGuild(t, states, { afkChannelId = null } = {}) {
+    const voice = { id: "800000000000000077", parentId: CATEGORY_ID, isTextBased: () => true, permissionsFor: () => ({ has: () => true }), send: vi.fn(async () => {}) };
+    t.guild.channels.cache.set(voice.id, voice);
+    t.guild.afkChannelId = afkChannelId;
+    t.guild.voiceStates = { cache: new Map(states.map((state, index) => [String(index), { channelId: voice.id, deaf: false, ...state }])) };
+    return voice;
+  }
+
+  const friend = (id = ADMIN_ID, extra = {}) => ({ id, user: { id, bot: false, username: "friend" }, roles: { cache: new Map() }, ...extra });
+
+  it("gives voice XP to members with company, not alone, deafened, with bots only or in the AFK channel", async () => {
+    const t = setup({ config: { voiceXp: true } });
+    voiceGuild(t, [{ member: t.member }, { member: friend() }]);
+    expect(await t.leveling.awardVoice(t.guild)).toEqual([MEMBER_ID, ADMIN_ID]);
+    expect(t.store.get(GUILD_ID, MEMBER_ID)).toMatchObject({ xp: 10, messages: 0 });
+
+    voiceGuild(t, [{ member: t.member }]);
+    expect(await t.leveling.awardVoice(t.guild)).toEqual([]);
+    voiceGuild(t, [{ member: t.member }, { member: friend(ADMIN_ID, { user: { id: ADMIN_ID, bot: true } }) }]);
+    expect(await t.leveling.awardVoice(t.guild)).toEqual([]);
+    voiceGuild(t, [{ member: t.member, deaf: true }, { member: friend() }]);
+    expect(await t.leveling.awardVoice(t.guild)).toEqual([ADMIN_ID]);
+    const afk = voiceGuild(t, [{ member: t.member }, { member: friend() }]);
+    t.guild.afkChannelId = afk.id;
+    expect(await t.leveling.awardVoice(t.guild)).toEqual([]);
+
+    const off = setup();
+    voiceGuild(off, [{ member: off.member }, { member: friend() }]);
+    expect(await off.leveling.awardVoice(off.guild)).toEqual([]);
+  });
+
+  it("announces a voice level-up in the voice channel's chat", async () => {
+    const t = setup({ config: { voiceXp: true } });
+    t.store.setXp(GUILD_ID, MEMBER_ID, 95);
+    const voice = voiceGuild(t, [{ member: t.member }, { member: friend() }]);
+    await t.leveling.awardVoice(t.guild);
+    expect(voice.send).toHaveBeenCalledWith(expect.objectContaining({ content: `🎉 <@${MEMBER_ID}> reached level **1**!` }));
+  });
+});
+
 describe("level commands", () => {
   function commandSetup({ enabled = true } = {}) {
     const t = setup({ config: { enabled } });
@@ -301,6 +394,8 @@ describe("level commands", () => {
         getSubcommand: () => subcommand,
         getString: (key) => options[key] ?? null,
         getInteger: (key) => options[key] ?? null,
+        getNumber: (key) => options[key] ?? null,
+        getBoolean: (key) => options[key] ?? null,
         getChannel: (key) => options[key] ?? null,
         getRole: (key) => options[key] ?? null,
         getUser: (key) => options[key] ?? null,
@@ -316,10 +411,28 @@ describe("level commands", () => {
     return { ...t, commands, run };
   }
 
+  it("switches voice XP and sets booster and role boosts", async () => {
+    const t = commandSetup();
+    expect((await t.run({ name: "levels", subcommand: "voice", options: { enabled: true } })).outcome.key).toBe("levelsVoiceOn");
+    expect((await t.run({ name: "levels", subcommand: "boost", options: { multiplier: 1.25 } })).outcome.key).toBe("levelsBoostBadStep");
+    expect((await t.run({ name: "levels", subcommand: "boost", options: { multiplier: 2 } })).outcome.key).toBe("levelsBoostBoosterSet");
+    const role = { id: ROLE_5 };
+    expect((await t.run({ name: "levels", subcommand: "boost", options: { multiplier: 1.5, role } })).outcome.key).toBe("levelsBoostRoleSet");
+    expect(normalizeLeveling(t.guildSettings.get(GUILD_ID, Setting.LEVELING))).toMatchObject({
+      voiceXp: true,
+      boosterMultiplier: 2,
+      roleMultipliers: [{ roleId: ROLE_5, multiplier: 1.5 }],
+    });
+    const { target } = await t.run({ name: "levels", subcommand: "show" });
+    expect(target.reply.mock.calls[0][0].content).toContain(`**Role boosts:** <@&${ROLE_5}> ×1.5`);
+    expect((await t.run({ name: "levels", subcommand: "boost", options: { multiplier: 1, role } })).outcome.key).toBe("levelsBoostRoleOff");
+    expect(normalizeLeveling(t.guildSettings.get(GUILD_ID, Setting.LEVELING)).roleMultipliers).toEqual([]);
+  });
+
   it("keeps /levels under Discord's limits and for Manage Server", () => {
     const data = buildLevelsCommandData();
     expect(data.default_member_permissions).toBe(String(PermissionFlagsBits.ManageGuild));
-    expect(data.options).toHaveLength(11);
+    expect(data.options).toHaveLength(13);
   });
 
   it("shows a rank card and the leaderboard", async () => {

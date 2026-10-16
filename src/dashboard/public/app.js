@@ -70,6 +70,9 @@ const AUTOROLE_FORBIDDEN = (1n << 3n) | (1n << 5n);
 // Moderator permissions: roles with any of them can't be the birthday role.
 const BIRTHDAY_ROLE_FORBIDDEN = [3n, 5n, 28n, 4n, 13n, 29n, 27n, 30n, 33n, 34n, 2n, 1n, 40n, 17n, 7n].reduce((bits, bit) => bits | (1n << bit), 0n);
 const MAX_BIRTHDAY_MESSAGE_LENGTH = 1000;
+// Leveling XP boosts (leveling/config.js).
+const MAX_MULTIPLIER = 5;
+const MAX_ROLE_MULTIPLIERS = 10;
 const CHANNEL = { TEXT: 0, VOICE: 2, CATEGORY: 4, ANNOUNCEMENT: 5, FORUM: 15 };
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -1686,6 +1689,28 @@ function rewardRow(reward, roles, onRemove) {
   return row;
 }
 
+// One role XP boost: a role, a multiplier and a remove button.
+function boostRow(boost, roles, onRemove) {
+  const row = h(
+    "div",
+    { class: "boost-row" },
+    h("span", { class: "grow" }, picker({ id: undefined, options: roles, value: boost.roleId ?? "", emptyLabel: t("levelsRewardPickRole") })),
+    h("span", { class: "muted", "aria-hidden": "true" }, "×"),
+    h("input", {
+      class: "boost-multiplier",
+      type: "number",
+      min: 1.1,
+      max: MAX_MULTIPLIER,
+      step: 0.1,
+      required: true,
+      value: boost.multiplier ?? 2,
+      "aria-label": t("levelsBoostMultiplier"),
+    }),
+    h("button", { class: "ghost small", type: "button", onclick: () => onRemove(row) }, t("tagRemove")),
+  );
+  return row;
+}
+
 // Reads the leveling settings back from the page. Bad rows are sent as typed so the server explains.
 function readLeveling(form, saved) {
   const announce = form.querySelector("#levelsAnnounce").value;
@@ -1702,6 +1727,12 @@ function readLeveling(form, saved) {
       .sort((a, b) => a.level - b.level),
     noXpChannelIds: [...form.querySelectorAll('input[name="noXpChannel"]:checked')].map((box) => box.value),
     noXpRoleIds: [...form.querySelectorAll('input[name="noXpRole"]:checked')].map((box) => box.value),
+    voiceXp: form.querySelector("#levelsVoice").checked,
+    boosterMultiplier: Number(form.querySelector("#levelsBooster").value) || 1,
+    roleMultipliers: [...form.querySelectorAll(".boost-row")]
+      .map((row) => ({ roleId: row.querySelector("select").value, multiplier: Number(row.querySelector(".boost-multiplier").value) }))
+      .filter((boost) => boost.roleId)
+      .sort((a, b) => b.multiplier - a.multiplier),
   };
 }
 
@@ -1824,6 +1855,15 @@ async function showLevels(guildId) {
       h("span", { class: "switch" }, h("input", { id, type: "checkbox", role: "switch", checked, "aria-label": t(labelKey) })),
     );
 
+  const boosts = editableList({
+    items: config.roleMultipliers ?? [],
+    max: MAX_ROLE_MULTIPLIERS,
+    makeRow: (boost, removeBoost) => boostRow(boost ?? {}, roles.map((role) => ({ id: role.id, label: `@${role.label}` })), removeBoost),
+    focus: "select",
+    emptyKey: "levelsBoostsNone",
+    addKey: "levelsBoostAdd",
+  });
+
   const board = await leaderboardCard(guildId, page).catch((error) => {
     failed(error);
     return null;
@@ -1854,6 +1894,20 @@ async function showLevels(guildId) {
         empty,
         list,
         toggle("levelsStack", config.stackRewards, "levelsStack", "levelsStackHelp"),
+      ),
+      card(
+        t("levelsExtrasTitle"),
+        "🎙️",
+        "purple",
+        toggle("levelsVoice", config.voiceXp ?? false, "levelsVoice", "levelsVoiceHelp"),
+        field(
+          "levelsBooster",
+          "levelsBoosterHelp",
+          h("input", { id: "levelsBooster", type: "number", min: 1, max: MAX_MULTIPLIER, step: 0.1, required: true, value: config.boosterMultiplier ?? 1 }),
+        ),
+        h("div", { class: "toolbar" }, h("p", { class: "help grow" }, t("levelsBoostsHelp")), boosts.count, boosts.addButton),
+        boosts.empty,
+        boosts.list,
       ),
       card(
         t("levelsNoXpChannels"),

@@ -862,5 +862,20 @@
   "birthdayNeedsChannelOrRole": "Pick a channel for greetings, a birthday role, or both.",
   "birthdaySetupDone": "Birthdays are on. Greetings: {channel} · Role: {role} · Time zone: {timezone}.",
   "birthdayAlreadyOff": "Birthday greetings are already off.",
-  "birthdayOffDone": "Birthday greetings and the role are off. Saved birthdays are kept."
+  "birthdayOffDone": "Birthday greetings and the role are off. Saved birthdays are kept.",
+
+  "levelsVoiceDescription": "Switch XP for time in voice channels on or off.",
+  "levelsVoiceEnabledOptionDescription": "Earn XP in voice (10 a minute, with someone else, not deafened).",
+  "levelsBoostDescription": "Give Server Boosters, or a role, more XP. 1 removes the boost.",
+  "levelsMultiplierOptionDescription": "How much more XP: 1.5 is half as much again, up to 5.",
+  "levelsBoostRoleOptionDescription": "The role to boost (default: Server Boosters).",
+  "levelsVoiceOn": "🎙️ Voice XP is on: members earn 10 XP a minute in voice with someone else, unless they're deafened or in the AFK channel.",
+  "levelsVoiceOff": "Voice XP is off.",
+  "levelsBoostBadStep": "Use a boost from {min} to {max} in steps of 0.1, like 1.5 or 2.",
+  "levelsBoostBoosterSet": "💎 Server Boosters now earn ×{multiplier} XP.",
+  "levelsBoostBoosterOff": "Server Boosters earn normal XP again.",
+  "levelsBoostRoleSet": "{role} now earns ×{multiplier} XP. Members get their highest boost; boosts don't multiply.",
+  "levelsBoostRoleOff": "{role} earns normal XP again.",
+  "levelsBoostTooMany": "You can boost at most {max} roles. Remove one first (set it to 1).",
+  "levelsShowExtras": "**Voice XP:** {voice}\n**Booster boost:** {booster}\n**Role boosts:** {roles}"
 }

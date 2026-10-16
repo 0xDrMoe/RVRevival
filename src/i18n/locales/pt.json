@@ -862,5 +862,20 @@
   "birthdayNeedsChannelOrRole": "Escolha um canal para as mensagens, um cargo de aniversário ou os dois.",
   "birthdaySetupDone": "Os aniversários estão ativos. Mensagens: {channel} · Cargo: {role} · Fuso: {timezone}.",
   "birthdayAlreadyOff": "As mensagens de aniversário já estão desativadas.",
-  "birthdayOffDone": "As mensagens e o cargo de aniversário estão desativados. Os aniversários salvos continuam guardados."
+  "birthdayOffDone": "As mensagens e o cargo de aniversário estão desativados. Os aniversários salvos continuam guardados.",
+
+  "levelsVoiceDescription": "Liga ou desliga a XP por tempo em canais de voz.",
+  "levelsVoiceEnabledOptionDescription": "Ganhar XP na voz (10 por minuto, com mais alguém, sem ensurdecer).",
+  "levelsBoostDescription": "Dá mais XP para quem impulsiona o servidor ou para um cargo. 1 remove o bônus.",
+  "levelsMultiplierOptionDescription": "Quanto mais XP: 1.5 é metade a mais, até 5.",
+  "levelsBoostRoleOptionDescription": "O cargo com bônus (padrão: quem impulsiona o servidor).",
+  "levelsVoiceOn": "🎙️ A XP de voz está ligada: os membros ganham 10 XP por minuto na voz com mais alguém, a não ser que estejam ensurdecidos ou no canal AFK.",
+  "levelsVoiceOff": "A XP de voz está desligada.",
+  "levelsBoostBadStep": "Use um bônus de {min} a {max} em passos de 0.1, como 1.5 ou 2.",
+  "levelsBoostBoosterSet": "💎 Quem impulsiona o servidor agora ganha ×{multiplier} XP.",
+  "levelsBoostBoosterOff": "Quem impulsiona o servidor volta a ganhar XP normal.",
+  "levelsBoostRoleSet": "{role} agora ganha ×{multiplier} XP. Cada membro recebe seu maior bônus; eles não se multiplicam.",
+  "levelsBoostRoleOff": "{role} volta a ganhar XP normal.",
+  "levelsBoostTooMany": "Você pode dar bônus a no máximo {max} cargos. Remova um primeiro (coloque 1).",
+  "levelsShowExtras": "**XP de voz:** {voice}\n**Bônus de impulso:** {booster}\n**Bônus de cargos:** {roles}"
 }

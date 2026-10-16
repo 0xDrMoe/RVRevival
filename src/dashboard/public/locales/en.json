@@ -452,5 +452,14 @@
   "birthdayTimezone": "Time zone",
   "birthdayTimezoneHelp": "When the day starts, like Europe/London or America/Toronto.",
   "birthdayMessage": "Greeting",
-  "birthdayMessageHelp": "{user} is the member (several on the same day are listed together), {server} the server. Leave empty for the default."
+  "birthdayMessageHelp": "{user} is the member (several on the same day are listed together), {server} the server. Leave empty for the default.",
+  "levelsExtrasTitle": "Voice XP and boosts",
+  "levelsVoice": "Voice XP",
+  "levelsVoiceHelp": "10 XP a minute in voice with at least one other person, unless deafened or in the AFK channel. No-XP channels and roles count here too.",
+  "levelsBooster": "Server Booster boost",
+  "levelsBoosterHelp": "XP multiplier for members boosting the server, from 1 (none) to 5.",
+  "levelsBoostsHelp": "Roles that earn more XP. A member gets their highest boost (booster or role); boosts don't multiply each other.",
+  "levelsBoostsNone": "No role boosts.",
+  "levelsBoostMultiplier": "Multiplier",
+  "levelsBoostAdd": "+ Add boost"
 }

@@ -24,6 +24,14 @@ export const MAX_LEVEL_MESSAGE_LENGTH = 500;
 export const MIN_XP_PER_MESSAGE = 15;
 export const MAX_XP_PER_MESSAGE = 25;
 export const XP_COOLDOWN_MS = 60 * 1000;
+// Voice XP: per minute in a voice channel with at least one other person,
+// not deafened and not in the AFK channel.
+export const VOICE_XP_PER_MINUTE = 10;
+// XP boosts for Server Boosters and chosen roles. A member gets the highest
+// boost they qualify for; boosts don't multiply each other.
+export const MIN_MULTIPLIER = 1;
+export const MAX_MULTIPLIER = 5;
+export const MAX_ROLE_MULTIPLIERS = 10;
 
 export const DEFAULT_LEVELING = Object.freeze({
   enabled: false,
@@ -35,11 +43,32 @@ export const DEFAULT_LEVELING = Object.freeze({
   stackRewards: true,
   noXpChannelIds: [],
   noXpRoleIds: [],
+  voiceXp: false,
+  boosterMultiplier: 1,
+  roleMultipliers: [],
 });
 
 const isId = (value) => typeof value === "string" && /^\d{17,20}$/.test(value);
 const idList = (value, max) => (Array.isArray(value) ? [...new Set(value.filter(isId))].slice(0, max) : []);
 const isLevel = (value) => Number.isInteger(value) && value >= 1 && value <= MAX_LEVEL;
+// Boosts go in steps of 0.1, from 1 (none) to 5.
+export const isMultiplier = (value) =>
+  typeof value === "number" && value >= MIN_MULTIPLIER && value <= MAX_MULTIPLIER && Math.abs(value * 10 - Math.round(value * 10)) < 1e-9;
+const roundMultiplier = (value) => Math.round(value * 10) / 10;
+
+// Role boosts above 1, one per role, highest first.
+export function cleanRoleMultipliers(list) {
+  if (!Array.isArray(list)) {
+    return [];
+  }
+  const byRole = new Map();
+  for (const entry of list) {
+    if (entry && isId(entry.roleId) && isMultiplier(entry.multiplier) && entry.multiplier > 1 && !byRole.has(entry.roleId)) {
+      byRole.set(entry.roleId, { roleId: entry.roleId, multiplier: roundMultiplier(entry.multiplier) });
+    }
+  }
+  return [...byRole.values()].sort((a, b) => b.multiplier - a.multiplier).slice(0, MAX_ROLE_MULTIPLIERS);
+}
 
 // Rewards sorted by level, one role per level and each role once.
 export function cleanRewards(rewards) {
@@ -69,7 +98,22 @@ export function normalizeLeveling(saved) {
     stackRewards: value.stackRewards !== false,
     noXpChannelIds: idList(value.noXpChannelIds, MAX_NO_XP_CHANNELS),
     noXpRoleIds: idList(value.noXpRoleIds, MAX_NO_XP_ROLES),
+    voiceXp: value.voiceXp === true,
+    boosterMultiplier: isMultiplier(value.boosterMultiplier) ? roundMultiplier(value.boosterMultiplier) : 1,
+    roleMultipliers: cleanRoleMultipliers(value.roleMultipliers),
   };
+}
+
+// The XP boost for a member: the highest of the booster boost (when they boost
+// the server) and their roles' boosts. 1 means none.
+export function multiplierFor(config, member) {
+  let best = member?.premiumSince ? config.boosterMultiplier : 1;
+  for (const { roleId, multiplier } of config.roleMultipliers) {
+    if (multiplier > best && member?.roles?.cache?.has(roleId)) {
+      best = multiplier;
+    }
+  }
+  return best;
 }
 
 export class InvalidLeveling extends Error {
@@ -118,6 +162,24 @@ export function checkLeveling(value, { isRole, isRewardRole, isChannel }) {
     if (!Array.isArray(list) || list.length > max || !list.every(check)) {
       throw new InvalidLeveling(`Pick at most ${max} ${what} from this server that earn no XP.`);
     }
+  }
+  if (value.voiceXp !== undefined && typeof value.voiceXp !== "boolean") {
+    throw new InvalidLeveling("Voice XP needs on or off.");
+  }
+  if (value.boosterMultiplier !== undefined && !isMultiplier(value.boosterMultiplier)) {
+    throw new InvalidLeveling(`XP boosts go from ${MIN_MULTIPLIER} to ${MAX_MULTIPLIER}, in steps of 0.1.`);
+  }
+  const boosts = value.roleMultipliers ?? [];
+  if (!Array.isArray(boosts) || boosts.length > MAX_ROLE_MULTIPLIERS) {
+    throw new InvalidLeveling(`Add at most ${MAX_ROLE_MULTIPLIERS} role XP boosts.`);
+  }
+  for (const boost of boosts) {
+    if (!isRole(boost?.roleId) || !isMultiplier(boost.multiplier) || boost.multiplier <= 1) {
+      throw new InvalidLeveling(`Each role XP boost needs a role from this server and a boost above 1, up to ${MAX_MULTIPLIER}.`);
+    }
+  }
+  if (new Set(boosts.map((boost) => boost.roleId)).size !== boosts.length) {
+    throw new InvalidLeveling("Use each role once in XP boosts.");
   }
   return normalizeLeveling({
     ...value,

@@ -862,5 +862,20 @@
   "birthdayNeedsChannelOrRole": "اختر قناة للتهاني أو رتبة عيد الميلاد أو كليهما.",
   "birthdaySetupDone": "أعياد الميلاد مفعّلة. التهاني: {channel} · الرتبة: {role} · المنطقة الزمنية: {timezone}.",
   "birthdayAlreadyOff": "تهاني أعياد الميلاد متوقفة أصلًا.",
-  "birthdayOffDone": "تهاني ورتبة أعياد الميلاد متوقفة. أعياد الميلاد المحفوظة باقية."
+  "birthdayOffDone": "تهاني ورتبة أعياد الميلاد متوقفة. أعياد الميلاد المحفوظة باقية.",
+
+  "levelsVoiceDescription": "شغّل أو أوقف الخبرة مقابل الوقت في القنوات الصوتية.",
+  "levelsVoiceEnabledOptionDescription": "اكسب خبرة في الصوت (10 كل دقيقة، مع شخص آخر، دون كتم السماع).",
+  "levelsBoostDescription": "امنح داعمي الخادم أو رتبة خبرة أكثر. القيمة 1 تزيل المضاعفة.",
+  "levelsMultiplierOptionDescription": "مقدار الخبرة الإضافية: 1.5 تعني النصف زيادة، حتى 5.",
+  "levelsBoostRoleOptionDescription": "الرتبة المضاعفة (الافتراضي: داعمو الخادم).",
+  "levelsVoiceOn": "🎙️ خبرة الصوت مفعّلة: يكسب الأعضاء 10 خبرة كل دقيقة في الصوت مع شخص آخر، إلا إذا كتموا السماع أو كانوا في قناة AFK.",
+  "levelsVoiceOff": "خبرة الصوت متوقفة.",
+  "levelsBoostBadStep": "استخدم مضاعفة من {min} إلى {max} بخطوات 0.1، مثل 1.5 أو 2.",
+  "levelsBoostBoosterSet": "💎 داعمو الخادم يكسبون الآن ×{multiplier} خبرة.",
+  "levelsBoostBoosterOff": "داعمو الخادم يكسبون الخبرة العادية من جديد.",
+  "levelsBoostRoleSet": "{role} تكسب الآن ×{multiplier} خبرة. كل عضو يحصل على أعلى مضاعفة له؛ ولا تتضاعف معًا.",
+  "levelsBoostRoleOff": "{role} تكسب الخبرة العادية من جديد.",
+  "levelsBoostTooMany": "يمكنك مضاعفة {max} رتب على الأكثر. أزل واحدة أولًا (اجعلها 1).",
+  "levelsShowExtras": "**خبرة الصوت:** {voice}\n**مضاعفة الداعمين:** {booster}\n**مضاعفات الرتب:** {roles}"
 }

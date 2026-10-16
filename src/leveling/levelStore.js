@@ -33,6 +33,11 @@ export class LevelStore {
           xp = xp + excluded.xp, messages = messages + 1, last_xp_at = excluded.last_xp_at, user_tag = excluded.user_tag
         WHERE member_xp.last_xp_at <= :cutoff
         RETURNING xp`),
+      // Adds XP without the message cooldown or count (voice XP).
+      add: db.prepare(`
+        INSERT INTO member_xp (guild_id, user_id, user_tag, xp) VALUES (:guildId, :userId, :userTag, :amount)
+        ON CONFLICT (guild_id, user_id) DO UPDATE SET xp = xp + excluded.xp, user_tag = COALESCE(excluded.user_tag, user_tag)
+        RETURNING xp`),
       set: db.prepare(`
         INSERT INTO member_xp (guild_id, user_id, user_tag, xp) VALUES (?, ?, ?, ?)
         ON CONFLICT (guild_id, user_id) DO UPDATE SET xp = excluded.xp, user_tag = COALESCE(excluded.user_tag, user_tag)`),
@@ -55,6 +60,12 @@ export class LevelStore {
       return undefined;
     }
     const after = Number(row.xp);
+    return { before: after - amount, after };
+  }
+
+  // Gives the member `amount` XP, with no cooldown. Returns { before, after } XP.
+  addXp({ guildId, userId, userTag = null, amount }) {
+    const after = Number(this.#statements.add.get({ guildId, userId, userTag, amount }).xp);
     return { before: after - amount, after };
   }
 

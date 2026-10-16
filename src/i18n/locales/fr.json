@@ -862,5 +862,20 @@
   "birthdayNeedsChannelOrRole": "Choisis un salon pour les messages, un rôle d'anniversaire, ou les deux.",
   "birthdaySetupDone": "Les anniversaires sont activés. Messages : {channel} · Rôle : {role} · Fuseau : {timezone}.",
   "birthdayAlreadyOff": "Les messages d'anniversaire sont déjà désactivés.",
-  "birthdayOffDone": "Les messages et le rôle d'anniversaire sont désactivés. Les anniversaires enregistrés sont conservés."
+  "birthdayOffDone": "Les messages et le rôle d'anniversaire sont désactivés. Les anniversaires enregistrés sont conservés.",
+
+  "levelsVoiceDescription": "Active ou désactive l'XP pour le temps passé en vocal.",
+  "levelsVoiceEnabledOptionDescription": "Gagner de l'XP en vocal (10 par minute, avec quelqu'un, sans être en sourdine).",
+  "levelsBoostDescription": "Donne plus d'XP aux boosters du serveur ou à un rôle. 1 retire le bonus.",
+  "levelsMultiplierOptionDescription": "Combien d'XP en plus : 1.5 donne moitié plus, jusqu'à 5.",
+  "levelsBoostRoleOptionDescription": "Le rôle à booster (par défaut : les boosters du serveur).",
+  "levelsVoiceOn": "🎙️ L'XP vocale est activée : les membres gagnent 10 XP par minute en vocal avec quelqu'un, sauf en sourdine ou dans le salon AFK.",
+  "levelsVoiceOff": "L'XP vocale est désactivée.",
+  "levelsBoostBadStep": "Utilise un bonus de {min} à {max} par pas de 0.1, comme 1.5 ou 2.",
+  "levelsBoostBoosterSet": "💎 Les boosters du serveur gagnent maintenant ×{multiplier} XP.",
+  "levelsBoostBoosterOff": "Les boosters du serveur gagnent de nouveau l'XP normale.",
+  "levelsBoostRoleSet": "{role} gagne maintenant ×{multiplier} XP. Chaque membre a son plus grand bonus ; ils ne se multiplient pas.",
+  "levelsBoostRoleOff": "{role} gagne de nouveau l'XP normale.",
+  "levelsBoostTooMany": "Tu peux booster au plus {max} rôles. Retires-en un d'abord (mets-le à 1).",
+  "levelsShowExtras": "**XP vocale :** {voice}\n**Bonus booster :** {booster}\n**Bonus de rôles :** {roles}"
 }

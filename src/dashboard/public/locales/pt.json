@@ -452,5 +452,14 @@
   "birthdayTimezone": "Fuso horário",
   "birthdayTimezoneHelp": "Quando o dia começa, como America/Sao_Paulo ou Europe/Lisbon.",
   "birthdayMessage": "Mensagem",
-  "birthdayMessageHelp": "{user} é o membro (vários no mesmo dia aparecem juntos), {server} o servidor. Vazio para o texto padrão."
+  "birthdayMessageHelp": "{user} é o membro (vários no mesmo dia aparecem juntos), {server} o servidor. Vazio para o texto padrão.",
+  "levelsExtrasTitle": "XP de voz e bônus",
+  "levelsVoice": "XP de voz",
+  "levelsVoiceHelp": "10 XP por minuto na voz com pelo menos mais uma pessoa, a não ser que esteja ensurdecido ou no canal AFK. Canais e cargos sem XP também valem aqui.",
+  "levelsBooster": "Bônus de quem impulsiona",
+  "levelsBoosterHelp": "Multiplicador de XP para quem impulsiona o servidor, de 1 (nenhum) a 5.",
+  "levelsBoostsHelp": "Cargos que ganham mais XP. Cada membro recebe seu maior bônus (impulso ou cargo); eles não se multiplicam.",
+  "levelsBoostsNone": "Nenhum bônus de cargo.",
+  "levelsBoostMultiplier": "Multiplicador",
+  "levelsBoostAdd": "+ Adicionar bônus"
 }
