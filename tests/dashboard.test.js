@@ -505,6 +505,17 @@ describe("dashboard helpers", () => {
     expect(() => checkSettingChanges([], server)).toThrow(InvalidSetting);
   });
 
+  it("checks the starboard settings", () => {
+    const server = { guildId: GUILD_ID, roles: [], channels: [{ id: TEXT_ID, type: ChannelType.GuildText }] };
+    expect(checkSettingChanges({ starboard: { channelId: TEXT_ID, threshold: 5, emoji: " ⭐ ", extra: 1 } }, server)).toEqual({
+      starboard: { channelId: TEXT_ID, threshold: 5, emoji: "⭐" },
+    });
+    expect(checkSettingChanges({ starboard: null }, server)).toEqual({ starboard: null });
+    expect(() => checkSettingChanges({ starboard: { channelId: "1", threshold: 3, emoji: "⭐" } }, server)).toThrow(InvalidSetting);
+    expect(() => checkSettingChanges({ starboard: { channelId: TEXT_ID, threshold: 0, emoji: "⭐" } }, server)).toThrow(InvalidSetting);
+    expect(() => checkSettingChanges({ starboard: { channelId: TEXT_ID, threshold: 3, emoji: "star" } }, server)).toThrow(InvalidSetting);
+  });
+
   it("reads the dashboard settings from the environment", () => {
     const env = {
       DISCORD_TOKEN: config.token,

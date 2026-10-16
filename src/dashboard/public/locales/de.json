@@ -282,5 +282,13 @@
   "tagName": "Name",
   "tagNamePlaceholder": "download",
   "tagContent": "Text",
-  "tagContentPlaceholder": "Was /tag postet (bis zu 2000 Zeichen)"
+  "tagContentPlaceholder": "Was /tag postet (bis zu 2000 Zeichen)",
+  "sectionStarboard": "Starboard",
+  "starboardHelp": "Wenn eine Nachricht genug Sterne bekommt, postet der Bot sie mit einem Link im Starboard-Kanal erneut. Der eigene Stern des Autors und Bots zählen nicht.",
+  "starboardChannel": "Starboard-Kanal",
+  "starboardChannelHelp": "Aus schaltet das Starboard aus. Nachrichten aus Kanälen, die nicht alle sehen, kommen nie auf ein öffentliches Starboard.",
+  "starboardThreshold": "Nötige Sterne",
+  "starboardThresholdHelp": "Von 1 bis 50.",
+  "starboardEmoji": "Stern-Emoji",
+  "starboardEmojiHelp": "Standardmäßig ⭐. Ein eigenes Emoji sieht so aus: <:name:123…>."
 }

@@ -14,6 +14,7 @@ import { createPurgeCommand } from "./purge.js";
 import { createRemindCommand } from "./remind.js";
 import { createRolePanelCommand } from "./rolePanel.js";
 import { createSettingsCommand } from "./settings.js";
+import { createStarboardCommand } from "./starboard.js";
 import { createTagCommands } from "./tags.js";
 import { createWelcomeCommand } from "./welcome.js";
 
@@ -56,6 +57,7 @@ export function createCommands({
     ...createTagCommands({ guildSettings, forcedLanguage }),
     createRemindCommand({ reminders, forcedLanguage }),
     createGiveawayCommand({ giveaways, guildSettings, logger, forcedLanguage }),
+    createStarboardCommand({ guildSettings, forcedLanguage }),
   ];
   return new Map(commands.map((command) => [command.name, command]));
 }

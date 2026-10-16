@@ -282,5 +282,13 @@
   "tagName": "الاسم",
   "tagNamePlaceholder": "download",
   "tagContent": "النص",
-  "tagContentPlaceholder": "ما ينشره /tag (حتى 2000 حرف)"
+  "tagContentPlaceholder": "ما ينشره /tag (حتى 2000 حرف)",
+  "sectionStarboard": "لوحة النجوم",
+  "starboardHelp": "عندما تنال رسالة نجومًا كافية، يعيد البوت نشرها في قناة لوحة النجوم مع رابط إليها. لا تُحسب نجمة صاحب الرسالة ولا البوتات.",
+  "starboardChannel": "قناة لوحة النجوم",
+  "starboardChannelHelp": "اختيار «متوقف» يوقف لوحة النجوم. رسائل القنوات التي لا يراها الجميع لا تُنشر أبدًا على لوحة نجوم عامة.",
+  "starboardThreshold": "النجوم المطلوبة",
+  "starboardThresholdHelp": "من 1 إلى 50.",
+  "starboardEmoji": "رمز النجمة",
+  "starboardEmojiHelp": "⭐ افتراضيًا. يبدو الرمز المخصص هكذا: <:name:123…>."
 }

@@ -282,5 +282,13 @@
   "tagName": "Name",
   "tagNamePlaceholder": "download",
   "tagContent": "Text",
-  "tagContentPlaceholder": "What /tag posts (up to 2000 characters)"
+  "tagContentPlaceholder": "What /tag posts (up to 2000 characters)",
+  "sectionStarboard": "Starboard",
+  "starboardHelp": "When a message gets enough stars, the bot reposts it in the starboard channel with a link back. The author's own star and bots don't count.",
+  "starboardChannel": "Starboard channel",
+  "starboardChannelHelp": "Off turns the starboard off. Messages from channels everyone can't see never go on a public starboard.",
+  "starboardThreshold": "Stars needed",
+  "starboardThresholdHelp": "From 1 to 50.",
+  "starboardEmoji": "Star emoji",
+  "starboardEmojiHelp": "⭐ by default. A custom emoji looks like <:name:123…>."
 }

@@ -108,6 +108,18 @@ const MIGRATIONS = [
     PRIMARY KEY (giveaway_id, user_id)
   ) WITHOUT ROWID;
   `,
+  // 6: the starboard (/starboard): which messages are on it, and where.
+  `
+  CREATE TABLE starboard_posts (
+    message_id      TEXT    PRIMARY KEY,
+    guild_id        TEXT    NOT NULL,
+    channel_id      TEXT    NOT NULL,
+    star_message_id TEXT,
+    stars           INTEGER NOT NULL DEFAULT 0,
+    removed         INTEGER NOT NULL DEFAULT 0
+  ) WITHOUT ROWID;
+  CREATE INDEX starboard_by_star_message ON starboard_posts (star_message_id);
+  `,
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS.length;

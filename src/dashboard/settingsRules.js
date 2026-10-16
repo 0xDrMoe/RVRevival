@@ -4,6 +4,8 @@
 
 import { ChannelType } from "discord.js";
 import { activeRules, checkAutomod, InvalidAutomod, normalizeAutomod, RULE_LABELS } from "../automod/config.js";
+import { cleanEmoji } from "../community/rolePanels.js";
+import { MAX_THRESHOLD, MIN_THRESHOLD } from "../community/starboard.js";
 import { cleanTagContent, cleanTagName, MAX_TAG_LENGTH, MAX_TAGS, sortTags } from "../community/tags.js";
 import { MAX_AUTOROLES, MAX_MESSAGE_LENGTH } from "../community/welcome.js";
 import { LogEvent } from "../logs/serverLog.js";
@@ -50,6 +52,7 @@ export const SETTING_RULES = Object.freeze({
   [Setting.WELCOME_DM]: { kind: "text", label: "Welcome DM" },
   [Setting.AUTOROLES]: { kind: "autoroles", label: "Autoroles" },
   [Setting.TAGS]: { kind: "tags", label: "Custom commands" },
+  [Setting.STARBOARD]: { kind: "starboard", types: POSTING_CHANNELS, label: "Starboard" },
 });
 
 // Checks one value. Returns what to save: null clears the setting, and empty
@@ -147,6 +150,19 @@ function checkValue(setting, value, { guildId, channels, roles }) {
       }
       return tags.length > 0 ? sortTags(tags) : null;
     }
+    case "starboard": {
+      if (typeof value !== "object" || Array.isArray(value) || !channelOk(value.channelId, rule.types)) {
+        throw new InvalidSetting(setting, "Pick a text or announcement channel from this server for the starboard.");
+      }
+      if (!Number.isInteger(value.threshold) || value.threshold < MIN_THRESHOLD || value.threshold > MAX_THRESHOLD) {
+        throw new InvalidSetting(setting, `The starboard needs ${MIN_THRESHOLD} to ${MAX_THRESHOLD} stars.`);
+      }
+      const emoji = cleanEmoji(value.emoji);
+      if (!emoji) {
+        throw new InvalidSetting(setting, "Use one emoji for the starboard, like ⭐ or a custom emoji from this server.");
+      }
+      return { channelId: value.channelId, threshold: value.threshold, emoji };
+    }
     case "automod":
       try {
         return checkAutomod(value, {
@@ -189,6 +205,8 @@ export function describeValue(setting, value) {
       return value.map((id) => `<@&${id}>`).join(", ");
     case "tags":
       return value.map((tag) => `\`${tag.name}\``).join(", ");
+    case "starboard":
+      return `<#${value.channelId}> · ${value.emoji} ${value.threshold}`;
     case "text":
       return `"${value.length > 80 ? `${value.slice(0, 80)}…` : value}"`.replace(/\n/g, " ");
     case "automod": {

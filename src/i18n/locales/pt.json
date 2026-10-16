@@ -579,5 +579,21 @@
   "giveawayEndedButton": "Encerrado",
   "giveawayWon": "🎉 Parabéns {winners}! Você ganhou **{prize}**.",
   "giveawayNoEntries": "O sorteio de **{prize}** terminou, mas ninguém pôde ser escolhido como vencedor.",
-  "giveawayRerollWon": "🎉 Novo(s) vencedor(es) de **{prize}**: {winners}. Parabéns!"
+  "giveawayRerollWon": "🎉 Novo(s) vencedor(es) de **{prize}**: {winners}. Parabéns!",
+
+  "starboardCommandDescription": "Configure o starboard: mensagens com estrelas suficientes são republicadas num canal.",
+  "starboardSetDescription": "Ativar o starboard, ou mudar o canal, o número de estrelas ou o emoji.",
+  "starboardChannelOptionDescription": "Onde as mensagens com estrelas são republicadas.",
+  "starboardThresholdOptionDescription": "Quantas estrelas uma mensagem precisa (3 por padrão).",
+  "starboardEmojiOptionDescription": "O emoji que conta como estrela (⭐ por padrão).",
+  "starboardOffDescription": "Desativar o starboard.",
+  "starboardShowDescription": "Ver as configurações do starboard.",
+  "starboardSet": "O starboard está ativado: mensagens com {threshold} {emoji} vão para {channel}. A estrela do próprio autor e os bots não contam.",
+  "starboardOff": "O starboard está desativado. As publicações que já estão nele ficam.",
+  "starboardShow": "Starboard: {channel}, são necessárias {threshold} {emoji}.",
+  "starboardShowOff": "O starboard está desativado. Ative-o com `/starboard set`.",
+  "starboardBadEmoji": "Não consigo usar esse emoji. Use um emoji, como ⭐ ou um emoji personalizado deste servidor.",
+  "starboardCannotPost": "Não consigo publicar em {channel}. Preciso de Ver canal, Enviar mensagens e Inserir links lá.",
+  "starboardJump": "Ir para a mensagem",
+  "starboardAttachments": "Anexos"
 }

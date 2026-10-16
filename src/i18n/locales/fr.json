@@ -579,5 +579,21 @@
   "giveawayEndedButton": "Terminé",
   "giveawayWon": "🎉 Félicitations {winners} ! Vous avez gagné **{prize}**.",
   "giveawayNoEntries": "Le concours pour **{prize}** est terminé, mais personne n'a pu être tiré au sort.",
-  "giveawayRerollWon": "🎉 Nouveau(x) gagnant(s) pour **{prize}** : {winners}. Félicitations !"
+  "giveawayRerollWon": "🎉 Nouveau(x) gagnant(s) pour **{prize}** : {winners}. Félicitations !",
+
+  "starboardCommandDescription": "Configurer le starboard : les messages avec assez d'étoiles sont republiés dans un salon.",
+  "starboardSetDescription": "Activer le starboard, ou changer son salon, son nombre d'étoiles ou son emoji.",
+  "starboardChannelOptionDescription": "Où les messages étoilés sont republiés.",
+  "starboardThresholdOptionDescription": "Nombre d'étoiles nécessaires (3 par défaut).",
+  "starboardEmojiOptionDescription": "L'emoji qui compte comme une étoile (⭐ par défaut).",
+  "starboardOffDescription": "Désactiver le starboard.",
+  "starboardShowDescription": "Voir les réglages du starboard.",
+  "starboardSet": "Le starboard est activé : les messages avec {threshold} {emoji} vont dans {channel}. L'étoile de l'auteur et celles des bots ne comptent pas.",
+  "starboardOff": "Le starboard est désactivé. Les publications déjà dessus restent.",
+  "starboardShow": "Starboard : {channel}, {threshold} {emoji} nécessaires.",
+  "starboardShowOff": "Le starboard est désactivé. Activez-le avec `/starboard set`.",
+  "starboardBadEmoji": "Je ne peux pas utiliser cet emoji. Utilisez un seul emoji, comme ⭐ ou un emoji personnalisé de ce serveur.",
+  "starboardCannotPost": "Je ne peux pas publier dans {channel}. J'ai besoin de Voir le salon, Envoyer des messages et Intégrer des liens.",
+  "starboardJump": "Aller au message",
+  "starboardAttachments": "Pièces jointes"
 }

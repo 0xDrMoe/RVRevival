@@ -41,6 +41,7 @@ export const Setting = Object.freeze({
   AUTOROLES: "autoroleIds", // roles given to every new member, a list of IDs
   ROLE_PANELS: "rolePanels", // button role panels, a list of objects (see community/rolePanels.js)
   TAGS: "tags", // custom commands for /tag, a list of { name, content } (see community/tags.js)
+  STARBOARD: "starboard", // the starboard, { channelId, threshold, emoji } (see community/starboard.js)
 });
 
 const KNOWN_SETTINGS = new Set(Object.values(Setting));
