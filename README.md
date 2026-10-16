@@ -23,6 +23,7 @@ The Discord bot for the Rumbleverse Revival server. It is built as a set of inde
 | [Starboard](#starboard) | `/starboard`, or the dashboard's Starboard page | Manage Server (everyone stars messages) |
 | [Support tickets](#support-tickets) | `/tickets` | Manage Server (`panel`, `off`), ticket staff (the rest); members click Open a ticket |
 | [Raid protection](#raid-protection) | `/raid`, or the dashboard's Raid protection page | Manage Channels or the mod role (`lockdown`, `end`, `status`), Manage Server (`gate`, `gate-off`, `alert`) |
+| [Anti-nuke](#anti-nuke) | `/antinuke`, or the dashboard's Anti-nuke page | The server owner (`status`: Administrator) |
 | [Join-to-create voice](#join-to-create-voice) | `/voice` | Manage Server (`setup`, `off`), the channel's owner (`lock`, `unlock`), anyone in the channel (`claim`) |
 | [Leveling](#leveling) | `/rank`, `/leaderboard`, `/levels`, or the dashboard's Leveling page | Everyone (`/rank`, `/leaderboard`), Manage Server (`/levels`) |
 | [Country roles](#country-roles) | `/country`, `/country-staff`, `/country-help` | Everyone (`/country`), the staff role (`/country-staff`), Manage Server (`/country-help`) |
@@ -291,6 +292,29 @@ Discord has no built-in way to give each group its own voice channel, so the bot
 
 The bot needs **View Channel**, **Manage Channels**, **Manage Roles**, **Move Members** and **Connect** in the category. It uses the Guild Voice States intent, which isn't privileged.
 
+### Anti-nuke
+
+Stops someone with staff permissions, or a hacked bot, from wrecking the server. When one person goes over a limit in a minute, the bot steps in at once: it takes away every role it can (bots are kicked instead, since their own role can't be removed), or kicks or bans them if you chose that. It posts what happened in the mod log and DMs the server owner.
+
+| Watched | Default limit per minute |
+| --- | --- |
+| Channels deleted | 3 |
+| Channels created | 6 |
+| Roles deleted | 3 |
+| Bans | 8 |
+| Kicks | 8 |
+| Webhooks created | 3 |
+
+- `/antinuke on` / `off` turns it on or off (off by default).
+- `/antinuke limit action count` sets a limit (2 to 50 a minute).
+- `/antinuke punishment type` picks take their roles, kick or ban.
+- `/antinuke trust user` / `untrust user` lets a co-owner or a trusted bot go over the limits (up to 25).
+- `/antinuke status` shows all of the above.
+
+Only the **server owner** can change anti-nuke, on Discord or on the dashboard's **Anti-nuke** page, because trusted people can do anything; Administrators can see the status. The owner and this bot are never limited. Bans and kicks done through the bot's own commands count against the moderator who ran them.
+
+Who did what comes from the audit log, so the bot needs **View Audit Log**. Its role must be above the roles it should take away: put it near the top of the role list. Anti-nuke doesn't rebuild deleted channels or roles.
+
 ### Leveling
 
 Members earn XP for chatting and level up; reward roles are given automatically. Leveling is **off** until an admin turns it on with `/levels on` or on the dashboard's **Leveling** page.
@@ -348,6 +372,7 @@ A website where admins log in with Discord and manage the bot without slash comm
 - **Members:** find someone by the start of their username or nickname, or paste a user ID to find someone who left. Each person's page shows when their account was made (flagged if under 7 days old), when they joined, how many times they joined, their roles, a timeout or temporary ban in progress, Discord's ban reason if they're banned, every case as a timeline, their support tickets (with links to the threads), their level and leaderboard place, and their recent joins and leaves (the bot keeps the newest 50 per person). Each case in **Cases** has a *History* link to it.
 - **Tickets:** every support ticket, newest first, filtered by open or closed and by member ID. Each ticket shows who opened and closed it, the reason, a link to its thread, and its transcript (also as a `.txt` download).
 - **Automod:** the main switch, each rule with its action and numbers, banned words and allowed websites (one per line), timeout length and escalation, and exempt roles and channels (see [Automod](#automod)).
+- **Anti-nuke:** the main switch, what happens to someone who goes over a limit, each limit, and trusted people. Only the server owner can change it (see [Anti-nuke](#anti-nuke)).
 - **Raid protection:** the new-account gate, join-wave alerts, and a running lockdown (see [Raid protection](#raid-protection)).
 - **Welcome & leave:** the welcome and leave channels and messages (empty boxes show the default) and the welcome DM.
 - **Autoroles:** roles given on joining, and the server's role panels (read-only; change them with `/rolepanel`). Community servers get a tip recommending Discord's Onboarding.

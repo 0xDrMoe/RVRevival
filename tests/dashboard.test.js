@@ -784,6 +784,33 @@ describe("dashboard", () => {
     expect(guildSettings.get(GUILD_ID, Setting.JOIN_GATE)).toBeUndefined();
   });
 
+  it("lets only the server owner change anti-nuke", async () => {
+    const MOD_ID = "300000000000000077";
+    const cookies = await login();
+    const antiNuke = {
+      enabled: true,
+      punishment: "strip",
+      limits: { channelDelete: 3, channelCreate: 6, roleDelete: 3, ban: 8, kick: 8, webhookCreate: 3 },
+      trustedUserIds: [MOD_ID],
+    };
+    const refused = await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, { antiNuke });
+    expect(refused.statusCode).toBe(403);
+    expect(refused.json()).toMatchObject({ error: "owner-only", setting: "antiNuke" });
+    // Sending it back unchanged (the page saves every field) is fine.
+    const unchanged = await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, {
+      antiNuke: { ...antiNuke, enabled: false, trustedUserIds: [] },
+    });
+    expect(unchanged.statusCode).toBe(200);
+
+    const base = discord.guild.getMockImplementation();
+    discord.guild.mockImplementation(async (id) => ({ ...(await base(id)), owner_id: USER_ID }));
+    const saved = await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, { antiNuke });
+    expect(saved.statusCode).toBe(200);
+    expect(guildSettings.get(GUILD_ID, Setting.ANTI_NUKE)).toEqual(antiNuke);
+    const page = await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}`, cookies });
+    expect(page.json()).toMatchObject({ isOwner: true, settings: { antiNuke }, people: { [MOD_ID]: null } });
+  });
+
   it("logs out and forgets the session", async () => {
     const cookies = await login();
     expect((await write(cookies, "POST", "/auth/logout")).statusCode).toBe(200);

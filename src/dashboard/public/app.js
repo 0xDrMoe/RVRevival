@@ -8,6 +8,7 @@
 //   #/g/<id>/members       find a member (?q=), or one member's history (?user=)
 //   #/g/<id>/tickets       support tickets (?status=&user=), or one ticket's transcript (?ticket=)
 //   #/g/<id>/automod       automod rules, punishments and exemptions
+//   #/g/<id>/antinuke      anti-nuke limits, punishment and trusted people (owner only)
 //   #/g/<id>/raid          the new-account gate, join alerts and a running lockdown
 //   #/g/<id>/welcome       welcome and leave messages
 //   #/g/<id>/roles         autoroles and role panels
@@ -112,6 +113,7 @@ const NAV = [
     group: "protection",
     pages: [
       { id: "automod", icon: "bot", tone: "blue", manage: true, on: (s) => Boolean(s.automod?.enabled) },
+      { id: "antinuke", icon: "shieldCheck", tone: "purple", manage: true, on: (s) => Boolean(s.antiNuke?.enabled) },
       { id: "raid", icon: "shield", tone: "red", manage: true, on: (s) => Boolean(s.joinGate?.minAgeDays || s.joinGate?.alertJoins) },
     ],
   },
@@ -1316,6 +1318,118 @@ async function showRaid(guildId) {
     ],
     fields: { joinGate: readJoinGate },
   });
+}
+
+// --- Anti-nuke ------------------------------------------------------------------
+
+const NUKE_ACTIONS = ["channelDelete", "channelCreate", "roleDelete", "ban", "kick", "webhookCreate"];
+const NUKE_ACTION_ICONS = { channelDelete: "hash", channelCreate: "plus", roleDelete: "layers", ban: "gavel", kick: "userX", webhookCreate: "zap" };
+const MAX_TRUSTED = 25;
+
+// One trusted person: their user ID and, once known, their name.
+function trustedRow(userId, names, onRemove) {
+  const name = h("span", { class: "muted trusted-name" }, userId && names[userId] ? names[userId] : "");
+  const row = h(
+    "div",
+    { class: "reward-row" },
+    icon("user"),
+    h("input", {
+      class: "trusted-id grow",
+      type: "text",
+      inputmode: "numeric",
+      pattern: "\\d{17,20}",
+      required: true,
+      placeholder: t("antinukeUserId"),
+      value: userId ?? "",
+      "aria-label": t("antinukeUserId"),
+    }),
+    name,
+    h("button", { class: "ghost small", type: "button", onclick: () => onRemove(row) }, t("tagRemove")),
+  );
+  return row;
+}
+
+function readAntiNuke(form) {
+  const number = (action) => Number(form.querySelector(`[data-limit="${action}"]`).value);
+  return {
+    enabled: form.querySelector("#antinukeEnabled").checked,
+    punishment: form.querySelector("#antinukePunishment").value,
+    limits: Object.fromEntries(NUKE_ACTIONS.map((action) => [action, number(action)])),
+    trustedUserIds: [...new Set([...form.querySelectorAll(".trusted-id")].map((input) => input.value.trim()).filter(Boolean))],
+  };
+}
+
+async function showAntiNuke(guildId) {
+  const data = await loadManagedGuild(guildId);
+  if (!data) {
+    return;
+  }
+  const config = data.settings.antiNuke;
+  const owner = data.isOwner;
+  const trusted = editableList({
+    items: config.trustedUserIds,
+    max: MAX_TRUSTED,
+    makeRow: (userId, remove) => trustedRow(userId, data.people ?? {}, remove),
+    focus: ".trusted-id",
+    emptyKey: "antinukeNoTrusted",
+    addKey: "antinukeAddTrusted",
+  });
+  const cards = [
+    owner ? null : h("p", { class: "tip" }, icon("lock"), h("span", {}, t("antinukeOwnerOnly"))),
+    card(
+      t("antinukeMaster"),
+      "shieldCheck",
+      "purple",
+      h(
+        "label",
+        { class: "switch-card" },
+        h("span", { class: "switch-text" }, h("strong", {}, t("antinukeMaster")), h("span", { class: "help" }, t("antinukeMasterHelp"))),
+        h("span", { class: "switch" }, h("input", { id: "antinukeEnabled", type: "checkbox", role: "switch", checked: config.enabled, "aria-label": t("antinukeMaster") })),
+      ),
+      field(
+        "antinukePunishment",
+        "antinukePunishmentHelp",
+        h(
+          "select",
+          { id: "antinukePunishment" },
+          ["strip", "kick", "ban"].map((value) => h("option", { value, selected: config.punishment === value }, t(`antinukePunishment_${value}`))),
+        ),
+      ),
+    ),
+    card(
+      t("antinukeLimits"),
+      "alert",
+      "red",
+      h("p", { class: "help" }, t("antinukeLimitsHelp")),
+      h(
+        "div",
+        { class: "limit-grid" },
+        NUKE_ACTIONS.map((action) =>
+          h(
+            "label",
+            { class: "limit" },
+            iconChip(NUKE_ACTION_ICONS[action], "red", "sm"),
+            h("span", { class: "grow" }, t(`antinukeAction_${action}`)),
+            h("input", { type: "number", min: 2, max: 50, step: 1, required: true, value: config.limits[action], "data-limit": action, "aria-label": t(`antinukeAction_${action}`) }),
+          ),
+        ),
+      ),
+    ),
+    card(
+      t("antinukeTrusted"),
+      "users",
+      "green",
+      h("div", { class: "toolbar" }, h("p", { class: "help grow" }, t("antinukeTrustedHelp")), trusted.count, trusted.addButton),
+      trusted.empty,
+      trusted.list,
+    ),
+  ];
+  settingsPage({ data, pageId: "antinuke", intro: t("antinukeIntro"), cards, fields: { antiNuke: readAntiNuke } });
+  if (!owner) {
+    document.querySelectorAll(".content form.settings :is(input, select, button)").forEach((control) => {
+      control.disabled = true;
+    });
+  }
 }
 
 async function showLogging(guildId) {
@@ -3654,6 +3768,7 @@ async function showActivity(guildId) {
 const SHOW_PAGE = {
   overview: showOverview,
   activity: showActivity,
+  antinuke: showAntiNuke,
   cases: showCases,
   members: showMembers,
   tickets: showTickets,
