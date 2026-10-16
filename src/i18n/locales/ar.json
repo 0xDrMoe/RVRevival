@@ -1068,5 +1068,14 @@
   "highlightList": "**كلماتك ({count}/{max}):** {list}",
   "highlightCleared": "أُزيلت كل كلماتك ({count}).",
   "highlightDm": "🔔 ذُكرت `{word}` في {channel} على **{server}**:",
-  "highlightJump": "اذهب إلى الرسالة"
+  "highlightJump": "اذهب إلى الرسالة",
+
+  "leaderboardPeriodOptionDescription": "منذ البداية، أو نقاط آخر 7 أو 30 يومًا فقط",
+  "leaderboardPeriod_all": "منذ البداية",
+  "leaderboardPeriod_week": "هذا الأسبوع (آخر 7 أيام)",
+  "leaderboardPeriod_month": "هذا الشهر (آخر 30 يومًا)",
+  "leaderboardEmptyPeriod": "لم يكسب أحد نقاطًا في هذه المدة. ابدأوا الدردشة!",
+  "leaderboardLinePeriod": "{place} {member} · +{gained} نقطة · المستوى {level}",
+  "leaderboardTitle_week": "🏆 {server} · هذا الأسبوع",
+  "leaderboardTitle_month": "🏆 {server} · هذا الشهر"
 }

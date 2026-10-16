@@ -3215,3 +3215,9 @@ dialog textarea {
     grid-auto-flow: column;
   }
 }
+
+/* Leaderboard periods */
+.board-head {
+  flex-wrap: wrap;
+  row-gap: 8px;
+}

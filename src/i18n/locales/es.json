@@ -1068,5 +1068,14 @@
   "highlightList": "**Tus palabras ({count}/{max}):** {list}",
   "highlightCleared": "Quitadas todas tus palabras ({count}).",
   "highlightDm": "🔔 Se mencionó `{word}` en {channel} en **{server}**:",
-  "highlightJump": "Ir al mensaje"
+  "highlightJump": "Ir al mensaje",
+
+  "leaderboardPeriodOptionDescription": "Desde siempre, o solo la XP de los últimos 7 o 30 días",
+  "leaderboardPeriod_all": "Desde siempre",
+  "leaderboardPeriod_week": "Esta semana (últimos 7 días)",
+  "leaderboardPeriod_month": "Este mes (últimos 30 días)",
+  "leaderboardEmptyPeriod": "Nadie ganó XP en ese tiempo. ¡A chatear!",
+  "leaderboardLinePeriod": "{place} {member} · +{gained} XP · Nivel {level}",
+  "leaderboardTitle_week": "🏆 {server} · esta semana",
+  "leaderboardTitle_month": "🏆 {server} · este mes"
 }

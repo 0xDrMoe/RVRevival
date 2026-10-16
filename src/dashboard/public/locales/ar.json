@@ -757,5 +757,12 @@
   "stickyRemoveConfirm": "إزالة هذه الرسالة المثبتة؟ ستُحذف آخر نسخة منها أيضًا.",
   "stickyNone": "لا توجد رسائل مثبتة بعد.",
   "stickyListHelp": "حتى 10 لكل خادم، واحدة لكل قناة.",
-  "stickyUpdated": "حُدّثت {date}"
+  "stickyUpdated": "حُدّثت {date}",
+  "levelsPeriod_all": "منذ البداية",
+  "levelsPeriod_week": "7 أيام",
+  "levelsPeriod_month": "30 يومًا",
+  "levelsBoardHelp_week": "كسب {count} عضوًا نقاطًا في آخر 7 أيام. يرى الأعضاء ذلك بـ /leaderboard period:هذا الأسبوع.",
+  "levelsBoardHelp_month": "كسب {count} عضوًا نقاطًا في آخر 30 يومًا. يرى الأعضاء ذلك بـ /leaderboard period:هذا الشهر.",
+  "levelsBoardEmptyPeriod": "لم يكسب أحد نقاطًا في هذه المدة.",
+  "levelsBoardGained": "+{gained} نقطة · {xp} نقطة إجمالًا"
 }

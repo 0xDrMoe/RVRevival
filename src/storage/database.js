@@ -355,6 +355,18 @@ const MIGRATIONS = [
     PRIMARY KEY (guild_id, user_id, word)
   ) WITHOUT ROWID;
   `,
+  // 24: XP earned per member per day (day = days since 1970-01-01, UTC), for
+  // the weekly and monthly leaderboards. Kept for KEEP_DAYS (leveling/levelStore.js).
+  `
+  CREATE TABLE xp_daily (
+    guild_id  TEXT    NOT NULL,
+    user_id   TEXT    NOT NULL,
+    day       INTEGER NOT NULL,
+    xp        INTEGER NOT NULL,
+    PRIMARY KEY (guild_id, user_id, day)
+  ) WITHOUT ROWID;
+  CREATE INDEX xp_daily_by_day ON xp_daily (guild_id, day);
+  `,
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS.length;

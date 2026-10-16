@@ -757,5 +757,12 @@
   "stickyRemoveConfirm": "Retirer ce message collant ? Sa dernière copie est aussi supprimée.",
   "stickyNone": "Aucun message collant pour l'instant.",
   "stickyListHelp": "Jusqu'à 10 par serveur, un par salon.",
-  "stickyUpdated": "Mis à jour {date}"
+  "stickyUpdated": "Mis à jour {date}",
+  "levelsPeriod_all": "Toujours",
+  "levelsPeriod_week": "7 jours",
+  "levelsPeriod_month": "30 jours",
+  "levelsBoardHelp_week": "{count} membres ont gagné de l'XP ces 7 derniers jours. Les membres le voient avec /leaderboard period:Cette semaine.",
+  "levelsBoardHelp_month": "{count} membres ont gagné de l'XP ces 30 derniers jours. Les membres le voient avec /leaderboard period:Ce mois-ci.",
+  "levelsBoardEmptyPeriod": "Personne n'a gagné d'XP sur cette période.",
+  "levelsBoardGained": "+{gained} XP · {xp} XP au total"
 }

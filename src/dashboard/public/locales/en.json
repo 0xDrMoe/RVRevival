@@ -757,5 +757,12 @@
   "stickyRemoveConfirm": "Remove this sticky message? Its last copy is deleted too.",
   "stickyNone": "No sticky messages yet.",
   "stickyListHelp": "Up to 10 per server, one per channel.",
-  "stickyUpdated": "Updated {date}"
+  "stickyUpdated": "Updated {date}",
+  "levelsPeriod_all": "All time",
+  "levelsPeriod_week": "7 days",
+  "levelsPeriod_month": "30 days",
+  "levelsBoardHelp_week": "{count} members earned XP in the last 7 days. Members see this with /leaderboard period:This week.",
+  "levelsBoardHelp_month": "{count} members earned XP in the last 30 days. Members see this with /leaderboard period:This month.",
+  "levelsBoardEmptyPeriod": "Nobody earned XP in this time.",
+  "levelsBoardGained": "+{gained} XP · {xp} XP in total"
 }

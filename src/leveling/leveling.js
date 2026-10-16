@@ -170,6 +170,7 @@ export function createLeveling({ guildSettings, store, logger, forcedLanguage, r
           userId: member.id,
           userTag: member.user?.username ?? null,
           amount: Math.round(VOICE_XP_PER_MINUTE * multiplierFor(config, member)),
+          now: now(),
         });
         awarded.push(member.id);
         await afterAward(award, member, channel, config);
@@ -181,7 +182,10 @@ export function createLeveling({ guildSettings, store, logger, forcedLanguage, r
   let voiceTimer;
   let voiceRunning = false;
 
-  // Gives voice XP every minute in every server that has it switched on.
+  let prunedDay;
+
+  // Gives voice XP every minute in every server that has it switched on, and
+  // once a day forgets daily XP the weekly and monthly boards no longer need.
   function startVoiceXp(client) {
     stopVoiceXp();
     voiceTimer = setInterval(async () => {
@@ -190,6 +194,11 @@ export function createLeveling({ guildSettings, store, logger, forcedLanguage, r
       }
       voiceRunning = true;
       try {
+        const today = Math.floor(now() / 86_400_000);
+        if (prunedDay !== today) {
+          prunedDay = today;
+          store.prune(now());
+        }
         for (const guild of client.guilds.cache.values()) {
           await awardVoice(guild).catch((error) => logger.error("Giving voice XP crashed", { guildId: guild.id, error }));
         }

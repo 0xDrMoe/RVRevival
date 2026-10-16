@@ -1068,5 +1068,14 @@
   "highlightList": "**Vos mots ({count}/{max}) :** {list}",
   "highlightCleared": "Tous vos mots ont été retirés ({count}).",
   "highlightDm": "🔔 `{word}` a été mentionné dans {channel} sur **{server}** :",
-  "highlightJump": "Aller au message"
+  "highlightJump": "Aller au message",
+
+  "leaderboardPeriodOptionDescription": "Depuis toujours, ou seulement l'XP des 7 ou 30 derniers jours",
+  "leaderboardPeriod_all": "Depuis toujours",
+  "leaderboardPeriod_week": "Cette semaine (7 derniers jours)",
+  "leaderboardPeriod_month": "Ce mois-ci (30 derniers jours)",
+  "leaderboardEmptyPeriod": "Personne n'a gagné d'XP sur cette période. À vos claviers !",
+  "leaderboardLinePeriod": "{place} {member} · +{gained} XP · Niveau {level}",
+  "leaderboardTitle_week": "🏆 {server} · cette semaine",
+  "leaderboardTitle_month": "🏆 {server} · ce mois-ci"
 }
