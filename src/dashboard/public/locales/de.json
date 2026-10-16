@@ -548,5 +548,9 @@
   "memberQuarantineReason": "Grund: {reason}",
   "sectionQuarantine": "Quarantäne",
   "quarantineRole": "Quarantänerolle",
-  "quarantineRoleHelp": "Bekommen Mitglieder, die mit /quarantine oder von Anti-Nuke in Quarantäne kommen, nachdem ihre Rollen weg sind. Am besten eine Rolle, die nur einen Kanal sieht."
+  "quarantineRoleHelp": "Bekommen Mitglieder, die mit /quarantine oder von Anti-Nuke in Quarantäne kommen, nachdem ihre Rollen weg sind. Am besten eine Rolle, die nur einen Kanal sieht.",
+  "sectionPersist": "Rollen beim Wiederkommen",
+  "persistEnabled": "Rollen zurückgeben, wenn Mitglieder wiederkommen",
+  "persistHelp": "Der Bot merkt sich die Rollen von Mitgliedern, die gehen, damit man eine Strafrolle nicht durch Verlassen loswird. Rollen mit Moderationsrechten, Bot-Rollen und Rollen über dem Bot werden nie automatisch zurückgegeben.",
+  "persistIgnoreHelp": "Rollen, die nie zurückgegeben werden:"
 }

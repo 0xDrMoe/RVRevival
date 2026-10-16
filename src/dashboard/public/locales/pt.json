@@ -548,5 +548,9 @@
   "memberQuarantineReason": "Motivo: {reason}",
   "sectionQuarantine": "Quarentena",
   "quarantineRole": "Cargo de quarentena",
-  "quarantineRoleHelp": "Dado a membros em quarentena com /quarantine ou pelo anti-nuke, depois que os cargos são retirados. Use um cargo que só vê um canal."
+  "quarantineRoleHelp": "Dado a membros em quarentena com /quarantine ou pelo anti-nuke, depois que os cargos são retirados. Use um cargo que só vê um canal.",
+  "sectionPersist": "Cargos ao voltar",
+  "persistEnabled": "Devolver os cargos quando um membro volta",
+  "persistHelp": "O bot lembra os cargos de quem sai, para que sair não tire um cargo restrito. Cargos com permissões de moderação, cargos de bot e cargos acima do bot nunca são devolvidos sozinhos.",
+  "persistIgnoreHelp": "Cargos nunca devolvidos:"
 }

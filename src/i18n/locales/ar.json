@@ -941,5 +941,12 @@
   "quarantineListMore": "…و{count} آخرون.",
   "quarantineRoleCleared": "لن يحصل أعضاء الحجر على رتبة؛ ستُسحب رتبهم فقط.",
   "quarantineRoleUnusable": "لا يمكنني إعطاء {role}: إنها رتبة بوت أو داعم، أو فوق رتبتي.",
-  "quarantineRoleSet": "سيحصل أعضاء الحجر على {role}. تأكد أنها لا ترى إلا القنوات المناسبة."
+  "quarantineRoleSet": "سيحصل أعضاء الحجر على {role}. تأكد أنها لا ترى إلا القنوات المناسبة.",
+
+  "welcomePersistDescription": "أعد للأعضاء رتبهم عندما يغادرون ثم يعودون",
+  "welcomePersistOptionDescription": "تفعيل أو تعطيل",
+  "welcomePersistOn": "الأعضاء الذين يغادرون ثم يعودون يستعيدون رتبهم. الرتب ذات صلاحيات الإشراف ورتب البوتات والرتب فوق رتبتي لا تُعاد تلقائيًا أبدًا.",
+  "welcomePersistOff": "الأعضاء العائدون لن يستعيدوا رتبهم القديمة.",
+  "welcomeShowPersistOn": "**الرتب عند العودة:** تُعاد",
+  "welcomeShowPersistOff": "**الرتب عند العودة:** لا تُعاد"
 }

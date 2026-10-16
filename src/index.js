@@ -15,6 +15,7 @@ import { createInteractionHandler } from "./interactionHandler.js";
 import { createAntiNuke } from "./raid/antiNuke.js";
 import { createQuarantine } from "./moderation/quarantine.js";
 import { SavedRoleStore } from "./members/savedRoleStore.js";
+import { createRolePersistence } from "./members/rolePersistence.js";
 import { createRaidGuard } from "./raid/raid.js";
 import { createTempVoice } from "./voice/tempVoice.js";
 import { createAutoResponder } from "./community/autoResponders.js";
@@ -144,6 +145,13 @@ async function start() {
   // Quarantined members' roles (/quarantine), saved so they can be given back.
   const savedRoles = new SavedRoleStore(db);
   const quarantine = createQuarantine({ guildSettings, store: savedRoles, modLog, logger });
+  // Gives members their roles back when they rejoin (/welcome persist).
+  const rolePersistence = createRolePersistence({
+    guildSettings,
+    store: savedRoles,
+    isQuarantined: (guildId, userId) => quarantine.isQuarantined(guildId, userId),
+    logger,
+  });
   antiNuke = createAntiNuke({ guildSettings, moderation, quarantine, modLog, logger, forcedLanguage });
   const externalActions = createExternalActionRecorder({ moderation, botActions, logger });
 
@@ -310,6 +318,8 @@ async function start() {
     client.on(Events.GuildMemberAdd, safely("welcoming a member", (member) => welcomer.memberJoined(member)));
     client.on(Events.GuildMemberAdd, safely("the join gate", (member) => raidGuard.memberJoined(member)));
     client.on(Events.GuildMemberAdd, safely("a quarantined member rejoining", (member) => quarantine.memberJoined(member)));
+    client.on(Events.GuildMemberAdd, safely("giving roles back", (member) => rolePersistence.memberJoined(member)));
+    client.on(Events.GuildMemberRemove, safely("saving roles", (member) => rolePersistence.memberLeft(member)));
     client.on(Events.GuildMemberRemove, safely("a leave message", (member) => welcomer.memberLeft(member)));
     client.on(Events.GuildMemberRemove, safely("forgetting a birthday", (member) => birthdayStore.remove(member.guild.id, member.id)));
     client.on(Events.GuildMemberUpdate, safely("autoroles after screening", (before, after) => welcomer.memberUpdated(before, after)));

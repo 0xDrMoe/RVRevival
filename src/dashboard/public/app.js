@@ -121,7 +121,7 @@ const NAV = [
     group: "community",
     pages: [
       { id: "welcome", icon: "userPlus", tone: "pink", manage: true, on: (s) => Boolean(s.welcomeChannelId || s.welcomeDm || s.leaveChannelId) },
-      { id: "roles", icon: "layers", tone: "green", manage: true, on: (s) => (s.autoroleIds ?? []).length > 0 || (s.rolePanels ?? []).length > 0 },
+      { id: "roles", icon: "layers", tone: "green", manage: true, on: (s) => Boolean(s.rolePersist?.enabled) || (s.autoroleIds ?? []).length > 0 || (s.rolePanels ?? []).length > 0 },
       { id: "starboard", icon: "star", tone: "amber", manage: true, on: (s) => Boolean(s.starboard?.channelId) },
       { id: "birthdays", icon: "cake", tone: "pink", manage: true, on: (s) => Boolean(s.birthdays) },
       { id: "levels", icon: "trophy", tone: "green", manage: true, on: (s) => Boolean(s.leveling?.enabled) },
@@ -1845,11 +1845,19 @@ async function showWelcome(guildId) {
   });
 }
 
+// Role persistence on the Autoroles page, or null when it's off with nothing ignored.
+function readRolePersist(form) {
+  const enabled = form.querySelector("#persistEnabled").checked;
+  const ignoredRoleIds = checkedList("persistIgnore")(form) ?? [];
+  return enabled || ignoredRoleIds.length > 0 ? { enabled, ignoredRoleIds } : null;
+}
+
 async function showRoles(guildId) {
   const data = await loadManagedGuild(guildId);
   if (!data) {
     return;
   }
+  const persist = data.settings.rolePersist ?? {};
   const givable = data.roles
     .filter((role) => !role.managed && (BigInt(role.permissions ?? 0) & AUTOROLE_FORBIDDEN) === 0n)
     .map((role) => ({ id: role.id, label: `@${role.name}`, dot: roleDot(role) }));
@@ -1866,8 +1874,26 @@ async function showRoles(guildId) {
         h("p", { class: "help" }, t("autorolesHelp", { max: MAX_AUTOROLES })),
         checkList({ name: "autorole", items: givable, checked: data.settings.autoroleIds ?? [], filterKey: "filterRoles" }),
       ),
+      card(
+        t("sectionPersist"),
+        "refresh",
+        "purple",
+        h(
+          "label",
+          { class: "switch-card" },
+          h("span", { class: "switch-text" }, h("strong", {}, t("persistEnabled")), h("span", { class: "help" }, t("persistHelp"))),
+          h("span", { class: "switch" }, h("input", { id: "persistEnabled", type: "checkbox", role: "switch", checked: Boolean(persist.enabled), "aria-label": t("persistEnabled") })),
+        ),
+        h("p", { class: "help" }, t("persistIgnoreHelp")),
+        checkList({
+          name: "persistIgnore",
+          items: data.roles.filter((role) => !role.managed).map((role) => ({ id: role.id, label: `@${role.name}`, dot: roleDot(role) })),
+          checked: persist.ignoredRoleIds ?? [],
+          filterKey: "filterRoles",
+        }),
+      ),
     ],
-    fields: { autoroleIds: checkedList("autorole") },
+    fields: { autoroleIds: checkedList("autorole"), rolePersist: readRolePersist },
     after: card(t("sectionRolePanels"), "layers", "blue", h("p", { class: "help" }, t("rolePanelsHelp")), rolePanelList(data)),
   });
 }

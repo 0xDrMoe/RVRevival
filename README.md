@@ -168,6 +168,8 @@ Admins set it up on the dashboard's **Welcome & leave** and **Autoroles** pages,
 
 Giving roles needs **Manage Roles** and the bot's role above the autoroles.
 
+**Roles on rejoin.** `/welcome persist enabled:true` (or the switch on the dashboard's **Autoroles** page) makes the bot remember members' roles when they leave and give them back when they rejoin, so leaving can't shake off a restricted role. Roles with moderator permissions (ban, kick, manage anything, mention everyone…), bot and booster roles, and roles above the bot are never given back automatically; the dashboard can also list roles to never give back. Saved roles are used once and forgotten after a year. Quarantined members keep their [quarantine](#quarantine) instead.
+
 **Community servers should use Onboarding.** Discord's own Onboarding (Server Settings → Onboarding) gives new members roles and lets them pick their own, so on a Community server we recommend it over autoroles and role panels. `/welcome autorole`, `/welcome show`, `/rolepanel create` and the dashboard's Autoroles page say so when the server is a Community server. Autoroles and role panels are there for servers that don't use Onboarding.
 
 ### Role panels
@@ -387,7 +389,7 @@ A website where admins log in with Discord and manage the bot without slash comm
 - **Anti-nuke:** the main switch, what happens to someone who goes over a limit, each limit, and trusted people. Only the server owner can change it (see [Anti-nuke](#anti-nuke)).
 - **Raid protection:** the new-account gate, join-wave alerts, and a running lockdown (see [Raid protection](#raid-protection)).
 - **Welcome & leave:** the welcome and leave channels and messages (empty boxes show the default) and the welcome DM.
-- **Autoroles:** roles given on joining, and the server's role panels (read-only; change them with `/rolepanel`). Community servers get a tip recommending Discord's Onboarding.
+- **Autoroles:** roles given on joining, giving roles back on rejoin (with roles to never give back), and the server's role panels (read-only; change them with `/rolepanel`). Community servers get a tip recommending Discord's Onboarding.
 - **Starboard:** channel, stars needed and emoji.
 - **Birthdays:** channel, role, time zone and greeting.
 - **Leveling:** the main switch, where and how level-ups are announced, reward roles, voice XP and XP boosts, channels and roles that earn no XP, and the leaderboard with each member's level and progress (see [Leveling](#leveling)).

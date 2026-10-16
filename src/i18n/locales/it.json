@@ -941,5 +941,12 @@
   "quarantineListMore": "…e altri {count}.",
   "quarantineRoleCleared": "I membri in quarantena non riceveranno un ruolo; i loro ruoli vengono solo tolti.",
   "quarantineRoleUnusable": "Non posso dare {role}: è un ruolo di bot o booster, o è sopra il mio.",
-  "quarantineRoleSet": "I membri in quarantena riceveranno {role}. Assicurati che veda solo i canali giusti."
+  "quarantineRoleSet": "I membri in quarantena riceveranno {role}. Assicurati che veda solo i canali giusti.",
+
+  "welcomePersistDescription": "Ridà i ruoli ai membri che escono e rientrano",
+  "welcomePersistOptionDescription": "Attivo o disattivo",
+  "welcomePersistOn": "I membri che escono e rientrano riavranno i loro ruoli. Ruoli con permessi di moderazione, ruoli dei bot e ruoli sopra il mio non vengono mai restituiti in automatico.",
+  "welcomePersistOff": "I membri che rientrano non riavranno i vecchi ruoli.",
+  "welcomeShowPersistOn": "**Ruoli al rientro:** restituiti",
+  "welcomeShowPersistOff": "**Ruoli al rientro:** non restituiti"
 }

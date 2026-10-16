@@ -941,5 +941,12 @@
   "quarantineListMore": "…e mais {count}.",
   "quarantineRoleCleared": "Membros em quarentena não receberão cargo; os cargos deles só serão retirados.",
   "quarantineRoleUnusable": "Não posso dar {role}: é um cargo de bot ou de booster, ou está acima do meu.",
-  "quarantineRoleSet": "Membros em quarentena receberão {role}. Garanta que ele só vê os canais certos."
+  "quarantineRoleSet": "Membros em quarentena receberão {role}. Garanta que ele só vê os canais certos.",
+
+  "welcomePersistDescription": "Devolve os cargos a membros que saem e voltam",
+  "welcomePersistOptionDescription": "Ligado ou desligado",
+  "welcomePersistOn": "Membros que saem e voltam recebem seus cargos de volta. Cargos com permissões de moderação, cargos de bot e cargos acima do meu nunca são devolvidos sozinhos.",
+  "welcomePersistOff": "Membros que voltarem não recebem os cargos antigos.",
+  "welcomeShowPersistOn": "**Cargos ao voltar:** devolvidos",
+  "welcomeShowPersistOff": "**Cargos ao voltar:** não devolvidos"
 }
