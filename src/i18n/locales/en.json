@@ -1025,5 +1025,13 @@
   "statsRemoved": "Removed the counter and deleted {channel}.",
   "statsRemovedKeptChannel": "Removed the counter. I couldn't delete {channel}, so delete it yourself.",
   "statsListEmpty": "This server has no counters yet. Add one with `/stats add`.",
-  "statsList": "**Counters ({count}/{max})**\n{list}"
+  "statsList": "**Counters ({count}/{max})**\n{list}",
+
+  "afkCommandDescription": "Say you're away; people who mention you get your message",
+  "afkMessageOptionDescription": "Why you're away, like \"Eating, back in 30\"",
+  "afkSet": "You're AFK: {message}\nSend any message here to come back.",
+  "afkSetNoMessage": "You're AFK. Send any message here to come back.",
+  "afkBack": "Welcome back {user}! You were AFK since {since}.",
+  "afkNotice": "💤 {user} is AFK ({since}): {message}",
+  "afkNoticeNoMessage": "💤 {user} is AFK ({since})."
 }

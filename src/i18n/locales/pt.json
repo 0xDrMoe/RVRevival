@@ -1025,5 +1025,13 @@
   "statsRemoved": "Contador removido e {channel} apagado.",
   "statsRemovedKeptChannel": "Contador removido. Não consegui apagar {channel}, então apague você mesmo.",
   "statsListEmpty": "Este servidor ainda não tem contadores. Adicione um com `/stats add`.",
-  "statsList": "**Contadores ({count}/{max})**\n{list}"
+  "statsList": "**Contadores ({count}/{max})**\n{list}",
+
+  "afkCommandDescription": "Diga que está ausente; quem mencionar você vê sua mensagem",
+  "afkMessageOptionDescription": "Por que está ausente, como \"Comendo, volto em 30\"",
+  "afkSet": "Você está AFK: {message}\nEnvie qualquer mensagem aqui para voltar.",
+  "afkSetNoMessage": "Você está AFK. Envie qualquer mensagem aqui para voltar.",
+  "afkBack": "Bem-vindo de volta {user}! Você estava AFK desde {since}.",
+  "afkNotice": "💤 {user} está AFK ({since}): {message}",
+  "afkNoticeNoMessage": "💤 {user} está AFK ({since})."
 }

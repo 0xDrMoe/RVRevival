@@ -29,6 +29,7 @@ The Discord bot for the Rumbleverse Revival server. It is built as a set of inde
 | [Embed builder](#embed-builder) | The dashboard's Embed builder page | Manage Server or a dashboard role that can change settings |
 | [Feeds](#feeds) | `/feed`, or the dashboard's Feeds page | Manage Server or a dashboard role that can change settings |
 | [Server stats](#server-stats) | `/stats`, or the dashboard's Server stats page | Manage Server or a dashboard role that can change settings |
+| [AFK](#afk) | `/afk` | Everyone |
 | [Ban appeals](#ban-appeals) | The dashboard's Ban appeals page | Manage Server or a dashboard role that can change settings (banned members fill in the form) |
 | [Join-to-create voice](#join-to-create-voice) | `/voice` | Manage Server (`setup`, `off`), the channel's owner (`lock`, `unlock`), anyone in the channel (`claim`) |
 | [Leveling](#leveling) | `/rank`, `/leaderboard`, `/levels`, or the dashboard's Leveling page | Everyone (`/rank`, `/leaderboard`), Manage Server (`/levels`) |
@@ -374,6 +375,12 @@ The bot checks each feed every 10 minutes and posts only items that appear after
 
 A server can have up to 5 counters. Discord lets the bot rename a channel only twice per 10 minutes, so names follow the counts within about 5 minutes. Counters added on the dashboard get their channel within a minute. Needs **Manage Server**. The bot needs **Manage Channels**.
 
+### AFK
+
+**`/afk [message]`** says you're away. When someone mentions you or replies to you, the bot answers with your message and how long you've been away (once a minute per channel, and the notice deletes itself after 15 seconds). Your next message in the server marks you back.
+
+If the bot may change your nickname (it has **Manage Nicknames** and a higher role than yours), it adds "[AFK] " in front of it while you're away and takes it off when you're back. Mentions in AFK messages never ping anyone. To turn `/afk` off, hide it in **Server Settings → Integrations**.
+
 ### Ban appeals
 
 Lets banned members ask to be unbanned without a second account or a DM to a moderator. Turn it on in the dashboard's **Ban appeals** page (off by default), then:
@@ -610,6 +617,7 @@ src/
     voice.js             Join-to-create voice: /voice
     feed.js              Feeds: /feed
     stats.js             Server stats: /stats
+    afk.js               AFK: /afk
     commandHelpers.js    Shared start of moderation-style commands (language, permission check)
   countries/             Country roles: country list, name matching and search
   roles/                 Country roles: find, create, assign and remove roles
@@ -622,6 +630,7 @@ src/
   messages/              Embed builder: checking messages against Discord's limits (embedMessage.js), messages posted from the dashboard (sentMessageStore.js)
   feeds/                 Feeds: reading RSS and Atom (parseFeed.js), safe fetching and finding YouTube and Reddit feeds (fetchFeed.js), saved in SQLite (feedStore.js), adding feeds and posts (feeds.js), checked on time (feedPoller.js)
   stats/                 Server stats: counters and counts (statsCounters.js), creating and renaming the channels (statsUpdater.js)
+  afk/                   AFK: saved in SQLite (afkStore.js), notices and welcome-backs (afk.js)
   appeals/               Ban appeals: settings (config.js), saved in SQLite (appealStore.js); the form and decisions live in the dashboard
   voice/                 Join-to-create voice: making and deleting channels (tempVoice.js), saved in SQLite (tempVoiceStore.js)
   leveling/              Leveling: settings and level math (config.js), XP in SQLite (levelStore.js), earning XP and rewards (leveling.js)

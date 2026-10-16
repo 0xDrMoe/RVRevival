@@ -321,6 +321,18 @@ const MIGRATIONS = [
   CREATE INDEX feeds_by_guild ON feeds (guild_id);
   CREATE INDEX feeds_due ON feeds (checked_at);
   `,
+  // 21: members who are away (/afk). nickname says what the bot did to their
+  // nickname (afk/afkStore.js NicknameChange), so it can undo it.
+  `
+  CREATE TABLE afk (
+    guild_id  TEXT    NOT NULL,
+    user_id   TEXT    NOT NULL,
+    message   TEXT,
+    since     INTEGER NOT NULL,
+    nickname  INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (guild_id, user_id)
+  ) WITHOUT ROWID;
+  `,
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS.length;

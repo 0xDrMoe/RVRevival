@@ -1025,5 +1025,13 @@
   "statsRemoved": "أُزيل العدّاد وحُذفت {channel}.",
   "statsRemovedKeptChannel": "أُزيل العدّاد. لم أستطع حذف {channel}، فاحذفها بنفسك.",
   "statsListEmpty": "لا توجد عدّادات في هذا الخادم بعد. أضف واحدًا بـ `/stats add`.",
-  "statsList": "**العدّادات ({count}/{max})**\n{list}"
+  "statsList": "**العدّادات ({count}/{max})**\n{list}",
+
+  "afkCommandDescription": "أخبر الآخرين أنك غائب؛ من يذكرك يرى رسالتك",
+  "afkMessageOptionDescription": "سبب غيابك، مثل \"آكل، أعود بعد 30 دقيقة\"",
+  "afkSet": "أنت الآن AFK: {message}\nأرسل أي رسالة هنا لتعود.",
+  "afkSetNoMessage": "أنت الآن AFK. أرسل أي رسالة هنا لتعود.",
+  "afkBack": "أهلًا بعودتك {user}! كنت AFK منذ {since}.",
+  "afkNotice": "💤 {user} غائب ({since}): {message}",
+  "afkNoticeNoMessage": "💤 {user} غائب ({since})."
 }
