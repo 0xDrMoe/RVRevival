@@ -4,6 +4,7 @@
 //   #/                     your servers
 //   #/g/<id>/overview      a server's numbers at a glance
 //   #/g/<id>/cases         moderation cases (?q=&action=&user=&moderator=&from=&to=)
+//   #/g/<id>/members       find a member (?q=), or one member's history (?user=)
 //   #/g/<id>/moderation    staff and mod roles, the mod log
 //   #/g/<id>/logging       log channels, events and ignored channels
 //   #/g/<id>/automod       automod rules, punishments and exemptions
@@ -56,6 +57,7 @@ const DEFAULT_APPEARANCE = { theme: "auto", accent: "blurple", density: "comfort
 const PAGES = [
   { id: "overview", icon: "📊", tone: "blue" },
   { id: "cases", icon: "🗂️", tone: "pink" },
+  { id: "members", icon: "👤", tone: "purple" },
   { id: "moderation", icon: "🛡️", tone: "red", settings: true },
   { id: "logging", icon: "📜", tone: "amber", settings: true },
   { id: "automod", icon: "🤖", tone: "blue", settings: true },
@@ -241,6 +243,18 @@ function card(title, icon, tone, ...children) {
     { class: "card" },
     h("h2", { class: "card-title" }, h("span", { class: `chip-icon tone-${tone}`, "aria-hidden": "true" }, icon), title),
     ...children,
+  );
+}
+
+// A number tile with a label, linking somewhere when `href` is given.
+function tile(icon, tone, value, label, sub, href) {
+  return h(
+    href ? "a" : "div",
+    { class: `stat card tone-${tone}`, href },
+    h("span", { class: `chip-icon tone-${tone}`, "aria-hidden": "true" }, icon),
+    h("span", { class: "stat-value" }, value),
+    h("span", { class: "stat-label" }, label),
+    sub ? h("span", { class: "stat-sub" }, sub) : null,
   );
 }
 
@@ -1464,15 +1478,6 @@ async function showOverview(guildId) {
   const total = Object.values(stats.caseCounts).reduce((sum, count) => sum + count, 0);
   const casesSince = (firstDay) =>
     stats.perDay.filter((entry) => entry.day >= firstDay).reduce((sum, entry) => sum + entry.total, 0);
-  const tile = (icon, tone, value, label, sub, href) =>
-    h(
-      href ? "a" : "div",
-      { class: `stat card tone-${tone}`, href },
-      h("span", { class: `chip-icon tone-${tone}`, "aria-hidden": "true" }, icon),
-      h("span", { class: "stat-value" }, value),
-      h("span", { class: "stat-label" }, label),
-      sub ? h("span", { class: "stat-sub" }, sub) : null,
-    );
   const tiles = h(
     "div",
     { class: "stats" },
@@ -1603,7 +1608,7 @@ async function showOverview(guildId) {
               {},
               h(
                 "a",
-                { href: casesLink({ [param]: somebody.id }) },
+                { href: param === "user" ? memberLink(guildId, somebody.id) : casesLink({ [param]: somebody.id }) },
                 h("span", { class: `rank rank-${index + 1}` }, String(index + 1)),
                 h("span", { class: "leader-name" }, somebody.tag ?? somebody.id),
                 h("span", { class: "count-pill" }, formatNumber(somebody.total)),
@@ -1934,7 +1939,12 @@ function caseRow(guildId, entry, filters, apply) {
     { class: `act-row act-${entry.action}` },
     h("td", { class: "number" }, `#${entry.number}`),
     h("td", {}, h("div", { class: "action-cell" }, actionPill(entry), duration)),
-    h("td", { class: "person" }, person(entry.userId, entry.userTag, () => apply({ ...filters, user: entry.userId }))),
+    h(
+      "td",
+      { class: "person" },
+      person(entry.userId, entry.userTag, () => apply({ ...filters, user: entry.userId })),
+      h("a", { class: "history-link", href: memberLink(guildId, entry.userId) }, t("memberHistory")),
+    ),
     h(
       "td",
       { class: "person" },
@@ -2012,11 +2022,275 @@ async function deleteCase(guildId, entry, row) {
   }
 }
 
+// --- Members -----------------------------------------------------------------
+
+const memberLink = (guildId, userId) => `#/g/${guildId}/members?user=${userId}`;
+// Accounts younger than this get a warning, like the server log's join message.
+const NEW_ACCOUNT_DAYS = 7;
+
+// Someone's avatar, or their initials when they have none.
+function personAvatar(user, size = "md") {
+  const url = user.avatar ? `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png?size=128` : null;
+  const name = user.displayName ?? user.username ?? "?";
+  return url
+    ? h("img", { class: `member-avatar ${size}`, src: url, alt: "" })
+    : h("span", { class: `member-avatar ${size} placeholder`, "aria-hidden": "true" }, initials(name).slice(0, 2));
+}
+
+// "3 days ago", "2 years ago".
+function formatAgo(ms) {
+  const units = [
+    ["year", 365 * DAY_MS],
+    ["month", 30 * DAY_MS],
+    ["day", DAY_MS],
+    ["hour", 60 * 60 * 1000],
+    ["minute", 60 * 1000],
+  ];
+  const elapsed = Date.now() - ms;
+  const [unit, size] = units.find(([, length]) => elapsed >= length) ?? units.at(-1);
+  return new Intl.RelativeTimeFormat(state.language, { numeric: "auto" }).format(-Math.floor(elapsed / size), unit);
+}
+
+async function showMembers(guildId) {
+  const query = new URLSearchParams(location.hash.split("?")[1] ?? "");
+  const userId = query.get("user");
+  if (userId && /^\d{17,20}$/.test(userId)) {
+    return showMemberHistory(guildId, userId);
+  }
+  const data = await loadGuild(guildId);
+  const text = (query.get("q") ?? "").trim();
+  const input = h("input", {
+    type: "search",
+    class: "grow",
+    placeholder: t("memberSearchPlaceholder"),
+    value: text,
+    "aria-label": t("memberSearchPlaceholder"),
+    maxLength: 32,
+  });
+  const results = h("div", { class: "member-results" });
+  const form = h(
+    "form",
+    {
+      class: "card",
+      onsubmit: (event) => {
+        event.preventDefault();
+        const next = input.value.trim();
+        if (/^\d{17,20}$/.test(next)) {
+          location.hash = memberLink(guildId, next);
+        } else {
+          location.hash = `#/g/${guildId}/members${next ? `?q=${encodeURIComponent(next)}` : ""}`;
+        }
+      },
+    },
+    h("div", { class: "toolbar" }, input, h("button", { class: "primary", type: "submit" }, `🔎 ${t("search")}`)),
+    h("p", { class: "help" }, t("memberSearchHelp")),
+  );
+  show(guildLayout(data, "members", hero(t("page_members"), t("membersIntro"), "purple"), form, results));
+  input.focus();
+  if (!text) {
+    return;
+  }
+  const { members } = await api(`/api/guilds/${guildId}/members?q=${encodeURIComponent(text)}`);
+  results.replaceChildren(
+    members.length === 0
+      ? h("p", { class: "muted empty" }, t("memberSearchNone"))
+      : h(
+          "ul",
+          { class: "card member-list flush" },
+          members.map((member) =>
+            h(
+              "li",
+              {},
+              h(
+                "a",
+                { href: memberLink(guildId, member.id) },
+                personAvatar(member),
+                h(
+                  "span",
+                  { class: "member-names" },
+                  h("strong", {}, member.displayName),
+                  h("span", { class: "muted" }, `@${member.username} · ${member.id}`),
+                ),
+                member.bot ? h("span", { class: "badge badge-accent" }, t("memberBot")) : null,
+                member.inServer ? null : h("span", { class: "badge" }, t("memberNotInServer")),
+              ),
+            ),
+          ),
+        ),
+  );
+}
+
+async function showMemberHistory(guildId, userId) {
+  const [data, history] = await Promise.all([loadGuild(guildId), api(`/api/guilds/${guildId}/members/${userId}`)]);
+  const { user, member } = history;
+  const casesLink = `#/g/${guildId}/cases?user=${userId}`;
+  const accountAgeDays = (Date.now() - user.createdAt) / DAY_MS;
+
+  // Where they stand right now.
+  const status = [];
+  if (member) {
+    status.push(h("span", { class: "badge badge-cyan" }, t("memberInServer")));
+  } else if (history.banned) {
+    status.push(h("span", { class: "badge badge-red" }, t("memberBanned")));
+  } else {
+    status.push(h("span", { class: "badge" }, t("memberNotInServer")));
+  }
+  if (history.tempBanEndsAt) {
+    status.push(h("span", { class: "badge badge-red" }, t("memberTempBanEnds", { date: formatDate(history.tempBanEndsAt) })));
+  }
+  if (member?.timedOutUntil) {
+    status.push(h("span", { class: "badge badge-amber" }, t("memberTimedOutUntil", { date: formatDate(member.timedOutUntil) })));
+  }
+  if (user.bot) {
+    status.push(h("span", { class: "badge badge-accent" }, t("memberBot")));
+  }
+  if (accountAgeDays < NEW_ACCOUNT_DAYS) {
+    status.push(h("span", { class: "badge badge-amber" }, `⚠️ ${t("memberNewAccount")}`));
+  }
+
+  const header = h(
+    "section",
+    { class: "card member-header" },
+    personAvatar(user, "lg"),
+    h(
+      "div",
+      { class: "member-names" },
+      h("h1", {}, user.displayName ?? user.id),
+      h("span", { class: "muted" }, [user.username ? `@${user.username}` : null, user.id].filter(Boolean).join(" · ")),
+      h("div", { class: "badges" }, status),
+    ),
+    h(
+      "button",
+      {
+        class: "ghost small push-end",
+        type: "button",
+        onclick: async () => {
+          try {
+            await navigator.clipboard.writeText(user.id);
+            toast(t("memberIdCopied"));
+          } catch {
+            toast(user.id);
+          }
+        },
+      },
+      `📋 ${t("memberCopyId")}`,
+    ),
+  );
+
+  const totalCases = Object.values(history.caseCounts).reduce((sum, count) => sum + count, 0);
+  const tiles = h(
+    "div",
+    { class: "stats" },
+    tile("🎂", "blue", formatAgo(user.createdAt), t("memberAccountCreated"), formatDate(user.createdAt)),
+    tile(
+      "📥",
+      "green",
+      member?.joinedAt ? formatAgo(member.joinedAt) : "—",
+      t("memberJoinedServer"),
+      member?.joinedAt ? formatDate(member.joinedAt) : t("memberNotInServer"),
+    ),
+    tile("🔁", "amber", formatNumber(history.joins), t("memberTimesJoined"), t("memberTimesJoinedSub")),
+    tile("🗂️", "pink", formatNumber(totalCases), t("statCases"), null, totalCases > 0 ? casesLink : undefined),
+  );
+
+  const summary = CASE_ACTIONS.filter((action) => history.caseCounts[action]).map((action) =>
+    h("span", { class: `pill act-${action}` }, `${t(`action_${action}`)} · ${formatNumber(history.caseCounts[action])}`),
+  );
+  const caseList =
+    history.cases.length === 0
+      ? h("p", { class: "muted empty" }, t("memberNoCases"))
+      : h(
+          "ul",
+          { class: "timeline" },
+          history.cases.map((entry) =>
+            h(
+              "li",
+              { class: `act-${entry.action}` },
+              h("span", { class: "timeline-dot", "aria-hidden": "true" }),
+              h(
+                "div",
+                { class: "timeline-body" },
+                h(
+                  "div",
+                  { class: "timeline-head" },
+                  actionPill(entry),
+                  entry.durationMs ? h("span", { class: "duration" }, `⏱ ${formatDuration(entry.durationMs)}`) : null,
+                  h("span", { class: "muted" }, `#${entry.number} · ${formatDate(entry.createdAt)}`),
+                ),
+                h("p", { class: "timeline-reason" }, entry.reason ?? h("em", { class: "muted" }, t("noReason"))),
+                h(
+                  "span",
+                  { class: "muted timeline-by" },
+                  t("memberCaseBy", { name: entry.moderatorId === "0" ? t("unknown") : (entry.moderatorTag ?? entry.moderatorId) }),
+                ),
+              ),
+            ),
+          ),
+        );
+
+  const roles =
+    member && member.roles.length > 0
+      ? h(
+          "div",
+          { class: "role-chips" },
+          member.roles.map((role) => h("span", { class: "role-chip" }, roleDot(role), role.name)),
+        )
+      : h("p", { class: "muted empty" }, t(member ? "memberNoRoles" : "memberNotInServer"));
+
+  const events =
+    history.events.length === 0
+      ? h("p", { class: "muted empty" }, t("memberNoEvents"))
+      : h(
+          "ul",
+          { class: "recent" },
+          history.events.map((event) =>
+            h(
+              "li",
+              {},
+              h("span", { class: `badge ${event.kind === "join" ? "badge-cyan" : ""}` }, t(`memberEvent_${event.kind}`)),
+              h("span", { class: "recent-text" }, formatDate(event.at)),
+              h("span", { class: "muted recent-date" }, formatAgo(event.at)),
+            ),
+          ),
+        );
+
+  show(
+    guildLayout(
+      data,
+      "members",
+      h("a", { class: "back", href: `#/g/${guildId}/members` }, t("memberBackToSearch")),
+      header,
+      history.banned?.reason ? h("p", { class: "tip danger" }, t("memberBanReason", { reason: history.banned.reason })) : null,
+      tiles,
+      h(
+        "div",
+        { class: "grid-2 member-grid" },
+        card(
+          t("memberCases"),
+          "🗂️",
+          "pink",
+          summary.length > 0 ? h("div", { class: "badges member-summary" }, summary) : null,
+          caseList,
+          totalCases > history.cases.length ? h("p", { class: "help" }, t("memberMoreCases", { count: formatNumber(history.cases.length) })) : null,
+          totalCases > 0 ? h("a", { class: "button ghost small", href: casesLink }, t("memberOpenInCases")) : null,
+        ),
+        h(
+          "div",
+          { class: "stack" },
+          card(t("memberRoles"), "🎭", "purple", roles),
+          card(t("memberJoinsLeaves"), "🚪", "green", events, h("p", { class: "help" }, t("memberJoinsLeavesHelp"))),
+        ),
+      ),
+    ),
+  );
+}
+
 // --- Routing -----------------------------------------------------------------
 
 const SHOW_PAGE = {
   overview: showOverview,
   cases: showCases,
+  members: showMembers,
   moderation: showModeration,
   logging: showLogging,
   automod: showAutomod,
