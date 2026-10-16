@@ -2810,3 +2810,72 @@ dialog textarea {
   flex: 1;
   min-width: 0;
 }
+
+/* Ticket categories (a collapsible card on the Tickets page) */
+.collapsible > summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  list-style: none;
+  font-weight: 700;
+}
+
+.collapsible > summary::-webkit-details-marker {
+  display: none;
+}
+
+.collapsible > summary::after {
+  content: "";
+  margin-inline-start: auto;
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid var(--muted);
+  border-bottom: 2px solid var(--muted);
+  transform: rotate(45deg);
+  transition: transform 0.15s ease;
+}
+
+.collapsible[open] > summary::after {
+  transform: rotate(-135deg);
+}
+
+.collapsible > summary .muted {
+  font-weight: 400;
+}
+
+.collapsible[open] > summary {
+  margin-bottom: 12px;
+}
+
+.category-row {
+  padding: 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.category-row :is(input, select, textarea) {
+  background: var(--surface);
+}
+
+.category-row .field {
+  max-width: none;
+  margin-bottom: 10px;
+}
+
+.category-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 0.7fr) minmax(0, 1.5fr);
+  gap: 0 12px;
+}
+
+.category-grid .field:nth-child(4) {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 640px) {
+  .category-grid {
+    grid-template-columns: 1fr;
+  }
+}

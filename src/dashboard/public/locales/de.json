@@ -615,5 +615,21 @@
   "appealAnswerPlaceholder": "Deine Antwort",
   "appealAnswerAll": "Beantworte zuerst alle Fragen.",
   "appealSend": "Einspruch senden",
-  "appealSent": "Dein Einspruch wurde gesendet. Du bekommst eine DM, wenn das Team entscheidet (lass DMs von Servermitgliedern offen)."
+  "appealSent": "Dein Einspruch wurde gesendet. Du bekommst eine DM, wenn das Team entscheidet (lass DMs von Servermitgliedern offen).",
+  "ticketCategories": "Ticket-Arten",
+  "ticketCategoriesSummary": "{count} eingerichtet",
+  "ticketCategoriesHelp": "Gib dem Panel einen Button pro Ticket-Art, jeweils mit eigenen Fragen und eigenem Team. Ohne Arten hat das Panel einen einzigen Ticket-öffnen-Button. Speichern aktualisiert das gepostete Panel.",
+  "ticketCategoriesNone": "Keine Ticket-Arten: Das Panel hat einen einzigen Ticket-öffnen-Button.",
+  "ticketCategoriesAdd": "Art hinzufügen",
+  "ticketCategoriesSaved": "Ticket-Arten gespeichert.",
+  "ticketCategoryLabel": "Button-Text",
+  "ticketCategoryLabelPlaceholder": "Fehler melden",
+  "ticketCategoryEmoji": "Emoji",
+  "ticketCategoryStaff": "Team-Rolle",
+  "ticketCategoryStaffDefault": "Die Team-Rolle des Panels",
+  "ticketCategoryDescription": "Beschreibung im Panel",
+  "ticketCategoryDescriptionPlaceholder": "Etwas im Spiel kaputt? Sag es uns hier.",
+  "ticketCategoryQuestions": "Fragen",
+  "ticketCategoryQuestionsPlaceholder": "Was ist passiert?\nAuf welcher Plattform spielst du?",
+  "ticketCategoryQuestionsHelp": "Eine pro Zeile, bis zu {max}, je 45 Zeichen (Discords Grenze). Leer lassen, um zu fragen, wobei sie Hilfe brauchen."
 }

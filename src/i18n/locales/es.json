@@ -968,5 +968,7 @@
 
   "appealAcceptedDm": "Tu apelación de baneo en **{server}** fue aceptada. Puedes volver a unirte.",
   "appealDeniedDm": "Tu apelación de baneo en **{server}** fue rechazada.",
-  "dmAppeal": "Puedes apelar este baneo aquí: {url}"
+  "dmAppeal": "Puedes apelar este baneo aquí: {url}",
+
+  "ticketCategoryGone": "Ese tipo de ticket se eliminó. Pide al staff que publique el panel de nuevo con `/tickets panel`."
 }

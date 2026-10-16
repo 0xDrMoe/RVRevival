@@ -276,6 +276,12 @@ const MIGRATIONS = [
   CREATE INDEX ban_appeals_by_user ON ban_appeals (guild_id, user_id, created_at);
   CREATE INDEX ban_appeals_by_status ON ban_appeals (guild_id, status, number);
   `,
+  // 18: ticket categories: which panel button opened the ticket. The label is
+  // kept as it was, so renaming or removing a category doesn't change old tickets.
+  `
+  ALTER TABLE tickets ADD COLUMN category_id TEXT;
+  ALTER TABLE tickets ADD COLUMN category_label TEXT;
+  `,
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS.length;

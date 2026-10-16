@@ -187,6 +187,8 @@ describe("tickets", () => {
       channelId: CHANNEL_ID,
       messageId: "600000000000000001",
       staffRoleId: STAFF_ROLE_ID,
+      title: "Support",
+      message: null,
     });
     expect(t.lastText(run)).toContain(`<@&${STAFF_ROLE_ID}>`);
   });
@@ -231,6 +233,52 @@ describe("tickets", () => {
     expect(welcome.components[0].toJSON().components[0].custom_id).toBe(CLOSE_BUTTON);
     expect(t.lastText(form)).toContain(`<#${thread.id}>`);
     expect(t.tickets.openForUser(GUILD_ID, MEMBER_ID)).toMatchObject({ number: 1, threadId: thread.id });
+  });
+
+  it("has a button per category, each with its own questions and staff role", async () => {
+    const t = setup();
+    const BUGS_ROLE_ID = "700000000000000099";
+    t.guild.roles.cache.set(BUGS_ROLE_ID, { id: BUGS_ROLE_ID, mentionable: true, members: new Map() });
+    await t.guildSettings.set(GUILD_ID, Setting.TICKET_CATEGORIES, [
+      { id: "bugs", label: "Bug report", emoji: "🐞", description: "Something broken in the game", staffRoleId: BUGS_ROLE_ID, questions: ["What happened?", "Your platform"] },
+      { id: "other", label: "Something else", emoji: null, description: null, staffRoleId: null, questions: [] },
+    ]);
+    await t.postPanel({ "staff-role": { id: STAFF_ROLE_ID } });
+    const panel = t.channel.send.mock.calls[0][0];
+    expect(panel.components[0].toJSON().components.map((button) => [button.custom_id, button.label])).toEqual([
+      ["tk:open:bugs", "Bug report"],
+      ["tk:open:other", "Something else"],
+    ]);
+    expect(panel.embeds[0].toJSON().fields).toEqual([{ name: "🐞 Bug report", value: "Something broken in the game" }]);
+
+    const click = t.interaction({ customId: "tk:open:bugs", userId: MEMBER_ID });
+    await t.command.componentPrefixes["tk:open:"].handle(click);
+    const modal = click.showModal.mock.calls[0][0].toJSON();
+    expect(modal.custom_id).toBe("tk:form:bugs");
+    expect(modal.title).toBe("Bug report");
+    expect(modal.components.map((label) => [label.label, label.component.custom_id])).toEqual([
+      ["What happened?", "q0"],
+      ["Your platform", "q1"],
+    ]);
+
+    const form = t.interaction({ customId: "tk:form:bugs", userId: MEMBER_ID });
+    const answers = { q0: "Crash on start", q1: "PC" };
+    form.fields = { getTextInputValue: (id) => answers[id] };
+    expect((await t.command.componentPrefixes["tk:form:"].handle(form)).key).toBe("ticketOpened");
+    const ticket = t.tickets.openForUser(GUILD_ID, MEMBER_ID);
+    expect(ticket).toMatchObject({ categoryId: "bugs", categoryLabel: "Bug report", subject: "**What happened?**\nCrash on start\n\n**Your platform**\nPC" });
+    const welcome = t.threads[0].send.mock.calls[0][0];
+    expect(welcome.allowedMentions.roles).toEqual([BUGS_ROLE_ID]);
+    expect(welcome.embeds[0].toJSON().title).toBe("Bug report");
+
+    // The category's staff can close it without being general ticket staff.
+    const close = t.interaction({ customId: CLOSE_BUTTON, userId: ADMIN_ID, channelId: t.threads[0].id, roleIds: [BUGS_ROLE_ID] });
+    expect((await t.command.components[CLOSE_BUTTON].handle(close)).status).toBe(Status.SUCCESS);
+
+    // A button left over from a removed category says so.
+    await t.guildSettings.set(GUILD_ID, Setting.TICKET_CATEGORIES, []);
+    const stale = t.interaction({ customId: "tk:open:bugs", userId: MEMBER_ID });
+    expect((await t.command.componentPrefixes["tk:open:"].handle(stale)).key).toBe("ticketCategoryGone");
   });
 
   it("adds staff one by one when their role can't be pinged", async () => {

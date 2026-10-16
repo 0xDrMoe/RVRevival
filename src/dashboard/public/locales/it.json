@@ -615,5 +615,21 @@
   "appealAnswerPlaceholder": "La tua risposta",
   "appealAnswerAll": "Rispondi prima a tutte le domande.",
   "appealSend": "Invia ricorso",
-  "appealSent": "Il tuo ricorso è stato inviato. Riceverai un DM quando lo staff decide (tieni aperti i DM dai membri del server)."
+  "appealSent": "Il tuo ricorso è stato inviato. Riceverai un DM quando lo staff decide (tieni aperti i DM dai membri del server).",
+  "ticketCategories": "Tipi di ticket",
+  "ticketCategoriesSummary": "{count} configurati",
+  "ticketCategoriesHelp": "Dai al pannello un pulsante per ogni tipo di ticket, ognuno con le sue domande e il suo staff. Senza tipi, il pannello ha un solo pulsante Apri un ticket. Salvare aggiorna il pannello pubblicato.",
+  "ticketCategoriesNone": "Nessun tipo di ticket: il pannello ha un solo pulsante Apri un ticket.",
+  "ticketCategoriesAdd": "Aggiungi tipo",
+  "ticketCategoriesSaved": "Tipi di ticket salvati.",
+  "ticketCategoryLabel": "Testo del pulsante",
+  "ticketCategoryLabelPlaceholder": "Segnala un bug",
+  "ticketCategoryEmoji": "Emoji",
+  "ticketCategoryStaff": "Ruolo staff",
+  "ticketCategoryStaffDefault": "Il ruolo staff del pannello",
+  "ticketCategoryDescription": "Descrizione nel pannello",
+  "ticketCategoryDescriptionPlaceholder": "Qualcosa non va nel gioco? Diccelo qui.",
+  "ticketCategoryQuestions": "Domande",
+  "ticketCategoryQuestionsPlaceholder": "Cos'è successo?\nSu quale piattaforma giochi?",
+  "ticketCategoryQuestionsHelp": "Una per riga, fino a {max}, di 45 caratteri ciascuna (limite di Discord). Lascia vuoto per chiedere di cosa hanno bisogno."
 }

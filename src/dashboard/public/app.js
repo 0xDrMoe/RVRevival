@@ -3627,17 +3627,108 @@ function ticketRow(guildId, ticket) {
       h(
         "span",
         { class: "ticket-main" },
-        h("span", { class: "ticket-subject" }, ticket.subject),
+        h("span", { class: "ticket-subject" }, ticket.subject.replace(/\*\*/g, "").replace(/\n+/g, " · ")),
         h(
           "span",
           { class: "muted" },
-          [ticket.userName ?? ticket.userId, formatDate(ticket.createdAt), ticket.hasTranscript ? t("ticketsMessages", { count: formatNumber(ticket.messageCount ?? 0) }) : null]
+          [ticket.category, ticket.userName ?? ticket.userId, formatDate(ticket.createdAt), ticket.hasTranscript ? t("ticketsMessages", { count: formatNumber(ticket.messageCount ?? 0) }) : null]
             .filter(Boolean)
             .join(" · "),
         ),
       ),
       ticketBadge(ticket),
     ),
+  );
+}
+
+const MAX_TICKET_CATEGORIES = 5;
+const MAX_CATEGORY_QUESTIONS = 5;
+const newCategoryId = () => Math.random().toString(36).slice(2, 10) || "c1";
+
+function categoryRow(category, roles, onRemove) {
+  const value = category ?? { id: newCategoryId(), label: "", emoji: null, description: null, staffRoleId: null, questions: [] };
+  const row = h(
+    "div",
+    { class: "category-row", "data-id": value.id },
+    h(
+      "div",
+      { class: "category-grid" },
+      h("label", { class: "field" }, h("span", { class: "field-label" }, t("ticketCategoryLabel")), h("input", { class: "category-label", type: "text", maxLength: 80, required: true, value: value.label, placeholder: t("ticketCategoryLabelPlaceholder") })),
+      h("label", { class: "field category-emoji-field" }, h("span", { class: "field-label" }, t("ticketCategoryEmoji")), h("input", { class: "category-emoji", type: "text", maxLength: 64, value: value.emoji ?? "", placeholder: "🐞" })),
+      h("label", { class: "field" }, h("span", { class: "field-label" }, t("ticketCategoryStaff")), picker({ id: `staff-${value.id}`, options: roles, value: value.staffRoleId, emptyLabel: t("ticketCategoryStaffDefault") })),
+      h("label", { class: "field" }, h("span", { class: "field-label" }, t("ticketCategoryDescription")), h("input", { class: "category-description", type: "text", maxLength: 200, value: value.description ?? "", placeholder: t("ticketCategoryDescriptionPlaceholder") })),
+    ),
+    h(
+      "label",
+      { class: "field" },
+      h("span", { class: "field-label" }, t("ticketCategoryQuestions")),
+      h("textarea", { class: "category-questions", rows: 3, placeholder: t("ticketCategoryQuestionsPlaceholder") }, value.questions.join("\n")),
+      h("span", { class: "help" }, t("ticketCategoryQuestionsHelp", { max: MAX_CATEGORY_QUESTIONS })),
+    ),
+    h("div", { class: "toolbar" }, h("span", { class: "grow" }), h("button", { class: "ghost small", type: "button", onclick: () => onRemove(row) }, t("tagRemove"))),
+  );
+  row.querySelector("select").classList.add("category-staff");
+  return row;
+}
+
+function readTicketCategories(form) {
+  const categories = [...form.querySelectorAll(".category-row")].map((row) => ({
+    id: row.dataset.id,
+    label: row.querySelector(".category-label").value.trim(),
+    emoji: row.querySelector(".category-emoji").value.trim() || null,
+    description: row.querySelector(".category-description").value.trim() || null,
+    staffRoleId: row.querySelector(".category-staff").value || null,
+    questions: row
+      .querySelector(".category-questions")
+      .value.split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean),
+  }));
+  return categories.length > 0 ? categories : null;
+}
+
+// The panel's buttons ("ticket types"), for people who can change settings.
+function ticketCategoriesCard(guildId, data) {
+  const roles = data.roles.filter((role) => role.id !== guildId && !role.managed).map((role) => ({ id: role.id, label: `@${role.name}` }));
+  const categories = editableList({
+    items: data.settings.ticketCategories ?? [],
+    max: MAX_TICKET_CATEGORIES,
+    makeRow: (category, remove) => categoryRow(category, roles, remove),
+    focus: ".category-label",
+    emptyKey: "ticketCategoriesNone",
+    addKey: "ticketCategoriesAdd",
+  });
+  const save = h("button", { class: "primary", type: "submit" }, t("save"));
+  const summaryCount = h("span", { class: "muted" }, t("ticketCategoriesSummary", { count: (data.settings.ticketCategories ?? []).length }));
+  const form = h(
+    "form",
+    {
+      onsubmit: async (event) => {
+        event.preventDefault();
+        save.disabled = true;
+        try {
+          const result = await api(`/api/guilds/${guildId}/settings`, { method: "PUT", body: { ticketCategories: readTicketCategories(form) } });
+          data.settings = result.settings;
+          state.cache = { guildId, data, at: Date.now() };
+          summaryCount.textContent = t("ticketCategoriesSummary", { count: (data.settings.ticketCategories ?? []).length });
+          toast(t("ticketCategoriesSaved"));
+        } catch (error) {
+          failed(error);
+        } finally {
+          save.disabled = false;
+        }
+      },
+    },
+    h("div", { class: "toolbar" }, h("p", { class: "help grow" }, t("ticketCategoriesHelp")), categories.count, categories.addButton),
+    categories.empty,
+    categories.list,
+    h("div", { class: "toolbar" }, h("span", { class: "grow" }), save),
+  );
+  return h(
+    "details",
+    { class: "card collapsible" },
+    h("summary", {}, iconChip("layers", "purple"), h("span", { class: "card-title" }, t("ticketCategories")), summaryCount),
+    form,
   );
 }
 
@@ -3703,6 +3794,7 @@ async function showTicketList(guildId, data, query) {
       data,
       "tickets",
       pageHero("tickets", t("ticketsIntro"), data),
+      canManageGuild(data) ? ticketCategoriesCard(guildId, data) : null,
       filters,
       card(t("page_tickets"), "ticket", "cyan", summary, empty, list, h("div", { class: "center" }, more)),
     ),

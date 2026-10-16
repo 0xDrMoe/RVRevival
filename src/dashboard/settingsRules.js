@@ -14,6 +14,7 @@ import { checkLeveling, InvalidLeveling, normalizeLeveling } from "../leveling/c
 import { checkAntiNuke, describeAntiNuke, InvalidAntiNuke } from "../raid/antiNuke.js";
 import { checkRolePersist, InvalidRolePersist } from "../members/rolePersistence.js";
 import { checkAppeals, InvalidAppeals } from "../appeals/config.js";
+import { checkCategories, describeCategories, InvalidCategories } from "../tickets/categories.js";
 import { checkJoinGate, InvalidJoinGate } from "../raid/raid.js";
 import { LogEvent } from "../logs/serverLog.js";
 import { Setting } from "../settings/guildSettings.js";
@@ -72,6 +73,7 @@ export const SETTING_RULES = Object.freeze({
   [Setting.ROLE_PERSIST]: { kind: "rolePersist", label: "Roles on rejoin" },
   [Setting.APPEALS]: { kind: "appeals", types: POSTING_CHANNELS, label: "Ban appeals" },
   [Setting.TAGS]: { kind: "tags", label: "Custom commands" },
+  [Setting.TICKET_CATEGORIES]: { kind: "ticketCategories", label: "Ticket categories" },
   [Setting.STARBOARD]: { kind: "starboard", types: POSTING_CHANNELS, label: "Starboard" },
   [Setting.LEVELING]: { kind: "leveling", label: "Leveling" },
   [Setting.JOIN_GATE]: { kind: "joinGate", label: "Raid protection" },
@@ -221,6 +223,15 @@ function checkValue(setting, value, { guildId, channels, roles }) {
         }
         throw error;
       }
+    case "ticketCategories":
+      try {
+        return checkCategories(value, { isRole: (id) => roleOk(id) && !roles.find((role) => role.id === id).managed });
+      } catch (error) {
+        if (error instanceof InvalidCategories) {
+          throw new InvalidSetting(setting, error.message);
+        }
+        throw error;
+      }
     case "appeals":
       try {
         return checkAppeals(value, { isChannel: (id) => typeof id === "string" && channelOk(id, rule.types) });
@@ -331,6 +342,8 @@ export function describeValue(setting, value) {
       return `<#${value.channelId}> · ${value.emoji} ${value.threshold}`;
     case "antiNuke":
       return describeAntiNuke(value);
+    case "ticketCategories":
+      return describeCategories(value);
     case "appeals":
       return `${value.enabled ? "open" : "closed"} · ${value.channelId ? `<#${value.channelId}>` : "mod-log channel"} · ${value.questions.length} question(s) · wait ${value.cooldownDays} days after a denial`;
     case "rolePersist":

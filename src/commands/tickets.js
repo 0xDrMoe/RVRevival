@@ -7,6 +7,9 @@
 //   /tickets remove member:@x             take them out again
 //   /tickets list                         the open tickets
 //
+// Categories (several buttons, each with its own questions and staff role) are
+// set on the dashboard's Tickets page; see tickets/categories.js.
+//
 // Members open a ticket with the panel's button, which asks what they need
 // help with. The ticket is a private thread in the panel's channel with the
 // member and the staff role in it, and a Close button that the member or staff
@@ -44,13 +47,18 @@ import {
   MAX_REASON_LENGTH,
   MAX_SUBJECT_LENGTH,
   MAX_TITLE_LENGTH,
+  FORM_PREFIX,
   OPEN_BUTTON,
+  OPEN_PREFIX,
+  questionInput,
   serverLanguage,
   threadName,
   TICKET_PERMISSIONS,
+  ticketCategories,
   ticketSettings,
   ticketStaffRoleId,
 } from "../tickets/tickets.js";
+import { findCategory, subjectFromAnswers } from "../tickets/categories.js";
 import { buildTicketTranscript, fetchThreadMessages } from "../tickets/transcript.js";
 import { noModLog } from "../moderation/modLog.js";
 import { isPermissionError } from "../utils/discordErrors.js";
@@ -98,17 +106,45 @@ export function buildTicketsCommandData() {
 
 const timestamp = (ms, style) => `<t:${Math.floor(ms / 1000)}:${style}>`;
 
-function buildTicketForm(language) {
-  const input = new TextInputBuilder()
-    .setCustomId(FORM_INPUT)
-    .setStyle(TextInputStyle.Paragraph)
-    .setRequired(true)
-    .setMaxLength(MAX_SUBJECT_LENGTH)
-    .setPlaceholder(translate(language, "ticketFormPlaceholder"));
-  return new ModalBuilder()
-    .setCustomId(FORM_ID)
-    .setTitle(translate(language, "ticketFormTitle"))
-    .addLabelComponents(new LabelBuilder().setLabel(translate(language, "ticketFormLabel")).setTextInputComponent(input));
+// The form a ticket opens with: the category's questions, or "What do you
+// need help with?".
+function buildTicketForm(language, category) {
+  const answerInput = (customId) =>
+    new TextInputBuilder()
+      .setCustomId(customId)
+      .setStyle(TextInputStyle.Paragraph)
+      .setRequired(true)
+      .setMaxLength(MAX_SUBJECT_LENGTH)
+      .setPlaceholder(translate(language, "ticketFormPlaceholder"));
+  const form = new ModalBuilder()
+    .setCustomId(category ? `${FORM_PREFIX}${category.id}` : FORM_ID)
+    .setTitle((category?.label ?? translate(language, "ticketFormTitle")).slice(0, 45));
+  if (category?.questions.length > 0) {
+    return form.addLabelComponents(
+      category.questions.map((question, index) => new LabelBuilder().setLabel(question).setTextInputComponent(answerInput(questionInput(index)))),
+    );
+  }
+  return form.addLabelComponents(new LabelBuilder().setLabel(translate(language, "ticketFormLabel")).setTextInputComponent(answerInput(FORM_INPUT)));
+}
+
+// A text box's answer, or undefined if the form didn't have it.
+function formValue(interaction, customId) {
+  try {
+    return interaction.fields.getTextInputValue(customId);
+  } catch {
+    return undefined;
+  }
+}
+
+const cleanAnswer = (text) => (text ?? "").replace(/\r\n?/g, "\n").trim().slice(0, MAX_SUBJECT_LENGTH);
+
+// The category a category button or form belongs to: undefined for the
+// single default button, null when the category was removed since.
+function categoryFor(interaction, guildSettings, prefix) {
+  if (!interaction.customId.startsWith(prefix)) {
+    return undefined;
+  }
+  return findCategory(ticketCategories(guildSettings, interaction.guildId), interaction.customId.slice(prefix.length)) ?? null;
 }
 
 // Options:
@@ -243,13 +279,12 @@ export function createTicketsCommand({ tickets, guildSettings, logger, forcedLan
         return answer(Status.REFUSED, "ticketStaffEveryone");
       }
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-      const panel = buildPanelMessage(serverLanguage(guild, forcedLanguage), {
-        title: interaction.options.getString("title")?.trim(),
-        message: interaction.options.getString("message")?.trim(),
-      });
-      let message;
+      const title = interaction.options.getString("title")?.trim() || null;
+      const message = interaction.options.getString("message")?.trim() || null;
+      const panel = buildPanelMessage(serverLanguage(guild, forcedLanguage), { title, message, categories: ticketCategories(guildSettings, guildId) });
+      let posted;
       try {
-        message = await channel.send(panel);
+        posted = await channel.send(panel);
       } catch (error) {
         if (isPermissionError(error)) {
           return answer(Status.FAILED, "ticketCannotCreate", { channel: `<#${channel.id}>` });
@@ -257,7 +292,8 @@ export function createTicketsCommand({ tickets, guildSettings, logger, forcedLan
         throw error;
       }
       await removeOldPanel();
-      await guildSettings.set(guildId, Setting.TICKETS, { channelId: channel.id, messageId: message.id, staffRoleId: role?.id ?? null });
+      // The title and message are kept so the dashboard can redraw the panel when categories change.
+      await guildSettings.set(guildId, Setting.TICKETS, { channelId: channel.id, messageId: posted.id, staffRoleId: role?.id ?? null, title, message });
       const staffRoleId = ticketStaffRoleId(guildSettings, guildId);
       return answer(Status.SUCCESS, staffRoleId ? "ticketPanelPosted" : "ticketPanelPostedNoStaff", {
         channel: `<#${channel.id}>`,
@@ -265,11 +301,10 @@ export function createTicketsCommand({ tickets, guildSettings, logger, forcedLan
       });
     }
 
-    if (!isTicketStaff(interaction, guildSettings) && subcommand !== "close") {
-      return answer(Status.REFUSED, "ticketStaffOnly");
-    }
-
     if (subcommand === "list") {
+      if (!isTicketStaff(interaction, guildSettings)) {
+        return answer(Status.REFUSED, "ticketStaffOnly");
+      }
       const open = tickets.listOpen(guildId);
       if (open.length === 0) {
         return answer(Status.SUCCESS, "ticketsListEmpty");
@@ -296,10 +331,13 @@ export function createTicketsCommand({ tickets, guildSettings, logger, forcedLan
       return answer(Status.REFUSED, "ticketNotATicket");
     }
     if (subcommand === "close") {
-      if (ticket.userId !== interaction.user.id && !isTicketStaff(interaction, guildSettings)) {
+      if (ticket.userId !== interaction.user.id && !isTicketStaff(interaction, guildSettings, ticket)) {
         return answer(Status.REFUSED, "ticketCloseNoPermission");
       }
       return closeTicket(interaction, ticket, interaction.options.getString("reason")?.trim() || null);
+    }
+    if (!isTicketStaff(interaction, guildSettings, ticket)) {
+      return answer(Status.REFUSED, "ticketStaffOnly");
     }
     if (ticket.closedAt !== null) {
       return answer(Status.REFUSED, "ticketAlreadyClosed");
@@ -329,11 +367,15 @@ export function createTicketsCommand({ tickets, guildSettings, logger, forcedLan
     if (!interaction.inCachedGuild() || !ticketSettings(guildSettings, interaction.guildId)) {
       return answer(Status.REFUSED, "ticketsOff");
     }
+    const category = categoryFor(interaction, guildSettings, OPEN_PREFIX);
+    if (category === null) {
+      return answer(Status.REFUSED, "ticketCategoryGone");
+    }
     const open = liveTicket(interaction.guild, interaction.user.id);
     if (open) {
       return answer(Status.REFUSED, "ticketAlreadyOpen", { thread: `<#${open.threadId}>` });
     }
-    await interaction.showModal(buildTicketForm(language));
+    await interaction.showModal(buildTicketForm(language, category));
     return undefined;
   }
 
@@ -345,6 +387,10 @@ export function createTicketsCommand({ tickets, guildSettings, logger, forcedLan
       return answer(Status.REFUSED, "ticketsOff");
     }
     const guild = interaction.guild;
+    const category = categoryFor(interaction, guildSettings, FORM_PREFIX);
+    if (category === null) {
+      return answer(Status.REFUSED, "ticketCategoryGone");
+    }
     const channel = usableChannel(guild, settings.channelId);
     if (!channel) {
       logger.warn("Can't open tickets in the panel's channel; check the bot's permissions there", { guildId: guild.id });
@@ -357,8 +403,24 @@ export function createTicketsCommand({ tickets, guildSettings, logger, forcedLan
     if (tickets.countOpen(guild.id) >= MAX_OPEN_TICKETS) {
       return answer(Status.REFUSED, "ticketTooMany");
     }
-    const subject = interaction.fields.getTextInputValue(FORM_INPUT).replace(/\r\n?/g, "\n").trim().slice(0, MAX_SUBJECT_LENGTH);
-    const ticket = tickets.open({ guildId: guild.id, userId: interaction.user.id, subject: subject || "—", createdAt: now() });
+    // The form was built from the questions when the button was pressed; read
+    // what came back rather than trusting the questions haven't changed since.
+    const answers =
+      category?.questions.length > 0
+        ? category.questions
+            .map((question, index) => {
+              const value = formValue(interaction, questionInput(index));
+              return value === undefined ? null : { question, answer: cleanAnswer(value) || "—" };
+            })
+            .filter(Boolean)
+        : [{ question: null, answer: cleanAnswer(formValue(interaction, FORM_INPUT)) || "—" }];
+    const ticket = tickets.open({
+      guildId: guild.id,
+      userId: interaction.user.id,
+      subject: answers.length > 0 ? subjectFromAnswers(answers) : "—",
+      category: category ? { id: category.id, label: category.label } : null,
+      createdAt: now(),
+    });
     if (!ticket) {
       const existing = tickets.openForUser(guild.id, interaction.user.id);
       return answer(Status.REFUSED, "ticketAlreadyOpen", { thread: existing?.threadId ? `<#${existing.threadId}>` : "—" });
@@ -384,7 +446,7 @@ export function createTicketsCommand({ tickets, guildSettings, logger, forcedLan
     }
     tickets.setThread(ticket.id, thread.id);
 
-    const staffRoleId = settings.staffRoleId ?? ticketStaffRoleId(guildSettings, guild.id);
+    const staffRoleId = category?.staffRoleId ?? settings.staffRoleId ?? ticketStaffRoleId(guildSettings, guild.id);
     await thread.members.add(interaction.user.id);
     await thread.send({
       ...buildTicketWelcome(serverLanguage(guild, forcedLanguage), { ticket, staffRoleId }),
@@ -404,7 +466,7 @@ export function createTicketsCommand({ tickets, guildSettings, logger, forcedLan
     if (!interaction.inCachedGuild() || !ticket || ticket.guildId !== interaction.guildId) {
       return answer(Status.REFUSED, "ticketNotATicket");
     }
-    if (ticket.userId !== interaction.user.id && !isTicketStaff(interaction, guildSettings)) {
+    if (ticket.userId !== interaction.user.id && !isTicketStaff(interaction, guildSettings, ticket)) {
       return answer(Status.REFUSED, "ticketCloseNoPermission");
     }
     return closeTicket(interaction, ticket, null);
@@ -427,6 +489,10 @@ export function createTicketsCommand({ tickets, guildSettings, logger, forcedLan
       [OPEN_BUTTON]: { label: "Open ticket button", handle: handleOpenButton },
       [FORM_ID]: { label: "Ticket form", handle: handleForm },
       [CLOSE_BUTTON]: { label: "Close ticket button", handle: handleCloseButton },
+    },
+    componentPrefixes: {
+      [OPEN_PREFIX]: { label: "Open ticket category button", handle: handleOpenButton },
+      [FORM_PREFIX]: { label: "Ticket category form", handle: handleForm },
     },
   };
 }

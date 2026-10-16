@@ -874,6 +874,30 @@ describe("dashboard", () => {
     expect((await write(cookies, "POST", `/api/appeals/${GUILD_ID}`, { answers: ["again"] })).statusCode).toBe(409);
   });
 
+  it("saves ticket types and redraws the posted panel", async () => {
+    const cookies = await login();
+    const ticketCategories = [{ id: "bugs", label: "Bug report", emoji: "🐞", description: null, staffRoleId: ROLE_ID, questions: ["What happened?"] }];
+    // No panel yet: just saved.
+    expect((await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, { ticketCategories })).statusCode).toBe(200);
+    expect(discord.editMessage).not.toHaveBeenCalled();
+
+    await guildSettings.set(GUILD_ID, Setting.TICKETS, { channelId: TEXT_ID, messageId: "600000000000000001", staffRoleId: null, title: "Help desk", message: null });
+    const both = [...ticketCategories, { id: "other", label: "Other", emoji: null, description: "Anything else", staffRoleId: null, questions: [] }];
+    expect((await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, { ticketCategories: both })).statusCode).toBe(200);
+    const [channelId, messageId, payload] = discord.editMessage.mock.calls[0];
+    expect([channelId, messageId]).toEqual([TEXT_ID, "600000000000000001"]);
+    expect(payload.embeds[0]).toMatchObject({ title: "Help desk", fields: [{ name: "Other", value: "Anything else" }] });
+    expect(payload.components[0].components.map((button) => button.custom_id)).toEqual(["tk:open:bugs", "tk:open:other"]);
+
+    // A panel from before titles were saved keeps its text: only the buttons change.
+    await guildSettings.set(GUILD_ID, Setting.TICKETS, { channelId: TEXT_ID, messageId: "600000000000000001", staffRoleId: null });
+    await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, { ticketCategories: null });
+    expect(discord.editMessage.mock.calls[1][2]).toEqual({ components: [expect.objectContaining({ components: [expect.objectContaining({ custom_id: "tk:open" })] })] });
+
+    const bad = await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, { ticketCategories: [{ ...ticketCategories[0], emoji: "nope" }] });
+    expect(bad.statusCode).toBe(400);
+  });
+
   it("logs out and forgets the session", async () => {
     const cookies = await login();
     expect((await write(cookies, "POST", "/auth/logout")).statusCode).toBe(200);

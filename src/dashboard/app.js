@@ -44,6 +44,8 @@ import { SavedRoles, SavedRoleStore } from "../members/savedRoleStore.js";
 import { TempRoleStore } from "../tempRoles/tempRoleStore.js";
 import { AppealStatus, APPEAL_STATUSES, AppealStore } from "../appeals/appealStore.js";
 import { appealQuestions, MAX_ANSWER_LENGTH, normalizeAppeals } from "../appeals/config.js";
+import { normalizeCategories } from "../tickets/categories.js";
+import { buildPanelButtons, buildPanelMessage } from "../tickets/tickets.js";
 import { ScheduledMessageStore } from "../scheduled/scheduledMessageStore.js";
 import { MAX_DELAY_MS, MAX_INTERVAL_MS, MAX_SCHEDULED, MAX_SCHEDULED_LENGTH, MIN_INTERVAL_MS } from "../scheduled/scheduler.js";
 import { buildCaseEmbed } from "../moderation/modLog.js";
@@ -379,6 +381,32 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     [Setting.APPEALS]: normalizeAppeals(guildSettings.get(guildId, Setting.APPEALS)),
   });
 
+  // Gives the ticket panel's message the current category buttons. Panels
+  // posted before titles were saved keep their text and only get new buttons.
+  // Returns false if Discord refused (the message was deleted, say).
+  async function redrawTicketPanel(guildId, guild) {
+    const panel = guildSettings.get(guildId, Setting.TICKETS);
+    if (!panel?.channelId) {
+      return true;
+    }
+    const language = pickLanguage(guild.preferred_locale, config.forcedLanguage);
+    const categories = normalizeCategories(guildSettings.get(guildId, Setting.TICKET_CATEGORIES));
+    let payload;
+    if ("title" in panel) {
+      const message = buildPanelMessage(language, { title: panel.title, message: panel.message, categories });
+      payload = { embeds: message.embeds.map((embed) => embed.toJSON()), components: message.components.map((row) => row.toJSON()) };
+    } else {
+      payload = { components: [buildPanelButtons(language, categories).toJSON()] };
+    }
+    try {
+      await discord.editMessage(panel.channelId, panel.messageId, payload);
+      return true;
+    } catch (error) {
+      logger.warn("Couldn't update the ticket panel", { guildId, error });
+      return false;
+    }
+  }
+
   const communityDefaults = (guild) => {
     const language = pickLanguage(guild.preferred_locale, config.forcedLanguage);
     return {
@@ -559,6 +587,9 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
         await guildSettings.set(guildId, setting, value);
       }
       lines.push(`**${SETTING_RULES[setting].label}:** ${describeValue(setting, before)} → ${describeValue(setting, value)}`);
+      if (setting === Setting.TICKET_CATEGORIES && !(await redrawTicketPanel(guildId, guild))) {
+        lines.push("The ticket panel couldn't be updated; post it again with `/tickets panel`.");
+      }
     }
     if (lines.length > 0) {
       logger.info("Dashboard settings change", { guildId, userId: session.userId, settings: Object.keys(changes) });
@@ -781,6 +812,7 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     userId: ticket.userId,
     userName: names[ticket.userId] ?? null,
     subject: ticket.subject,
+    category: ticket.categoryLabel,
     threadId: ticket.threadId,
     createdAt: ticket.createdAt,
     closedAt: ticket.closedAt,

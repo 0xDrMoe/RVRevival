@@ -968,5 +968,7 @@
 
   "appealAcceptedDm": "Seu recurso de banimento em **{server}** foi aceito. Você pode entrar de novo.",
   "appealDeniedDm": "Seu recurso de banimento em **{server}** foi negado.",
-  "dmAppeal": "Você pode recorrer deste banimento aqui: {url}"
+  "dmAppeal": "Você pode recorrer deste banimento aqui: {url}",
+
+  "ticketCategoryGone": "Esse tipo de ticket foi removido. Peça à equipe para postar o painel de novo com `/tickets panel`."
 }

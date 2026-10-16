@@ -615,5 +615,21 @@
   "appealAnswerPlaceholder": "إجابتك",
   "appealAnswerAll": "أجب عن كل الأسئلة أولًا.",
   "appealSend": "إرسال الطعن",
-  "appealSent": "تم إرسال طعنك. ستصلك رسالة خاصة عند قرار الطاقم (أبقِ الرسائل الخاصة من أعضاء الخادم مفتوحة)."
+  "appealSent": "تم إرسال طعنك. ستصلك رسالة خاصة عند قرار الطاقم (أبقِ الرسائل الخاصة من أعضاء الخادم مفتوحة).",
+  "ticketCategories": "أنواع التذاكر",
+  "ticketCategoriesSummary": "{count} مُعدّة",
+  "ticketCategoriesHelp": "أعطِ اللوحة زرًا لكل نوع من التذاكر، لكلٍّ أسئلته وطاقمه. بدون أنواع، تحتوي اللوحة على زر واحد لفتح تذكرة. الحفظ يحدّث اللوحة المنشورة.",
+  "ticketCategoriesNone": "لا توجد أنواع تذاكر: اللوحة فيها زر واحد لفتح تذكرة.",
+  "ticketCategoriesAdd": "إضافة نوع",
+  "ticketCategoriesSaved": "تم حفظ أنواع التذاكر.",
+  "ticketCategoryLabel": "نص الزر",
+  "ticketCategoryLabelPlaceholder": "الإبلاغ عن خلل",
+  "ticketCategoryEmoji": "إيموجي",
+  "ticketCategoryStaff": "دور الطاقم",
+  "ticketCategoryStaffDefault": "دور طاقم اللوحة",
+  "ticketCategoryDescription": "الوصف في اللوحة",
+  "ticketCategoryDescriptionPlaceholder": "هل هناك خلل في اللعبة؟ أخبرنا هنا.",
+  "ticketCategoryQuestions": "الأسئلة",
+  "ticketCategoryQuestionsPlaceholder": "ماذا حدث؟\nعلى أي منصة تلعب؟",
+  "ticketCategoryQuestionsHelp": "سؤال في كل سطر، حتى {max}، بحد 45 حرفًا لكل سؤال (حد Discord). اتركه فارغًا لسؤالهم عمّا يحتاجون المساعدة فيه."
 }

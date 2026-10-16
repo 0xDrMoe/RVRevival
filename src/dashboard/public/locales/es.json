@@ -615,5 +615,21 @@
   "appealAnswerPlaceholder": "Tu respuesta",
   "appealAnswerAll": "Responde todas las preguntas primero.",
   "appealSend": "Enviar apelación",
-  "appealSent": "Tu apelación se envió. Recibirás un MD cuando el staff decida (mantén abiertos los MD de miembros del servidor)."
+  "appealSent": "Tu apelación se envió. Recibirás un MD cuando el staff decida (mantén abiertos los MD de miembros del servidor).",
+  "ticketCategories": "Tipos de ticket",
+  "ticketCategoriesSummary": "{count} configurados",
+  "ticketCategoriesHelp": "Da al panel un botón por cada tipo de ticket, cada uno con sus preguntas y su staff. Sin ninguno, el panel tiene un solo botón de Abrir ticket. Al guardar se actualiza el panel publicado.",
+  "ticketCategoriesNone": "No hay tipos de ticket: el panel tiene un solo botón de Abrir ticket.",
+  "ticketCategoriesAdd": "Añadir tipo",
+  "ticketCategoriesSaved": "Tipos de ticket guardados.",
+  "ticketCategoryLabel": "Texto del botón",
+  "ticketCategoryLabelPlaceholder": "Reportar un bug",
+  "ticketCategoryEmoji": "Emoji",
+  "ticketCategoryStaff": "Rol de staff",
+  "ticketCategoryStaffDefault": "El rol de staff del panel",
+  "ticketCategoryDescription": "Descripción en el panel",
+  "ticketCategoryDescriptionPlaceholder": "¿Algo no funciona en el juego? Cuéntanos aquí.",
+  "ticketCategoryQuestions": "Preguntas",
+  "ticketCategoryQuestionsPlaceholder": "¿Qué pasó?\n¿En qué plataforma juegas?",
+  "ticketCategoryQuestionsHelp": "Una por línea, hasta {max}, de 45 caracteres cada una (límite de Discord). Déjalo vacío para preguntar en qué necesitan ayuda."
 }

@@ -615,5 +615,21 @@
   "appealAnswerPlaceholder": "Ta réponse",
   "appealAnswerAll": "Réponds d'abord à toutes les questions.",
   "appealSend": "Envoyer l'appel",
-  "appealSent": "Ton appel a été envoyé. Tu recevras un MP quand le staff aura décidé (garde les MP des membres du serveur ouverts)."
+  "appealSent": "Ton appel a été envoyé. Tu recevras un MP quand le staff aura décidé (garde les MP des membres du serveur ouverts).",
+  "ticketCategories": "Types de ticket",
+  "ticketCategoriesSummary": "{count} configurés",
+  "ticketCategoriesHelp": "Donne au panneau un bouton par type de ticket, chacun avec ses questions et son staff. Sans type, le panneau a un seul bouton Ouvrir un ticket. Enregistrer met à jour le panneau publié.",
+  "ticketCategoriesNone": "Aucun type de ticket : le panneau a un seul bouton Ouvrir un ticket.",
+  "ticketCategoriesAdd": "Ajouter un type",
+  "ticketCategoriesSaved": "Types de ticket enregistrés.",
+  "ticketCategoryLabel": "Texte du bouton",
+  "ticketCategoryLabelPlaceholder": "Signaler un bug",
+  "ticketCategoryEmoji": "Emoji",
+  "ticketCategoryStaff": "Rôle du staff",
+  "ticketCategoryStaffDefault": "Le rôle de staff du panneau",
+  "ticketCategoryDescription": "Description sur le panneau",
+  "ticketCategoryDescriptionPlaceholder": "Quelque chose ne marche pas dans le jeu ? Dis-le ici.",
+  "ticketCategoryQuestions": "Questions",
+  "ticketCategoryQuestionsPlaceholder": "Que s'est-il passé ?\nSur quelle plateforme joues-tu ?",
+  "ticketCategoryQuestionsHelp": "Une par ligne, jusqu'à {max}, 45 caractères chacune (limite de Discord). Laisse vide pour demander de quoi ils ont besoin."
 }
