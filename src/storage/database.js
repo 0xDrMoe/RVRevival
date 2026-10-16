@@ -211,6 +211,20 @@ const MIGRATIONS = [
   ) WITHOUT ROWID;
   CREATE INDEX birthdays_by_date ON birthdays (guild_id, month, day);
   `,
+  // 14: what people changed on the dashboard (Activity page). lines is a JSON
+  // array of strings. Only the newest few hundred per server are kept.
+  `
+  CREATE TABLE dashboard_activity (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    guild_id    TEXT    NOT NULL,
+    user_id     TEXT    NOT NULL,
+    user_name   TEXT    NOT NULL,
+    summary     TEXT    NOT NULL,
+    lines       TEXT    NOT NULL,
+    created_at  INTEGER NOT NULL
+  );
+  CREATE INDEX dashboard_activity_by_guild ON dashboard_activity (guild_id, id);
+  `,
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS.length;

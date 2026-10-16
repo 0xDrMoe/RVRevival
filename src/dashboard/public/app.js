@@ -2,17 +2,24 @@
 // part of the address after "#":
 //
 //   #/                     your servers
-//   #/g/<id>/overview      a server's numbers at a glance
+//   #/g/<id>/overview      a server's numbers at a glance, and which features are on
+//   #/g/<id>/activity      every change made on the dashboard (?before=)
 //   #/g/<id>/cases         moderation cases (?q=&action=&user=&moderator=&from=&to=)
 //   #/g/<id>/members       find a member (?q=), or one member's history (?user=)
 //   #/g/<id>/tickets       support tickets (?status=&user=), or one ticket's transcript (?ticket=)
-//   #/g/<id>/moderation    staff and mod roles, the mod log
-//   #/g/<id>/logging       log channels, events and ignored channels
 //   #/g/<id>/automod       automod rules, punishments and exemptions
-//   #/g/<id>/community     welcome and leave messages, autoroles, role panels
-//   #/g/<id>/tags          custom commands (saved answers for /tag)
+//   #/g/<id>/raid          the new-account gate, join alerts and a running lockdown
+//   #/g/<id>/welcome       welcome and leave messages
+//   #/g/<id>/roles         autoroles and role panels
+//   #/g/<id>/starboard     the starboard
+//   #/g/<id>/birthdays     birthday greetings and role
 //   #/g/<id>/levels        leveling: XP, level-up messages, reward roles, the leaderboard (?page=)
 //   #/g/<id>/country       the /country channel
+//   #/g/<id>/tags          custom commands (saved answers for /tag)
+//   #/g/<id>/responders    auto-responders
+//   #/g/<id>/scheduled     scheduled messages
+//   #/g/<id>/moderation    staff and mod roles, the mod log
+//   #/g/<id>/logging       log channels, events and ignored channels
 //   #/g/<id>/access        roles: who can open the dashboard, and every role
 //
 // Everything shown comes from the JSON API in ../app.js. Text from Discord
@@ -82,22 +89,126 @@ const ACCENTS = ["blurple", "violet", "pink", "orange", "gold", "green", "cyan",
 const DENSITIES = ["comfortable", "compact"];
 const DEFAULT_APPEARANCE = { theme: "auto", accent: "blurple", density: "comfortable" };
 
-// The pages of one server. Pages in the settings group need Manage Server.
-const PAGES = [
-  { id: "overview", icon: "📊", tone: "blue" },
-  { id: "cases", icon: "🗂️", tone: "pink" },
-  { id: "members", icon: "👤", tone: "purple" },
-  { id: "tickets", icon: "🎫", tone: "cyan" },
-  { id: "moderation", icon: "🛡️", tone: "red", settings: true },
-  { id: "logging", icon: "📜", tone: "amber", settings: true },
-  { id: "automod", icon: "🤖", tone: "blue", settings: true },
-  { id: "community", icon: "👋", tone: "pink", settings: true },
-  { id: "tags", icon: "💬", tone: "amber", settings: true },
-  { id: "scheduled", icon: "🗓️", tone: "blue", settings: true },
-  { id: "levels", icon: "🏆", tone: "green", settings: true },
-  { id: "country", icon: "🌍", tone: "green", settings: true },
-  { id: "access", icon: "🎭", tone: "purple", settings: true },
+// The pages of one server, in sidebar groups. `manage` pages need Manage
+// Server; the others are also open to dashboard roles. `on` says whether the
+// feature is switched on, for the dot in the sidebar and the overview.
+const NAV = [
+  {
+    group: "general",
+    pages: [
+      { id: "overview", icon: "home", tone: "blue" },
+      { id: "activity", icon: "activity", tone: "purple", manage: true },
+    ],
+  },
+  {
+    group: "moderation",
+    pages: [
+      { id: "cases", icon: "folder", tone: "pink" },
+      { id: "members", icon: "users", tone: "purple" },
+      { id: "tickets", icon: "ticket", tone: "cyan" },
+    ],
+  },
+  {
+    group: "protection",
+    pages: [
+      { id: "automod", icon: "bot", tone: "blue", manage: true, on: (s) => Boolean(s.automod?.enabled) },
+      { id: "raid", icon: "shield", tone: "red", manage: true, on: (s) => Boolean(s.joinGate?.minAgeDays || s.joinGate?.alertJoins) },
+    ],
+  },
+  {
+    group: "community",
+    pages: [
+      { id: "welcome", icon: "userPlus", tone: "pink", manage: true, on: (s) => Boolean(s.welcomeChannelId || s.welcomeDm || s.leaveChannelId) },
+      { id: "roles", icon: "layers", tone: "green", manage: true, on: (s) => (s.autoroleIds ?? []).length > 0 || (s.rolePanels ?? []).length > 0 },
+      { id: "starboard", icon: "star", tone: "amber", manage: true, on: (s) => Boolean(s.starboard?.channelId) },
+      { id: "birthdays", icon: "cake", tone: "pink", manage: true, on: (s) => Boolean(s.birthdays) },
+      { id: "levels", icon: "trophy", tone: "green", manage: true, on: (s) => Boolean(s.leveling?.enabled) },
+      { id: "country", icon: "globe", tone: "cyan", manage: true, on: (s) => Boolean(s.countryChannelId) },
+    ],
+  },
+  {
+    group: "messages",
+    pages: [
+      { id: "tags", icon: "tag", tone: "amber", manage: true, on: (s) => (s.tags ?? []).length > 0 },
+      { id: "responders", icon: "repeat", tone: "cyan", manage: true, on: (s) => (s.autoResponders ?? []).length > 0 },
+      { id: "scheduled", icon: "calendar", tone: "blue", manage: true },
+    ],
+  },
+  {
+    group: "settings",
+    pages: [
+      { id: "moderation", icon: "sliders", tone: "red", manage: true },
+      { id: "logging", icon: "list", tone: "amber", manage: true, on: (s) => Boolean(s.logsChannelId || s.serverLogChannelId) },
+      { id: "access", icon: "key", tone: "purple", manage: true },
+    ],
+  },
 ];
+const PAGES = NAV.flatMap((section) => section.pages.map((page) => ({ ...page, group: section.group })));
+// Addresses from older versions of the dashboard.
+const PAGE_ALIASES = { settings: "moderation", community: "welcome" };
+
+// Icons: the inside of a 24×24 stroked SVG. Fixed markup, never built from data.
+const ICONS = {
+  home: '<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M10 21v-6h4v6"/>',
+  activity: '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>',
+  folder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+  users: '<circle cx="9" cy="8" r="4"/><path d="M2 21a7 7 0 0 1 14 0"/><path d="M16 3.5a4 4 0 0 1 0 9"/><path d="M22 21a7 7 0 0 0-5-6.7"/>',
+  user: '<circle cx="12" cy="8" r="4"/><path d="M5 21a7 7 0 0 1 14 0"/>',
+  userPlus: '<circle cx="9" cy="8" r="4"/><path d="M2 21a7 7 0 0 1 14 0"/><path d="M19 8v6M16 11h6"/>',
+  ticket: '<path d="M3 9V6a1 1 0 0 1 1-1h16a1 1 0 0 1 1 1v3a3 3 0 0 0 0 6v3a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-3a3 3 0 0 0 0-6z"/><path d="M14 6v2M14 11v2M14 16v2"/>',
+  bot: '<rect x="4" y="8" width="16" height="12" rx="3"/><path d="M12 4v4"/><circle cx="12" cy="3" r="1"/><path d="M9 13v1M15 13v1M2 13v3M22 13v3"/>',
+  shield: '<path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"/>',
+  shieldCheck: '<path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"/><path d="m9 12 2 2 4-4"/>',
+  layers: '<path d="m12 3 9 5-9 5-9-5z"/><path d="m3 13 9 5 9-5"/>',
+  star: '<path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/>',
+  cake: '<path d="M4 21h16"/><path d="M5 21v-7a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v7"/><path d="M5 16c2 1.5 3.5 1.5 5 0s3.5-1.5 5 0 3.5 1.5 4 0"/><path d="M12 12V8"/>',
+  trophy: '<path d="M8 21h8M12 17v4"/><path d="M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/>',
+  globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>',
+  tag: '<path d="M3 12V4a1 1 0 0 1 1-1h8l9 9-9 9z"/><circle cx="8" cy="8" r="1.5"/>',
+  repeat: '<path d="m17 2 4 4-4 4"/><path d="M3 11V9a3 3 0 0 1 3-3h15"/><path d="m7 22-4-4 4-4"/><path d="M21 13v2a3 3 0 0 1-3 3H3"/>',
+  calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/>',
+  sliders: '<path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/>',
+  list: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
+  key: '<circle cx="8" cy="15" r="4"/><path d="m11 12 9-9M17 6l3 3M15 8l2 2"/>',
+  search: '<circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>',
+  menu: '<path d="M4 6h16M4 12h16M4 18h16"/>',
+  chevronDown: '<path d="m6 9 6 6 6-6"/>',
+  chevronLeft: '<path d="m15 18-6-6 6-6"/>',
+  chevronRight: '<path d="m9 18 6-6-6-6"/>',
+  check: '<path d="M20 6 9 17l-5-5"/>',
+  x: '<path d="M18 6 6 18M6 6l12 12"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5M21 12H9"/>',
+  download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5M12 15V3"/>',
+  upload: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5M12 3v12"/>',
+  palette: '<path d="M12 21a9 9 0 1 1 9-9c0 2.5-2 3-3.5 3H15a2 2 0 0 0-1.5 3.3A1.6 1.6 0 0 1 12 21z"/><circle cx="7.5" cy="11" r="1"/><circle cx="10.5" cy="7" r="1"/><circle cx="15.5" cy="8" r="1"/>',
+  mic: '<rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 17v4"/>',
+  clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  alert: '<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/>',
+  eyeOff: '<path d="m3 3 18 18"/><path d="M10.6 5.1A10 10 0 0 1 12 5c6 0 10 7 10 7a17 17 0 0 1-3.2 3.9M6.6 6.6C3.9 8.4 2 12 2 12s4 7 10 7a9.7 9.7 0 0 0 5.4-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/>',
+  zap: '<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>',
+  gavel: '<path d="m14 13-8.5 8.5a2.1 2.1 0 0 1-3-3L11 10"/><path d="m16 16 6-6M8 8l6-6M9 7l8 8M21 11l-8-8"/>',
+  gift: '<rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13M5 12v9h14v-9"/><path d="M12 8S10.5 3 8 3a2.5 2.5 0 0 0 0 5M12 8s1.5-5 4-5a2.5 2.5 0 0 1 0 5"/>',
+  message: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+  edit: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
+  sparkles: '<path d="m12 3 1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="m19 15 .8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/>',
+  chart: '<path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 6-6"/>',
+  barChart: '<path d="M12 20V10M18 20V4M6 20v-4"/>',
+  hash: '<path d="M4 9h16M4 15h16M10 3 8 21M16 3l-2 18"/>',
+  file: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8"/>',
+  copy: '<rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/>',
+  external: '<path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>',
+  refresh: '<path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/>',
+  lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
+  bell: '<path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/>',
+  rss: '<path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/>',
+  image: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/>',
+  pin: '<path d="M12 17v5M9 3h6l-1 6 3 3v2H7v-2l3-3z"/>',
+  moon: '<path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z"/>',
+  archive: '<rect x="2" y="3" width="20" height="5" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8M10 12h4"/>',
+  userX: '<circle cx="9" cy="8" r="4"/><path d="M2 21a7 7 0 0 1 14 0"/><path d="m17 8 5 5M22 8l-5 5"/>',
+  volume: '<path d="M11 5 6 9H2v6h4l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14"/>',
+};
 
 // Permission bits shown as badges on the roles page. Administrator includes
 // all the others, so it's shown alone.
@@ -123,7 +234,13 @@ const state = {
   unsaved: false,
   // The address of the page shown, to go back to if leaving is cancelled.
   lastHash: location.hash,
+  // The last server loaded, reused for a few seconds so moving between pages is instant.
+  cache: null,
+  // The sidebar and content area of the server shown, kept between its pages.
+  shell: null,
 };
+// How long a loaded server is reused before asking again.
+const GUILD_CACHE_MS = 15_000;
 const main = document.getElementById("main");
 
 // --- Storage -------------------------------------------------------------------
@@ -216,6 +333,12 @@ function svg(tag, attributes = {}, ...children) {
 }
 
 function show(...children) {
+  if (!(children.length === 1 && children[0] === state.shell?.element)) {
+    document.body.classList.remove("in-guild");
+  }
+  if (children.length === 1 && main.firstChild === children[0] && main.childElementCount === 1) {
+    return;
+  }
   main.replaceChildren(...children);
 }
 
@@ -265,30 +388,70 @@ function fillBar(className, fraction) {
   return fill;
 }
 
-function hero(title, intro, tone) {
-  return h("header", { class: `hero tone-${tone}` }, h("h1", {}, title), intro ? h("p", {}, intro) : null);
+// An icon from ICONS as an inline SVG.
+function icon(name, className = "icon") {
+  const element = svg("svg", {
+    class: className,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    "stroke-width": "2",
+    "stroke-linecap": "round",
+    "stroke-linejoin": "round",
+    "aria-hidden": "true",
+    focusable: "false",
+  });
+  element.innerHTML = ICONS[name] ?? ICONS.sparkles;
+  return element;
 }
 
-function card(title, icon, tone, ...children) {
+// A colored square with an icon in it, for cards and page headers.
+const iconChip = (name, tone, size = "") => h("span", { class: `chip-icon tone-${tone} ${size}`.trim(), "aria-hidden": "true" }, icon(name));
+
+// The title of a page: its icon, name and what it's for. `extra` goes on the right (a status, buttons).
+function hero(title, intro, tone, { iconName, extra } = {}) {
   return h(
-    "section",
-    { class: "card" },
-    h("h2", { class: "card-title" }, h("span", { class: `chip-icon tone-${tone}`, "aria-hidden": "true" }, icon), title),
-    ...children,
+    "header",
+    { class: "hero" },
+    iconName ? iconChip(iconName, tone, "lg") : null,
+    h("div", { class: "hero-text" }, h("h1", {}, title), intro ? h("p", {}, intro) : null),
+    extra ? h("div", { class: "hero-extra" }, extra) : null,
   );
+}
+
+// The header of a server page, from its entry in NAV.
+function pageHero(pageId, intro, data, extra) {
+  const page = PAGES.find((entry) => entry.id === pageId);
+  const on = page?.on && data?.settings ? page.on(data.settings) : undefined;
+  const status = on === undefined ? null : h("span", { class: `status ${on ? "on" : "off"}` }, t(on ? "featureOn" : "featureOff"));
+  return hero(t(`page_${pageId}`), intro, page?.tone ?? "blue", { iconName: page?.icon, extra: [status, extra].filter(Boolean) });
+}
+
+function card(title, iconName, tone, ...children) {
+  return h("section", { class: "card" }, h("h2", { class: "card-title" }, iconChip(iconName, tone), title), ...children);
 }
 
 // A number tile with a label, linking somewhere when `href` is given.
-function tile(icon, tone, value, label, sub, href) {
+function tile(iconName, tone, value, label, sub, href) {
   return h(
     href ? "a" : "div",
     { class: `stat card tone-${tone}`, href },
-    h("span", { class: `chip-icon tone-${tone}`, "aria-hidden": "true" }, icon),
+    h("span", { class: "stat-head" }, h("span", { class: "stat-label" }, label), iconChip(iconName, tone, "sm")),
     h("span", { class: "stat-value" }, value),
-    h("span", { class: "stat-label" }, label),
     sub ? h("span", { class: "stat-sub" }, sub) : null,
   );
 }
+
+// Grey blocks where a page will appear, while it loads.
+const skeleton = () =>
+  h(
+    "div",
+    { class: "skeleton", "aria-busy": "true", "aria-label": t("loading") },
+    h("span", { class: "sk sk-title" }),
+    h("span", { class: "sk sk-line" }),
+    h("span", { class: "sk sk-card" }),
+    h("span", { class: "sk sk-card short" }),
+  );
 
 function field(labelKey, helpKey, control) {
   return h(
@@ -436,7 +599,8 @@ async function api(path, { method = "GET", body } = {}) {
   const data = await response.json().catch(() => ({}));
   if (response.status === 401) {
     state.me = null;
-    renderAccount();
+    state.shell = null;
+    renderChrome();
     showLogin();
     throw new ApiError(401, data);
   }
@@ -458,31 +622,100 @@ function failed(error) {
 
 // --- Account -----------------------------------------------------------------
 
+// The language menu. Changing it redraws everything in the new language.
+function languageSelect() {
+  return h(
+    "select",
+    {
+      class: "language",
+      "aria-label": t("language"),
+      onchange: async (event) => {
+        await loadLanguage(event.currentTarget.value);
+        state.shell = null;
+        renderChrome();
+        route();
+      },
+    },
+    Object.entries(LANGUAGES).map(([code, name]) => h("option", { value: code, selected: code === state.language }, name)),
+  );
+}
+
+// The account button in the top bar and its menu: appearance, language, log out.
+// Logged out, only the language menu is shown.
 function renderAccount() {
   const account = document.getElementById("account");
   if (!state.me) {
-    account.replaceChildren();
+    account.replaceChildren(languageSelect());
     return;
   }
   const { user } = state.me;
   const url = avatarUrl(user);
-  account.replaceChildren(
+  const avatar = () =>
+    url
+      ? h("img", { class: "avatar", src: url, alt: "" })
+      : h("span", { class: "avatar placeholder", "aria-hidden": "true" }, initials(user.username).slice(0, 2));
+  const menu = h(
+    "div",
+    { class: "menu", role: "menu", hidden: true },
+    h("div", { class: "menu-user" }, avatar(), h("strong", {}, user.username)),
     h(
-      "div",
-      { class: "account" },
-      url
-        ? h("img", { class: "avatar", src: url, alt: "" })
-        : h("span", { class: "avatar placeholder", "aria-hidden": "true" }, initials(user.username)),
-      h("span", { class: "account-name" }, user.username),
-      h("button", { class: "ghost small", type: "button", onclick: logout }, t("logout")),
+      "button",
+      { class: "menu-item", type: "button", role: "menuitem", onclick: () => (closeMenus(), openAppearance()) },
+      icon("palette"),
+      t("appearanceTitle"),
     ),
+    h("label", { class: "menu-item" }, icon("globe"), languageSelect()),
+    h("button", { class: "menu-item danger-text", type: "button", role: "menuitem", onclick: logout }, icon("logout"), t("logout")),
   );
+  const button = h(
+    "button",
+    {
+      class: "account-button",
+      type: "button",
+      "aria-haspopup": "menu",
+      "aria-expanded": "false",
+      "aria-label": t("accountMenu"),
+      onclick: (event) => {
+        event.stopPropagation();
+        const open = menu.hidden;
+        closeMenus();
+        menu.hidden = !open;
+        button.setAttribute("aria-expanded", String(open));
+      },
+    },
+    avatar(),
+    h("span", { class: "account-name" }, user.username),
+    icon("chevronDown", "icon small"),
+  );
+  account.replaceChildren(h("div", { class: "account" }, button, menu));
 }
+
+// Closes any open dropdown (account menu, server switcher).
+function closeMenus() {
+  document.querySelectorAll(".menu").forEach((menu) => (menu.hidden = true));
+  document.querySelectorAll("[aria-haspopup][aria-expanded=true]").forEach((button) => button.setAttribute("aria-expanded", "false"));
+}
+
+// The top bar: the menu button (phones), the search button and the account.
+function renderChrome() {
+  const toggle = document.getElementById("menuToggle");
+  toggle.replaceChildren(icon("menu"));
+  toggle.setAttribute("aria-label", t("menu"));
+  const search = document.getElementById("searchButton");
+  search.replaceChildren(icon("search"), h("span", { class: "search-label" }, t("searchButton")), h("kbd", {}, isMac() ? "⌘K" : "Ctrl K"));
+  search.setAttribute("aria-label", t("searchButton"));
+  search.hidden = !state.me;
+  renderAccount();
+}
+
+const isMac = () => /Mac|iPhone|iPad/.test(navigator.platform ?? "");
 
 async function logout() {
   await fetch("/auth/logout", { method: "POST", credentials: "same-origin" }).catch(() => {});
   state.me = null;
-  renderAccount();
+  state.cache = null;
+  state.shell = null;
+  renderChrome();
   location.hash = "#/";
   showLogin();
 }
@@ -506,7 +739,7 @@ function showLogin() {
 
 async function showServers({ refresh = false } = {}) {
   state.me = await api(`/api/me${refresh ? "?refresh=1" : ""}`);
-  renderAccount();
+  renderChrome();
   const ready = state.me.guilds.filter((guild) => guild.botPresent);
   const invitable = state.me.guilds.filter((guild) => !guild.botPresent);
 
@@ -532,7 +765,7 @@ async function showServers({ refresh = false } = {}) {
     serverCard(guild, {
       href: `${state.me.inviteUrl}&guild_id=${guild.id}`,
       banner: "banner-muted",
-      badge: h("span", { class: "badge" }, `＋ ${t("serversInvite")}`),
+      badge: h("span", { class: "badge" }, icon("plus", "icon small"), t("serversInvite")),
       extra: { target: "_blank", rel: "noopener" },
     }),
   );
@@ -552,7 +785,7 @@ async function showServers({ refresh = false } = {}) {
   });
 
   show(
-    hero(t("serversWelcome", { name: state.me.user.username }), t("serversIntro"), "accent"),
+    hero(t("serversWelcome", { name: state.me.user.username }), t("serversIntro"), "accent", { iconName: "layers" }),
     h(
       "div",
       { class: "toolbar" },
@@ -560,7 +793,7 @@ async function showServers({ refresh = false } = {}) {
       h(
         "button",
         { class: "ghost", type: "button", onclick: () => showServers({ refresh: true }).catch(failed) },
-        `↻ ${t("serversRefresh")}`,
+        icon("refresh", "icon small"), t("serversRefresh"),
       ),
     ),
     noMatch,
@@ -572,21 +805,28 @@ async function showServers({ refresh = false } = {}) {
 
 // --- One server ----------------------------------------------------------------
 
-async function loadGuild(guildId) {
+async function loadGuild(guildId, { fresh = false } = {}) {
   if (!state.me) {
     state.me = await api("/api/me");
-    renderAccount();
+    renderChrome();
+  }
+  const cached = state.cache;
+  if (!fresh && cached?.guildId === guildId && Date.now() - cached.at < GUILD_CACHE_MS) {
+    state.guild = cached.data;
+    return cached.data;
   }
   state.guild = await api(`/api/guilds/${guildId}`);
+  state.cache = { guildId, data: state.guild, at: Date.now() };
   return state.guild;
 }
 
 const canManageGuild = (data) => data.access === "manage";
 
 // The server for a settings page, or undefined (after moving on to the
-// overview) for someone who only has a dashboard role.
+// overview) for someone who only has a dashboard role. Settings pages always
+// ask the server again, so they never show stale values.
 async function loadManagedGuild(guildId) {
-  const data = await loadGuild(guildId);
+  const data = await loadGuild(guildId, { fresh: true });
   if (!canManageGuild(data)) {
     location.replace(`#/g/${guildId}/overview`);
     return undefined;
@@ -594,50 +834,217 @@ async function loadManagedGuild(guildId) {
   return data;
 }
 
-// The server's sidebar and the page next to it.
-function guildLayout(data, pageId, ...content) {
+const visiblePages = (data) => PAGES.filter((page) => !page.manage || canManageGuild(data));
+
+// The server switcher at the top of the sidebar: this server, and a menu of the others.
+function guildSwitcher(data) {
   const { guild } = data;
-  const pages = PAGES.filter((page) => !page.settings || canManageGuild(data));
-  const link = (page) =>
-    h(
-      "a",
-      {
-        class: `nav-link${page.id === pageId ? " active" : ""}`,
-        href: `#/g/${guild.id}/${page.id}`,
-        "aria-current": page.id === pageId ? "page" : undefined,
-      },
-      h("span", { class: `nav-icon tone-${page.tone}`, "aria-hidden": "true" }, page.icon),
-      h("span", {}, t(`page_${page.id}`)),
-    );
+  const others = (state.me?.guilds ?? []).filter((entry) => entry.botPresent && entry.id !== guild.id);
   const counts = [
-    guild.memberCount === null ? null : h("span", {}, t("membersCount", { count: formatNumber(guild.memberCount) })),
-    guild.onlineCount === null ? null : h("span", { class: "online" }, t("onlineCount", { count: formatNumber(guild.onlineCount) })),
-  ];
-  const settingsPages = pages.filter((page) => page.settings);
-  return h(
+    guild.memberCount === null ? null : t("membersCount", { count: formatNumber(guild.memberCount) }),
+    guild.onlineCount === null ? null : t("onlineCount", { count: formatNumber(guild.onlineCount) }),
+  ].filter(Boolean);
+  const menu = h(
     "div",
-    { class: "guild-layout" },
-    h(
-      "aside",
-      { class: "sidebar" },
-      h("a", { class: "back", href: "#/" }, t("backToServers")),
-      h(
-        "div",
-        { class: `sidebar-guild ${bannerFor(guild.id)}` },
-        guildIcon(guild, "lg"),
-        h("div", { class: "sidebar-guild-text" }, h("strong", {}, guild.name), h("span", { class: "sidebar-counts" }, counts)),
-      ),
-      h(
-        "nav",
-        { class: "nav", "aria-label": guild.name },
-        pages.filter((page) => !page.settings).map(link),
-        settingsPages.length > 0 ? h("span", { class: "nav-heading" }, t("navSettings")) : null,
-        settingsPages.map(link),
-      ),
-      canManageGuild(data) ? null : h("p", { class: "help sidebar-note" }, t("casesOnlyNote")),
+    { class: "menu switcher-menu", role: "menu", hidden: true },
+    others.map((entry) =>
+      h("a", { class: "menu-item", role: "menuitem", href: `#/g/${entry.id}/overview` }, guildIcon(entry, "xs"), h("span", { class: "grow" }, entry.name)),
     ),
-    h("div", { class: "content" }, ...content),
+    others.length > 0 ? h("hr") : null,
+    h("a", { class: "menu-item", role: "menuitem", href: "#/" }, icon("layers"), t("allServers")),
   );
+  const button = h(
+    "button",
+    {
+      class: "switcher",
+      type: "button",
+      "aria-haspopup": "menu",
+      "aria-expanded": "false",
+      title: t("switchServer"),
+      onclick: (event) => {
+        event.stopPropagation();
+        const open = menu.hidden;
+        closeMenus();
+        menu.hidden = !open;
+        button.setAttribute("aria-expanded", String(open));
+      },
+    },
+    guildIcon(guild, "sm"),
+    h("span", { class: "switcher-text" }, h("strong", {}, guild.name), h("span", { class: "muted" }, counts.join(" · "))),
+    icon("chevronDown", "icon small"),
+  );
+  return h("div", { class: "switcher-wrap" }, button, menu);
+}
+
+// The sidebar's links, grouped, with a dot on features that are switched on.
+function navLinks(data, pageId) {
+  const pages = visiblePages(data);
+  return NAV.map((section) => {
+    const links = section.pages
+      .filter((page) => pages.some((entry) => entry.id === page.id))
+      .map((page) => {
+        const on = page.on && data.settings ? page.on(data.settings) : undefined;
+        return h(
+          "a",
+          {
+            class: `nav-link${page.id === pageId ? " active" : ""}`,
+            href: `#/g/${data.guild.id}/${page.id}`,
+            "data-page": page.id,
+            "aria-current": page.id === pageId ? "page" : undefined,
+          },
+          h("span", { class: `nav-icon tone-${page.tone}` }, icon(page.icon)),
+          h("span", { class: "grow" }, t(`page_${page.id}`)),
+          on ? h("span", { class: "nav-dot", title: t("featureOn") }) : null,
+        );
+      });
+    return links.length > 0 ? h("div", { class: "nav-section" }, h("span", { class: "nav-heading" }, t(`navGroup_${section.group}`)), links) : null;
+  });
+}
+
+// The server's sidebar and the page next to it. The sidebar is kept while
+// moving between this server's pages; only the content is replaced.
+function guildLayout(data, pageId, ...content) {
+  const key = `${data.guild.id}:${data.access}:${state.language}`;
+  if (!state.shell || state.shell.key !== key || !state.shell.element.isConnected) {
+    const nav = h("nav", { class: "nav", "aria-label": data.guild.name });
+    const contentArea = h("div", { class: "content" });
+    const sidebar = h(
+      "aside",
+      { class: "sidebar", id: "sidebar" },
+      guildSwitcher(data),
+      nav,
+      canManageGuild(data) ? null : h("p", { class: "help sidebar-note" }, t("casesOnlyNote")),
+    );
+    const element = h(
+      "div",
+      { class: "guild-layout" },
+      sidebar,
+      h("button", { class: "nav-scrim", type: "button", "aria-label": t("closeMenu"), onclick: () => document.body.classList.remove("nav-open") }),
+      contentArea,
+    );
+    state.shell = { key, element, nav, contentArea, guildId: data.guild.id };
+  }
+  state.shell.nav.replaceChildren(...navLinks(data, pageId).filter(Boolean));
+  state.shell.contentArea.replaceChildren(...content.flat().filter(Boolean));
+  document.body.classList.add("in-guild");
+  document.body.classList.remove("nav-open");
+  return state.shell.element;
+}
+
+// --- Search (Ctrl+K) -------------------------------------------------------------
+
+// Lowercase, without accents, for matching what's typed.
+const searchable = (text) => text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
+// Everything the search box can jump to: this server's pages, then the servers.
+function searchItems() {
+  const items = [];
+  const data = state.guild && state.shell?.guildId === state.guild.guild.id ? state.guild : null;
+  if (data) {
+    for (const page of visiblePages(data)) {
+      const intro = t(`${page.id}Intro`);
+      items.push({
+        kind: "page",
+        icon: page.icon,
+        tone: page.tone,
+        title: t(`page_${page.id}`),
+        sub: t(`navGroup_${page.group}`),
+        text: searchable(`${t(`page_${page.id}`)} ${t(`navGroup_${page.group}`)} ${intro === `${page.id}Intro` ? "" : intro} ${t(`search_${page.id}`)}`),
+        href: `#/g/${data.guild.id}/${page.id}`,
+      });
+    }
+  }
+  for (const guild of (state.me?.guilds ?? []).filter((entry) => entry.botPresent)) {
+    items.push({ kind: "server", guild, title: guild.name, sub: t("searchServers"), text: searchable(guild.name), href: `#/g/${guild.id}/overview` });
+  }
+  return items;
+}
+
+function openSearch() {
+  if (!state.me || document.querySelector("dialog.search")) {
+    return;
+  }
+  const items = searchItems();
+  let shown = [];
+  let selected = 0;
+  const input = h("input", { type: "search", class: "search-input", placeholder: t("searchPlaceholder"), "aria-label": t("searchPlaceholder"), autocomplete: "off" });
+  const list = h("ul", { class: "search-results", role: "listbox" });
+  const go = (item) => {
+    dialog.close();
+    location.hash = item.href;
+  };
+  const paint = () => {
+    list.replaceChildren(
+      ...shown.map((item, index) =>
+        h(
+          "li",
+          {
+            role: "option",
+            class: index === selected ? "selected" : "",
+            "aria-selected": String(index === selected),
+            onclick: () => go(item),
+            onmousemove: () => {
+              if (selected !== index) {
+                selected = index;
+                paint();
+              }
+            },
+          },
+          item.kind === "server" ? guildIcon(item.guild, "xs") : iconChip(item.icon, item.tone, "sm"),
+          h("span", { class: "grow" }, h("strong", {}, item.title), h("span", { class: "muted" }, item.sub)),
+          index === selected ? icon("chevronRight", "icon small") : null,
+        ),
+      ),
+    );
+    if (shown.length === 0) {
+      list.append(h("li", { class: "muted empty" }, t("searchNoResults")));
+    }
+    list.querySelector(".selected")?.scrollIntoView({ block: "nearest" });
+  };
+  const filter = () => {
+    const words = searchable(input.value).split(/\s+/).filter(Boolean);
+    shown = items.filter((item) => words.every((word) => item.text.includes(word))).slice(0, 30);
+    selected = 0;
+    paint();
+  };
+  input.addEventListener("input", filter);
+  input.addEventListener("keydown", (event) => {
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      const step = event.key === "ArrowDown" ? 1 : -1;
+      selected = shown.length === 0 ? 0 : (selected + step + shown.length) % shown.length;
+      paint();
+    } else if (event.key === "Enter" && shown[selected]) {
+      event.preventDefault();
+      go(shown[selected]);
+    }
+  });
+  const dialog = h(
+    "dialog",
+    { class: "search", onclick: (event) => event.target === dialog && dialog.close() },
+    h("div", { class: "search-box" }, icon("search"), input, h("kbd", {}, "Esc")),
+    list,
+  );
+  dialog.addEventListener("close", () => dialog.remove());
+  document.body.append(dialog);
+  dialog.showModal();
+  filter();
+  input.focus();
+}
+
+// Ctrl+K (⌘K on a Mac) or "/" opens the search; "/" is ignored while typing.
+function onShortcut(event) {
+  const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName ?? "") || document.activeElement?.isContentEditable;
+  if ((event.key === "k" || event.key === "K") && (event.ctrlKey || event.metaKey)) {
+    event.preventDefault();
+    openSearch();
+  } else if (event.key === "/" && !typing && !event.ctrlKey && !event.metaKey && !event.altKey) {
+    event.preventDefault();
+    openSearch();
+  } else if (event.key === "Escape") {
+    closeMenus();
+    document.body.classList.remove("nav-open");
+  }
 }
 
 // A <select> of roles or channels, with "Not set" first. A saved value that
@@ -776,8 +1183,12 @@ function settingsPage({ data, pageId, intro, cards, fields, after = null }) {
           Object.keys(saved).forEach((key) => delete saved[key]);
           Object.assign(saved, result.settings);
           data.settings = result.settings;
+          state.cache = { guildId, data, at: Date.now() };
           toast(t("saved"));
           refresh();
+          // The sidebar dots and the page's on/off badge follow what was saved.
+          state.shell?.nav.replaceChildren(...navLinks(data, pageId).filter(Boolean));
+          header.replaceWith((header = pageHero(pageId, intro, data)));
         } catch (error) {
           failed(error);
         } finally {
@@ -788,8 +1199,8 @@ function settingsPage({ data, pageId, intro, cards, fields, after = null }) {
     cards,
     saveBar,
   );
-  const page = PAGES.find((entry) => entry.id === pageId);
-  show(guildLayout(data, pageId, hero(t(`page_${pageId}`), intro, page.tone), form, after));
+  let header = pageHero(pageId, intro, data);
+  show(guildLayout(data, pageId, header, form, after));
 }
 
 const selectValue = (id) => (form) => form.querySelector(`#${id}`).value || null;
@@ -817,8 +1228,6 @@ async function showModeration(guildId) {
   if (!data) {
     return;
   }
-  const gate = data.settings.joinGate ?? {};
-  const lockdown = data.settings.lockdown;
   const roles = roleOptions(data);
   const rolePicker = (key) => picker({ id: key, options: roles, value: data.settings[key], emptyLabel: t("notSet") });
   settingsPage({
@@ -828,14 +1237,14 @@ async function showModeration(guildId) {
     cards: [
       card(
         t("sectionRoles"),
-        "👮",
+        "shield",
         "red",
         field("staffRole", "staffRoleHelp", rolePicker("staffRoleId")),
         field("modRole", "modRoleHelp", rolePicker("modRoleId")),
       ),
       card(
         t("sectionModLog"),
-        "📋",
+        "list",
         "blue",
         field(
           "modLogChannel",
@@ -848,14 +1257,40 @@ async function showModeration(guildId) {
           }),
         ),
       ),
+    ],
+    fields: {
+      staffRoleId: selectValue("staffRoleId"),
+      modRoleId: selectValue("modRoleId"),
+      modLogChannelId: selectValue("modLogChannelId"),
+    },
+  });
+}
+
+async function showRaid(guildId) {
+  const data = await loadManagedGuild(guildId);
+  if (!data) {
+    return;
+  }
+  const gate = data.settings.joinGate ?? {};
+  const lockdown = data.settings.lockdown;
+  settingsPage({
+    data,
+    pageId: "raid",
+    intro: t("raidIntro"),
+    cards: [
+      lockdown
+        ? h(
+            "p",
+            { class: "tip danger" },
+            icon("alert"),
+            h("span", {}, t("raidLockdownActive", { date: formatDate(lockdown.startedAt), count: lockdown.channels?.length ?? 0 })),
+          )
+        : null,
       card(
-        t("sectionRaid"),
-        "🚨",
-        "amber",
-        lockdown
-          ? h("p", { class: "tip danger" }, t("raidLockdownActive", { date: formatDate(lockdown.startedAt), count: lockdown.channels?.length ?? 0 }))
-          : null,
-        h("p", { class: "help" }, t("raidHelp")),
+        t("raidGateTitle"),
+        "userX",
+        "red",
+        h("p", { class: "help" }, t("raidGateHelp")),
         h(
           "div",
           { class: "rule-body" },
@@ -869,16 +1304,17 @@ async function showModeration(guildId) {
               ["kick", "alert"].map((action) => h("option", { value: action, selected: (gate.action ?? "kick") === action }, t(`gateAction_${action}`))),
             ),
           ),
-          field("gateAlertJoins", "gateAlertJoinsHelp", h("input", { id: "gateAlertJoins", type: "number", min: 3, max: 100, step: 1, placeholder: t("off"), value: gate.alertJoins ?? "" })),
         ),
       ),
+      card(
+        t("raidAlertTitle"),
+        "bell",
+        "amber",
+        field("gateAlertJoins", "gateAlertJoinsHelp", h("input", { id: "gateAlertJoins", type: "number", min: 3, max: 100, step: 1, placeholder: t("off"), value: gate.alertJoins ?? "" })),
+      ),
+      card(t("raidLockdownTitle"), "lock", "gray", h("p", { class: "help" }, t("raidLockdownHelp"))),
     ],
-    fields: {
-      staffRoleId: selectValue("staffRoleId"),
-      modRoleId: selectValue("modRoleId"),
-      modLogChannelId: selectValue("modLogChannelId"),
-      joinGate: readJoinGate,
-    },
+    fields: { joinGate: readJoinGate },
   });
 }
 
@@ -924,14 +1360,14 @@ async function showLogging(guildId) {
     cards: [
       card(
         t("sectionChannels"),
-        "📨",
+        "hash",
         "amber",
         field("logsChannel", "logsChannelHelp", channelPicker("logsChannelId")),
         field("serverLogChannel", "serverLogChannelHelp", channelPicker("serverLogChannelId")),
       ),
       card(
         t("sectionServerLog"),
-        "⚡",
+        "zap",
         "purple",
         h(
           "div",
@@ -944,7 +1380,7 @@ async function showLogging(guildId) {
       ),
       card(
         t("ignoredChannels"),
-        "🙈",
+        "eyeOff",
         "gray",
         h("p", { class: "help" }, t("ignoredChannelsHelp")),
         checkList({ name: "ignore", items: ignorable, checked: data.settings.logIgnoredChannels ?? [], filterKey: "filterChannels" }),
@@ -1077,7 +1513,7 @@ async function showAutomod(guildId) {
     cards: [
       card(
         t("amMaster"),
-        "🤖",
+        "bot",
         "blue",
         h(
           "label",
@@ -1089,14 +1525,14 @@ async function showAutomod(guildId) {
       ),
       card(
         t("amRulesTitle"),
-        "🧹",
+        "sparkles",
         "pink",
         h("p", { class: "help" }, t("amRulesHelp")),
         h("div", { class: "rules" }, AUTOMOD_RULES.map((rule) => automodRule(rule, config))),
       ),
       card(
         t("amPunishTitle"),
-        "⚖️",
+        "gavel",
         "red",
         h(
           "div",
@@ -1121,14 +1557,14 @@ async function showAutomod(guildId) {
       ),
       card(
         t("amExemptRoles"),
-        "🎟️",
+        "tag",
         "purple",
         h("p", { class: "help" }, t("amExemptRolesHelp")),
         checkList({ name: "amRole", items: roles, checked: config.exemptRoleIds, filterKey: "filterRoles" }),
       ),
       card(
         t("amExemptChannels"),
-        "🙈",
+        "eyeOff",
         "gray",
         h("p", { class: "help" }, t("amExemptChannelsHelp")),
         checkList({ name: "amChannel", items: channels, checked: config.exemptChannelIds, filterKey: "filterChannels" }),
@@ -1227,9 +1663,8 @@ function birthdayCard(data, postable, defaults) {
   const zones = h("datalist", { id: "birthdayZones" }, ["UTC", ...Intl.supportedValuesOf("timeZone")].map((zone) => h("option", { value: zone })));
   return card(
     t("sectionBirthdays"),
-    "🎂",
+    "cake",
     "pink",
-    h("p", { class: "help" }, t("birthdaysHelp")),
     h(
       "div",
       { class: "rule-body" },
@@ -1253,54 +1688,90 @@ function birthdayCard(data, postable, defaults) {
   );
 }
 
-async function showCommunity(guildId) {
+// The channels the bot can post in, with "Off" first, for community pickers.
+const offPicker = (data, id, value) => picker({ id, options: postableChannels(data), value, emptyLabel: t("communityOff") });
+
+async function showWelcome(guildId) {
   const data = await loadManagedGuild(guildId);
   if (!data) {
     return;
   }
   const { settings } = data;
   const defaults = data.communityDefaults ?? {};
-  const postable = postableChannels(data);
-  const channelPicker = (key) =>
-    picker({ id: key, options: postable, value: key === "starboardChannelId" ? settings.starboard?.channelId : settings[key], emptyLabel: t("communityOff") });
-  const givable = data.roles
-    .filter((role) => !role.managed && (BigInt(role.permissions ?? 0) & AUTOROLE_FORBIDDEN) === 0n)
-    .map((role) => ({ id: role.id, label: `@${role.name}`, dot: roleDot(role) }));
-
   settingsPage({
     data,
-    pageId: "community",
-    intro: t("communityIntro"),
+    pageId: "welcome",
+    intro: t("welcomeIntro"),
     cards: [
       card(
         t("sectionWelcome"),
-        "👋",
+        "userPlus",
         "pink",
-        field("welcomeChannel", "welcomeChannelHelp", channelPicker("welcomeChannelId")),
+        field("welcomeChannel", "welcomeChannelHelp", offPicker(data, "welcomeChannelId", settings.welcomeChannelId)),
         field("welcomeMessage", "messagePlaceholdersHelp", messageBox("welcomeMessage", settings.welcomeMessage, defaults.welcomeMessage)),
-        field("welcomeDm", "welcomeDmHelp", messageBox("welcomeDm", settings.welcomeDm, t("welcomeDmPlaceholder"))),
       ),
+      card(t("welcomeDm"), "message", "blue", field("welcomeDm", "welcomeDmHelp", messageBox("welcomeDm", settings.welcomeDm, t("welcomeDmPlaceholder")))),
       card(
         t("sectionLeave"),
-        "🚪",
+        "logout",
         "gray",
-        field("leaveChannel", "leaveChannelHelp", channelPicker("leaveChannelId")),
+        field("leaveChannel", "leaveChannelHelp", offPicker(data, "leaveChannelId", settings.leaveChannelId)),
         field("leaveMessage", "messagePlaceholdersHelp", messageBox("leaveMessage", settings.leaveMessage, defaults.leaveMessage)),
       ),
+    ],
+    fields: {
+      welcomeChannelId: selectValue("welcomeChannelId"),
+      welcomeMessage: textValue("welcomeMessage"),
+      welcomeDm: textValue("welcomeDm"),
+      leaveChannelId: selectValue("leaveChannelId"),
+      leaveMessage: textValue("leaveMessage"),
+    },
+  });
+}
+
+async function showRoles(guildId) {
+  const data = await loadManagedGuild(guildId);
+  if (!data) {
+    return;
+  }
+  const givable = data.roles
+    .filter((role) => !role.managed && (BigInt(role.permissions ?? 0) & AUTOROLE_FORBIDDEN) === 0n)
+    .map((role) => ({ id: role.id, label: `@${role.name}`, dot: roleDot(role) }));
+  settingsPage({
+    data,
+    pageId: "roles",
+    intro: t("rolesIntro"),
+    cards: [
+      data.guild.community ? h("p", { class: "tip" }, icon("sparkles"), h("span", {}, t("onboardingTip"))) : null,
       card(
         t("sectionAutoroles"),
-        "🎁",
+        "gift",
         "green",
         h("p", { class: "help" }, t("autorolesHelp", { max: MAX_AUTOROLES })),
-        data.guild.community ? h("p", { class: "tip" }, t("onboardingTip")) : null,
-        checkList({ name: "autorole", items: givable, checked: settings.autoroleIds ?? [], filterKey: "filterRoles" }),
+        checkList({ name: "autorole", items: givable, checked: data.settings.autoroleIds ?? [], filterKey: "filterRoles" }),
       ),
+    ],
+    fields: { autoroleIds: checkedList("autorole") },
+    after: card(t("sectionRolePanels"), "layers", "blue", h("p", { class: "help" }, t("rolePanelsHelp")), rolePanelList(data)),
+  });
+}
+
+async function showStarboard(guildId) {
+  const data = await loadManagedGuild(guildId);
+  if (!data) {
+    return;
+  }
+  const starboard = data.settings.starboard ?? {};
+  settingsPage({
+    data,
+    pageId: "starboard",
+    intro: t("starboardHelp"),
+    cards: [
       card(
         t("sectionStarboard"),
-        "⭐",
+        "star",
         "amber",
-        h("p", { class: "help" }, t("starboardHelp")),
-        field("starboardChannel", "starboardChannelHelp", channelPicker("starboardChannelId")),
+        field("starboardChannel", "starboardChannelHelp", offPicker(data, "starboardChannelId", starboard.channelId)),
         h(
           "div",
           { class: "rule-body" },
@@ -1313,36 +1784,28 @@ async function showCommunity(guildId) {
               min: 1,
               max: MAX_STARBOARD_THRESHOLD,
               step: 1,
-              value: settings.starboard?.threshold ?? STARBOARD_DEFAULTS.threshold,
+              value: starboard.threshold ?? STARBOARD_DEFAULTS.threshold,
             }),
           ),
-          field(
-            "starboardEmoji",
-            "starboardEmojiHelp",
-            h("input", { id: "starboardEmoji", maxLength: 64, value: settings.starboard?.emoji ?? STARBOARD_DEFAULTS.emoji }),
-          ),
+          field("starboardEmoji", "starboardEmojiHelp", h("input", { id: "starboardEmoji", maxLength: 64, value: starboard.emoji ?? STARBOARD_DEFAULTS.emoji })),
         ),
       ),
-      birthdayCard(data, postable, defaults),
     ],
-    fields: {
-      welcomeChannelId: selectValue("welcomeChannelId"),
-      welcomeMessage: textValue("welcomeMessage"),
-      welcomeDm: textValue("welcomeDm"),
-      leaveChannelId: selectValue("leaveChannelId"),
-      leaveMessage: textValue("leaveMessage"),
-      autoroleIds: checkedList("autorole"),
-      starboard: readStarboard,
-      birthdays: readBirthdays,
-    },
-    after: card(
-      t("sectionRolePanels"),
-      "🔘",
-      "blue",
-      h("p", { class: "help" }, t("rolePanelsHelp")),
-      data.guild.community ? h("p", { class: "tip" }, t("rolePanelsOnboardingTip")) : null,
-      rolePanelList(data),
-    ),
+    fields: { starboard: readStarboard },
+  });
+}
+
+async function showBirthdays(guildId) {
+  const data = await loadManagedGuild(guildId);
+  if (!data) {
+    return;
+  }
+  settingsPage({
+    data,
+    pageId: "birthdays",
+    intro: t("birthdaysHelp"),
+    cards: [birthdayCard(data, postableChannels(data), data.communityDefaults ?? {})],
+    fields: { birthdays: readBirthdays },
   });
 }
 
@@ -1488,6 +1951,29 @@ async function showTags(guildId) {
     emptyKey: "tagsNone",
     addKey: "tagAdd",
   });
+  settingsPage({
+    data,
+    pageId: "tags",
+    intro: t("tagsIntro"),
+    cards: [
+      card(
+        t("sectionTags"),
+        "tag",
+        "amber",
+        h("div", { class: "toolbar" }, h("p", { class: "help grow" }, t("tagsHelp")), tags.count, tags.addButton),
+        tags.empty,
+        tags.list,
+      ),
+    ],
+    fields: { tags: readTags },
+  });
+}
+
+async function showResponders(guildId) {
+  const data = await loadManagedGuild(guildId);
+  if (!data) {
+    return;
+  }
   const responderChannels = data.channels
     .filter((channel) => [CHANNEL.TEXT, CHANNEL.ANNOUNCEMENT, CHANNEL.FORUM, CHANNEL.CATEGORY].includes(channel.type))
     .map((channel) => ({ id: channel.id, label: channelLabel(channel, data.channels) }));
@@ -1502,27 +1988,19 @@ async function showTags(guildId) {
 
   settingsPage({
     data,
-    pageId: "tags",
-    intro: t("tagsIntro"),
+    pageId: "responders",
+    intro: t("respondersIntro"),
     cards: [
       card(
-        t("sectionTags"),
-        "💬",
-        "amber",
-        h("div", { class: "toolbar" }, h("p", { class: "help grow" }, t("tagsHelp")), tags.count, tags.addButton),
-        tags.empty,
-        tags.list,
-      ),
-      card(
         t("sectionResponders"),
-        "🗨️",
+        "repeat",
         "cyan",
         h("div", { class: "toolbar" }, h("p", { class: "help grow" }, t("respondersHelp")), responders.count, responders.addButton),
         responders.empty,
         responders.list,
       ),
     ],
-    fields: { tags: readTags, autoResponders: readResponders },
+    fields: { autoResponders: readResponders },
   });
 }
 
@@ -1653,9 +2131,9 @@ async function showScheduled(guildId) {
     guildLayout(
       data,
       "scheduled",
-      hero(t("page_scheduled"), t("scheduledIntro"), "blue"),
-      card(t("scheduledNew"), "✍️", "blue", form),
-      card(t("scheduledUpcoming"), "🗓️", "blue", h("div", { class: "toolbar" }, h("p", { class: "help grow" }, t("scheduledHelp")), count), empty, list),
+      pageHero("scheduled", t("scheduledIntro"), data),
+      card(t("scheduledNew"), "edit", "blue", form),
+      card(t("scheduledUpcoming"), "calendar", "blue", h("div", { class: "toolbar" }, h("p", { class: "help grow" }, t("scheduledHelp")), count), empty, list),
     ),
   );
   await load();
@@ -1741,7 +2219,6 @@ async function leaderboardCard(guildId, page) {
   const board = await api(`/api/guilds/${guildId}/levels?page=${page}`);
   const pages = Math.max(1, Math.ceil(board.total / board.pageSize));
   const go = (next) => `#/g/${guildId}/levels${next > 1 ? `?page=${next}` : ""}`;
-  const medal = (rank) => ["🥇", "🥈", "🥉"][rank - 1] ?? `#${rank}`;
   const rows =
     board.entries.length === 0
       ? h("p", { class: "muted empty" }, t("levelsBoardEmpty"))
@@ -1752,7 +2229,7 @@ async function leaderboardCard(guildId, page) {
             h(
               "li",
               {},
-              h("span", { class: "board-rank" }, medal(entry.rank)),
+              h("span", { class: `rank rank-${entry.rank}` }, formatNumber(entry.rank)),
               h(
                 "a",
                 { class: "board-name grow", href: memberLink(guildId, entry.userId) },
@@ -1766,7 +2243,7 @@ async function leaderboardCard(guildId, page) {
         );
   return card(
     t("levelsBoard"),
-    "🏆",
+    "trophy",
     "amber",
     h("p", { class: "help" }, t("levelsBoardHelp", { count: formatNumber(board.total) })),
     rows,
@@ -1774,9 +2251,9 @@ async function leaderboardCard(guildId, page) {
       ? h(
           "div",
           { class: "toolbar pager" },
-          board.page > 1 ? h("a", { class: "button ghost small", href: go(board.page - 1) }, `← ${t("levelsPrev")}`) : null,
+          board.page > 1 ? h("a", { class: "button ghost small", href: go(board.page - 1) }, icon("chevronLeft", "icon small"), t("levelsPrev")) : null,
           h("span", { class: "muted grow center" }, t("levelsPageOf", { page: board.page, pages })),
-          board.page < pages ? h("a", { class: "button ghost small", href: go(board.page + 1) }, `${t("levelsNext")} →`) : null,
+          board.page < pages ? h("a", { class: "button ghost small", href: go(board.page + 1) }, t("levelsNext"), icon("chevronRight", "icon small")) : null,
         )
       : null,
   );
@@ -1874,10 +2351,10 @@ async function showLevels(guildId) {
     pageId: "levels",
     intro: t("levelsIntro"),
     cards: [
-      card(t("levelsMaster"), "🏆", "green", toggle("levelsEnabled", config.enabled, "levelsMaster", "levelsMasterHelp"), h("p", { class: "help" }, t("levelsHowXp"))),
+      card(t("levelsMaster"), "trophy", "green", toggle("levelsEnabled", config.enabled, "levelsMaster", "levelsMasterHelp"), h("p", { class: "help" }, t("levelsHowXp"))),
       card(
         t("levelsAnnounceTitle"),
-        "🎉",
+        "sparkles",
         "pink",
         h("div", { class: "rule-body" }, field("levelsAnnounce", null, announce), channelField),
         field(
@@ -1888,7 +2365,7 @@ async function showLevels(guildId) {
       ),
       card(
         t("levelsRewardsTitle"),
-        "🎁",
+        "gift",
         "amber",
         h("div", { class: "toolbar" }, h("p", { class: "help grow" }, t("levelsRewardsHelp")), count, addButton),
         empty,
@@ -1897,7 +2374,7 @@ async function showLevels(guildId) {
       ),
       card(
         t("levelsExtrasTitle"),
-        "🎙️",
+        "mic",
         "purple",
         toggle("levelsVoice", config.voiceXp ?? false, "levelsVoice", "levelsVoiceHelp"),
         field(
@@ -1911,14 +2388,14 @@ async function showLevels(guildId) {
       ),
       card(
         t("levelsNoXpChannels"),
-        "🙈",
+        "eyeOff",
         "gray",
         h("p", { class: "help" }, t("levelsNoXpChannelsHelp")),
         checkList({ name: "noXpChannel", items: channels, checked: config.noXpChannelIds, filterKey: "filterChannels" }),
       ),
       card(
         t("levelsNoXpRoles"),
-        "🎟️",
+        "tag",
         "purple",
         h("p", { class: "help" }, t("levelsNoXpRolesHelp")),
         checkList({ name: "noXpRole", items: roles, checked: config.noXpRoleIds, filterKey: "filterRoles" }),
@@ -1941,7 +2418,7 @@ async function showCountry(guildId) {
     cards: [
       card(
         t("countryChannel"),
-        "🗺️",
+        "globe",
         "green",
         field(
           "countryChannel",
@@ -2025,7 +2502,7 @@ function rolesTable(data) {
 
   return card(
     t("allRoles"),
-    "🏷️",
+    "tag",
     "blue",
     h("p", { class: "help" }, t("allRolesHelp")),
     h("div", { class: "toolbar" }, search, kind, shownCount),
@@ -2057,7 +2534,7 @@ async function showAccess(guildId) {
     cards: [
       card(
         t("dashboardAccess"),
-        "🔑",
+        "key",
         "purple",
         h("p", { class: "help" }, t("dashboardAccessHelp")),
         checkList({ name: "dashboardRole", items: dashboardRoles, checked: data.settings.dashboardRoleIds ?? [], filterKey: "filterRoles" }),
@@ -2088,16 +2565,16 @@ async function showOverview(guildId) {
     "div",
     { class: "stats" },
     tile(
-      "👥",
+      "users",
       "blue",
       guild.memberCount === null ? "—" : formatNumber(guild.memberCount),
       t("statMembers"),
       guild.onlineCount === null ? null : t("onlineCount", { count: formatNumber(guild.onlineCount) }),
     ),
-    tile("🗂️", "pink", formatNumber(total), t("statCases"), null, casesLink()),
-    tile("📅", "amber", formatNumber(casesSince(stats.days - 7)), t("statWeek")),
-    tile("📆", "green", formatNumber(casesSince(0)), t("statMonth")),
-    tile("⏳", "red", formatNumber(stats.runningTempBans), t("statTempBans"), null, casesLink({ action: "ban" })),
+    tile("folder", "pink", formatNumber(total), t("statCases"), null, casesLink()),
+    tile("calendar", "amber", formatNumber(casesSince(stats.days - 7)), t("statWeek")),
+    tile("calendar", "green", formatNumber(casesSince(0)), t("statMonth")),
+    tile("clock", "red", formatNumber(stats.runningTempBans), t("statTempBans"), null, casesLink({ action: "ban" })),
   );
 
   // Cases per day, stacked by action. The legend chips show or hide actions.
@@ -2249,28 +2726,59 @@ async function showOverview(guildId) {
     guildLayout(
       data,
       "overview",
-      hero(t("overviewTitle", { name: guild.name }), t(canManageGuild(data) ? "overviewIntro" : "overviewIntroCases"), "blue"),
+      hero(t("overviewTitle", { name: guild.name }), t(canManageGuild(data) ? "overviewIntro" : "overviewIntroCases"), "blue", { iconName: "home" }),
       tiles,
+      canManageGuild(data) ? featuresCard(data) : null,
       canManageGuild(data) ? setupCard(data) : null,
-      card(t("chartTitle"), "📈", "pink", legend, chartBox),
+      card(t("chartTitle"), "chart", "pink", legend, chartBox),
       h(
         "div",
         { class: "grid-2" },
         card(
           t("byAction"),
-          "🧮",
+          "barChart",
           "amber",
           breakdown.length > 0 ? h("div", { class: "meters" }, breakdown) : h("p", { class: "muted empty" }, t("nothingYet")),
         ),
-        card(t("recentCases"), "🕒", "blue", recent, h("a", { class: "button ghost small", href: casesLink() }, t("allCases"))),
-        card(t("topModerators"), "🏆", "green", leaderboard(stats.topModerators, "moderator")),
-        card(t("topMembers"), "🚨", "red", leaderboard(stats.topMembers, "user")),
+        card(t("recentCases"), "clock", "blue", recent, h("a", { class: "button ghost small", href: casesLink() }, t("allCases"))),
+        card(t("topModerators"), "trophy", "green", leaderboard(stats.topModerators, "moderator")),
+        card(t("topMembers"), "alert", "red", leaderboard(stats.topMembers, "user")),
       ),
     ),
   );
 }
 
-// What's set up and what isn't, with links to fix it.
+// Every feature with an on/off state, linking to its page.
+function featuresCard(data) {
+  const features = PAGES.filter((page) => page.on);
+  const onCount = features.filter((page) => page.on(data.settings)).length;
+  return h(
+    "section",
+    { class: "card" },
+    h(
+      "div",
+      { class: "toolbar" },
+      h("h2", { class: "card-title grow" }, iconChip("zap", "purple"), t("featuresTitle")),
+      h("span", { class: "count-pill" }, t("featuresOn", { count: onCount, total: features.length })),
+    ),
+    h(
+      "div",
+      { class: "feature-grid" },
+      features.map((page) => {
+        const on = page.on(data.settings);
+        return h(
+          "a",
+          { class: `feature${on ? " on" : ""}`, href: `#/g/${data.guild.id}/${page.id}` },
+          iconChip(page.icon, page.tone, "sm"),
+          h("span", { class: "grow" }, t(`page_${page.id}`)),
+          h("span", { class: `status ${on ? "on" : "off"}` }, t(on ? "featureOn" : "featureOff")),
+        );
+      }),
+    ),
+  );
+}
+
+// What's set up and what isn't, with links to fix it. Hidden once everything is done.
 function setupCard(data) {
   const { settings, guild } = data;
   const steps = [
@@ -2281,16 +2789,19 @@ function setupCard(data) {
     { key: "setupCountry", done: Boolean(settings.countryChannelId), page: "country" },
     { key: "setupDashboard", done: (settings.dashboardRoleIds ?? []).length > 0, page: "access" },
     { key: "setupAutomod", done: Boolean(settings.automod?.enabled), page: "automod" },
-    { key: "setupWelcome", done: Boolean(settings.welcomeChannelId), page: "community" },
+    { key: "setupWelcome", done: Boolean(settings.welcomeChannelId), page: "welcome" },
   ];
   const done = steps.filter((step) => step.done).length;
+  if (done === steps.length) {
+    return null;
+  }
   return h(
     "section",
     { class: "card setup" },
     h(
       "div",
       { class: "toolbar" },
-      h("h2", { class: "card-title grow" }, h("span", { class: "chip-icon tone-green", "aria-hidden": "true" }, "✅"), t("setupTitle")),
+      h("h2", { class: "card-title grow" }, iconChip("check", "green"), t("setupTitle")),
       h("span", { class: "count-pill" }, t("setupProgress", { done, total: steps.length })),
     ),
     h("div", { class: "progress" }, fillBar("progress-fill", done / steps.length)),
@@ -2301,7 +2812,7 @@ function setupCard(data) {
         h(
           "li",
           { class: step.done ? "done" : "" },
-          h("span", { class: "step-mark", "aria-hidden": "true" }, step.done ? "✓" : "•"),
+          h("span", { class: "step-mark", "aria-hidden": "true" }, step.done ? icon("check", "icon tiny") : null),
           h("span", { class: "grow" }, t(step.key)),
           step.done
             ? h("span", { class: "muted" }, t("setupDone"))
@@ -2438,7 +2949,7 @@ async function showCases(guildId) {
         });
       },
     },
-    h("div", { class: "toolbar" }, textInput, h("button", { class: "primary", type: "submit" }, `🔎 ${t("search")}`)),
+    h("div", { class: "toolbar" }, textInput, h("button", { class: "primary", type: "submit" }, icon("search", "icon small"), t("search"))),
     h("div", { class: "legend" }, actionChips),
     h(
       "details",
@@ -2473,7 +2984,7 @@ async function showCases(guildId) {
         "button",
         { type: "button", class: "filter-chip", title: t("removeFilter"), onclick: () => apply({ ...filters, ...change }) },
         label,
-        h("span", { "aria-hidden": "true" }, "✕"),
+        icon("x", "icon tiny"),
       ),
     ),
     activeChips.length > 1
@@ -2486,7 +2997,7 @@ async function showCases(guildId) {
         href: `/api/guilds/${guildId}/cases/export?${filtersToApi(filters)}`,
         download: `cases-${guildId}.csv`,
       },
-      `⬇ ${t("exportCsv")}`,
+      icon("download", "icon small"), t("exportCsv"),
     ),
   );
 
@@ -2494,7 +3005,7 @@ async function showCases(guildId) {
     guildLayout(
       data,
       "cases",
-      hero(t("page_cases"), t("casesIntro"), "pink"),
+      pageHero("cases", t("casesIntro"), data),
       filterForm,
       active,
       h(
@@ -2539,7 +3050,7 @@ function person(id, tag, onPick) {
 
 function caseRow(guildId, entry, filters, apply) {
   const reasonCell = h("td", { class: "reason" }, entry.reason ?? h("em", { class: "muted" }, t("noReason")));
-  const duration = entry.durationMs ? h("span", { class: "duration" }, `⏱ ${formatDuration(entry.durationMs)}`) : null;
+  const duration = entry.durationMs ? h("span", { class: "duration" }, icon("clock", "icon tiny"), formatDuration(entry.durationMs)) : null;
   const row = h(
     "tr",
     { class: `act-row act-${entry.action}` },
@@ -2688,10 +3199,10 @@ async function showMembers(guildId) {
         }
       },
     },
-    h("div", { class: "toolbar" }, input, h("button", { class: "primary", type: "submit" }, `🔎 ${t("search")}`)),
+    h("div", { class: "toolbar" }, input, h("button", { class: "primary", type: "submit" }, icon("search", "icon small"), t("search"))),
     h("p", { class: "help" }, t("memberSearchHelp")),
   );
-  show(guildLayout(data, "members", hero(t("page_members"), t("membersIntro"), "purple"), form, results));
+  show(guildLayout(data, "members", pageHero("members", t("membersIntro"), data), form, results));
   input.focus();
   if (!text) {
     return;
@@ -2751,7 +3262,7 @@ async function showMemberHistory(guildId, userId) {
     status.push(h("span", { class: "badge badge-accent" }, t("memberBot")));
   }
   if (accountAgeDays < NEW_ACCOUNT_DAYS) {
-    status.push(h("span", { class: "badge badge-amber" }, `⚠️ ${t("memberNewAccount")}`));
+    status.push(h("span", { class: "badge badge-amber" }, icon("alert", "icon tiny"), t("memberNewAccount")));
   }
 
   const header = h(
@@ -2779,7 +3290,7 @@ async function showMemberHistory(guildId, userId) {
           }
         },
       },
-      `📋 ${t("memberCopyId")}`,
+      icon("copy", "icon small"), t("memberCopyId"),
     ),
   );
 
@@ -2787,19 +3298,19 @@ async function showMemberHistory(guildId, userId) {
   const tiles = h(
     "div",
     { class: "stats" },
-    tile("🎂", "blue", formatAgo(user.createdAt), t("memberAccountCreated"), formatDate(user.createdAt)),
+    tile("cake", "blue", formatAgo(user.createdAt), t("memberAccountCreated"), formatDate(user.createdAt)),
     tile(
-      "📥",
+      "userPlus",
       "green",
       member?.joinedAt ? formatAgo(member.joinedAt) : "—",
       t("memberJoinedServer"),
       member?.joinedAt ? formatDate(member.joinedAt) : t("memberNotInServer"),
     ),
-    tile("🔁", "amber", formatNumber(history.joins), t("memberTimesJoined"), t("memberTimesJoinedSub")),
-    tile("🗂️", "pink", formatNumber(totalCases), t("statCases"), null, totalCases > 0 ? casesLink : undefined),
+    tile("repeat", "amber", formatNumber(history.joins), t("memberTimesJoined"), t("memberTimesJoinedSub")),
+    tile("folder", "pink", formatNumber(totalCases), t("statCases"), null, totalCases > 0 ? casesLink : undefined),
     history.level
       ? tile(
-          "🏆",
+          "trophy",
           "purple",
           t("levelsLevel", { level: history.level.level }),
           t("memberLevel"),
@@ -2830,7 +3341,7 @@ async function showMemberHistory(guildId, userId) {
                   "div",
                   { class: "timeline-head" },
                   actionPill(entry),
-                  entry.durationMs ? h("span", { class: "duration" }, `⏱ ${formatDuration(entry.durationMs)}`) : null,
+                  entry.durationMs ? h("span", { class: "duration" }, icon("clock", "icon tiny"), formatDuration(entry.durationMs)) : null,
                   h("span", { class: "muted" }, `#${entry.number} · ${formatDate(entry.createdAt)}`),
                 ),
                 h("p", { class: "timeline-reason" }, entry.reason ?? h("em", { class: "muted" }, t("noReason"))),
@@ -2905,7 +3416,7 @@ async function showMemberHistory(guildId, userId) {
         { class: "grid-2 member-grid" },
         card(
           t("memberCases"),
-          "🗂️",
+          "folder",
           "pink",
           summary.length > 0 ? h("div", { class: "badges member-summary" }, summary) : null,
           caseList,
@@ -2915,9 +3426,9 @@ async function showMemberHistory(guildId, userId) {
         h(
           "div",
           { class: "stack" },
-          card(t("memberRoles"), "🎭", "purple", roles),
-          card(t("memberTickets"), "🎫", "blue", ticketList),
-          card(t("memberJoinsLeaves"), "🚪", "green", events, h("p", { class: "help" }, t("memberJoinsLeavesHelp"))),
+          card(t("memberRoles"), "layers", "purple", roles),
+          card(t("memberTickets"), "ticket", "blue", ticketList),
+          card(t("memberJoinsLeaves"), "logout", "green", events, h("p", { class: "help" }, t("memberJoinsLeavesHelp"))),
         ),
       ),
     ),
@@ -2951,7 +3462,7 @@ function ticketRow(guildId, ticket) {
         h(
           "span",
           { class: "muted" },
-          [ticket.userName ?? ticket.userId, formatDate(ticket.createdAt), ticket.hasTranscript ? `📄 ${t("ticketsMessages", { count: formatNumber(ticket.messageCount ?? 0) })}` : null]
+          [ticket.userName ?? ticket.userId, formatDate(ticket.createdAt), ticket.hasTranscript ? t("ticketsMessages", { count: formatNumber(ticket.messageCount ?? 0) }) : null]
             .filter(Boolean)
             .join(" · "),
         ),
@@ -2993,7 +3504,7 @@ async function showTicketList(guildId, data, query) {
       (value) => go({ status: value }),
     ),
     userInput,
-    h("button", { class: "primary", type: "submit" }, `🔎 ${t("search")}`),
+    h("button", { class: "primary", type: "submit" }, icon("search", "icon small"), t("search")),
   );
   const list = h("ul", { class: "ticket-list" });
   const more = h("button", { class: "ghost", type: "button", hidden: true }, t("loadMore"));
@@ -3022,9 +3533,9 @@ async function showTicketList(guildId, data, query) {
     guildLayout(
       data,
       "tickets",
-      hero(t("page_tickets"), t("ticketsIntro"), "cyan"),
+      pageHero("tickets", t("ticketsIntro"), data),
       filters,
-      card(t("page_tickets"), "🎫", "cyan", summary, empty, list, h("div", { class: "center" }, more)),
+      card(t("page_tickets"), "ticket", "cyan", summary, empty, list, h("div", { class: "center" }, more)),
     ),
   );
   await load();
@@ -3043,9 +3554,9 @@ async function showTicket(guildId, data, number) {
     "div",
     { class: "toolbar" },
     ticket.threadId
-      ? h("a", { class: "button ghost small", href: `https://discord.com/channels/${guildId}/${ticket.threadId}`, target: "_blank", rel: "noopener" }, `💬 ${t("ticketsOpenThread")}`)
+      ? h("a", { class: "button ghost small", href: `https://discord.com/channels/${guildId}/${ticket.threadId}`, target: "_blank", rel: "noopener" }, icon("external", "icon small"), t("ticketsOpenThread"))
       : null,
-    transcript !== null ? h("a", { class: "button ghost small", href: `/api/guilds/${guildId}/tickets/${number}?download=1` }, `⬇️ ${t("ticketsDownload")}`) : null,
+    transcript !== null ? h("a", { class: "button ghost small", href: `/api/guilds/${guildId}/tickets/${number}?download=1` }, icon("download", "icon small"), t("ticketsDownload")) : null,
   );
   show(
     guildLayout(
@@ -3055,14 +3566,14 @@ async function showTicket(guildId, data, number) {
       h(
         "section",
         { class: "card" },
-        h("div", { class: "toolbar" }, h("h1", { class: "grow ticket-title" }, `🎫 #${ticket.number}`), ticketBadge(ticket)),
+        h("div", { class: "toolbar" }, h("h1", { class: "grow ticket-title" }, `#${ticket.number}`), ticketBadge(ticket)),
         h("p", { class: "ticket-subject-full" }, ticket.subject),
         h("dl", { class: "facts" }, facts.flatMap(([label, value]) => [h("dt", {}, label), h("dd", {}, value)])),
         actions,
       ),
       card(
         t("ticketsTranscript"),
-        "📄",
+        "file",
         "blue",
         transcript === null
           ? h("p", { class: "muted" }, t(ticket.closedAt ? "ticketsNoTranscript" : "ticketsTranscriptLater"))
@@ -3079,21 +3590,86 @@ async function showTickets(guildId) {
   return Number.isInteger(number) && number > 0 ? showTicket(guildId, data, number) : showTicketList(guildId, data, query);
 }
 
+// --- Activity ----------------------------------------------------------------------
+
+// A line of a dashboard change: **bold** as bold, and channel and role mentions as names.
+function activityText(text, data) {
+  const named = text
+    .replace(/<#(\d{17,20})>/g, (mention, id) => {
+      const channel = data.channels.find((entry) => entry.id === id);
+      return channel ? `#${channel.name}` : mention;
+    })
+    .replace(/<@&(\d{17,20})>/g, (mention, id) => {
+      const role = data.roles.find((entry) => entry.id === id);
+      return role ? `@${role.name}` : mention;
+    });
+  return named.split(/\*\*(.+?)\*\*/g).map((part, index) => (index % 2 === 1 ? h("strong", {}, part) : part));
+}
+
+function activityRow(entry, data) {
+  return h(
+    "li",
+    { class: "activity-row" },
+    h("span", { class: "avatar placeholder", "aria-hidden": "true" }, initials(entry.userName ?? "?").slice(0, 2)),
+    h(
+      "div",
+      { class: "activity-body" },
+      h(
+        "div",
+        { class: "activity-head" },
+        h("a", { href: memberLink(data.guild.id, entry.userId) }, entry.userName ?? entry.userId),
+        h("span", { class: "muted", title: formatDate(entry.createdAt) }, formatAgo(entry.createdAt)),
+      ),
+      h("p", { class: "activity-summary" }, activityText(entry.summary, data)),
+      entry.lines.length > 0 ? h("ul", { class: "activity-lines" }, entry.lines.map((line) => h("li", {}, activityText(line, data)))) : null,
+    ),
+  );
+}
+
+async function showActivity(guildId) {
+  const data = await loadManagedGuild(guildId);
+  if (!data) {
+    return;
+  }
+  const list = h("ul", { class: "activity" });
+  const empty = h("p", { class: "muted empty", hidden: true }, t("activityNone"));
+  const more = h("button", { class: "ghost", type: "button", hidden: true }, t("loadMore"));
+  let before = null;
+  const load = async () => {
+    more.disabled = true;
+    const page = await api(`/api/guilds/${guildId}/activity${before ? `?before=${before}` : ""}`);
+    list.append(...page.entries.map((entry) => activityRow(entry, data)));
+    empty.hidden = list.children.length > 0;
+    before = page.next;
+    more.hidden = !page.next;
+    more.disabled = false;
+  };
+  more.addEventListener("click", () => load().catch(failed));
+  show(guildLayout(data, "activity", pageHero("activity", t("activityIntro"), data), h("section", { class: "card" }, empty, list, h("div", { class: "center" }, more))));
+  await load();
+}
+
 // --- Routing -----------------------------------------------------------------
 
 const SHOW_PAGE = {
   overview: showOverview,
+  activity: showActivity,
   cases: showCases,
   members: showMembers,
   tickets: showTickets,
-  moderation: showModeration,
-  logging: showLogging,
   automod: showAutomod,
-  community: showCommunity,
-  tags: showTags,
-  scheduled: showScheduled,
+  raid: showRaid,
+  welcome: showWelcome,
+  roles: showRoles,
+  starboard: showStarboard,
+  birthdays: showBirthdays,
   levels: showLevels,
   country: showCountry,
+  tags: showTags,
+  responders: showResponders,
+  scheduled: showScheduled,
+  moderation: showModeration,
+  logging: showLogging,
   access: showAccess,
 };
 
@@ -3102,9 +3678,24 @@ async function route() {
   const match = path.match(/^\/g\/(\d{17,20})(?:\/(\w+))?$/);
   state.unsaved = false;
   state.lastHash = location.hash;
-  // Links from older versions went to "settings".
-  const pageId = match && (match[2] === "settings" ? "moderation" : (match[2] ?? "overview"));
-  show(h("p", { class: "muted loading" }, h("span", { class: "spinner", "aria-hidden": "true" }), t("loading")));
+  closeMenus();
+  const pageId = match && (PAGE_ALIASES[match[2]] ?? match[2] ?? "overview");
+  if (match && PAGE_ALIASES[match[2]]) {
+    history.replaceState(null, "", `#/g/${match[1]}/${pageId}`);
+    state.lastHash = location.hash;
+  }
+  // Moving between pages of the same server keeps the sidebar and shows placeholders.
+  if (match && state.shell?.guildId === match[1] && state.shell.element.isConnected) {
+    state.shell.contentArea.replaceChildren(skeleton());
+    state.shell.nav.querySelectorAll(".nav-link").forEach((link) => {
+      link.classList.toggle("active", link.dataset.page === pageId);
+      link.toggleAttribute("aria-current", link.dataset.page === pageId);
+    });
+    document.body.classList.remove("nav-open");
+  } else {
+    show(skeleton());
+  }
+  window.scrollTo({ top: 0 });
   try {
     if (match && SHOW_PAGE[pageId]) {
       await SHOW_PAGE[pageId](match[1]);
@@ -3131,20 +3722,15 @@ function onHashChange() {
 async function start() {
   loadAppearance();
   await loadLanguage(preferredLanguage());
-  const select = document.getElementById("language");
-  select.replaceChildren(
-    ...Object.entries(LANGUAGES).map(([code, name]) => h("option", { value: code, selected: code === state.language }, name)),
-  );
-  select.addEventListener("change", async () => {
-    await loadLanguage(select.value);
-    appearanceButton.title = t("appearanceTitle");
-    renderAccount();
-    route();
+  renderChrome();
+  document.getElementById("searchButton").addEventListener("click", openSearch);
+  document.getElementById("menuToggle").addEventListener("click", () => document.body.classList.toggle("nav-open"));
+  document.addEventListener("keydown", onShortcut);
+  document.addEventListener("click", (event) => {
+    if (!event.target.closest(".menu")) {
+      closeMenus();
+    }
   });
-  const appearanceButton = document.getElementById("appearance");
-  appearanceButton.title = t("appearanceTitle");
-  appearanceButton.setAttribute("aria-label", t("appearanceTitle"));
-  appearanceButton.addEventListener("click", openAppearance);
   window.addEventListener("hashchange", onHashChange);
   window.addEventListener("beforeunload", (event) => {
     if (state.unsaved) {
