@@ -8,16 +8,11 @@
 // command still works and a warning goes to the console (once, until posting
 // works again).
 
-import {
-  ApplicationCommandOptionType,
-  AttachmentBuilder,
-  EmbedBuilder,
-  GatewayIntentBits,
-  PermissionFlagsBits,
-} from "discord.js";
+import { ApplicationCommandOptionType, AttachmentBuilder, EmbedBuilder, GatewayIntentBits } from "discord.js";
 import { translate } from "../i18n/i18n.js";
 import { Outcome } from "../roles/countryRoles.js";
 import { Setting } from "../settings/guildSettings.js";
+import { createLogChannelPoster } from "./logChannel.js";
 
 // How a command ended. Commands return { status, key?, values?, note? } from
 // execute(): `key` and `values` name the reply the user got (logged in English),
@@ -66,7 +61,7 @@ const MAX_SAVED_FILES = 10;
 const DOWNLOAD_TIMEOUT_MS = 15_000;
 
 // Shows typed text as inline code, so it can't add formatting or mentions.
-function quote(value) {
+export function quote(value) {
   let text = String(value).replace(/`/g, "'").replace(/\s+/g, " ").trim();
   if (text.length > MAX_VALUE_LENGTH) {
     text = `${text.slice(0, MAX_VALUE_LENGTH - 1)}…`;
@@ -126,13 +121,13 @@ const styleOf = (outcome) => STATUS_STYLE[outcome.status] ?? STATUS_STYLE[Status
 const asQuote = (text) => text.split("\n").map((line) => `> ${line}`).join("\n");
 
 // The member's name and avatar at the top of every entry.
-function authorOf(user) {
+export function authorOf(user) {
   const name = user.tag ?? user.username ?? user.id;
   const iconURL = user.displayAvatarURL?.();
   return iconURL ? { name, iconURL } : { name };
 }
 
-function formatBytes(bytes) {
+export function formatBytes(bytes) {
   if (bytes >= 1024 * 1024) {
     return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
   }
@@ -140,7 +135,7 @@ function formatBytes(bytes) {
 }
 
 // Text in a code block, so it shows exactly as typed and can't ping or format.
-function codeBlock(text) {
+export function codeBlock(text) {
   let shown = text;
   let cut = "";
   if (shown.length > MAX_CONTENT_LENGTH) {
@@ -277,56 +272,14 @@ export async function saveAttachments(message, { fetchFile = fetch } = {}) {
 //   guildSettings   where the logs channel is stored (GuildSettings)
 //   logger
 //   fetchFile       downloads attachments (replaceable in tests)
-export function createActionLog({ guildSettings, logger, fetchFile = fetch }) {
-  // Servers already warned about a broken logs channel, so every command
-  // doesn't add a console warning. Cleared once posting works again.
-  const warnedGuilds = new Set();
-
-  // The logs channel, or undefined if none is set. Throws if it's gone.
-  function logsChannelOf(guild) {
-    const channelId = guild ? guildSettings.get(guild.id, Setting.LOGS_CHANNEL) : undefined;
-    if (!channelId) {
-      return undefined;
-    }
-    const channel = guild.channels.cache.get(channelId);
-    if (!channel?.isTextBased?.()) {
-      throw new Error("The logs channel no longer exists or isn't a text channel");
-    }
-    return channel;
-  }
-
-  function warnOnce(guild, error) {
-    if (!warnedGuilds.has(guild.id)) {
-      warnedGuilds.add(guild.id);
-      logger.warn(
-        "Couldn't post in the logs channel. Give the bot View Channel, Send Messages, Embed Links and Attach Files there.",
-        { guildId: guild.id, channelId: guildSettings.get(guild.id, Setting.LOGS_CHANNEL), error },
-      );
-    }
-  }
-
-  // Never throws, so a logging problem can't break what's being logged.
-  // `build({ canAttach })` returns { embed, files? }.
-  async function post(guild, build) {
-    if (!guild) {
-      return;
-    }
-    try {
-      const channel = logsChannelOf(guild);
-      if (!channel) {
-        return;
-      }
-      // Without Attach Files the whole message would be refused, so post the
-      // entry without files instead.
-      const me = guild.members?.me;
-      const canAttach = Boolean(me && channel.permissionsFor?.(me)?.has(PermissionFlagsBits.AttachFiles));
-      const { embed, files = [] } = build({ canAttach });
-      await channel.send({ embeds: [embed], files: canAttach ? files : [], allowedMentions: { parse: [] } });
-      warnedGuilds.delete(guild.id);
-    } catch (error) {
-      warnOnce(guild, error);
-    }
-  }
+//   poster          posts in log channels (see logChannel.js); shared with the other logs
+export function createActionLog({
+  guildSettings,
+  logger,
+  fetchFile = fetch,
+  poster = createLogChannelPoster({ guildSettings, logger }),
+}) {
+  const post = (guild, build) => poster.post(guild, [Setting.LOGS_CHANNEL], build);
 
   return {
     logCommand: (interaction, outcome) =>
