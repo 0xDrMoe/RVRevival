@@ -256,6 +256,26 @@ const MIGRATIONS = [
   );
   CREATE INDEX temp_roles_by_expiry ON temp_roles (expires_at);
   `,
+  // 17: ban appeals sent from the dashboard. answers is a JSON array of
+  // { question, answer }; status is open, accepted or denied.
+  `
+  CREATE TABLE ban_appeals (
+    guild_id         TEXT    NOT NULL,
+    number           INTEGER NOT NULL,
+    user_id          TEXT    NOT NULL,
+    user_tag         TEXT,
+    ban_reason       TEXT,
+    answers          TEXT    NOT NULL,
+    status           TEXT    NOT NULL DEFAULT 'open',
+    created_at       INTEGER NOT NULL,
+    decided_at       INTEGER,
+    decided_by       TEXT,
+    decision_reason  TEXT,
+    PRIMARY KEY (guild_id, number)
+  ) WITHOUT ROWID;
+  CREATE INDEX ban_appeals_by_user ON ban_appeals (guild_id, user_id, created_at);
+  CREATE INDEX ban_appeals_by_status ON ban_appeals (guild_id, status, number);
+  `,
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS.length;

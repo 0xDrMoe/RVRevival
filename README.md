@@ -26,6 +26,7 @@ The Discord bot for the Rumbleverse Revival server. It is built as a set of inde
 | [Temporary roles](#temporary-roles) | `/temprole` | Manage Roles or the mod role |
 | [Quarantine](#quarantine) | `/quarantine` | Manage Roles or the mod role (`role`: Manage Server) |
 | [Anti-nuke](#anti-nuke) | `/antinuke`, or the dashboard's Anti-nuke page | The server owner (`status`: Administrator) |
+| [Ban appeals](#ban-appeals) | The dashboard's Ban appeals page | Manage Server or a dashboard role that can change settings (banned members fill in the form) |
 | [Join-to-create voice](#join-to-create-voice) | `/voice` | Manage Server (`setup`, `off`), the channel's owner (`lock`, `unlock`), anyone in the channel (`claim`) |
 | [Leveling](#leveling) | `/rank`, `/leaderboard`, `/levels`, or the dashboard's Leveling page | Everyone (`/rank`, `/leaderboard`), Manage Server (`/levels`) |
 | [Country roles](#country-roles) | `/country`, `/country-staff`, `/country-help` | Everyone (`/country`), the staff role (`/country-staff`), Manage Server (`/country-help`) |
@@ -340,6 +341,18 @@ Only the **server owner** can change anti-nuke, on Discord or on the dashboard's
 
 Who did what comes from the audit log, so the bot needs **View Audit Log**. Its role must be above the roles it should take away: put it near the top of the role list. Anti-nuke doesn't rebuild deleted channels or roles.
 
+### Ban appeals
+
+Lets banned members ask to be unbanned without a second account or a DM to a moderator. Turn it on in the dashboard's **Ban appeals** page (off by default), then:
+
+- Ban DMs include a link to the appeal form (`<DASHBOARD_URL>/#/appeal/<server ID>`); the page also shows the link to share. The bot reads `DASHBOARD_URL` from `.env` for this; without it, ban DMs have no link.
+- The banned member logs in with Discord, sees the ban reason and answers up to 5 questions you set (or one general question). Only people banned from the server can send one, one open appeal at a time.
+- Each new appeal is posted in the channel you pick (the mod-log channel otherwise) with a link to decide it.
+- Staff read the answers on the same page and **accept** (the ban is lifted and an unban case is added) or **deny**, with an optional reason. Either way the member gets a DM.
+- After a denial they wait the days you set (30 by default; 0 for no wait) before appealing again.
+
+Every decision shows on the dashboard's Activity page. The bot needs **Ban Members** to check bans and lift them.
+
 ### Leveling
 
 Members earn XP for chatting and level up; reward roles are given automatically. Leveling is **off** until an admin turns it on with `/levels on` or on the dashboard's **Leveling** page.
@@ -558,6 +571,9 @@ src/
     tickets.js           Support tickets: /tickets, the panel's button, the form and the Close button
     levels.js            Leveling: /rank, /leaderboard, /levels
     raid.js              Raid protection: /raid
+    antiNuke.js          Anti-nuke: /antinuke
+    quarantine.js        Quarantine: /quarantine
+    tempRole.js          Temporary roles: /temprole
     voice.js             Join-to-create voice: /voice
     commandHelpers.js    Shared start of moderation-style commands (language, permission check)
   countries/             Country roles: country list, name matching and search
@@ -566,10 +582,12 @@ src/
   community/             Community: welcome and leave messages, autoroles (welcome.js), role panels (rolePanels.js), custom commands (tags.js), auto-responders (autoResponders.js), the starboard (starboard.js, starboardStore.js)
   giveaways/             Giveaways: saved in SQLite (giveawayStore.js), drawing winners (giveaways.js), ended on time (giveawayScheduler.js)
   tickets/               Support tickets: saved in SQLite (ticketStore.js), the panel, staff and messages (tickets.js), transcripts (transcript.js)
-  raid/                  Raid protection: lockdown planning and restoring, the new-account gate and join alerts (raid.js)
+  raid/                  Raid protection: lockdown planning and restoring, the new-account gate and join alerts (raid.js), anti-nuke (antiNuke.js)
+  tempRoles/             Temporary roles: saved in SQLite (tempRoleStore.js), taken away when due (tempRoleScheduler.js)
+  appeals/               Ban appeals: settings (config.js), saved in SQLite (appealStore.js); the form and decisions live in the dashboard
   voice/                 Join-to-create voice: making and deleting channels (tempVoice.js), saved in SQLite (tempVoiceStore.js)
   leveling/              Leveling: settings and level math (config.js), XP in SQLite (levelStore.js), earning XP and rewards (leveling.js)
-  members/               Member history: when members joined and left (memberEventStore.js)
+  members/               Member history (memberEventStore.js), saved roles for quarantine and role persistence (savedRoleStore.js, rolePersistence.js)
   birthdays/             Birthdays: saved in SQLite (birthdayStore.js), greetings and the role each day (birthdays.js)
   scheduled/             Scheduled messages: saved in SQLite (scheduledMessageStore.js), posted when due (scheduler.js)
   reminders/             Reminders: saved in SQLite (reminderStore.js), sent when due (reminderScheduler.js)

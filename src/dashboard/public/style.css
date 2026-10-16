@@ -460,6 +460,12 @@ button:disabled {
   font-size: 0.86rem;
 }
 
+/* "icon small" is a size, not a small button. */
+svg.small {
+  min-height: 0;
+  padding: 0;
+}
+
 .big {
   min-height: 44px;
   padding: 10px 24px;
@@ -2746,4 +2752,61 @@ dialog textarea {
 
 .trusted-name:empty {
   display: none;
+}
+
+/* Ban appeals */
+.appeal-page {
+  max-width: 640px;
+  margin: 6vh auto 0;
+  padding: 28px;
+  display: grid;
+  gap: 14px;
+}
+
+.appeal-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.appeal-head h1 {
+  margin: 0;
+  font-size: 1.4rem;
+  overflow-wrap: anywhere;
+}
+
+.appeal-form {
+  display: grid;
+  gap: 14px;
+}
+
+.appeal-form .button.big,
+.appeal-form button.big {
+  justify-self: start;
+}
+
+.appeal-answer {
+  padding: 10px 0;
+  border-top: 1px solid var(--border);
+}
+
+.appeal-answer:first-of-type {
+  border-top: 0;
+}
+
+.appeal-answer p {
+  margin: 4px 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.link-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.link-row input {
+  flex: 1;
+  min-width: 0;
 }

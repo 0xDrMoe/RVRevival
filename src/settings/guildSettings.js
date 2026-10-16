@@ -49,6 +49,7 @@ export const Setting = Object.freeze({
   TEMP_VOICE: "tempVoice", // join-to-create voice, { hubChannelId, categoryId, nameTemplate, userLimit } (see voice/tempVoice.js)
   BIRTHDAYS: "birthdays", // birthday greetings and role, { channelId, roleId, message, timezone } (see birthdays/config.js)
   AUTO_RESPONDERS: "autoResponders", // auto-responders, a list of { trigger, match, reply, channelId } (see community/autoResponders.js)
+  APPEALS: "appeals", // ban appeals on the dashboard, { enabled, channelId, questions, cooldownDays } (see appeals/config.js)
   ROLE_PERSIST: "rolePersist", // give roles back on rejoin, { enabled, ignoredRoleIds } (see members/rolePersistence.js)
   QUARANTINE_ROLE: "quarantineRoleId", // given to quarantined members (see moderation/quarantine.js)
   ANTI_NUKE: "antiNuke", // anti-nuke limits, punishment and trusted users, an object (see raid/antiNuke.js)

@@ -13,6 +13,7 @@ import { MAX_AUTOROLES, MAX_MESSAGE_LENGTH } from "../community/welcome.js";
 import { checkLeveling, InvalidLeveling, normalizeLeveling } from "../leveling/config.js";
 import { checkAntiNuke, describeAntiNuke, InvalidAntiNuke } from "../raid/antiNuke.js";
 import { checkRolePersist, InvalidRolePersist } from "../members/rolePersistence.js";
+import { checkAppeals, InvalidAppeals } from "../appeals/config.js";
 import { checkJoinGate, InvalidJoinGate } from "../raid/raid.js";
 import { LogEvent } from "../logs/serverLog.js";
 import { Setting } from "../settings/guildSettings.js";
@@ -69,6 +70,7 @@ export const SETTING_RULES = Object.freeze({
   [Setting.WELCOME_DM]: { kind: "text", label: "Welcome DM" },
   [Setting.AUTOROLES]: { kind: "autoroles", label: "Autoroles" },
   [Setting.ROLE_PERSIST]: { kind: "rolePersist", label: "Roles on rejoin" },
+  [Setting.APPEALS]: { kind: "appeals", types: POSTING_CHANNELS, label: "Ban appeals" },
   [Setting.TAGS]: { kind: "tags", label: "Custom commands" },
   [Setting.STARBOARD]: { kind: "starboard", types: POSTING_CHANNELS, label: "Starboard" },
   [Setting.LEVELING]: { kind: "leveling", label: "Leveling" },
@@ -219,6 +221,15 @@ function checkValue(setting, value, { guildId, channels, roles }) {
         }
         throw error;
       }
+    case "appeals":
+      try {
+        return checkAppeals(value, { isChannel: (id) => typeof id === "string" && channelOk(id, rule.types) });
+      } catch (error) {
+        if (error instanceof InvalidAppeals) {
+          throw new InvalidSetting(setting, error.message);
+        }
+        throw error;
+      }
     case "rolePersist":
       try {
         return checkRolePersist(value, { isRole: roleOk });
@@ -320,6 +331,8 @@ export function describeValue(setting, value) {
       return `<#${value.channelId}> · ${value.emoji} ${value.threshold}`;
     case "antiNuke":
       return describeAntiNuke(value);
+    case "appeals":
+      return `${value.enabled ? "open" : "closed"} · ${value.channelId ? `<#${value.channelId}>` : "mod-log channel"} · ${value.questions.length} question(s) · wait ${value.cooldownDays} days after a denial`;
     case "rolePersist":
       return `${value.enabled ? "given back" : "not given back"}${value.ignoredRoleIds.length > 0 ? ` · ignoring ${value.ignoredRoleIds.map((id) => `<@&${id}>`).join(", ")}` : ""}`;
     case "joinGate":

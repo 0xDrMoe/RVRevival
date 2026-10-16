@@ -964,5 +964,9 @@
   "temproleRemoved": "{role} a été retiré à {user}.",
   "temproleListEmpty": "Aucun rôle temporaire en cours.",
   "temproleList": "**Rôles temporaires :**\n{list}",
-  "temproleListMore": "…et {count} de plus."
+  "temproleListMore": "…et {count} de plus.",
+
+  "appealAcceptedDm": "Ton appel de bannissement pour **{server}** a été accepté. Tu peux rejoindre à nouveau.",
+  "appealDeniedDm": "Ton appel de bannissement pour **{server}** a été refusé.",
+  "dmAppeal": "Tu peux faire appel de ce bannissement ici : {url}"
 }

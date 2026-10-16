@@ -964,5 +964,9 @@
   "temproleRemoved": "{role} wurde {user} weggenommen.",
   "temproleListEmpty": "Es laufen keine Zeitrollen.",
   "temproleList": "**Zeitrollen:**\n{list}",
-  "temproleListMore": "…und {count} weitere."
+  "temproleListMore": "…und {count} weitere.",
+
+  "appealAcceptedDm": "Dein Bann-Einspruch für **{server}** wurde angenommen. Du kannst wieder beitreten.",
+  "appealDeniedDm": "Dein Bann-Einspruch für **{server}** wurde abgelehnt.",
+  "dmAppeal": "Hier kannst du Einspruch gegen den Bann einlegen: {url}"
 }

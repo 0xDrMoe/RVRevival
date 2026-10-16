@@ -964,5 +964,9 @@
   "temproleRemoved": "سُحبت {role} من {user}.",
   "temproleListEmpty": "لا توجد رتب مؤقتة جارية.",
   "temproleList": "**الرتب المؤقتة:**\n{list}",
-  "temproleListMore": "…و{count} أخرى."
+  "temproleListMore": "…و{count} أخرى.",
+
+  "appealAcceptedDm": "تم قبول طعنك في الحظر على **{server}**. يمكنك الانضمام مجددًا.",
+  "appealDeniedDm": "تم رفض طعنك في الحظر على **{server}**.",
+  "dmAppeal": "يمكنك الطعن في هذا الحظر هنا: {url}"
 }

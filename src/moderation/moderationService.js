@@ -37,8 +37,10 @@ export function auditReason(moderator, reason) {
 //                    events Discord sends back aren't recorded twice (RecentIds)
 //   onModeratorAction  called with (guild, moderatorId, "ban" | "kick") after a
 //                    ban or kick, so anti-nuke counts bans done through the bot
+//   appealLink       (guild) => the ban-appeal page's address, or null; added
+//                    to ban DMs
 //   now              the clock (replaceable in tests)
-export function createModerationService({ store, modLog = noModLog, logger, forcedLanguage, botActions, onModeratorAction, now = Date.now }) {
+export function createModerationService({ store, modLog = noModLog, logger, forcedLanguage, botActions, onModeratorAction, appealLink, now = Date.now }) {
   const markOwnAction = (guild, userId, action) => botActions?.add(`${guild.id}:${userId}:${action}`);
   const counted = (guild, moderator, action) => {
     Promise.resolve(onModeratorAction?.(guild, moderator?.id, action)).catch((error) =>
@@ -60,6 +62,10 @@ export function createModerationService({ store, modLog = noModLog, logger, forc
       }),
     ];
     lines.push(reason ? translate(language, "dmReason", { reason }) : translate(language, "dmNoReason"));
+    const appeal = action === CaseAction.BAN ? appealLink?.(guild) : null;
+    if (appeal) {
+      lines.push(translate(language, "dmAppeal", { url: appeal }));
+    }
     try {
       await user.send({ content: lines.join("\n").slice(0, 2000), allowedMentions: { parse: [] } });
       return true;

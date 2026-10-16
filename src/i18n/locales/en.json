@@ -964,5 +964,9 @@
   "temproleRemoved": "{role} was taken from {user}.",
   "temproleListEmpty": "No temporary roles are running.",
   "temproleList": "**Temporary roles:**\n{list}",
-  "temproleListMore": "…and {count} more."
+  "temproleListMore": "…and {count} more.",
+
+  "appealAcceptedDm": "Your ban appeal for **{server}** was accepted. You can join again.",
+  "appealDeniedDm": "Your ban appeal for **{server}** was denied.",
+  "dmAppeal": "You can appeal this ban here: {url}"
 }
