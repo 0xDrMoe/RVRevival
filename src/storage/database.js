@@ -83,6 +83,31 @@ const MIGRATIONS = [
   CREATE INDEX reminders_due ON reminders (due_at);
   CREATE INDEX reminders_by_user ON reminders (guild_id, user_id, due_at);
   `,
+  // 5: giveaways (/giveaway) and who entered them. Ended giveaways are kept
+  // for a while so they can be rerolled.
+  `
+  CREATE TABLE giveaways (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    guild_id         TEXT    NOT NULL,
+    channel_id       TEXT    NOT NULL,
+    message_id       TEXT,
+    host_id          TEXT    NOT NULL,
+    prize            TEXT    NOT NULL,
+    winner_count     INTEGER NOT NULL,
+    required_role_id TEXT,
+    created_at       INTEGER NOT NULL,
+    ends_at          INTEGER NOT NULL,
+    ended_at         INTEGER,
+    winner_ids       TEXT    NOT NULL DEFAULT '[]'
+  );
+  CREATE INDEX giveaways_due ON giveaways (ended_at, ends_at);
+  CREATE INDEX giveaways_by_guild ON giveaways (guild_id, ends_at);
+  CREATE TABLE giveaway_entries (
+    giveaway_id INTEGER NOT NULL,
+    user_id     TEXT    NOT NULL,
+    PRIMARY KEY (giveaway_id, user_id)
+  ) WITHOUT ROWID;
+  `,
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS.length;

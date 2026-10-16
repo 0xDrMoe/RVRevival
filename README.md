@@ -16,6 +16,7 @@ The Discord bot for the Rumbleverse Revival server. It is built as a set of inde
 | [Role panels](#role-panels) | `/rolepanel` | Manage Roles (members click the buttons) |
 | [Custom commands](#custom-commands) | `/tag`, `/tags`, or the dashboard's Custom commands page | Everyone (`/tag`), Manage Messages or the mod role (`/tags`) |
 | [Reminders](#reminders) | `/remind` | Everyone |
+| [Giveaways](#giveaways) | `/giveaway` | Manage Server or the mod role (members click Enter) |
 | [Country roles](#country-roles) | `/country`, `/country-staff`, `/country-help` | Everyone (`/country`), the staff role (`/country-staff`), Manage Server (`/country-help`) |
 | [Web dashboard](#web-dashboard) | https://rumbleverse.cedartechsolutions.ca | Manage Server, or a dashboard role |
 
@@ -189,6 +190,17 @@ Anyone can ask the bot to remind them about something later: a tournament check-
 - `/remind list` shows your reminders in the server, and `/remind cancel reminder:<…>` cancels one (it suggests yours as you type).
 
 Up to 25 per member per server. Reminders are saved in `data/bot.db`, so they survive restarts; one that came due while the bot was offline is sent as soon as it's back. If the bot can't post in the channel (when it's set, or later), the reminder comes by DM, and if the member's DMs are closed too, it's dropped.
+
+### Giveaways
+
+Staff post a giveaway, members click **🎉 Enter**, and the bot picks random winners when time is up.
+
+- `/giveaway start prize:<…> duration:<time>` posts it in this channel. Optional: `winners` (1 to 20, default 1), `channel`, and `role` (only members with that role can enter). Durations go from 1 minute to 30 days.
+- Members click **Enter** to join and click again to leave. The entry count on the message updates every few seconds.
+- When it ends, the message shows the winners and the bot announces them in the channel, pinging only the winners. Winners are picked at random among entrants still in the server (and still holding the role, if one was required).
+- `/giveaway end` ends one early, `/giveaway cancel` stops one without winners, `/giveaway reroll` picks new winners for an ended giveaway (never someone who already won it), and `/giveaway list` shows the running ones.
+
+Needs **Manage Server** or the mod role. Up to 10 running per server. Giveaways are saved in `data/bot.db`, so they survive restarts; one that ended while the bot was offline is drawn as soon as it's back. Ended giveaways can be rerolled for 30 days. Entering isn't posted in the logs channel, so a big giveaway doesn't flood it.
 
 ### Country roles
 
@@ -373,11 +385,13 @@ src/
     rolePanel.js         Community: /rolepanel and its buttons
     tags.js              Custom commands: /tag, /tags and the form
     remind.js            Reminders: /remind
+    giveaway.js          Giveaways: /giveaway and its Enter button
     commandHelpers.js    Shared start of moderation-style commands (language, permission check)
   countries/             Country roles: country list, name matching and search
   roles/                 Country roles: find, create, assign and remove roles
   channels/              Country roles: keeps the /country channel clean
   community/             Community: welcome and leave messages, autoroles (welcome.js), role panels (rolePanels.js), custom commands (tags.js)
+  giveaways/             Giveaways: saved in SQLite (giveawayStore.js), drawing winners (giveaways.js), ended on time (giveawayScheduler.js)
   reminders/             Reminders: saved in SQLite (reminderStore.js), sent when due (reminderScheduler.js)
   automod/               Automod: settings (config.js), what each rule matches (rules.js), acting on messages
   logs/                  Logs channel, server log, and posting to log channels
