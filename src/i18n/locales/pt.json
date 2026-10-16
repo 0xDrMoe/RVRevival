@@ -1050,5 +1050,23 @@
   "stickyNone": "{channel} não tem mensagem fixa.",
   "stickyRemoved": "Mensagem fixa removida de {channel}.",
   "stickyListEmpty": "Ainda não há mensagens fixas. Adicione uma com `/sticky set`.",
-  "stickyList": "**Mensagens fixas ({count}/{max})**\n{list}"
+  "stickyList": "**Mensagens fixas ({count}/{max})**\n{list}",
+
+  "highlightCommandDescription": "Receba uma DM quando alguém disser uma das suas palavras",
+  "highlightAddDescription": "Adicione uma palavra para ser avisado",
+  "highlightRemoveDescription": "Remova uma das suas palavras",
+  "highlightListDescription": "Suas palavras neste servidor",
+  "highlightClearDescription": "Remova todas as suas palavras",
+  "highlightWordOptionDescription": "Uma palavra ou frase curta",
+  "highlightBadWord": "Uma palavra tem de {min} a {max} caracteres e pelo menos uma letra ou número.",
+  "highlightAlready": "`{word}` já é uma das suas palavras.",
+  "highlightFull": "Você já tem {max} palavras. Remova uma com `/highlight remove` primeiro.",
+  "highlightAdded": "Vou te mandar uma DM quando alguém disser `{word}` em um canal que você vê (não enquanto você estiver conversando lá). Suas DMs deste servidor precisam estar abertas.",
+  "highlightNotFound": "`{word}` não é uma das suas palavras. Veja `/highlight list`.",
+  "highlightRemoved": "`{word}` removida.",
+  "highlightListEmpty": "Você ainda não tem palavras. Adicione uma com `/highlight add`.",
+  "highlightList": "**Suas palavras ({count}/{max}):** {list}",
+  "highlightCleared": "Todas as suas palavras foram removidas ({count}).",
+  "highlightDm": "🔔 `{word}` foi mencionada em {channel} em **{server}**:",
+  "highlightJump": "Ir para a mensagem"
 }

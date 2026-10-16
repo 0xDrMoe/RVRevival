@@ -346,6 +346,15 @@ const MIGRATIONS = [
   ) WITHOUT ROWID;
   CREATE INDEX stickies_by_guild ON stickies (guild_id);
   `,
+  // 23: words members want a DM about (/highlight), saved lowercase.
+  `
+  CREATE TABLE highlights (
+    guild_id  TEXT NOT NULL,
+    user_id   TEXT NOT NULL,
+    word      TEXT NOT NULL,
+    PRIMARY KEY (guild_id, user_id, word)
+  ) WITHOUT ROWID;
+  `,
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS.length;

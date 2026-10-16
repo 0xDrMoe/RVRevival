@@ -1050,5 +1050,23 @@
   "stickyNone": "{channel} has no sticky message.",
   "stickyRemoved": "Removed the sticky message from {channel}.",
   "stickyListEmpty": "No sticky messages yet. Add one with `/sticky set`.",
-  "stickyList": "**Sticky messages ({count}/{max})**\n{list}"
+  "stickyList": "**Sticky messages ({count}/{max})**\n{list}",
+
+  "highlightCommandDescription": "Get a DM when someone says one of your words",
+  "highlightAddDescription": "Add a word to be told about",
+  "highlightRemoveDescription": "Remove one of your words",
+  "highlightListDescription": "Your words on this server",
+  "highlightClearDescription": "Remove all your words",
+  "highlightWordOptionDescription": "A word or short phrase",
+  "highlightBadWord": "A word is {min} to {max} characters and has at least one letter or number.",
+  "highlightAlready": "`{word}` is already one of your words.",
+  "highlightFull": "You already have {max} words. Remove one with `/highlight remove` first.",
+  "highlightAdded": "I'll DM you when someone says `{word}` in a channel you can see (not while you're chatting there yourself). Your DMs from this server need to be open.",
+  "highlightNotFound": "`{word}` isn't one of your words. See `/highlight list`.",
+  "highlightRemoved": "Removed `{word}`.",
+  "highlightListEmpty": "You have no words yet. Add one with `/highlight add`.",
+  "highlightList": "**Your words ({count}/{max}):** {list}",
+  "highlightCleared": "Removed all your words ({count}).",
+  "highlightDm": "🔔 `{word}` was mentioned in {channel} on **{server}**:",
+  "highlightJump": "Jump to the message"
 }

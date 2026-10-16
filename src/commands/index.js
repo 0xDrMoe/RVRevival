@@ -29,6 +29,7 @@ import { createFeedCommand } from "./feed.js";
 import { createStatsCommand } from "./stats.js";
 import { createAfkCommand } from "./afk.js";
 import { createStickyCommand } from "./sticky.js";
+import { createHighlightCommand } from "./highlight.js";
 import { createBirthdayCommand } from "./birthday.js";
 import { createWelcomeCommand } from "./welcome.js";
 
@@ -50,7 +51,9 @@ import { createWelcomeCommand } from "./welcome.js";
 // (tempRoles/tempRoleStore.js) to run /temprole, `feeds` (feeds/feedStore.js)
 // to run /feed, `statsUpdater` (stats/statsUpdater.js) to run /stats, `afk` (afk/afk.js)
 // to run /afk, `stickyStore` (sticky/stickyStore.js) with `stickies`
-// (sticky/stickies.js) to run /sticky, not to register them.
+// (sticky/stickies.js) to run /sticky, `highlightStore`
+// (highlights/highlightStore.js) with `highlights` (highlights/highlights.js)
+// to run /highlight, not to register them.
 export function createCommands({
   logger,
   guildSettings,
@@ -73,6 +76,8 @@ export function createCommands({
   afk,
   stickyStore,
   stickies,
+  highlightStore,
+  highlights,
 }) {
   // Shared, so /country and /country-staff can't change the same member at the same time.
   const roleService = new CountryRoleService(logger);
@@ -107,6 +112,7 @@ export function createCommands({
     createStatsCommand({ guildSettings, updater: statsUpdater, forcedLanguage, logger }),
     createAfkCommand({ afk, forcedLanguage }),
     createStickyCommand({ store: stickyStore, stickies, forcedLanguage }),
+    createHighlightCommand({ store: highlightStore, highlights, forcedLanguage }),
     createBirthdayCommand({ guildSettings, store: birthdays, forcedLanguage }),
     ...createLevelCommands({ levels, leveling, guildSettings, forcedLanguage }),
   ];

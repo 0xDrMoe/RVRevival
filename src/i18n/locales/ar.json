@@ -1050,5 +1050,23 @@
   "stickyNone": "لا توجد رسالة مثبتة في {channel}.",
   "stickyRemoved": "أُزيلت الرسالة المثبتة من {channel}.",
   "stickyListEmpty": "لا توجد رسائل مثبتة بعد. أضف واحدة بـ `/sticky set`.",
-  "stickyList": "**الرسائل المثبتة ({count}/{max})**\n{list}"
+  "stickyList": "**الرسائل المثبتة ({count}/{max})**\n{list}",
+
+  "highlightCommandDescription": "استلم رسالة خاصة عندما يقول أحدهم إحدى كلماتك",
+  "highlightAddDescription": "أضف كلمة لتُنبَّه عنها",
+  "highlightRemoveDescription": "أزل إحدى كلماتك",
+  "highlightListDescription": "كلماتك في هذا الخادم",
+  "highlightClearDescription": "أزل كل كلماتك",
+  "highlightWordOptionDescription": "كلمة أو عبارة قصيرة",
+  "highlightBadWord": "الكلمة من {min} إلى {max} حرفًا وفيها حرف أو رقم واحد على الأقل.",
+  "highlightAlready": "`{word}` من كلماتك بالفعل.",
+  "highlightFull": "لديك {max} كلمات بالفعل. أزل واحدة بـ `/highlight remove` أولًا.",
+  "highlightAdded": "سأراسلك عندما يقول أحدهم `{word}` في قناة تستطيع رؤيتها (ليس أثناء حديثك فيها). يجب أن تكون رسائلك الخاصة من هذا الخادم مفتوحة.",
+  "highlightNotFound": "`{word}` ليست من كلماتك. راجع `/highlight list`.",
+  "highlightRemoved": "أُزيلت `{word}`.",
+  "highlightListEmpty": "ليست لديك كلمات بعد. أضف واحدة بـ `/highlight add`.",
+  "highlightList": "**كلماتك ({count}/{max}):** {list}",
+  "highlightCleared": "أُزيلت كل كلماتك ({count}).",
+  "highlightDm": "🔔 ذُكرت `{word}` في {channel} على **{server}**:",
+  "highlightJump": "اذهب إلى الرسالة"
 }
