@@ -43,7 +43,9 @@ describe("language files", () => {
     for (const language of SUPPORTED_LANGUAGES) {
       expect(translate(language, "commandDescription").length).toBeLessThanOrEqual(100);
       expect(translate(language, "countryOptionDescription").length).toBeLessThanOrEqual(100);
-      for (const key of Object.keys(getTranslations("en")).filter((key) => key.endsWith("Description"))) {
+      // Choice names (automod rules, actions…) have the same limit.
+      const limited = (key) => key.endsWith("Description") || /^automod(Rule|Action|Limit|Escalation)_/.test(key);
+      for (const key of Object.keys(getTranslations("en")).filter(limited)) {
         expect(translate(language, key).length, `${language}.${key}`).toBeLessThanOrEqual(100);
       }
     }

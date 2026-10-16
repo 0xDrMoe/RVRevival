@@ -8,6 +8,7 @@ import { buildDashboard } from "../src/dashboard/app.js";
 import { canManage, DiscordApiError } from "../src/dashboard/discordApi.js";
 import { SessionStore } from "../src/dashboard/sessions.js";
 import { checkSettingChanges, InvalidSetting } from "../src/dashboard/settingsRules.js";
+import { defaultAutomod } from "../src/automod/config.js";
 import { CaseAction, CaseStore } from "../src/moderation/caseStore.js";
 import { GuildSettings, Setting } from "../src/settings/guildSettings.js";
 import { closeDatabase, openDatabase } from "../src/storage/database.js";
@@ -278,6 +279,36 @@ describe("dashboard", () => {
     expect(saved.json().settings.dashboardRoleIds).toEqual([ROLE_ID]);
     const everyone = await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, { dashboardRoleIds: [GUILD_ID] });
     expect(everyone.statusCode).toBe(400);
+  });
+
+  it("shows automod with its defaults, and saves a valid configuration", async () => {
+    await guildSettings.set(GUILD_ID, Setting.LOGS_CHANNEL, LOGS_ID);
+    const cookies = await login();
+    const guild = await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}`, cookies });
+    expect(guild.json().settings.automod).toEqual(defaultAutomod());
+
+    const wanted = defaultAutomod();
+    wanted.enabled = true;
+    wanted.rules.invites = { enabled: true, action: "warn" };
+    wanted.rules.links.allowedDomains = ["https://www.YouTube.com/"];
+    wanted.exemptRoleIds = [ROLE_ID];
+    wanted.exemptChannelIds = [VOICE_ID];
+    const saved = await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, { automod: wanted });
+    expect(saved.statusCode).toBe(200);
+    expect(saved.json().settings.automod.rules.links.allowedDomains).toEqual(["youtube.com"]);
+    expect(guildSettings.get(GUILD_ID, Setting.AUTOMOD)).toMatchObject({ enabled: true, exemptRoleIds: [ROLE_ID] });
+    const [, logged] = discord.postMessage.mock.calls.at(-1);
+    expect(logged.embeds[0].description).toContain("**Automod:** off → on · Invite link (warn)");
+
+    const bad = await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, {
+      automod: { ...wanted, timeoutMinutes: 0 },
+    });
+    expect(bad.statusCode).toBe(400);
+    expect(bad.json()).toMatchObject({ error: "invalid-setting", setting: "automod" });
+    const foreign = await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, {
+      automod: { ...wanted, exemptRoleIds: [GUILD_ID] },
+    });
+    expect(foreign.statusCode).toBe(400);
   });
 
   it("filters cases by moderator, actions, dates and text", async () => {

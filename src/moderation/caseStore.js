@@ -122,6 +122,9 @@ export class CaseStore {
       countForUser: db.prepare(
         "SELECT action, COUNT(*) AS total FROM cases WHERE guild_id = ? AND user_id = ? GROUP BY action",
       ),
+      countForUserSince: db.prepare(
+        "SELECT COUNT(*) AS total FROM cases WHERE guild_id = ? AND user_id = ? AND action = ? AND created_at >= ?",
+      ),
       deleteForUser: db.prepare("DELETE FROM cases WHERE guild_id = ? AND user_id = ? AND action = ?"),
       updateReason: db.prepare(
         "UPDATE cases SET reason = ?, updated_at = ? WHERE guild_id = ? AND case_number = ?",
@@ -192,6 +195,11 @@ export class CaseStore {
   // { ban: 1, warn: 3, … } for one member.
   countCases(guildId, userId) {
     return Object.fromEntries(this.#statements.countForUser.all(guildId, userId).map((row) => [row.action, row.total]));
+  }
+
+  // How many cases of one kind the member got since `since` (ms), for automod's warning limit.
+  countCasesSince(guildId, userId, action, since) {
+    return Number(this.#statements.countForUserSince.get(guildId, userId, action, since).total);
   }
 
   // A page of a server's cases, newest first. `before` is the lowest case

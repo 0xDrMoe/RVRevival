@@ -24,6 +24,7 @@ function fakeInteraction(
     inCachedGuild: () => true,
     memberPermissions: { has: (permission) => permission === PermissionFlagsBits.ManageGuild },
     options: {
+      getSubcommandGroup: () => null,
       getSubcommand: () => subcommand,
       getChannel: () => ({
         id: CHANNEL_ID,
@@ -70,6 +71,7 @@ describe("/settings definition", () => {
       "log-ignore",
       "clear",
       "show",
+      "automod",
     ]);
 
     const [roleOption] = data.options[0].options;
@@ -97,6 +99,7 @@ describe("/settings definition", () => {
       Setting.MOD_ROLE,
       Setting.DISABLED_LOG_EVENTS,
       Setting.LOG_IGNORED_CHANNELS,
+      Setting.AUTOMOD,
     ]);
     expect(settingOption.choices[0].name_localizations.de).toBe(translate("de", "settingsStaffRoleName"));
   });
@@ -197,6 +200,7 @@ describe("/settings", () => {
     [Setting.MOD_ROLE, "settingsModRoleCleared"],
     [Setting.DISABLED_LOG_EVENTS, "settingsLogEventsCleared"],
     [Setting.LOG_IGNORED_CHANNELS, "settingsLogIgnoreCleared"],
+    [Setting.AUTOMOD, "settingsAutomodCleared"],
   ])("clears %s", async (setting, messageKey) => {
     await guildSettings.set(GUILD_ID, Setting.STAFF_ROLE, ROLE_ID);
     await guildSettings.set(GUILD_ID, Setting.COUNTRY_CHANNEL, CHANNEL_ID);
@@ -219,7 +223,8 @@ describe("/settings", () => {
         content:
           "Staff role: not set\n/country channel: any channel\nLogs channel: not set\n" +
           "Mod-log channel: not set (cases go to the logs channel)\nServer-log channel: not set\n" +
-          "Mod role: not set (the staff role is used)\nServer-log events: all on\nIgnored by the server log: none",
+          "Mod role: not set (the staff role is used)\nServer-log events: all on\nIgnored by the server log: none\n" +
+          "Automod: off (details: `/settings automod show`)",
       }),
     );
 
@@ -231,13 +236,15 @@ describe("/settings", () => {
     await guildSettings.set(GUILD_ID, Setting.MOD_ROLE, ROLE_ID);
     await guildSettings.set(GUILD_ID, Setting.DISABLED_LOG_EVENTS, [LogEvent.MEMBER_JOIN, LogEvent.MESSAGE_EDIT]);
     await guildSettings.set(GUILD_ID, Setting.LOG_IGNORED_CHANNELS, [CHANNEL_ID]);
+    await guildSettings.set(GUILD_ID, Setting.AUTOMOD, { enabled: true });
     const after = fakeInteraction("show");
     await command.execute(after);
     expect(after.reply).toHaveBeenCalledWith({
       content:
         `Staff role: <@&${ROLE_ID}>\n/country channel: <#${CHANNEL_ID}>\nLogs channel: <#${CHANNEL_ID}>\n` +
         `Mod-log channel: <#${CHANNEL_ID}>\nServer-log channel: <#${CHANNEL_ID}>\nMod role: <@&${ROLE_ID}>\n` +
-        `Server-log events switched off: Edited messages, Members joining\nIgnored by the server log: <#${CHANNEL_ID}>`,
+        `Server-log events switched off: Edited messages, Members joining\nIgnored by the server log: <#${CHANNEL_ID}>\n` +
+        "Automod: on (details: `/settings automod show`)",
       flags: MessageFlags.Ephemeral,
       allowedMentions: { parse: [] },
     });

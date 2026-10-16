@@ -1,6 +1,8 @@
 // Starts the bot. Slash commands are registered separately with `npm run register`.
 
 import { Client, Events, GatewayCloseCodes, GatewayIntentBits, Partials } from "discord.js";
+import { createAutomod } from "./automod/automod.js";
+import { normalizeAutomod } from "./automod/config.js";
 import { createCountryChannelGuard } from "./channels/countryChannelGuard.js";
 import { createCommands } from "./commands/index.js";
 import { ConfigError, loadBotConfig } from "./config.js";
@@ -84,6 +86,9 @@ async function start() {
   const moderation = createModerationService({ store, modLog, logger, forcedLanguage, botActions });
   const externalActions = createExternalActionRecorder({ moderation, botActions, logger });
 
+  // Automod (/settings automod): spam, banned words, invites, links, mentions, capitals.
+  const automod = createAutomod({ guildSettings, moderation, modLog, logger, forcedLanguage, botDeletions });
+
   const commands = createCommands({ logger, guildSettings, forcedLanguage, moderation, modLog, botDeletions });
   const handleInteraction = createInteractionHandler({ commands, logger, forcedLanguage, actionLog });
   const guardCountryChannel = createCountryChannelGuard({ guildSettings, logger, actionLog, botDeletions });
@@ -103,6 +108,20 @@ async function start() {
       .then(() => handler(...args))
       .catch((error) => logger.error(`Couldn't handle ${what}`, { error }));
   };
+
+  // Drops a deleted role or channel from automod's exemptions.
+  function forgetAutomodExemption(guildId, list, id) {
+    const saved = guildId && guildSettings.get(guildId, Setting.AUTOMOD);
+    if (!saved) {
+      return;
+    }
+    const config = normalizeAutomod(saved);
+    if (config[list].includes(id)) {
+      guildSettings
+        .set(guildId, Setting.AUTOMOD, { ...config, [list]: config[list].filter((entry) => entry !== id) })
+        .catch((error) => logger.error("Couldn't remove a deleted role or channel from automod", { error }));
+    }
+  }
 
   let client;
   let tempBans;
@@ -133,6 +152,7 @@ async function start() {
     client.on(Events.MessageCreate, (message) => {
       guardCountryChannel(message).catch((error) => logger.error("Couldn't clean the /country channel", { error }));
     });
+    client.on(Events.MessageCreate, safely("automod", (message) => automod.handleMessage(message)));
 
     // The server log (/settings server-log-channel).
     client.on(Events.MessageDelete, safely("a deleted message", (message) => serverLog.messageDeleted(message)));
@@ -141,6 +161,7 @@ async function start() {
       safely("a bulk delete", (messages, channel) => serverLog.messagesBulkDeleted(messages, channel)),
     );
     client.on(Events.MessageUpdate, safely("an edited message", (before, after) => serverLog.messageEdited(before, after)));
+    client.on(Events.MessageUpdate, safely("automod on an edit", (before, after) => automod.handleEdit(before, after)));
     client.on(Events.GuildMemberAdd, safely("a member joining", (member) => serverLog.memberJoined(member)));
     client.on(
       Events.GuildMemberRemove,
@@ -168,6 +189,7 @@ async function start() {
           .toggleInList(channel.guildId, Setting.LOG_IGNORED_CHANNELS, channel.id)
           .catch((error) => logger.error("Couldn't forget a deleted ignored channel", { error }));
       }
+      forgetAutomodExemption(channel.guildId, "exemptChannelIds", channel.id);
       for (const [setting, message] of CHANNEL_SETTINGS) {
         if (channel.guildId && guildSettings.get(channel.guildId, setting) === channel.id) {
           guildSettings
@@ -188,6 +210,7 @@ async function start() {
             .catch((error) => logger.error("Couldn't clear a deleted role from the settings", { setting, error }));
         }
       }
+      forgetAutomodExemption(role.guild.id, "exemptRoleIds", role.id);
       if (guildSettings.getList(role.guild.id, Setting.DASHBOARD_ROLES).includes(role.id)) {
         guildSettings
           .toggleInList(role.guild.id, Setting.DASHBOARD_ROLES, role.id)
@@ -213,6 +236,7 @@ async function start() {
     process.once(signal, async () => {
       logger.info("Shutting down");
       tempBans?.stop();
+      automod.stop();
       await client?.destroy().catch(() => {});
       closeDatabase(db);
       process.exit(0);

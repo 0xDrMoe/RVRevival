@@ -34,4 +34,21 @@ describe("command list", () => {
       expect(command.data.description.length).toBeGreaterThan(0);
     }
   });
+
+  // Discord refuses a command whose names, descriptions and choices add up to
+  // more than 4000 characters, counted for each language separately.
+  it("keeps every command within Discord's size limit in every language", () => {
+    const commands = createCommands({ logger: fakeLogger(), guildSettings: new GuildSettings() });
+    for (const locale of [undefined, "en-GB", "es-ES", "es-419", "de", "fr", "pt-BR", "it"]) {
+      const localized = (text, translations) => (locale && translations?.[locale]) || text || "";
+      const size = (entry) =>
+        entry.name.length +
+        localized(entry.description, entry.description_localizations).length +
+        (entry.choices ?? []).reduce((total, choice) => total + localized(choice.name, choice.name_localizations).length + String(choice.value).length, 0) +
+        (entry.options ?? []).reduce((total, option) => total + size(option), 0);
+      for (const command of commands.values()) {
+        expect(size(command.data), `${command.name} in ${locale ?? "en-US"}`).toBeLessThanOrEqual(4000);
+      }
+    }
+  });
 });

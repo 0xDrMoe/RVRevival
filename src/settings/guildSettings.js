@@ -32,6 +32,7 @@ export const Setting = Object.freeze({
   DISABLED_LOG_EVENTS: "disabledLogEvents", // server-log events switched off, a list of names
   LOG_IGNORED_CHANNELS: "logIgnoredChannels", // channels the server log skips, a list of IDs
   DASHBOARD_ROLES: "dashboardRoleIds", // roles that may see the dashboard and manage cases, a list of IDs
+  AUTOMOD: "automod", // the automod configuration, an object (see automod/config.js)
 });
 
 const KNOWN_SETTINGS = new Set(Object.values(Setting));
