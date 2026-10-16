@@ -968,5 +968,7 @@
 
   "appealAcceptedDm": "Ton appel de bannissement pour **{server}** a été accepté. Tu peux rejoindre à nouveau.",
   "appealDeniedDm": "Ton appel de bannissement pour **{server}** a été refusé.",
-  "dmAppeal": "Tu peux faire appel de ce bannissement ici : {url}"
+  "dmAppeal": "Tu peux faire appel de ce bannissement ici : {url}",
+
+  "ticketCategoryGone": "Ce type de ticket a été supprimé. Demande au staff de republier le panneau avec `/tickets panel`."
 }

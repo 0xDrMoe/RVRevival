@@ -968,5 +968,7 @@
 
   "appealAcceptedDm": "Your ban appeal for **{server}** was accepted. You can join again.",
   "appealDeniedDm": "Your ban appeal for **{server}** was denied.",
-  "dmAppeal": "You can appeal this ban here: {url}"
+  "dmAppeal": "You can appeal this ban here: {url}",
+
+  "ticketCategoryGone": "That ticket type was removed. Ask staff to post the panel again with `/tickets panel`."
 }

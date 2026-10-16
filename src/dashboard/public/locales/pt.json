@@ -615,5 +615,21 @@
   "appealAnswerPlaceholder": "Sua resposta",
   "appealAnswerAll": "Responda todas as perguntas primeiro.",
   "appealSend": "Enviar recurso",
-  "appealSent": "Seu recurso foi enviado. Você receberá uma DM quando a equipe decidir (mantenha abertas as DMs de membros do servidor)."
+  "appealSent": "Seu recurso foi enviado. Você receberá uma DM quando a equipe decidir (mantenha abertas as DMs de membros do servidor).",
+  "ticketCategories": "Tipos de ticket",
+  "ticketCategoriesSummary": "{count} configurados",
+  "ticketCategoriesHelp": "Dê ao painel um botão para cada tipo de ticket, cada um com suas perguntas e sua equipe. Sem nenhum, o painel tem um único botão Abrir ticket. Salvar atualiza o painel publicado.",
+  "ticketCategoriesNone": "Nenhum tipo de ticket: o painel tem um único botão Abrir ticket.",
+  "ticketCategoriesAdd": "Adicionar tipo",
+  "ticketCategoriesSaved": "Tipos de ticket salvos.",
+  "ticketCategoryLabel": "Texto do botão",
+  "ticketCategoryLabelPlaceholder": "Reportar bug",
+  "ticketCategoryEmoji": "Emoji",
+  "ticketCategoryStaff": "Cargo da equipe",
+  "ticketCategoryStaffDefault": "O cargo da equipe do painel",
+  "ticketCategoryDescription": "Descrição no painel",
+  "ticketCategoryDescriptionPlaceholder": "Algo quebrado no jogo? Conte aqui.",
+  "ticketCategoryQuestions": "Perguntas",
+  "ticketCategoryQuestionsPlaceholder": "O que aconteceu?\nEm qual plataforma você joga?",
+  "ticketCategoryQuestionsHelp": "Uma por linha, até {max}, com 45 caracteres cada (limite do Discord). Deixe vazio para perguntar com o que precisam de ajuda."
 }

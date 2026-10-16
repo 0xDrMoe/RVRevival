@@ -968,5 +968,7 @@
 
   "appealAcceptedDm": "Il tuo ricorso contro il ban su **{server}** è stato accettato. Puoi rientrare.",
   "appealDeniedDm": "Il tuo ricorso contro il ban su **{server}** è stato respinto.",
-  "dmAppeal": "Puoi fare ricorso contro questo ban qui: {url}"
+  "dmAppeal": "Puoi fare ricorso contro questo ban qui: {url}",
+
+  "ticketCategoryGone": "Quel tipo di ticket è stato rimosso. Chiedi allo staff di ripubblicare il pannello con `/tickets panel`."
 }

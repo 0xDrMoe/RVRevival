@@ -968,5 +968,7 @@
 
   "appealAcceptedDm": "Dein Bann-Einspruch für **{server}** wurde angenommen. Du kannst wieder beitreten.",
   "appealDeniedDm": "Dein Bann-Einspruch für **{server}** wurde abgelehnt.",
-  "dmAppeal": "Hier kannst du Einspruch gegen den Bann einlegen: {url}"
+  "dmAppeal": "Hier kannst du Einspruch gegen den Bann einlegen: {url}",
+
+  "ticketCategoryGone": "Diese Ticket-Art wurde entfernt. Bitte das Team, das Panel mit `/tickets panel` neu zu posten."
 }

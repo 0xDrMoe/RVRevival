@@ -615,5 +615,21 @@
   "appealAnswerPlaceholder": "Your answer",
   "appealAnswerAll": "Answer every question first.",
   "appealSend": "Send appeal",
-  "appealSent": "Your appeal was sent. You'll get a DM when staff decide (keep DMs from server members open)."
+  "appealSent": "Your appeal was sent. You'll get a DM when staff decide (keep DMs from server members open).",
+  "ticketCategories": "Ticket types",
+  "ticketCategoriesSummary": "{count} set up",
+  "ticketCategoriesHelp": "Give the panel a button for each kind of ticket, each with its own questions and staff. With none, the panel has one Open a ticket button. Saving updates the posted panel.",
+  "ticketCategoriesNone": "No ticket types: the panel has a single Open a ticket button.",
+  "ticketCategoriesAdd": "Add a type",
+  "ticketCategoriesSaved": "Ticket types saved.",
+  "ticketCategoryLabel": "Button label",
+  "ticketCategoryLabelPlaceholder": "Bug report",
+  "ticketCategoryEmoji": "Emoji",
+  "ticketCategoryStaff": "Staff role",
+  "ticketCategoryStaffDefault": "The panel's staff role",
+  "ticketCategoryDescription": "Description on the panel",
+  "ticketCategoryDescriptionPlaceholder": "Something broken in the game? Tell us here.",
+  "ticketCategoryQuestions": "Questions",
+  "ticketCategoryQuestionsPlaceholder": "What happened?\nWhich platform are you on?",
+  "ticketCategoryQuestionsHelp": "One per line, up to {max}, 45 characters each (Discord's limit). Leave empty to ask what they need help with."
 }
