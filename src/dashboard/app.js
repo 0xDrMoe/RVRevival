@@ -12,7 +12,8 @@
 //   PATCH  /api/guilds/:id/cases/:number  change a case's reason
 //   DELETE /api/guilds/:id/cases/:number  delete a case
 //   GET  /api/guilds/:id/members          find members by name, or a user by ID (?q=)
-//   GET  /api/guilds/:id/members/:user    one person's history: cases, tickets, joins, leaves, roles
+//   GET  /api/guilds/:id/members/:user    one person's history: cases, tickets, joins, leaves, roles, level
+//   GET  /api/guilds/:id/levels           the XP leaderboard (?page=)
 //
 // Two levels of access to a server the bot is in:
 //   - "manage": Manage Server, Administrator or the owner. Everything.
@@ -30,6 +31,8 @@ import fastifyRateLimit from "@fastify/rate-limit";
 import fastifyStatic from "@fastify/static";
 import Fastify from "fastify";
 import { normalizeAutomod } from "../automod/config.js";
+import { levelProgress, normalizeLeveling } from "../leveling/config.js";
+import { LevelStore } from "../leveling/levelStore.js";
 import { pickLanguage, translate } from "../i18n/i18n.js";
 import { CaseAction } from "../moderation/caseStore.js";
 import { MemberEventStore } from "../members/memberEventStore.js";
@@ -48,6 +51,8 @@ const GUILD_LIST_MS = 5 * 60 * 1000;
 const MAX_REASON_LENGTH = 512;
 const CASES_PAGE = 50;
 const EXPORT_LIMIT = 10_000;
+const LEADERBOARD_PAGE = 25;
+const MAX_LEADERBOARD_PAGE = 400;
 const MAX_SEARCH_LENGTH = 100;
 const STATS_DAYS = 30;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -159,6 +164,7 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
   const sessions = new SessionStore(db, { secret: config.sessionSecret });
   const memberEvents = new MemberEventStore(db);
   const tickets = new TicketStore(db);
+  const levels = new LevelStore(db);
   const secureCookies = config.url.startsWith("https://");
   const cookieOptions = { path: "/", httpOnly: true, secure: secureCookies, sameSite: "lax" };
 
@@ -346,11 +352,12 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     return { session, guildId, access };
   }
 
-  // A server's settings for the browser. Automod always comes with every
-  // default filled in, so the page can show it as it is.
+  // A server's settings for the browser. Automod and leveling always come with
+  // every default filled in, so the page can show them as they are.
   const settingsJson = (guildId) => ({
     ...guildSettings.all(guildId),
     [Setting.AUTOMOD]: normalizeAutomod(guildSettings.get(guildId, Setting.AUTOMOD)),
+    [Setting.LEVELING]: normalizeLeveling(guildSettings.get(guildId, Setting.LEVELING)),
   });
 
   const communityDefaults = (guild) => {
@@ -358,6 +365,7 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     return {
       [Setting.WELCOME_MESSAGE]: translate(language, "welcomeDefaultWelcome"),
       [Setting.LEAVE_MESSAGE]: translate(language, "welcomeDefaultLeave"),
+      levelUpMessage: translate(language, "levelUpDefault"),
     };
   };
 
@@ -493,8 +501,9 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     const lines = [];
     for (const [setting, value] of Object.entries(changes)) {
       const saved = guildSettings.get(guildId, setting);
-      // Unsaved automod means the defaults, which is what the page was shown.
-      const before = setting === Setting.AUTOMOD ? normalizeAutomod(saved) : saved;
+      // Unsaved automod or leveling means the defaults, which is what the page was shown.
+      const before =
+        setting === Setting.AUTOMOD ? normalizeAutomod(saved) : setting === Setting.LEVELING ? normalizeLeveling(saved) : saved;
       if (JSON.stringify(before ?? null) === JSON.stringify(value)) {
         continue;
       }
@@ -692,6 +701,44 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
         createdAt: ticket.createdAt,
         closedAt: ticket.closedAt,
         closeReason: ticket.closeReason,
+      })),
+      level: levelJson(guildId, userId),
+    };
+  });
+
+  // --- Leveling ------------------------------------------------------------
+
+  // A member's level, or null if they have no XP.
+  const levelJson = (guildId, userId) => {
+    const entry = levels.get(guildId, userId);
+    if (!entry || entry.xp <= 0) {
+      return null;
+    }
+    return { ...levelProgress(entry.xp), xp: entry.xp, messages: entry.messages, rank: levels.rank(guildId, userId) };
+  };
+
+  app.get("/api/guilds/:id/levels", async (request, reply) => {
+    const access = await requireGuild(request, reply);
+    if (!access) {
+      return reply;
+    }
+    const { guildId } = access;
+    const requested = Number.parseInt(request.query?.page ?? "1", 10);
+    const page = Number.isInteger(requested) ? Math.min(Math.max(requested, 1), MAX_LEADERBOARD_PAGE) : 1;
+    const offset = (page - 1) * LEADERBOARD_PAGE;
+    const total = levels.count(guildId);
+    return {
+      enabled: normalizeLeveling(guildSettings.get(guildId, Setting.LEVELING)).enabled,
+      page,
+      pageSize: LEADERBOARD_PAGE,
+      total,
+      entries: levels.top(guildId, { limit: LEADERBOARD_PAGE, offset }).map((entry, index) => ({
+        rank: offset + index + 1,
+        userId: entry.userId,
+        userTag: entry.userTag,
+        xp: entry.xp,
+        messages: entry.messages,
+        ...levelProgress(entry.xp),
       })),
     };
   });
