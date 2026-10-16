@@ -20,6 +20,7 @@ import { createTagCommands } from "./tags.js";
 import { createRaidCommand } from "./raid.js";
 import { createTicketsCommand } from "./tickets.js";
 import { createVoiceCommand } from "./voice.js";
+import { createAutoResponderCommand } from "./autoResponder.js";
 import { createWelcomeCommand } from "./welcome.js";
 
 // Each command is { name, data, execute(interaction), autocomplete?(interaction),
@@ -73,6 +74,7 @@ export function createCommands({
     createTicketsCommand({ tickets, guildSettings, logger, forcedLanguage, modLog }),
     createRaidCommand({ guildSettings, modLog, forcedLanguage }),
     createVoiceCommand({ guildSettings, store: tempVoice, forcedLanguage }),
+    createAutoResponderCommand({ guildSettings, forcedLanguage }),
     ...createLevelCommands({ levels, leveling, guildSettings, forcedLanguage }),
   ];
   return new Map(commands.map((command) => [command.name, command]));

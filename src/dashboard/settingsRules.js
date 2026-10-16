@@ -4,6 +4,7 @@
 
 import { ChannelType } from "discord.js";
 import { activeRules, checkAutomod, InvalidAutomod, normalizeAutomod, RULE_LABELS } from "../automod/config.js";
+import { checkResponders, InvalidResponders } from "../community/autoResponders.js";
 import { cleanEmoji } from "../community/rolePanels.js";
 import { MAX_THRESHOLD, MIN_THRESHOLD } from "../community/starboard.js";
 import { cleanTagContent, cleanTagName, MAX_TAG_LENGTH, MAX_TAGS, sortTags } from "../community/tags.js";
@@ -36,6 +37,7 @@ const IGNORABLE_CHANNELS = [
   ChannelType.GuildVoice,
   ChannelType.GuildCategory,
 ];
+const RESPONDER_CHANNELS = [ChannelType.GuildText, ChannelType.GuildAnnouncement, ChannelType.GuildForum, ChannelType.GuildCategory];
 const MAX_IGNORED_CHANNELS = 100;
 const MAX_DASHBOARD_ROLES = 25;
 const LOG_EVENTS = Object.values(LogEvent);
@@ -64,6 +66,7 @@ export const SETTING_RULES = Object.freeze({
   [Setting.STARBOARD]: { kind: "starboard", types: POSTING_CHANNELS, label: "Starboard" },
   [Setting.LEVELING]: { kind: "leveling", label: "Leveling" },
   [Setting.JOIN_GATE]: { kind: "joinGate", label: "Raid protection" },
+  [Setting.AUTO_RESPONDERS]: { kind: "autoResponders", types: RESPONDER_CHANNELS, label: "Auto-responders" },
 });
 
 // Checks one value. Returns what to save: null clears the setting, and empty
@@ -174,6 +177,15 @@ function checkValue(setting, value, { guildId, channels, roles }) {
       }
       return { channelId: value.channelId, threshold: value.threshold, emoji };
     }
+    case "autoResponders":
+      try {
+        return checkResponders(value, (id) => channelOk(id, rule.types));
+      } catch (error) {
+        if (error instanceof InvalidResponders) {
+          throw new InvalidSetting(setting, error.message);
+        }
+        throw error;
+      }
     case "joinGate":
       try {
         return checkJoinGate(value);
@@ -249,6 +261,8 @@ export function describeValue(setting, value) {
       return value.map((id) => `<@&${id}>`).join(", ");
     case "tags":
       return value.map((tag) => `\`${tag.name}\``).join(", ");
+    case "autoResponders":
+      return value.map((responder) => `\`${responder.trigger}\``).join(", ");
     case "starboard":
       return `<#${value.channelId}> · ${value.emoji} ${value.threshold}`;
     case "joinGate":

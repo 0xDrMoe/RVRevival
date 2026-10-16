@@ -15,6 +15,7 @@ The Discord bot for the Rumbleverse Revival server. It is built as a set of inde
 | [Welcome and leave messages](#welcome-and-leave-messages) | `/welcome`, or the dashboard's Community page | Manage Server |
 | [Role panels](#role-panels) | `/rolepanel` | Manage Roles (members click the buttons) |
 | [Custom commands](#custom-commands) | `/tag`, `/tags`, or the dashboard's Custom commands page | Everyone (`/tag`), Manage Messages or the mod role (`/tags`) |
+| [Auto-responders](#auto-responders) | `/autoresponder`, or the dashboard's Custom commands page | Manage Server |
 | [Reminders](#reminders) | `/remind` | Everyone |
 | [Giveaways](#giveaways) | `/giveaway` | Manage Server or the mod role (members click Enter) |
 | [Starboard](#starboard) | `/starboard`, or the dashboard's Community page | Manage Server (everyone stars messages) |
@@ -186,6 +187,18 @@ Saved answers that staff write once and anyone can post: the download link, how 
 
 `/tags` needs **Manage Messages** or the mod role. Up to 50 per server. Admins can also add, edit and remove them on the dashboard's **Custom commands** page.
 
+### Auto-responders
+
+The bot answers messages that match a trigger, like "how do I download" or "server ip". Discord's own AutoMod can block or flag words but can't reply, so this fills that gap.
+
+- `/autoresponder set trigger:<text> [match] [channel]` opens a form for the reply (several lines, up to 2000 characters). Using it with a trigger that already exists changes that one; leaving `match` or `channel` out keeps what was saved.
+- `match`: **anywhere in the message** (default), **as whole words** ("ip" doesn't match "ship"), **the whole message** or **the start of the message**. Case and extra spaces don't matter. Triggers are up to 60 characters.
+- `channel` limits it to one channel or category (threads count as their channel); without it, it answers everywhere.
+- In the reply, `{user}` mentions the author without pinging, `{server}` is the server's name and `{channel}` the channel. Nothing in a reply can ping anyone.
+- `/autoresponder remove trigger:<text>` deletes one; `/autoresponder list` lists them.
+
+Needs **Manage Server**. Up to 25 per server. Each answers at most once every 30 seconds per channel, never answers bots, and skips messages automod acted on. Reading messages needs the **Message Content** intent. They're also on the dashboard's **Custom commands** page.
+
 ### Reminders
 
 Anyone can ask the bot to remind them about something later: a tournament check-in, a stream, an event.
@@ -311,7 +324,7 @@ A website where admins log in with Discord and manage the bot without slash comm
 - **Logging:** the logs and server-log channels, a switch for each server-log event, and ignored channels or categories (with a filter).
 - **Automod:** the main switch, each rule with its action and numbers, banned words and allowed websites (one per line), timeout length and escalation, and exempt roles and channels (see [Automod](#automod)).
 - **Community:** the welcome and leave channels and messages (empty boxes show the default), the welcome DM, autoroles, the starboard (channel, stars needed, emoji), and the server's role panels (read-only; change them with `/rolepanel`).
-- **Custom commands:** every saved answer for `/tag`, with its name and text; add, edit or remove them (see [Custom commands](#custom-commands)).
+- **Custom commands:** every saved answer for `/tag`, with its name and text, and the auto-responders with their trigger, match, channel and reply; add, edit or remove them (see [Custom commands](#custom-commands) and [Auto-responders](#auto-responders)).
 - **Leveling:** the main switch, where and how level-ups are announced, reward roles, channels and roles that earn no XP, and the leaderboard with each member's level and progress (see [Leveling](#leveling)).
 - **Country:** the `/country` channel.
 - **Roles & access:** the **dashboard roles** (see below), and a table of every role with its color, its strongest permissions and what the bot uses it for, filterable by name or kind.
@@ -453,6 +466,7 @@ src/
     welcome.js           Community: /welcome
     rolePanel.js         Community: /rolepanel and its buttons
     tags.js              Custom commands: /tag, /tags and the form
+    autoResponder.js     Auto-responders: /autoresponder and the reply form
     remind.js            Reminders: /remind
     giveaway.js          Giveaways: /giveaway and its Enter button
     starboard.js         Starboard: /starboard
@@ -464,7 +478,7 @@ src/
   countries/             Country roles: country list, name matching and search
   roles/                 Country roles: find, create, assign and remove roles
   channels/              Country roles: keeps the /country channel clean
-  community/             Community: welcome and leave messages, autoroles (welcome.js), role panels (rolePanels.js), custom commands (tags.js), the starboard (starboard.js, starboardStore.js)
+  community/             Community: welcome and leave messages, autoroles (welcome.js), role panels (rolePanels.js), custom commands (tags.js), auto-responders (autoResponders.js), the starboard (starboard.js, starboardStore.js)
   giveaways/             Giveaways: saved in SQLite (giveawayStore.js), drawing winners (giveaways.js), ended on time (giveawayScheduler.js)
   tickets/               Support tickets: saved in SQLite (ticketStore.js), the panel, staff and messages (tickets.js), transcripts (transcript.js)
   raid/                  Raid protection: lockdown planning and restoring, the new-account gate and join alerts (raid.js)

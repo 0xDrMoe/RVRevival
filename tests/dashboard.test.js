@@ -455,6 +455,19 @@ describe("dashboard", () => {
     expect(cleared.json().settings.tags).toBeUndefined();
   });
 
+  it("saves auto-responders and refuses ones limited to a voice channel", async () => {
+    const cookies = await login();
+    const saved = await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, {
+      autoResponders: [{ trigger: " Server IP ", match: "word", reply: "play.example.com", channelId: TEXT_ID }],
+    });
+    expect(saved.statusCode).toBe(200);
+    expect(saved.json().settings.autoResponders).toEqual([{ trigger: "server ip", match: "word", reply: "play.example.com", channelId: TEXT_ID }]);
+    const refused = await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, {
+      autoResponders: [{ trigger: "ip", reply: "x", channelId: VOICE_ID }],
+    });
+    expect(refused.json()).toMatchObject({ error: "invalid-setting", setting: "autoResponders" });
+  });
+
   it("never saves role panels from the dashboard", async () => {
     const cookies = await login();
     const response = await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, { rolePanels: [] });

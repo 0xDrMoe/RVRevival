@@ -38,6 +38,7 @@ describe("command list", () => {
       "tickets",
       "raid",
       "voice",
+      "autoresponder",
       "rank",
       "leaderboard",
       "levels",
