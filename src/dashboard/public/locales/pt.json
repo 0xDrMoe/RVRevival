@@ -442,5 +442,15 @@
   "scheduledDeleteConfirm": "Apagar a mensagem agendada #{number}?",
   "scheduledDeleted": "Apagada",
   "scheduledBy": "Agendada por {name}. As menções não notificam.",
-  "scheduledByPings": "Agendada por {name}. As menções notificam."
+  "scheduledByPings": "Agendada por {name}. As menções notificam.",
+  "sectionBirthdays": "Aniversários",
+  "birthdaysHelp": "Os membros salvam o aniversário com /birthday set (mês e dia, sem ano). Quando o dia começa, o bot posta uma mensagem e dá o cargo de aniversário até o dia seguinte. Escolha um canal, um cargo ou os dois.",
+  "birthdayChannel": "Canal das mensagens",
+  "birthdayChannelHelp": "Onde a mensagem é postada.",
+  "birthdayRole": "Cargo de aniversário",
+  "birthdayRoleHelp": "Dado durante o dia. Cargos com permissões de moderação não aparecem.",
+  "birthdayTimezone": "Fuso horário",
+  "birthdayTimezoneHelp": "Quando o dia começa, como America/Sao_Paulo ou Europe/Lisbon.",
+  "birthdayMessage": "Mensagem",
+  "birthdayMessageHelp": "{user} é o membro (vários no mesmo dia aparecem juntos), {server} o servidor. Vazio para o texto padrão."
 }

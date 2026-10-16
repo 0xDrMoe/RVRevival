@@ -501,6 +501,25 @@ describe("dashboard", () => {
     expect(again.statusCode).toBe(404);
   });
 
+  it("saves birthday settings and refuses bad time zones and moderator roles", async () => {
+    const cookies = await login();
+    const saved = await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, {
+      birthdays: { channelId: TEXT_ID, roleId: null, message: " 🎂 {user}! ", timezone: "Europe/London" },
+    });
+    expect(saved.statusCode).toBe(200);
+    expect(saved.json().settings.birthdays).toEqual({ channelId: TEXT_ID, roleId: null, message: "🎂 {user}!", timezone: "Europe/London" });
+    for (const birthdays of [
+      { channelId: TEXT_ID, timezone: "Nowhere/City" },
+      { channelId: VOICE_ID, timezone: "UTC" },
+      { roleId: GUILD_ID, timezone: "UTC" },
+    ]) {
+      const refused = await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, { birthdays });
+      expect(refused.json()).toMatchObject({ error: "invalid-setting", setting: "birthdays" });
+    }
+    const off = await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, { birthdays: { channelId: null, roleId: null } });
+    expect(off.json().settings.birthdays).toBeUndefined();
+  });
+
   it("never saves role panels from the dashboard", async () => {
     const cookies = await login();
     const response = await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, { rolePanels: [] });

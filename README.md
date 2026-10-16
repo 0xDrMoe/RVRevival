@@ -17,6 +17,7 @@ The Discord bot for the Rumbleverse Revival server. It is built as a set of inde
 | [Custom commands](#custom-commands) | `/tag`, `/tags`, or the dashboard's Custom commands page | Everyone (`/tag`), Manage Messages or the mod role (`/tags`) |
 | [Auto-responders](#auto-responders) | `/autoresponder`, or the dashboard's Custom commands page | Manage Server |
 | [Scheduled messages](#scheduled-messages) | `/schedule`, or the dashboard's Scheduled page | Manage Server |
+| [Birthdays](#birthdays) | `/birthday`, or the dashboard's Community page | Everyone (`set`, `remove`, `show`, `upcoming`), Manage Server (`setup`, `off`, removing someone else's) |
 | [Reminders](#reminders) | `/remind` | Everyone |
 | [Giveaways](#giveaways) | `/giveaway` | Manage Server or the mod role (members click Enter) |
 | [Starboard](#starboard) | `/starboard`, or the dashboard's Community page | Manage Server (everyone stars messages) |
@@ -211,6 +212,17 @@ Messages the bot posts later, once or on repeat: event reminders, a weekly updat
 
 Needs **Manage Server**. Up to 25 per server. The bot needs View Channel and Send Messages in the channel. The dashboard's **Scheduled** page does the same, with the time picked in your own time zone.
 
+### Birthdays
+
+Members save their birthday; on the day, the bot posts a greeting and gives a birthday role. Discord has no birthday feature.
+
+- `/birthday set month:<1-12> day:<1-31>` saves yours. Only the month and day are kept, never the year. `/birthday remove` forgets it, `/birthday show [user]` shows a saved one, and `/birthday upcoming` lists the next 10 in the server.
+- `/birthday setup [channel] [role] [timezone] [message]` turns it on (a channel, a role, or both); options left out keep what was saved. The day starts at midnight in `timezone` (default UTC, suggested as you type). In `message`, `{user}` is the member (several on the same day are greeted together) and `{server}` the server's name; `\n` starts a new line. `/birthday off` turns it off; saved birthdays are kept.
+- The birthday role is taken back the next day. It can't have moderator permissions and must be below the bot's highest role.
+- 29 February birthdays are celebrated on the 28th in other years. Members who leave the server are forgotten (needs the Server Members intent).
+
+Saving and viewing birthdays is open to everyone; `setup`, `off` and removing someone else's need **Manage Server**. The same settings are on the dashboard's **Community** page.
+
 ### Reminders
 
 Anyone can ask the bot to remind them about something later: a tournament check-in, a stream, an event.
@@ -335,7 +347,7 @@ A website where admins log in with Discord and manage the bot without slash comm
 - **Moderation:** staff and mod roles, the mod-log channel, and raid protection (the new-account gate and join alerts; a running lockdown is shown here).
 - **Logging:** the logs and server-log channels, a switch for each server-log event, and ignored channels or categories (with a filter).
 - **Automod:** the main switch, each rule with its action and numbers, banned words and allowed websites (one per line), timeout length and escalation, and exempt roles and channels (see [Automod](#automod)).
-- **Community:** the welcome and leave channels and messages (empty boxes show the default), the welcome DM, autoroles, the starboard (channel, stars needed, emoji), and the server's role panels (read-only; change them with `/rolepanel`).
+- **Community:** the welcome and leave channels and messages (empty boxes show the default), the welcome DM, autoroles, the starboard (channel, stars needed, emoji), birthdays (channel, role, time zone, greeting), and the server's role panels (read-only; change them with `/rolepanel`).
 - **Custom commands:** every saved answer for `/tag`, with its name and text, and the auto-responders with their trigger, match, channel and reply; add, edit or remove them (see [Custom commands](#custom-commands) and [Auto-responders](#auto-responders)).
 - **Scheduled:** schedule a message (channel, first post in your own time zone, repeat), and see or delete the upcoming ones (see [Scheduled messages](#scheduled-messages)).
 - **Leveling:** the main switch, where and how level-ups are announced, reward roles, channels and roles that earn no XP, and the leaderboard with each member's level and progress (see [Leveling](#leveling)).
@@ -482,6 +494,7 @@ src/
     autoResponder.js     Auto-responders: /autoresponder and the reply form
     remind.js            Reminders: /remind
     schedule.js          Scheduled messages: /schedule and the message form
+    birthday.js          Birthdays: /birthday
     giveaway.js          Giveaways: /giveaway and its Enter button
     starboard.js         Starboard: /starboard
     tickets.js           Support tickets: /tickets, the panel's button, the form and the Close button
@@ -499,6 +512,7 @@ src/
   voice/                 Join-to-create voice: making and deleting channels (tempVoice.js), saved in SQLite (tempVoiceStore.js)
   leveling/              Leveling: settings and level math (config.js), XP in SQLite (levelStore.js), earning XP and rewards (leveling.js)
   members/               Member history: when members joined and left (memberEventStore.js)
+  birthdays/             Birthdays: saved in SQLite (birthdayStore.js), greetings and the role each day (birthdays.js)
   scheduled/             Scheduled messages: saved in SQLite (scheduledMessageStore.js), posted when due (scheduler.js)
   reminders/             Reminders: saved in SQLite (reminderStore.js), sent when due (reminderScheduler.js)
   automod/               Automod: settings (config.js), what each rule matches (rules.js), acting on messages

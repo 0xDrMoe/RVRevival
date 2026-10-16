@@ -373,6 +373,7 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
       [Setting.WELCOME_MESSAGE]: translate(language, "welcomeDefaultWelcome"),
       [Setting.LEAVE_MESSAGE]: translate(language, "welcomeDefaultLeave"),
       levelUpMessage: translate(language, "levelUpDefault"),
+      birthdayMessage: translate(language, "birthdayDefaultMessage"),
     };
   };
 

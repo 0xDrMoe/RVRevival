@@ -442,5 +442,15 @@
   "scheduledDeleteConfirm": "حذف الرسالة المجدولة #{number}؟",
   "scheduledDeleted": "حُذفت",
   "scheduledBy": "جدولها {name}. الإشارات لن تنبّه.",
-  "scheduledByPings": "جدولها {name}. الإشارات تنبّه."
+  "scheduledByPings": "جدولها {name}. الإشارات تنبّه.",
+  "sectionBirthdays": "أعياد الميلاد",
+  "birthdaysHelp": "يحفظ الأعضاء أعياد ميلادهم بـ /birthday set (الشهر واليوم، دون السنة). عندما يبدأ اليوم، ينشر البوت تهنئة ويمنح رتبة عيد الميلاد حتى اليوم التالي. اختر قناة أو رتبة أو كليهما.",
+  "birthdayChannel": "قناة التهاني",
+  "birthdayChannelHelp": "أين تُنشر التهنئة.",
+  "birthdayRole": "رتبة عيد الميلاد",
+  "birthdayRoleHelp": "تُمنح طوال اليوم. الرتب ذات صلاحيات الإشراف غير معروضة.",
+  "birthdayTimezone": "المنطقة الزمنية",
+  "birthdayTimezoneHelp": "متى يبدأ اليوم، مثل Asia/Riyadh أو Africa/Cairo.",
+  "birthdayMessage": "التهنئة",
+  "birthdayMessageHelp": "{user} هو العضو (إذا كان أكثر من عضو في اليوم نفسه يُذكرون معًا)، و{server} الخادم. اتركه فارغًا للنص الافتراضي."
 }

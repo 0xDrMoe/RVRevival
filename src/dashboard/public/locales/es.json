@@ -442,5 +442,15 @@
   "scheduledDeleteConfirm": "¿Borrar el mensaje programado #{number}?",
   "scheduledDeleted": "Borrado",
   "scheduledBy": "Programado por {name}. Las menciones no notifican.",
-  "scheduledByPings": "Programado por {name}. Las menciones notifican."
+  "scheduledByPings": "Programado por {name}. Las menciones notifican.",
+  "sectionBirthdays": "Cumpleaños",
+  "birthdaysHelp": "Los miembros guardan su cumpleaños con /birthday set (mes y día, sin año). Cuando empieza el día, el bot publica una felicitación y da el rol de cumpleaños hasta el día siguiente. Elige un canal, un rol o ambos.",
+  "birthdayChannel": "Canal de felicitaciones",
+  "birthdayChannelHelp": "Dónde se publica la felicitación.",
+  "birthdayRole": "Rol de cumpleaños",
+  "birthdayRoleHelp": "Se da durante el día. No aparecen los roles con permisos de moderación.",
+  "birthdayTimezone": "Zona horaria",
+  "birthdayTimezoneHelp": "Cuándo empieza el día, como Europe/Madrid o America/Mexico_City.",
+  "birthdayMessage": "Felicitación",
+  "birthdayMessageHelp": "{user} es el miembro (si hay varios el mismo día salen juntos), {server} el servidor. Vacío para el texto por defecto."
 }

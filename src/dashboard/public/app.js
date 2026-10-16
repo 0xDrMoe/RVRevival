@@ -67,6 +67,9 @@ const STARBOARD_DEFAULTS = { threshold: 3, emoji: "⭐" };
 const MAX_STARBOARD_THRESHOLD = 50;
 // Administrator and Manage Server: roles the bot won't give new members.
 const AUTOROLE_FORBIDDEN = (1n << 3n) | (1n << 5n);
+// Moderator permissions: roles with any of them can't be the birthday role.
+const BIRTHDAY_ROLE_FORBIDDEN = [3n, 5n, 28n, 4n, 13n, 29n, 27n, 30n, 33n, 34n, 2n, 1n, 40n, 17n, 7n].reduce((bits, bit) => bits | (1n << bit), 0n);
+const MAX_BIRTHDAY_MESSAGE_LENGTH = 1000;
 const CHANNEL = { TEXT: 0, VOICE: 2, CATEGORY: 4, ANNOUNCEMENT: 5, FORUM: 15 };
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -1198,6 +1201,55 @@ function readStarboard(form) {
   };
 }
 
+// The birthday settings on the Community page, or null when neither a channel nor a role is picked (off).
+function readBirthdays(form) {
+  const channelId = form.querySelector("#birthdayChannelId").value || null;
+  const roleId = form.querySelector("#birthdayRoleId").value || null;
+  if (!channelId && !roleId) {
+    return null;
+  }
+  return {
+    channelId,
+    roleId,
+    message: form.querySelector("#birthdayMessage").value.replace(/\r\n?/g, "\n").trim() || null,
+    timezone: form.querySelector("#birthdayTimezone").value.trim() || "UTC",
+  };
+}
+
+function birthdayCard(data, postable, defaults) {
+  const saved = data.settings.birthdays ?? {};
+  const roles = data.roles
+    .filter((role) => role.id !== data.guild.id && !role.managed && (BigInt(role.permissions ?? 0) & BIRTHDAY_ROLE_FORBIDDEN) === 0n)
+    .map((role) => ({ id: role.id, label: `@${role.name}` }));
+  const zones = h("datalist", { id: "birthdayZones" }, ["UTC", ...Intl.supportedValuesOf("timeZone")].map((zone) => h("option", { value: zone })));
+  return card(
+    t("sectionBirthdays"),
+    "🎂",
+    "pink",
+    h("p", { class: "help" }, t("birthdaysHelp")),
+    h(
+      "div",
+      { class: "rule-body" },
+      field("birthdayChannel", "birthdayChannelHelp", picker({ id: "birthdayChannelId", options: postable, value: saved.channelId, emptyLabel: t("communityOff") })),
+      field("birthdayRole", "birthdayRoleHelp", picker({ id: "birthdayRoleId", options: roles, value: saved.roleId, emptyLabel: t("communityOff") })),
+      field(
+        "birthdayTimezone",
+        "birthdayTimezoneHelp",
+        h("input", {
+          id: "birthdayTimezone",
+          list: "birthdayZones",
+          maxLength: 64,
+          spellcheck: false,
+          value: saved.timezone ?? "UTC",
+          placeholder: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        }),
+      ),
+    ),
+    zones,
+    field("birthdayMessage", "birthdayMessageHelp", messageBox("birthdayMessage", saved.message, defaults.birthdayMessage, MAX_BIRTHDAY_MESSAGE_LENGTH)),
+  );
+}
+
 async function showCommunity(guildId) {
   const data = await loadManagedGuild(guildId);
   if (!data) {
@@ -1268,6 +1320,7 @@ async function showCommunity(guildId) {
           ),
         ),
       ),
+      birthdayCard(data, postable, defaults),
     ],
     fields: {
       welcomeChannelId: selectValue("welcomeChannelId"),
@@ -1277,6 +1330,7 @@ async function showCommunity(guildId) {
       leaveMessage: textValue("leaveMessage"),
       autoroleIds: checkedList("autorole"),
       starboard: readStarboard,
+      birthdays: readBirthdays,
     },
     after: card(
       t("sectionRolePanels"),

@@ -442,5 +442,15 @@
   "scheduledDeleteConfirm": "Supprimer le message programmé #{number} ?",
   "scheduledDeleted": "Supprimé",
   "scheduledBy": "Programmé par {name}. Les mentions ne notifient pas.",
-  "scheduledByPings": "Programmé par {name}. Les mentions notifient."
+  "scheduledByPings": "Programmé par {name}. Les mentions notifient.",
+  "sectionBirthdays": "Anniversaires",
+  "birthdaysHelp": "Les membres enregistrent leur anniversaire avec /birthday set (mois et jour, sans année). Quand le jour commence, le bot poste un message et donne le rôle d'anniversaire jusqu'au lendemain. Choisis un salon, un rôle, ou les deux.",
+  "birthdayChannel": "Salon des messages",
+  "birthdayChannelHelp": "Où le message est posté.",
+  "birthdayRole": "Rôle d'anniversaire",
+  "birthdayRoleHelp": "Donné pour la journée. Les rôles avec des permissions de modération ne sont pas listés.",
+  "birthdayTimezone": "Fuseau horaire",
+  "birthdayTimezoneHelp": "Quand le jour commence, comme Europe/Paris.",
+  "birthdayMessage": "Message",
+  "birthdayMessageHelp": "{user} est le membre (plusieurs le même jour sont cités ensemble), {server} le serveur. Vide pour le texte par défaut."
 }
