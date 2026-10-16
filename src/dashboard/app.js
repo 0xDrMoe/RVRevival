@@ -33,6 +33,7 @@ import fastifyRateLimit from "@fastify/rate-limit";
 import fastifyStatic from "@fastify/static";
 import Fastify from "fastify";
 import { normalizeAutomod } from "../automod/config.js";
+import { normalizeAntiNuke } from "../raid/antiNuke.js";
 import { levelProgress, normalizeLeveling } from "../leveling/config.js";
 import { LevelStore } from "../leveling/levelStore.js";
 import { pickLanguage, translate } from "../i18n/i18n.js";
@@ -367,6 +368,7 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     ...guildSettings.all(guildId),
     [Setting.AUTOMOD]: normalizeAutomod(guildSettings.get(guildId, Setting.AUTOMOD)),
     [Setting.LEVELING]: normalizeLeveling(guildSettings.get(guildId, Setting.LEVELING)),
+    [Setting.ANTI_NUKE]: normalizeAntiNuke(guildSettings.get(guildId, Setting.ANTI_NUKE)),
   });
 
   const communityDefaults = (guild) => {
@@ -453,6 +455,10 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
         community: Array.isArray(guild.features) && guild.features.includes("COMMUNITY"),
       },
       access: access.access,
+      // Anti-nuke can only be changed by the owner.
+      isOwner: guild.owner_id === access.session.userId,
+      // Names for the user IDs the settings mention (anti-nuke's trusted people).
+      people: manage ? await peopleNames(guildId, normalizeAntiNuke(guildSettings.get(guildId, Setting.ANTI_NUKE)).trustedUserIds) : {},
       // People with a dashboard role only see the cases, not how the server is set up.
       settings: manage ? settingsJson(guildId) : null,
       channels: channels
@@ -514,12 +520,27 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
       throw error;
     }
 
+    const NORMALIZE = {
+      [Setting.AUTOMOD]: normalizeAutomod,
+      [Setting.LEVELING]: normalizeLeveling,
+      [Setting.ANTI_NUKE]: normalizeAntiNuke,
+    };
+    const ownerOnly = Object.keys(changes).filter((setting) => {
+      if (!SETTING_RULES[setting].ownerOnly) {
+        return false;
+      }
+      const before = NORMALIZE[setting] ? NORMALIZE[setting](guildSettings.get(guildId, setting)) : guildSettings.get(guildId, setting);
+      return JSON.stringify(before ?? null) !== JSON.stringify(changes[setting]);
+    });
+    if (ownerOnly.length > 0 && guild.owner_id !== session.userId) {
+      return reply.code(403).send({ error: "owner-only", setting: ownerOnly[0], message: "Only the server owner can change this." });
+    }
+
     const lines = [];
     for (const [setting, value] of Object.entries(changes)) {
       const saved = guildSettings.get(guildId, setting);
-      // Unsaved automod or leveling means the defaults, which is what the page was shown.
-      const before =
-        setting === Setting.AUTOMOD ? normalizeAutomod(saved) : setting === Setting.LEVELING ? normalizeLeveling(saved) : saved;
+      // Unsaved automod, leveling or anti-nuke means the defaults, which is what the page was shown.
+      const before = NORMALIZE[setting] ? NORMALIZE[setting](saved) : saved;
       if (JSON.stringify(before ?? null) === JSON.stringify(value)) {
         continue;
       }

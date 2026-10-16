@@ -11,6 +11,7 @@ import { MAX_THRESHOLD, MIN_THRESHOLD } from "../community/starboard.js";
 import { cleanTagContent, cleanTagName, MAX_TAG_LENGTH, MAX_TAGS, sortTags } from "../community/tags.js";
 import { MAX_AUTOROLES, MAX_MESSAGE_LENGTH } from "../community/welcome.js";
 import { checkLeveling, InvalidLeveling, normalizeLeveling } from "../leveling/config.js";
+import { checkAntiNuke, describeAntiNuke, InvalidAntiNuke } from "../raid/antiNuke.js";
 import { checkJoinGate, InvalidJoinGate } from "../raid/raid.js";
 import { LogEvent } from "../logs/serverLog.js";
 import { Setting } from "../settings/guildSettings.js";
@@ -69,6 +70,8 @@ export const SETTING_RULES = Object.freeze({
   [Setting.STARBOARD]: { kind: "starboard", types: POSTING_CHANNELS, label: "Starboard" },
   [Setting.LEVELING]: { kind: "leveling", label: "Leveling" },
   [Setting.JOIN_GATE]: { kind: "joinGate", label: "Raid protection" },
+  // Only the server owner may change this (checked by the dashboard route).
+  [Setting.ANTI_NUKE]: { kind: "antiNuke", label: "Anti-nuke", ownerOnly: true },
   [Setting.BIRTHDAYS]: { kind: "birthdays", types: POSTING_CHANNELS, label: "Birthdays" },
   [Setting.AUTO_RESPONDERS]: { kind: "autoResponders", types: RESPONDER_CHANNELS, label: "Auto-responders" },
 });
@@ -213,6 +216,15 @@ function checkValue(setting, value, { guildId, channels, roles }) {
         }
         throw error;
       }
+    case "antiNuke":
+      try {
+        return checkAntiNuke(value);
+      } catch (error) {
+        if (error instanceof InvalidAntiNuke) {
+          throw new InvalidSetting(setting, error.message);
+        }
+        throw error;
+      }
     case "joinGate":
       try {
         return checkJoinGate(value);
@@ -294,6 +306,8 @@ export function describeValue(setting, value) {
       return value.map((responder) => `\`${responder.trigger}\``).join(", ");
     case "starboard":
       return `<#${value.channelId}> · ${value.emoji} ${value.threshold}`;
+    case "antiNuke":
+      return describeAntiNuke(value);
     case "joinGate":
       return [
         value.minAgeDays ? `${value.action} accounts under ${value.minAgeDays} days` : "no account-age gate",

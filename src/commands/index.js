@@ -18,6 +18,7 @@ import { createSettingsCommand } from "./settings.js";
 import { createStarboardCommand } from "./starboard.js";
 import { createTagCommands } from "./tags.js";
 import { createRaidCommand } from "./raid.js";
+import { createAntiNukeCommand } from "./antiNuke.js";
 import { createTicketsCommand } from "./tickets.js";
 import { createVoiceCommand } from "./voice.js";
 import { createAutoResponderCommand } from "./autoResponder.js";
@@ -79,6 +80,7 @@ export function createCommands({
     createStarboardCommand({ guildSettings, forcedLanguage }),
     createTicketsCommand({ tickets, guildSettings, logger, forcedLanguage, modLog }),
     createRaidCommand({ guildSettings, modLog, forcedLanguage }),
+    createAntiNukeCommand({ guildSettings, forcedLanguage }),
     createVoiceCommand({ guildSettings, store: tempVoice, forcedLanguage }),
     createAutoResponderCommand({ guildSettings, forcedLanguage }),
     createScheduleCommand({ store: scheduledMessages, forcedLanguage }),

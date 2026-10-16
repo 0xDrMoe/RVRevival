@@ -12,6 +12,7 @@ import { ConfigError, loadBotConfig } from "./config.js";
 import { createGiveawayScheduler } from "./giveaways/giveawayScheduler.js";
 import { GiveawayStore } from "./giveaways/giveawayStore.js";
 import { createInteractionHandler } from "./interactionHandler.js";
+import { createAntiNuke } from "./raid/antiNuke.js";
 import { createRaidGuard } from "./raid/raid.js";
 import { createTempVoice } from "./voice/tempVoice.js";
 import { createAutoResponder } from "./community/autoResponders.js";
@@ -128,7 +129,17 @@ async function start() {
   // Posts cases in the mod-log channel, and server events in the server-log channel.
   const modLog = createModLog({ poster, store });
   const serverLog = createServerLog({ poster, botDeletions, guildSettings });
-  const moderation = createModerationService({ store, modLog, logger, forcedLanguage, botActions });
+  // Anti-nuke (/antinuke) counts bans and kicks done through the bot as well.
+  let antiNuke;
+  const moderation = createModerationService({
+    store,
+    modLog,
+    logger,
+    forcedLanguage,
+    botActions,
+    onModeratorAction: (guild, moderatorId, action) => antiNuke?.record(guild, moderatorId, action),
+  });
+  antiNuke = createAntiNuke({ guildSettings, moderation, modLog, logger, forcedLanguage });
   const externalActions = createExternalActionRecorder({ moderation, botActions, logger });
 
   // Automod (/settings automod): spam, banned words, invites, links, mentions, capitals.
@@ -307,6 +318,7 @@ async function start() {
 
     // Bans and unbans done outside the bot still get a case.
     client.on(Events.GuildBanAdd, safely("a ban", (ban) => externalActions.onBan(ban)));
+    client.on(Events.GuildAuditLogEntryCreate, safely("an audit log entry", (entry, guild) => antiNuke.auditLogEntry(entry, guild)));
     client.on(Events.GuildBanRemove, safely("an unban", (ban) => externalActions.onUnban(ban)));
 
     client.on(Events.ThreadDelete, safely("a deleted thread", (thread) => commands.get("tickets").threadDeleted(thread)));

@@ -35,9 +35,16 @@ export function auditReason(moderator, reason) {
 //   forcedLanguage   DM in this language (BOT_LANGUAGE); otherwise the server's language
 //   botActions       remembers what the bot does itself, so the ban/kick/timeout
 //                    events Discord sends back aren't recorded twice (RecentIds)
+//   onModeratorAction  called with (guild, moderatorId, "ban" | "kick") after a
+//                    ban or kick, so anti-nuke counts bans done through the bot
 //   now              the clock (replaceable in tests)
-export function createModerationService({ store, modLog = noModLog, logger, forcedLanguage, botActions, now = Date.now }) {
+export function createModerationService({ store, modLog = noModLog, logger, forcedLanguage, botActions, onModeratorAction, now = Date.now }) {
   const markOwnAction = (guild, userId, action) => botActions?.add(`${guild.id}:${userId}:${action}`);
+  const counted = (guild, moderator, action) => {
+    Promise.resolve(onModeratorAction?.(guild, moderator?.id, action)).catch((error) =>
+      logger?.error("Anti-nuke failed on a moderator action", { error }),
+    );
+  };
 
   // DMs the member about an action. Returns whether it arrived; closed DMs are normal.
   async function notify(user, guild, action, { reason, expiresAt }) {
@@ -101,6 +108,7 @@ export function createModerationService({ store, modLog = noModLog, logger, forc
       const dmSent = member ? await notify(user, guild, CaseAction.BAN, { reason, expiresAt }) : undefined;
       markOwnAction(guild, user.id, CaseAction.BAN);
       await guild.members.ban(user.id, { reason: auditReason(moderator, reason), deleteMessageSeconds });
+      counted(guild, moderator, "ban");
       // A new ban replaces any temporary ban still waiting to end.
       store.clearPendingUnbans(guild.id, user.id);
       return recordCase({
@@ -131,6 +139,7 @@ export function createModerationService({ store, modLog = noModLog, logger, forc
       markOwnAction(guild, member.id, CaseAction.UNBAN);
       await guild.members.ban(member.id, { reason: auditReason(moderator, reason), deleteMessageSeconds });
       await guild.members.unban(member.id, auditReason(moderator, `Softban: ${reason || "No reason given"}`));
+      counted(guild, moderator, "ban");
       return recordCase({ guild, action: CaseAction.SOFTBAN, user: member.user, moderator, reason, dmSent });
     },
 
@@ -138,6 +147,7 @@ export function createModerationService({ store, modLog = noModLog, logger, forc
       const dmSent = await notify(member.user, guild, CaseAction.KICK, { reason });
       markOwnAction(guild, member.id, CaseAction.KICK);
       await member.kick(auditReason(moderator, reason));
+      counted(guild, moderator, "kick");
       return recordCase({ guild, action: CaseAction.KICK, user: member.user, moderator, reason, dmSent });
     },
 

@@ -37,6 +37,7 @@ describe("command list", () => {
       "starboard",
       "tickets",
       "raid",
+      "antinuke",
       "voice",
       "autoresponder",
       "schedule",
