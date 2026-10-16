@@ -68,6 +68,21 @@ const MIGRATIONS = [
   );
   CREATE INDEX dashboard_sessions_expiry ON dashboard_sessions (expires_at);
   `,
+  // 4: reminders (/remind). Kept until they're sent, so they survive restarts.
+  `
+  CREATE TABLE reminders (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    guild_id   TEXT    NOT NULL,
+    channel_id TEXT    NOT NULL,
+    user_id    TEXT    NOT NULL,
+    text       TEXT    NOT NULL,
+    private    INTEGER NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL,
+    due_at     INTEGER NOT NULL
+  );
+  CREATE INDEX reminders_due ON reminders (due_at);
+  CREATE INDEX reminders_by_user ON reminders (guild_id, user_id, due_at);
+  `,
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS.length;

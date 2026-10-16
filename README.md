@@ -15,6 +15,7 @@ The Discord bot for the Rumbleverse Revival server. It is built as a set of inde
 | [Welcome and leave messages](#welcome-and-leave-messages) | `/welcome`, or the dashboard's Community page | Manage Server |
 | [Role panels](#role-panels) | `/rolepanel` | Manage Roles (members click the buttons) |
 | [Custom commands](#custom-commands) | `/tag`, `/tags`, or the dashboard's Custom commands page | Everyone (`/tag`), Manage Messages or the mod role (`/tags`) |
+| [Reminders](#reminders) | `/remind` | Everyone |
 | [Country roles](#country-roles) | `/country`, `/country-staff`, `/country-help` | Everyone (`/country`), the staff role (`/country-staff`), Manage Server (`/country-help`) |
 | [Web dashboard](#web-dashboard) | https://rumbleverse.cedartechsolutions.ca | Manage Server, or a dashboard role |
 
@@ -178,6 +179,16 @@ Saved answers that staff write once and anyone can post: the download link, how 
 - `/tags edit name:<tag>` opens the form with the current text. `/tags remove name:<tag>` deletes one. `/tags list` lists them.
 
 `/tags` needs **Manage Messages** or the mod role. Up to 50 per server. Admins can also add, edit and remove them on the dashboard's **Custom commands** page.
+
+### Reminders
+
+Anyone can ask the bot to remind them about something later: a tournament check-in, a stream, an event.
+
+- `/remind set in:<time> about:<text>` sets one. Times look like `10m`, `2h`, `1d 12h` or `90` (minutes), from 1 minute to 365 days ahead.
+- When it's due, the bot posts it in the same channel and pings only that member. With `private:true` it comes by DM instead.
+- `/remind list` shows your reminders in the server, and `/remind cancel reminder:<…>` cancels one (it suggests yours as you type).
+
+Up to 25 per member per server. Reminders are saved in `data/bot.db`, so they survive restarts; one that came due while the bot was offline is sent as soon as it's back. If the bot can't post in the channel (when it's set, or later), the reminder comes by DM, and if the member's DMs are closed too, it's dropped.
 
 ### Country roles
 
@@ -361,11 +372,13 @@ src/
     welcome.js           Community: /welcome
     rolePanel.js         Community: /rolepanel and its buttons
     tags.js              Custom commands: /tag, /tags and the form
+    remind.js            Reminders: /remind
     commandHelpers.js    Shared start of moderation-style commands (language, permission check)
   countries/             Country roles: country list, name matching and search
   roles/                 Country roles: find, create, assign and remove roles
   channels/              Country roles: keeps the /country channel clean
   community/             Community: welcome and leave messages, autoroles (welcome.js), role panels (rolePanels.js), custom commands (tags.js)
+  reminders/             Reminders: saved in SQLite (reminderStore.js), sent when due (reminderScheduler.js)
   automod/               Automod: settings (config.js), what each rule matches (rules.js), acting on messages
   logs/                  Logs channel, server log, and posting to log channels
   moderation/            Moderation: cases (SQLite), checks, actions, mod log, temporary bans

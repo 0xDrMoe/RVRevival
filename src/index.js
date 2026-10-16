@@ -17,6 +17,8 @@ import { createExternalActionRecorder } from "./moderation/externalActions.js";
 import { createModLog } from "./moderation/modLog.js";
 import { createModerationService } from "./moderation/moderationService.js";
 import { createTempBanScheduler } from "./moderation/tempBans.js";
+import { ReminderStore } from "./reminders/reminderStore.js";
+import { createReminderScheduler } from "./reminders/reminderScheduler.js";
 import { GuildSettings, Setting } from "./settings/guildSettings.js";
 import { closeDatabase, DEFAULT_DATABASE_FILE, openDatabase } from "./storage/database.js";
 import { logger, registerSecret } from "./utils/logger.js";
@@ -63,6 +65,8 @@ async function start() {
   const db = openDatabase(DEFAULT_DATABASE_FILE);
   const guildSettings = await GuildSettings.load(db);
   const store = new CaseStore(db);
+  // Reminders set with /remind.
+  const reminders = new ReminderStore(db);
   // Pick up settings changed on the web dashboard (another process).
   const settingsReload = setInterval(() => {
     try {
@@ -93,7 +97,15 @@ async function start() {
   // Welcome and leave messages, the welcome DM and autoroles (/welcome).
   const welcomer = createWelcomer({ guildSettings, logger, forcedLanguage });
 
-  const commands = createCommands({ logger, guildSettings, forcedLanguage, moderation, modLog, botDeletions });
+  const commands = createCommands({
+    logger,
+    guildSettings,
+    forcedLanguage,
+    moderation,
+    modLog,
+    botDeletions,
+    reminders,
+  });
   const handleInteraction = createInteractionHandler({ commands, logger, forcedLanguage, actionLog });
   const guardCountryChannel = createCountryChannelGuard({ guildSettings, logger, actionLog, botDeletions });
 
@@ -131,6 +143,7 @@ async function start() {
 
   let client;
   let tempBans;
+  let reminderScheduler;
 
   function connect(intents) {
     client = new Client({ intents, partials: PARTIALS });
@@ -148,6 +161,9 @@ async function start() {
       tempBans?.stop();
       tempBans = createTempBanScheduler({ client: readyClient, moderation, botActions, logger });
       tempBans.start();
+      reminderScheduler?.stop();
+      reminderScheduler = createReminderScheduler({ client: readyClient, store: reminders, logger, forcedLanguage });
+      reminderScheduler.start();
     });
 
     client.on(Events.InteractionCreate, (interaction) => {
@@ -250,6 +266,7 @@ async function start() {
     process.once(signal, async () => {
       logger.info("Shutting down");
       tempBans?.stop();
+      reminderScheduler?.stop();
       automod.stop();
       await client?.destroy().catch(() => {});
       closeDatabase(db);
