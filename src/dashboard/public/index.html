@@ -11,15 +11,13 @@
   </head>
   <body>
     <header class="topbar">
+      <button id="menuToggle" class="icon-button nav-toggle" type="button" aria-label="Menu"></button>
       <a class="brand" href="#/">
         <img src="favicon.svg" alt="" width="28" height="28" />
         <span>Rumbleverse Revival</span>
       </a>
-      <div class="topbar-right">
-        <button id="appearance" class="icon-button" type="button" aria-label="Appearance">🎨</button>
-        <select id="language" class="language" aria-label="Language"></select>
-        <div id="account"></div>
-      </div>
+      <button id="searchButton" class="search-button" type="button" hidden></button>
+      <div class="topbar-right"><div id="account"></div></div>
     </header>
     <main id="main" class="main" aria-live="polite"></main>
     <div id="toast" class="toast" role="status" hidden></div>

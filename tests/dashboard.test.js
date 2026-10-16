@@ -501,6 +501,28 @@ describe("dashboard", () => {
     expect(again.statusCode).toBe(404);
   });
 
+  it("records every dashboard change on the Activity page, even without a logs channel", async () => {
+    const cookies = await login();
+    await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, { modRoleId: ROLE_ID });
+    const at = Date.now() + 60 * 60 * 1000;
+    const added = await write(cookies, "POST", `/api/guilds/${GUILD_ID}/scheduled`, { channelId: TEXT_ID, content: "Hi", at, intervalMs: null });
+    expect(discord.postMessage).not.toHaveBeenCalled();
+
+    const page = await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}/activity`, cookies });
+    expect(page.statusCode).toBe(200);
+    const { entries, next } = page.json();
+    expect(next).toBeNull();
+    expect(entries.map((entry) => entry.summary)).toEqual([
+      `**Scheduled message #${added.json().message.id} added** for <#${TEXT_ID}>`,
+      "**Settings changed**",
+    ]);
+    expect(entries[1]).toMatchObject({ userId: USER_ID, userName: "Moe" });
+    expect(entries[1].lines.join("\n")).toContain(ROLE_ID);
+
+    const older = await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}/activity?before=${entries[1].id}`, cookies });
+    expect(older.json()).toEqual({ entries: [], next: null });
+  });
+
   it("saves birthday settings and refuses bad time zones and moderator roles", async () => {
     const cookies = await login();
     const saved = await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, {

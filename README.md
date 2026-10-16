@@ -12,17 +12,17 @@ The Discord bot for the Rumbleverse Revival server. It is built as a set of inde
 | [Channel and member tools](#channel-and-member-tools) | `/lock`, `/unlock`, `/slowmode`, `/role`, `/nick` | The matching Discord permission, or the mod role |
 | [Server log](#server-log) | `/settings server-log-channel`, `/settings log-event`, `/settings log-ignore` | Manage Server |
 | [Automod](#automod) | `/settings automod …`, or the dashboard's Automod page | Manage Server |
-| [Welcome and leave messages](#welcome-and-leave-messages) | `/welcome`, or the dashboard's Community page | Manage Server |
+| [Welcome and leave messages](#welcome-and-leave-messages) | `/welcome`, or the dashboard's Welcome & leave page | Manage Server |
 | [Role panels](#role-panels) | `/rolepanel` | Manage Roles (members click the buttons) |
 | [Custom commands](#custom-commands) | `/tag`, `/tags`, or the dashboard's Custom commands page | Everyone (`/tag`), Manage Messages or the mod role (`/tags`) |
-| [Auto-responders](#auto-responders) | `/autoresponder`, or the dashboard's Custom commands page | Manage Server |
+| [Auto-responders](#auto-responders) | `/autoresponder`, or the dashboard's Auto-responders page | Manage Server |
 | [Scheduled messages](#scheduled-messages) | `/schedule`, or the dashboard's Scheduled page | Manage Server |
-| [Birthdays](#birthdays) | `/birthday`, or the dashboard's Community page | Everyone (`set`, `remove`, `show`, `upcoming`), Manage Server (`setup`, `off`, removing someone else's) |
+| [Birthdays](#birthdays) | `/birthday`, or the dashboard's Birthdays page | Everyone (`set`, `remove`, `show`, `upcoming`), Manage Server (`setup`, `off`, removing someone else's) |
 | [Reminders](#reminders) | `/remind` | Everyone |
 | [Giveaways](#giveaways) | `/giveaway` | Manage Server or the mod role (members click Enter) |
-| [Starboard](#starboard) | `/starboard`, or the dashboard's Community page | Manage Server (everyone stars messages) |
+| [Starboard](#starboard) | `/starboard`, or the dashboard's Starboard page | Manage Server (everyone stars messages) |
 | [Support tickets](#support-tickets) | `/tickets` | Manage Server (`panel`, `off`), ticket staff (the rest); members click Open a ticket |
-| [Raid protection](#raid-protection) | `/raid`, or the dashboard's Moderation page | Manage Channels or the mod role (`lockdown`, `end`, `status`), Manage Server (`gate`, `gate-off`, `alert`) |
+| [Raid protection](#raid-protection) | `/raid`, or the dashboard's Raid protection page | Manage Channels or the mod role (`lockdown`, `end`, `status`), Manage Server (`gate`, `gate-off`, `alert`) |
 | [Join-to-create voice](#join-to-create-voice) | `/voice` | Manage Server (`setup`, `off`), the channel's owner (`lock`, `unlock`), anyone in the channel (`claim`) |
 | [Leveling](#leveling) | `/rank`, `/leaderboard`, `/levels`, or the dashboard's Leveling page | Everyone (`/rank`, `/leaderboard`), Manage Server (`/levels`) |
 | [Country roles](#country-roles) | `/country`, `/country-staff`, `/country-help` | Everyone (`/country`), the staff role (`/country-staff`), Manage Server (`/country-help`) |
@@ -156,7 +156,7 @@ When someone joins, the bot can post a welcome message in a channel, DM them, an
 
 Messages can use `{user}` (a mention), `{username}`, `{server}` and `{count}` (the member count), up to 1000 characters. Only `{user}` pings anyone. Unset messages use a default in the server's language: *Welcome to {server}, {user}! You're member #{count}.* and *{username} has left the server.*
 
-Admins set it up on the dashboard's **Community** page, or with:
+Admins set it up on the dashboard's **Welcome & leave** and **Autoroles** pages, or with:
 
 - `/welcome channel channel:<channel>` and `/welcome leave-channel channel:<channel>` switch welcome or leave messages on, in that channel.
 - `/welcome message text:<…>`, `/welcome leave-message text:<…>` and `/welcome dm text:<…>` set the messages. Type `\n` for a new line.
@@ -166,7 +166,7 @@ Admins set it up on the dashboard's **Community** page, or with:
 
 Giving roles needs **Manage Roles** and the bot's role above the autoroles.
 
-**Community servers should use Onboarding.** Discord's own Onboarding (Server Settings → Onboarding) gives new members roles and lets them pick their own, so on a Community server we recommend it over autoroles and role panels. `/welcome autorole`, `/welcome show`, `/rolepanel create` and the dashboard's Community page say so when the server is a Community server. Autoroles and role panels are there for servers that don't use Onboarding.
+**Community servers should use Onboarding.** Discord's own Onboarding (Server Settings → Onboarding) gives new members roles and lets them pick their own, so on a Community server we recommend it over autoroles and role panels. `/welcome autorole`, `/welcome show`, `/rolepanel create` and the dashboard's Autoroles page say so when the server is a Community server. Autoroles and role panels are there for servers that don't use Onboarding.
 
 ### Role panels
 
@@ -175,7 +175,7 @@ A role panel is a message with a button per role. Members click a button to get 
 - `/rolepanel create channel:<channel> title:<…> description:<…> mode:<Pick any number | Pick only one>` posts a new, empty panel (up to 10 per server).
 - `/rolepanel add panel:<panel> role:<role> emoji:<emoji> label:<text>` adds a button (up to 25 per panel); adding a role that's already there updates its emoji and label.
 - `/rolepanel remove panel:<panel> role:<role>` removes a button; `/rolepanel delete panel:<panel>` deletes the panel and its message.
-- `/rolepanel list` lists the panels. They're also shown (read-only) on the dashboard's Community page.
+- `/rolepanel list` lists the panels. They're also shown (read-only) on the dashboard's Autoroles page.
 
 Panels are edited in place; if the message was deleted, the next change posts it again. Roles with moderator or admin permissions (Administrator, Manage Server/Roles/Channels/Messages, Ban, Kick, Timeout, Mention Everyone and similar), bot roles, `@everyone`, roles above the bot and roles above your own top role can't go on a panel, and each click checks the role again.
 
@@ -199,7 +199,7 @@ The bot answers messages that match a trigger, like "how do I download" or "serv
 - In the reply, `{user}` mentions the author without pinging, `{server}` is the server's name and `{channel}` the channel. Nothing in a reply can ping anyone.
 - `/autoresponder remove trigger:<text>` deletes one; `/autoresponder list` lists them.
 
-Needs **Manage Server**. Up to 25 per server. Each answers at most once every 30 seconds per channel, never answers bots, and skips messages automod acted on. Reading messages needs the **Message Content** intent. They're also on the dashboard's **Custom commands** page.
+Needs **Manage Server**. Up to 25 per server. Each answers at most once every 30 seconds per channel, never answers bots, and skips messages automod acted on. Reading messages needs the **Message Content** intent. They're also on the dashboard's **Auto-responders** page.
 
 ### Scheduled messages
 
@@ -221,7 +221,7 @@ Members save their birthday; on the day, the bot posts a greeting and gives a bi
 - The birthday role is taken back the next day. It can't have moderator permissions and must be below the bot's highest role.
 - 29 February birthdays are celebrated on the 28th in other years. Members who leave the server are forgotten (needs the Server Members intent).
 
-Saving and viewing birthdays is open to everyone; `setup`, `off` and removing someone else's need **Manage Server**. The same settings are on the dashboard's **Community** page.
+Saving and viewing birthdays is open to everyone; `setup`, `off` and removing someone else's need **Manage Server**. The same settings are on the dashboard's **Birthdays** page.
 
 ### Reminders
 
@@ -249,7 +249,7 @@ Needs **Manage Server** or the mod role. Up to 10 running per server. Giveaways 
 When a message gets enough ⭐ reactions, the bot reposts it in a starboard channel with the author, text, first image and a **Jump to message** button, and keeps the star count up to date.
 
 - `/starboard set channel:#starboard` turns it on. Optional: `threshold` (stars needed, 1 to 50, default 3) and `emoji` (default ⭐; a custom emoji from the server works too). Running it again changes those.
-- `/starboard show` shows the settings and `/starboard off` turns it off (posts already on the board stay). The same settings are on the dashboard's **Community** page.
+- `/starboard show` shows the settings and `/starboard off` turns it off (posts already on the board stay). The same settings are on the dashboard's **Starboard** page.
 - The author's own star and bots don't count. If the stars drop below the threshold, the starboard post is deleted, and if the original message is deleted, so is its post. If staff delete a starboard post, that message never goes back on the board.
 - Messages from channels @everyone can't see never go on a starboard @everyone can see, and messages from age-restricted channels only go on an age-restricted starboard. Messages in the starboard channel itself can't be starred onto it.
 
@@ -276,7 +276,7 @@ For when a server is flooded by bots or a coordinated group. Discord's own tools
 - `/raid end [reason]` puts every locked channel back **exactly** as it was: the bot saved each changed permission before locking. Channels it couldn't edit are skipped and listed in the mod log.
 - `/raid gate min-age:<days> [action]` kicks accounts younger than that when they join (they're DMed the reason, and a case is recorded), or with `action:alert` only flags them in the mod log. `/raid gate-off` turns it off.
 - `/raid alert joins:<n>` posts an alert in the mod log when n members join within a minute (at most once every 10 minutes). `joins:0` turns it off.
-- `/raid status` shows all of the above. The gate and alerts can also be set on the dashboard's **Moderation** page, which shows a running lockdown too.
+- `/raid status` shows all of the above. The gate and alerts can also be set on the dashboard's **Raid protection** page, which shows a running lockdown too.
 
 The bot needs **Manage Channels** and **Manage Roles** in the channels it locks (and its role above the member roles), and **Kick Members** for the gate. A short notice is posted in the server's system channel when a lockdown starts and ends.
 
@@ -339,30 +339,36 @@ Country names are the English ISO names, with a few shortened (for example *Unit
 
 ### Web dashboard
 
-A website where admins log in with Discord and manage the bot without slash commands. Each server has a sidebar with these pages:
+A website where admins log in with Discord and manage the bot without slash commands. Each server has a sidebar grouped into General, Moderation, Protection, Community, Messages and Settings, with a green dot next to every feature that's switched on. **Ctrl+K** (⌘K on a Mac, or `/`) opens a search box that jumps to any page or server. On phones the sidebar becomes a menu behind the ☰ button. Pages switch without reloading.
 
 - **Servers:** every server you can open, with a search box. Servers without the bot get an invite link.
-- **Overview:** member and online counts, total cases, cases in the last 7 and 30 days, running temporary bans, a chart of cases per day for the last 30 days (click the legend to hide actions), cases per action, the latest cases, the busiest moderators (each links to their cases) and the most moderated members (each links to their history), and a setup checklist with links to what isn't set yet.
+- **Overview:** member and online counts, total cases, cases in the last 7 and 30 days, running temporary bans, which features are on (each links to its page), a setup checklist (hidden once everything is done), a chart of cases per day for the last 30 days (click the legend to hide actions), cases per action, the latest cases, the busiest moderators (each links to their cases) and the most moderated members (each links to their history).
+- **Activity:** every change made on the dashboard, newest first, with who made it and what changed. Kept even when there's no logs channel (the newest 500 per server).
 - **Cases:** every moderation case, newest first. Search reasons and names, pick one or more actions, and filter by member ID, moderator ID and date range; clicking a name shows only their cases. Active filters show as chips you can remove. **Export CSV** downloads the filtered list (up to 10,000 cases). Reasons can be edited (the mod-log post is updated too) and cases deleted.
 - **Members:** find someone by the start of their username or nickname, or paste a user ID to find someone who left. Each person's page shows when their account was made (flagged if under 7 days old), when they joined, how many times they joined, their roles, a timeout or temporary ban in progress, Discord's ban reason if they're banned, every case as a timeline, their support tickets (with links to the threads), their level and leaderboard place, and their recent joins and leaves (the bot keeps the newest 50 per person). Each case in **Cases** has a *History* link to it.
 - **Tickets:** every support ticket, newest first, filtered by open or closed and by member ID. Each ticket shows who opened and closed it, the reason, a link to its thread, and its transcript (also as a `.txt` download).
-- **Moderation:** staff and mod roles, the mod-log channel, and raid protection (the new-account gate and join alerts; a running lockdown is shown here).
-- **Logging:** the logs and server-log channels, a switch for each server-log event, and ignored channels or categories (with a filter).
 - **Automod:** the main switch, each rule with its action and numbers, banned words and allowed websites (one per line), timeout length and escalation, and exempt roles and channels (see [Automod](#automod)).
-- **Community:** the welcome and leave channels and messages (empty boxes show the default), the welcome DM, autoroles, the starboard (channel, stars needed, emoji), birthdays (channel, role, time zone, greeting), and the server's role panels (read-only; change them with `/rolepanel`).
-- **Custom commands:** every saved answer for `/tag`, with its name and text, and the auto-responders with their trigger, match, channel and reply; add, edit or remove them (see [Custom commands](#custom-commands) and [Auto-responders](#auto-responders)).
-- **Scheduled:** schedule a message (channel, first post in your own time zone, repeat), and see or delete the upcoming ones (see [Scheduled messages](#scheduled-messages)).
+- **Raid protection:** the new-account gate, join-wave alerts, and a running lockdown (see [Raid protection](#raid-protection)).
+- **Welcome & leave:** the welcome and leave channels and messages (empty boxes show the default) and the welcome DM.
+- **Autoroles:** roles given on joining, and the server's role panels (read-only; change them with `/rolepanel`). Community servers get a tip recommending Discord's Onboarding.
+- **Starboard:** channel, stars needed and emoji.
+- **Birthdays:** channel, role, time zone and greeting.
 - **Leveling:** the main switch, where and how level-ups are announced, reward roles, voice XP and XP boosts, channels and roles that earn no XP, and the leaderboard with each member's level and progress (see [Leveling](#leveling)).
 - **Country:** the `/country` channel.
+- **Custom commands:** every saved answer for `/tag`, with its name and text; add, edit or remove them (see [Custom commands](#custom-commands)).
+- **Auto-responders:** each trigger, match, channel and reply (see [Auto-responders](#auto-responders)).
+- **Scheduled:** schedule a message (channel, first post in your own time zone, repeat), and see or delete the upcoming ones (see [Scheduled messages](#scheduled-messages)).
+- **Staff roles:** staff and mod roles, and the mod-log channel.
+- **Logging:** the logs and server-log channels, a switch for each server-log event, and ignored channels or categories (with a filter).
 - **Roles & access:** the **dashboard roles** (see below), and a table of every role with its color, its strongest permissions and what the bot uses it for, filterable by name or kind.
 
 Settings pages show a save bar when something changed, and ask before you leave with unsaved changes.
 
 **Dashboard roles.** Members with one of the roles ticked under *Roles & access* can open the server's Overview, Cases (view, edit reasons, delete, export) and Members without Manage Server. Only people with Manage Server can see or change settings. Roles are checked against Discord on every request (at most 30 seconds old), so removing someone's role takes their access away right away.
 
-**Appearance.** The 🎨 button picks a theme (match the device, light or dark), one of 8 accent colors and comfortable or compact spacing. It's remembered per browser.
+**Appearance.** The account menu (top right) picks a theme (match the device, light or dark), one of 8 accent colors and comfortable or compact spacing. It's remembered per browser.
 
-Every change made on the dashboard is posted in the server's logs channel with who made it, like commands are. The bot picks up dashboard changes within 5 seconds. The dashboard is in the same 7 languages as the bot (picked from the browser, or the menu at the top).
+Every change made on the dashboard is listed on the **Activity** page and posted in the server's logs channel with who made it, like commands are. The bot picks up dashboard changes within 5 seconds. The dashboard is in the same 7 languages as the bot (picked from the browser, or the account menu).
 
 **How it works.** It's a second process (`npm run dashboard`, pm2 app `rv-dashboard`) that shares `data/bot.db` with the bot. It only listens on `127.0.0.1:3080`; nginx (or Caddy) puts it on the internet with HTTPS. Logging in uses Discord OAuth2 with the `identify` and `guilds` scopes only, so it can see your name, avatar and server list, nothing else. Permissions are re-checked against Discord on every request (your server list is re-read at most every 5 minutes, or when you press *Refresh list*). Logins last 7 days. The session cookie is HTTP-only and Secure, and changes are only accepted from the dashboard's own address.
 

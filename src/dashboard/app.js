@@ -43,6 +43,7 @@ import { ScheduledMessageStore } from "../scheduled/scheduledMessageStore.js";
 import { MAX_DELAY_MS, MAX_INTERVAL_MS, MAX_SCHEDULED, MAX_SCHEDULED_LENGTH, MIN_INTERVAL_MS } from "../scheduled/scheduler.js";
 import { buildCaseEmbed } from "../moderation/modLog.js";
 import { Setting } from "../settings/guildSettings.js";
+import { ActivityStore } from "./activityStore.js";
 import { canManage, DiscordApiError } from "./discordApi.js";
 import { SESSION_DAYS, SessionStore } from "./sessions.js";
 import { checkSettingChanges, describeValue, InvalidSetting, SETTING_RULES } from "./settingsRules.js";
@@ -172,6 +173,7 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
   const tickets = new TicketStore(db);
   const levels = new LevelStore(db);
   const scheduledMessages = new ScheduledMessageStore(db);
+  const activity = new ActivityStore(db);
   const secureCookies = config.url.startsWith("https://");
   const cookieOptions = { path: "/", httpOnly: true, secure: secureCookies, sameSite: "lax" };
 
@@ -377,8 +379,14 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     };
   };
 
-  // Posts what someone did on the dashboard in the server's logs channel.
+  // Records what someone did on the dashboard (Activity page) and posts it in
+  // the server's logs channel when there is one.
   async function logAction(guildId, session, summary, lines = []) {
+    try {
+      activity.add({ guildId, userId: session.userId, userName: session.username, summary, lines });
+    } catch (error) {
+      logger.warn("Couldn't save a dashboard change", { guildId, error });
+    }
     const channelId = guildSettings.get(guildId, Setting.LOGS_CHANNEL);
     if (!channelId) {
       return;
@@ -929,6 +937,17 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     }
     await logAction(access.guildId, access.session, `**Scheduled message #${number} deleted**`);
     return { ok: true };
+  });
+
+  // --- Activity -------------------------------------------------------------
+
+  app.get("/api/guilds/:id/activity", async (request, reply) => {
+    const access = await requireGuild(request, reply, { manage: true });
+    if (!access) {
+      return reply;
+    }
+    const before = Number.parseInt(request.query?.before ?? "", 10);
+    return activity.page(access.guildId, { before: Number.isSafeInteger(before) ? before : undefined });
   });
 
   return app;
