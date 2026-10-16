@@ -155,6 +155,8 @@ Admins set it up on the dashboard's **Community** page, or with:
 
 Giving roles needs **Manage Roles** and the bot's role above the autoroles.
 
+**Community servers should use Onboarding.** Discord's own Onboarding (Server Settings → Onboarding) gives new members roles and lets them pick their own, so on a Community server we recommend it over autoroles and role panels. `/welcome autorole`, `/welcome show`, `/rolepanel create` and the dashboard's Community page say so when the server is a Community server. Autoroles and role panels are there for servers that don't use Onboarding.
+
 ### Role panels
 
 A role panel is a message with a button per role. Members click a button to get the role, and click again to take it off. Good for platforms (PC, PlayStation, Xbox), regions, and ping roles for events or playtests. In **Pick only one role** mode, picking a role takes away the panel's other roles.

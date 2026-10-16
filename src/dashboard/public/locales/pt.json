@@ -268,5 +268,7 @@
   "rolePanelsEmpty": "Ainda não há cargos neste painel",
   "rolePanelMode_toggle": "Vários cargos",
   "rolePanelMode_unique": "Só um cargo",
-  "setupWelcome": "Receber novos membros"
+  "setupWelcome": "Receber novos membros",
+  "onboardingTip": "Este é um servidor da comunidade, então recomendamos a Integração do próprio Discord (Configurações do servidor → Integração) para dar cargos a novos membros. Use cargos automáticos só se não usar a Integração.",
+  "rolePanelsOnboardingTip": "Este é um servidor da comunidade, então recomendamos a Integração do próprio Discord (Configurações do servidor → Integração) para os membros escolherem cargos. Painéis de cargos são melhores para servidores que não usam a Integração."
 }

@@ -478,5 +478,9 @@
   "rolePanelButtonBroken": "Ahora no puedo darte ese rol. Avisa a un miembro del staff.",
   "rolePanelYouGot": "Ahora tienes {role}.",
   "rolePanelYouLost": "{role} quitado.",
-  "rolePanelYouSwapped": "Ahora tienes {role} en lugar de {old}."
+  "rolePanelYouSwapped": "Ahora tienes {role} en lugar de {old}.",
+
+  "welcomeOnboardingTip": "Consejo: este es un servidor de comunidad, así que la **Incorporación** de Discord (Ajustes del servidor → Incorporación) es la mejor forma de dar roles a los nuevos miembros. Usa roles automáticos solo si no usas la Incorporación.",
+
+  "rolePanelOnboardingTip": "Consejo: este es un servidor de comunidad, así que la **Incorporación** de Discord (Ajustes del servidor → Incorporación) permite a los miembros elegir roles sin un panel. Los paneles de roles son mejores para servidores que no usan la Incorporación."
 }

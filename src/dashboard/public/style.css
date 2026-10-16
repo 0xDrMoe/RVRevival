@@ -1667,6 +1667,15 @@ dialog textarea {
   gap: 8px;
 }
 
+.tip {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  font-size: 0.85rem;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+  border-radius: 10px;
+}
+
 .panel-list li {
   display: grid;
   gap: 8px;

@@ -316,6 +316,7 @@ describe("dashboard", () => {
     const cookies = await login();
     const guild = await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}`, cookies });
     expect(guild.json().communityDefaults.welcomeMessage).toContain("{user}");
+    expect(guild.json().guild.community).toBe(false);
 
     const saved = await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, {
       welcomeChannelId: TEXT_ID,

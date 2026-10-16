@@ -36,6 +36,8 @@ const OFF_CHOICES = [
 ];
 
 const POSTING_CHANNELS = [ChannelType.GuildText, ChannelType.GuildAnnouncement];
+// Community servers have Discord's own Onboarding, which we recommend over autoroles.
+const hasOnboarding = (guild) => Boolean(guild.features?.includes("COMMUNITY"));
 const POST_PERMISSIONS = [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages];
 
 function withDescription(builder, key) {
@@ -183,7 +185,8 @@ export function createWelcomeCommand({ guildSettings, forcedLanguage }) {
         }
         await guildSettings.toggleInList(guildId, Setting.AUTOROLES, role.id);
         const botCanGive = Boolean(me && role.position < me.roles.highest.position && me.permissions.has(PermissionFlagsBits.ManageRoles));
-        return reply(Status.SUCCESS, "welcomeAutoroleAdded", values, botCanGive ? [] : ["welcomeAutoroleAboveBot"]);
+        const notes = [...(botCanGive ? [] : ["welcomeAutoroleAboveBot"]), ...(hasOnboarding(guild) ? ["welcomeOnboardingTip"] : [])];
+        return reply(Status.SUCCESS, "welcomeAutoroleAdded", values, notes);
       }
       case "off": {
         const choice = OFF_CHOICES.find(({ value }) => value === interaction.options.getString("what", true));
@@ -222,8 +225,9 @@ export function createWelcomeCommand({ guildSettings, forcedLanguage }) {
           roles.length > 0
             ? text("welcomeShowAutoroles", { roles: roles.map((id) => `<@&${id}>`).join(", ") })
             : text("welcomeShowNoAutoroles"),
+          roles.length > 0 && hasOnboarding(guild) ? text("welcomeOnboardingTip") : "",
           text("welcomeShowTestHint"),
-        ]);
+        ].filter(Boolean));
       }
     }
     return reply(Status.FAILED, "unexpected");

@@ -402,6 +402,8 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
         icon: guild.icon ?? null,
         memberCount: guild.approximate_member_count ?? null,
         onlineCount: guild.approximate_presence_count ?? null,
+        // Community servers have Discord's Onboarding, which the Community page recommends over autoroles.
+        community: Array.isArray(guild.features) && guild.features.includes("COMMUNITY"),
       },
       access: access.access,
       // People with a dashboard role only see the cases, not how the server is set up.

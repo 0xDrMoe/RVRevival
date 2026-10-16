@@ -2,6 +2,7 @@ import { ButtonStyle, MessageFlags, PermissionFlagsBits } from "discord.js";
 import { describe, expect, it, vi } from "vitest";
 import { buildRolePanelCommandData, createRolePanelCommand } from "../src/commands/rolePanel.js";
 import { buildPanelMessage, buttonId, cleanEmoji, PanelMode, parseButtonId, roleProblem } from "../src/community/rolePanels.js";
+import { translate } from "../src/i18n/i18n.js";
 import { Status } from "../src/logs/actionLog.js";
 import { GuildSettings, Setting } from "../src/settings/guildSettings.js";
 import { fakeLogger } from "./helpers/fakes.js";
@@ -19,7 +20,7 @@ const HIGH_ROLE = "700000000000000004";
 const noPermissions = { has: () => false };
 const role = (id, name, position, overrides = {}) => ({ id, name, position, managed: false, permissions: noPermissions, ...overrides });
 
-function fakeGuild({ canManageRoles = true } = {}) {
+function fakeGuild({ canManageRoles = true, features = [] } = {}) {
   const sent = [];
   const messages = new Map();
   const channel = {
@@ -44,6 +45,7 @@ function fakeGuild({ canManageRoles = true } = {}) {
   return {
     id: GUILD_ID,
     ownerId: OWNER_ID,
+    features,
     preferredLocale: "en-US",
     sent,
     channel,
@@ -179,6 +181,17 @@ describe("/rolepanel", () => {
     const { command, guild } = setup();
     const outcome = await command.execute(fakeInteraction(guild, "list", { canManageRoles: false }));
     expect(outcome.status).toBe(Status.REFUSED);
+  });
+
+  it("recommends Onboarding when creating a panel on a Community server", async () => {
+    const { run, guild } = setup();
+    const tip = translate("en", "rolePanelOnboardingTip");
+    const plain = await run("create", { options: { title: "Roles" } });
+    expect(plain.interaction.editReply.mock.calls[0][0].content).not.toContain(tip);
+    guild.features = ["COMMUNITY"];
+    const community = await run("create", { options: { title: "More roles" } });
+    expect(community.interaction.editReply.mock.calls[0][0].content).toContain(tip);
+    expect(community.outcome.key).toBe("rolePanelCreated");
   });
 
   it("creates a panel, adds and removes buttons and edits the same message", async () => {
