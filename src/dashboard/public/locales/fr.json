@@ -387,5 +387,16 @@
   "ticketsDownload": "Télécharger le .txt",
   "ticketsTranscript": "Transcription",
   "ticketsNoTranscript": "Aucune transcription n'a été enregistrée pour ce ticket. Il a été fermé avant leur arrivée, ou son fil a été supprimé.",
-  "ticketsTranscriptLater": "La transcription est enregistrée à la fermeture du ticket."
+  "ticketsTranscriptLater": "La transcription est enregistrée à la fermeture du ticket.",
+  "off": "Désactivé",
+  "sectionRaid": "Anti-raid",
+  "raidHelp": "Expulsez ou signalez les comptes tout neufs à leur arrivée, et recevez une alerte dans le journal de modération quand beaucoup de monde arrive d'un coup. Pendant un raid, /raid lockdown verrouille tous les salons publics et /raid end les rétablit. Le niveau de vérification et les alertes de raid de Discord (Paramètres du serveur → Configuration de la sécurité) fonctionnent en plus.",
+  "raidLockdownActive": "Un verrouillage est en cours depuis le {date} ({count} salons verrouillés). Terminez-le avec /raid end dans Discord.",
+  "gateMinAge": "Âge minimum du compte (jours)",
+  "gateMinAgeHelp": "Vide signifie désactivé.",
+  "gateAction": "Comptes plus récents",
+  "gateAction_kick": "Les expulser (raison en MP)",
+  "gateAction_alert": "Seulement alerter le journal de modération",
+  "gateAlertJoins": "Alerter quand autant arrivent en une minute",
+  "gateAlertJoinsHelp": "De 3 à 100. Vide signifie désactivé."
 }

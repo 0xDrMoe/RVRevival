@@ -387,5 +387,16 @@
   "ticketsDownload": "Scarica .txt",
   "ticketsTranscript": "Trascrizione",
   "ticketsNoTranscript": "Nessuna trascrizione salvata per questo ticket. È stato chiuso prima che esistessero, o il suo thread è stato eliminato.",
-  "ticketsTranscriptLater": "La trascrizione viene salvata alla chiusura del ticket."
+  "ticketsTranscriptLater": "La trascrizione viene salvata alla chiusura del ticket.",
+  "off": "Disattivato",
+  "sectionRaid": "Protezione raid",
+  "raidHelp": "Espelli o segnala gli account appena creati quando entrano, e ricevi un avviso nel registro di moderazione quando entrano in tanti insieme. Durante un raid, /raid lockdown blocca tutti i canali pubblici e /raid end li ripristina. Il livello di verifica e gli avvisi raid di Discord (Impostazioni server → Configurazione sicurezza) funzionano insieme a questi.",
+  "raidLockdownActive": "C'è un blocco attivo dal {date} ({count} canali bloccati). Terminalo con /raid end in Discord.",
+  "gateMinAge": "Età minima dell'account (giorni)",
+  "gateMinAgeHelp": "Vuoto significa disattivato.",
+  "gateAction": "Account più giovani",
+  "gateAction_kick": "Espellerli (motivo in DM)",
+  "gateAction_alert": "Solo avvisare il registro di moderazione",
+  "gateAlertJoins": "Avvisa quando ne entrano tanti in un minuto",
+  "gateAlertJoinsHelp": "Da 3 a 100. Vuoto significa disattivato."
 }

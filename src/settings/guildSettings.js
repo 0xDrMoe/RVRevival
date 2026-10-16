@@ -44,6 +44,8 @@ export const Setting = Object.freeze({
   STARBOARD: "starboard", // the starboard, { channelId, threshold, emoji } (see community/starboard.js)
   LEVELING: "leveling", // leveling and XP, an object (see leveling/config.js)
   TICKETS: "tickets", // the ticket panel, { channelId, messageId, staffRoleId } (see tickets/tickets.js)
+  JOIN_GATE: "joinGate", // new-account gate and join alerts, an object (see raid/raid.js)
+  LOCKDOWN: "lockdown", // a running /raid lockdown and what to restore, an object (see raid/raid.js)
 });
 
 const KNOWN_SETTINGS = new Set(Object.values(Setting));

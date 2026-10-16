@@ -678,6 +678,25 @@ describe("dashboard", () => {
     expect((await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}/tickets/99`, cookies })).statusCode).toBe(404);
   });
 
+  it("saves raid protection and refuses bad values", async () => {
+    await guildSettings.set(GUILD_ID, Setting.LOGS_CHANNEL, LOGS_ID);
+    const cookies = await login();
+    const saved = await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, { joinGate: { minAgeDays: 7, action: "kick", alertJoins: 10 } });
+    expect(saved.statusCode).toBe(200);
+    expect(guildSettings.get(GUILD_ID, Setting.JOIN_GATE)).toEqual({ minAgeDays: 7, action: "kick", alertJoins: 10 });
+    const [, logged] = discord.postMessage.mock.calls.at(-1);
+    expect(logged.embeds[0].description).toContain("**Raid protection:** *none* → kick accounts under 7 days · alert at 10 joins a minute");
+    for (const joinGate of [{ minAgeDays: 0, action: "kick", alertJoins: null }, { minAgeDays: 5, action: "ban", alertJoins: null }, { minAgeDays: null, action: "kick", alertJoins: 1 }]) {
+      const bad = await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, { joinGate });
+      expect(bad.json()).toMatchObject({ error: "invalid-setting", setting: "joinGate" });
+    }
+    // The lockdown itself can't be written from the dashboard.
+    const lockdown = await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, { lockdown: { channels: [] } });
+    expect(lockdown.statusCode).toBe(400);
+    await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, { joinGate: null });
+    expect(guildSettings.get(GUILD_ID, Setting.JOIN_GATE)).toBeUndefined();
+  });
+
   it("logs out and forgets the session", async () => {
     const cookies = await login();
     expect((await write(cookies, "POST", "/auth/logout")).statusCode).toBe(200);

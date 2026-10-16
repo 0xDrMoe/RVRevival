@@ -12,6 +12,7 @@ import { ConfigError, loadBotConfig } from "./config.js";
 import { createGiveawayScheduler } from "./giveaways/giveawayScheduler.js";
 import { GiveawayStore } from "./giveaways/giveawayStore.js";
 import { createInteractionHandler } from "./interactionHandler.js";
+import { createRaidGuard } from "./raid/raid.js";
 import { createLeveling } from "./leveling/leveling.js";
 import { LevelStore } from "./leveling/levelStore.js";
 import { createActionLog } from "./logs/actionLog.js";
@@ -115,6 +116,8 @@ async function start() {
 
   // Automod (/settings automod): spam, banned words, invites, links, mentions, capitals.
   const automod = createAutomod({ guildSettings, moderation, modLog, logger, forcedLanguage, botDeletions });
+  // Raid protection (/raid): the new-account gate and join alerts.
+  const raidGuard = createRaidGuard({ guildSettings, moderation, modLog, logger });
 
   // Welcome and leave messages, the welcome DM and autoroles (/welcome).
   const welcomer = createWelcomer({ guildSettings, logger, forcedLanguage });
@@ -245,6 +248,7 @@ async function start() {
     );
     client.on(Events.GuildMemberAdd, safely("a member joining", (member) => serverLog.memberJoined(member)));
     client.on(Events.GuildMemberAdd, safely("welcoming a member", (member) => welcomer.memberJoined(member)));
+    client.on(Events.GuildMemberAdd, safely("the join gate", (member) => raidGuard.memberJoined(member)));
     client.on(Events.GuildMemberRemove, safely("a leave message", (member) => welcomer.memberLeft(member)));
     client.on(Events.GuildMemberUpdate, safely("autoroles after screening", (before, after) => welcomer.memberUpdated(before, after)));
     client.on(

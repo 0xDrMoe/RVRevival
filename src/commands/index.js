@@ -17,6 +17,7 @@ import { createRolePanelCommand } from "./rolePanel.js";
 import { createSettingsCommand } from "./settings.js";
 import { createStarboardCommand } from "./starboard.js";
 import { createTagCommands } from "./tags.js";
+import { createRaidCommand } from "./raid.js";
 import { createTicketsCommand } from "./tickets.js";
 import { createWelcomeCommand } from "./welcome.js";
 
@@ -67,6 +68,7 @@ export function createCommands({
     createGiveawayCommand({ giveaways, guildSettings, logger, forcedLanguage }),
     createStarboardCommand({ guildSettings, forcedLanguage }),
     createTicketsCommand({ tickets, guildSettings, logger, forcedLanguage, modLog }),
+    createRaidCommand({ guildSettings, modLog, forcedLanguage }),
     ...createLevelCommands({ levels, leveling, guildSettings, forcedLanguage }),
   ];
   return new Map(commands.map((command) => [command.name, command]));

@@ -19,6 +19,7 @@ The Discord bot for the Rumbleverse Revival server. It is built as a set of inde
 | [Giveaways](#giveaways) | `/giveaway` | Manage Server or the mod role (members click Enter) |
 | [Starboard](#starboard) | `/starboard`, or the dashboard's Community page | Manage Server (everyone stars messages) |
 | [Support tickets](#support-tickets) | `/tickets` | Manage Server (`panel`, `off`), ticket staff (the rest); members click Open a ticket |
+| [Raid protection](#raid-protection) | `/raid`, or the dashboard's Moderation page | Manage Channels or the mod role (`lockdown`, `end`, `status`), Manage Server (`gate`, `gate-off`, `alert`) |
 | [Leveling](#leveling) | `/rank`, `/leaderboard`, `/levels`, or the dashboard's Leveling page | Everyone (`/rank`, `/leaderboard`), Manage Server (`/levels`) |
 | [Country roles](#country-roles) | `/country`, `/country-staff`, `/country-help` | Everyone (`/country`), the staff role (`/country-staff`), Manage Server (`/country-help`) |
 | [Web dashboard](#web-dashboard) | https://rumbleverse.cedartechsolutions.ca | Manage Server, or a dashboard role |
@@ -229,6 +230,18 @@ Members open a private ticket with a button, and only they and the staff can see
 
 `panel` and `off` need **Manage Server**. Closing any ticket, `add`, `remove` and `list` need **Manage Threads**, Manage Server, the panel's staff role or the mod role. The bot needs View Channel, Send Messages, Embed Links, Create Private Threads, Send Messages in Threads and Manage Threads in the ticket channel (plus Read Message History and Attach Files in the mod-log channel and ticket channel for transcripts), and members need **Send Messages in Threads** there (they don't need Send Messages, so the channel can stay read-only apart from the threads).
 
+### Raid protection
+
+For when a server is flooded by bots or a coordinated group. Discord's own tools come first (Server Settings → Safety Setup: verification level, raid and DM-spam alerts); this adds what they don't have.
+
+- `/raid lockdown [reason]` stops members posting in **every** public text, announcement and forum channel at once. It denies @everyone, and also any member role with its own allow in a channel (a role allow would beat an @everyone deny). Staff roles (the mod and staff roles, and roles with Manage Messages, Manage Channels, Moderate Members, Manage Server or Administrator) keep posting. Up to 250 channels.
+- `/raid end [reason]` puts every locked channel back **exactly** as it was: the bot saved each changed permission before locking. Channels it couldn't edit are skipped and listed in the mod log.
+- `/raid gate min-age:<days> [action]` kicks accounts younger than that when they join (they're DMed the reason, and a case is recorded), or with `action:alert` only flags them in the mod log. `/raid gate-off` turns it off.
+- `/raid alert joins:<n>` posts an alert in the mod log when n members join within a minute (at most once every 10 minutes). `joins:0` turns it off.
+- `/raid status` shows all of the above. The gate and alerts can also be set on the dashboard's **Moderation** page, which shows a running lockdown too.
+
+The bot needs **Manage Channels** and **Manage Roles** in the channels it locks (and its role above the member roles), and **Kick Members** for the gate. A short notice is posted in the server's system channel when a lockdown starts and ends.
+
 ### Leveling
 
 Members earn XP for chatting and level up; reward roles are given automatically. Leveling is **off** until an admin turns it on with `/levels on` or on the dashboard's **Leveling** page.
@@ -282,7 +295,7 @@ A website where admins log in with Discord and manage the bot without slash comm
 - **Cases:** every moderation case, newest first. Search reasons and names, pick one or more actions, and filter by member ID, moderator ID and date range; clicking a name shows only their cases. Active filters show as chips you can remove. **Export CSV** downloads the filtered list (up to 10,000 cases). Reasons can be edited (the mod-log post is updated too) and cases deleted.
 - **Members:** find someone by the start of their username or nickname, or paste a user ID to find someone who left. Each person's page shows when their account was made (flagged if under 7 days old), when they joined, how many times they joined, their roles, a timeout or temporary ban in progress, Discord's ban reason if they're banned, every case as a timeline, their support tickets (with links to the threads), their level and leaderboard place, and their recent joins and leaves (the bot keeps the newest 50 per person). Each case in **Cases** has a *History* link to it.
 - **Tickets:** every support ticket, newest first, filtered by open or closed and by member ID. Each ticket shows who opened and closed it, the reason, a link to its thread, and its transcript (also as a `.txt` download).
-- **Moderation:** staff and mod roles, and the mod-log channel.
+- **Moderation:** staff and mod roles, the mod-log channel, and raid protection (the new-account gate and join alerts; a running lockdown is shown here).
 - **Logging:** the logs and server-log channels, a switch for each server-log event, and ignored channels or categories (with a filter).
 - **Automod:** the main switch, each rule with its action and numbers, banned words and allowed websites (one per line), timeout length and escalation, and exempt roles and channels (see [Automod](#automod)).
 - **Community:** the welcome and leave channels and messages (empty boxes show the default), the welcome DM, autoroles, the starboard (channel, stars needed, emoji), and the server's role panels (read-only; change them with `/rolepanel`).
@@ -433,6 +446,7 @@ src/
     starboard.js         Starboard: /starboard
     tickets.js           Support tickets: /tickets, the panel's button, the form and the Close button
     levels.js            Leveling: /rank, /leaderboard, /levels
+    raid.js              Raid protection: /raid
     commandHelpers.js    Shared start of moderation-style commands (language, permission check)
   countries/             Country roles: country list, name matching and search
   roles/                 Country roles: find, create, assign and remove roles
@@ -440,6 +454,7 @@ src/
   community/             Community: welcome and leave messages, autoroles (welcome.js), role panels (rolePanels.js), custom commands (tags.js), the starboard (starboard.js, starboardStore.js)
   giveaways/             Giveaways: saved in SQLite (giveawayStore.js), drawing winners (giveaways.js), ended on time (giveawayScheduler.js)
   tickets/               Support tickets: saved in SQLite (ticketStore.js), the panel, staff and messages (tickets.js), transcripts (transcript.js)
+  raid/                  Raid protection: lockdown planning and restoring, the new-account gate and join alerts (raid.js)
   leveling/              Leveling: settings and level math (config.js), XP in SQLite (levelStore.js), earning XP and rewards (leveling.js)
   members/               Member history: when members joined and left (memberEventStore.js)
   reminders/             Reminders: saved in SQLite (reminderStore.js), sent when due (reminderScheduler.js)
