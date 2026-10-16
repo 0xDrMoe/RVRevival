@@ -482,5 +482,28 @@
 
   "welcomeOnboardingTip": "Consejo: este es un servidor de comunidad, así que la **Incorporación** de Discord (Ajustes del servidor → Incorporación) es la mejor forma de dar roles a los nuevos miembros. Usa roles automáticos solo si no usas la Incorporación.",
 
-  "rolePanelOnboardingTip": "Consejo: este es un servidor de comunidad, así que la **Incorporación** de Discord (Ajustes del servidor → Incorporación) permite a los miembros elegir roles sin un panel. Los paneles de roles son mejores para servidores que no usan la Incorporación."
+  "rolePanelOnboardingTip": "Consejo: este es un servidor de comunidad, así que la **Incorporación** de Discord (Ajustes del servidor → Incorporación) permite a los miembros elegir roles sin un panel. Los paneles de roles son mejores para servidores que no usan la Incorporación.",
+
+  "tagCommandDescription": "Publica una respuesta guardada (un comando personalizado) en este canal.",
+  "tagNameOptionDescription": "Qué respuesta guardada publicar.",
+  "tagUserOptionDescription": "Alguien a quien mencionar con ella.",
+  "tagsCommandDescription": "Staff: añade, cambia o elimina respuestas guardadas para /tag.",
+  "tagsAddDescription": "Escribe una nueva respuesta guardada.",
+  "tagsNewNameOptionDescription": "Su nombre, como download o bug-report (letras, números y guiones).",
+  "tagsEditDescription": "Cambia el texto de una respuesta guardada.",
+  "tagsRemoveDescription": "Elimina una respuesta guardada.",
+  "tagsListDescription": "Muestra las respuestas guardadas.",
+  "tagsFormTitle": "Respuesta guardada: {name}",
+  "tagsFormLabel": "Lo que publica /tag",
+  "tagNotFound": "No hay ninguna respuesta guardada con ese nombre. `/tags list` las muestra todas.",
+  "tagCooldown": "Espera unos segundos antes de publicar otra respuesta guardada.",
+  "tagsBadName": "Los nombres solo pueden tener letras, números y guiones, hasta {max} caracteres.",
+  "tagsExists": "Ya hay una respuesta guardada llamada `{name}`. Usa `/tags edit` para cambiarla.",
+  "tagsFull": "Este servidor ya tiene {max} respuestas guardadas. Elimina una primero.",
+  "tagsAdded": "Guardada. Ahora cualquiera puede publicarla con `/tag name:{name}`.",
+  "tagsEdited": "`{name}` se ha actualizado.",
+  "tagsRemoved": "`{name}` se ha eliminado.",
+  "tagsListEmpty": "Aún no hay respuestas guardadas. Añade una con `/tags add`.",
+  "tagsListTitle": "**Respuestas guardadas ({count}/{max})**",
+  "tagsEmpty": "El texto no puede estar vacío."
 }

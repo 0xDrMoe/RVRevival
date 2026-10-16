@@ -482,5 +482,28 @@
 
   "welcomeOnboardingTip": "Astuce : c'est un serveur communautaire, donc l'**Accueil** de Discord (Paramètres du serveur → Accueil) est le meilleur moyen de donner des rôles aux nouveaux membres. N'utilisez les rôles automatiques que si vous n'utilisez pas l'Accueil.",
 
-  "rolePanelOnboardingTip": "Astuce : c'est un serveur communautaire, donc l'**Accueil** de Discord (Paramètres du serveur → Accueil) permet aux membres de choisir leurs rôles sans panneau. Les panneaux de rôles conviennent surtout aux serveurs qui n'utilisent pas l'Accueil."
+  "rolePanelOnboardingTip": "Astuce : c'est un serveur communautaire, donc l'**Accueil** de Discord (Paramètres du serveur → Accueil) permet aux membres de choisir leurs rôles sans panneau. Les panneaux de rôles conviennent surtout aux serveurs qui n'utilisent pas l'Accueil.",
+
+  "tagCommandDescription": "Publie une réponse enregistrée (une commande personnalisée) dans ce salon.",
+  "tagNameOptionDescription": "Quelle réponse enregistrée publier.",
+  "tagUserOptionDescription": "Quelqu'un à mentionner avec.",
+  "tagsCommandDescription": "Staff : ajoute, modifie ou supprime les réponses enregistrées pour /tag.",
+  "tagsAddDescription": "Écris une nouvelle réponse enregistrée.",
+  "tagsNewNameOptionDescription": "Son nom, comme download ou bug-report (lettres, chiffres et tirets).",
+  "tagsEditDescription": "Modifie le texte d'une réponse enregistrée.",
+  "tagsRemoveDescription": "Supprime une réponse enregistrée.",
+  "tagsListDescription": "Liste les réponses enregistrées.",
+  "tagsFormTitle": "Réponse enregistrée : {name}",
+  "tagsFormLabel": "Ce que /tag publie",
+  "tagNotFound": "Aucune réponse enregistrée ne porte ce nom. `/tags list` les affiche toutes.",
+  "tagCooldown": "Attends quelques secondes avant de publier une autre réponse enregistrée.",
+  "tagsBadName": "Les noms ne peuvent contenir que des lettres, des chiffres et des tirets, jusqu'à {max} caractères.",
+  "tagsExists": "Une réponse enregistrée s'appelle déjà `{name}`. Utilise `/tags edit` pour la modifier.",
+  "tagsFull": "Ce serveur a déjà {max} réponses enregistrées. Supprimes-en une d'abord.",
+  "tagsAdded": "Enregistrée. Tout le monde peut maintenant la publier avec `/tag name:{name}`.",
+  "tagsEdited": "`{name}` a été mise à jour.",
+  "tagsRemoved": "`{name}` a été supprimée.",
+  "tagsListEmpty": "Aucune réponse enregistrée pour l'instant. Ajoutes-en une avec `/tags add`.",
+  "tagsListTitle": "**Réponses enregistrées ({count}/{max})**",
+  "tagsEmpty": "Le texte ne peut pas être vide."
 }

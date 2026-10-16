@@ -270,5 +270,17 @@
   "rolePanelMode_unique": "Un seul rôle",
   "setupWelcome": "Accueillir les nouveaux membres",
   "onboardingTip": "C'est un serveur communautaire, nous recommandons donc l'Accueil de Discord (Paramètres du serveur → Accueil) pour donner des rôles aux nouveaux membres. N'utilisez les rôles automatiques que si vous n'utilisez pas l'Accueil.",
-  "rolePanelsOnboardingTip": "C'est un serveur communautaire, nous recommandons donc l'Accueil de Discord (Paramètres du serveur → Accueil) pour laisser les membres choisir leurs rôles. Les panneaux de rôles conviennent surtout aux serveurs qui n'utilisent pas l'Accueil."
+  "rolePanelsOnboardingTip": "C'est un serveur communautaire, nous recommandons donc l'Accueil de Discord (Paramètres du serveur → Accueil) pour laisser les membres choisir leurs rôles. Les panneaux de rôles conviennent surtout aux serveurs qui n'utilisent pas l'Accueil.",
+  "page_tags": "Commandes personnalisées",
+  "tagsIntro": "Des réponses enregistrées que tout le monde peut publier avec /tag : le lien de téléchargement, comment signaler un bug, la FAQ.",
+  "sectionTags": "Réponses enregistrées",
+  "tagsHelp": "Les noms utilisent des lettres, des chiffres et des tirets. Le staff peut aussi les gérer dans Discord avec /tags.",
+  "tagsCount": "{count}/{max}",
+  "tagAdd": "Ajouter",
+  "tagsNone": "Aucune commande personnalisée pour l'instant. Ajoutez-en une pour commencer.",
+  "tagRemove": "Retirer",
+  "tagName": "Nom",
+  "tagNamePlaceholder": "telechargement",
+  "tagContent": "Texte",
+  "tagContentPlaceholder": "Ce que /tag publie (jusqu'à 2000 caractères)"
 }

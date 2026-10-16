@@ -270,5 +270,17 @@
   "rolePanelMode_unique": "Un solo rol",
   "setupWelcome": "Da la bienvenida a nuevos miembros",
   "onboardingTip": "Este es un servidor de comunidad, así que recomendamos la Incorporación de Discord (Ajustes del servidor → Incorporación) para dar roles a los nuevos miembros. Usa roles automáticos solo si no usas la Incorporación.",
-  "rolePanelsOnboardingTip": "Este es un servidor de comunidad, así que recomendamos la Incorporación de Discord (Ajustes del servidor → Incorporación) para que los miembros elijan roles. Los paneles de roles son mejores para servidores que no usan la Incorporación."
+  "rolePanelsOnboardingTip": "Este es un servidor de comunidad, así que recomendamos la Incorporación de Discord (Ajustes del servidor → Incorporación) para que los miembros elijan roles. Los paneles de roles son mejores para servidores que no usan la Incorporación.",
+  "page_tags": "Comandos personalizados",
+  "tagsIntro": "Respuestas guardadas que cualquiera puede publicar con /tag: el enlace de descarga, cómo reportar un error, las preguntas frecuentes.",
+  "sectionTags": "Respuestas guardadas",
+  "tagsHelp": "Los nombres usan letras, números y guiones. El staff también puede gestionarlas en Discord con /tags.",
+  "tagsCount": "{count}/{max}",
+  "tagAdd": "Añadir",
+  "tagsNone": "Aún no hay comandos personalizados. Añade uno para empezar.",
+  "tagRemove": "Quitar",
+  "tagName": "Nombre",
+  "tagNamePlaceholder": "descarga",
+  "tagContent": "Texto",
+  "tagContentPlaceholder": "Lo que publica /tag (hasta 2000 caracteres)"
 }

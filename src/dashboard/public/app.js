@@ -8,6 +8,7 @@
 //   #/g/<id>/logging       log channels, events and ignored channels
 //   #/g/<id>/automod       automod rules, punishments and exemptions
 //   #/g/<id>/community     welcome and leave messages, autoroles, role panels
+//   #/g/<id>/tags          custom commands (saved answers for /tag)
 //   #/g/<id>/country       the /country channel
 //   #/g/<id>/access        roles: who can open the dashboard, and every role
 //
@@ -34,6 +35,8 @@ const AUTOMOD_NUMBERS = {
   ],
 };
 const MAX_MESSAGE_LENGTH = 1000;
+const MAX_TAGS = 50;
+const MAX_TAG_LENGTH = 2000;
 const MAX_AUTOROLES = 10;
 // Administrator and Manage Server: roles the bot won't give new members.
 const AUTOROLE_FORBIDDEN = (1n << 3n) | (1n << 5n);
@@ -54,6 +57,7 @@ const PAGES = [
   { id: "logging", icon: "📜", tone: "amber", settings: true },
   { id: "automod", icon: "🤖", tone: "blue", settings: true },
   { id: "community", icon: "👋", tone: "pink", settings: true },
+  { id: "tags", icon: "💬", tone: "amber", settings: true },
   { id: "country", icon: "🌍", tone: "green", settings: true },
   { id: "access", icon: "🎭", tone: "purple", settings: true },
 ];
@@ -1158,6 +1162,107 @@ async function showCommunity(guildId) {
   });
 }
 
+// --- Custom commands ---------------------------------------------------------------
+
+// "Download Link" -> "download-link", the way the bot saves tag names; "" if invalid.
+function cleanTagName(text) {
+  const name = text.trim().toLowerCase().replace(/\s+/g, "-").replace(/^-+|-+$/g, "");
+  return /^[\p{Ll}\p{Lo}\p{N}-]{1,32}$/u.test(name) ? name : "";
+}
+
+// One custom command: its name, its text and a remove button.
+function tagRow(tag, onRemove) {
+  const row = h(
+    "div",
+    { class: "tag-row" },
+    h(
+      "div",
+      { class: "toolbar" },
+      h("span", { class: "tag-slash", "aria-hidden": "true" }, "/tag"),
+      h("input", {
+        class: "grow tag-name",
+        value: tag.name,
+        maxLength: 32,
+        placeholder: t("tagNamePlaceholder"),
+        "aria-label": t("tagName"),
+        spellcheck: false,
+      }),
+      h("button", { class: "ghost small", type: "button", onclick: () => onRemove(row) }, t("tagRemove")),
+    ),
+    h("textarea", { class: "tag-content", rows: 3, maxLength: MAX_TAG_LENGTH, placeholder: t("tagContentPlaceholder"), "aria-label": t("tagContent") }, tag.content),
+  );
+  return row;
+}
+
+// The custom commands on the page, as the bot saves them. Rows left completely
+// empty are ignored; a row with a bad name is sent as typed so the server explains.
+function readTags(form) {
+  const tags = [...form.querySelectorAll(".tag-row")]
+    .map((row) => ({
+      typed: row.querySelector(".tag-name").value,
+      content: row.querySelector(".tag-content").value.replace(/\r\n?/g, "\n").trim(),
+    }))
+    .filter((tag) => tag.typed.trim() || tag.content)
+    .map((tag) => ({ name: cleanTagName(tag.typed) || tag.typed, content: tag.content }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  return tags.length > 0 ? tags : null;
+}
+
+async function showTags(guildId) {
+  const data = await loadManagedGuild(guildId);
+  if (!data) {
+    return;
+  }
+  const list = h("div", { class: "tag-list" });
+  const count = h("span", { class: "count-pill" });
+  const empty = h("p", { class: "muted" }, t("tagsNone"));
+  const update = () => {
+    const rows = list.querySelectorAll(".tag-row").length;
+    count.textContent = t("tagsCount", { count: rows, max: MAX_TAGS });
+    empty.hidden = rows > 0;
+    addButton.disabled = rows >= MAX_TAGS;
+  };
+  const changed = () => list.dispatchEvent(new Event("change", { bubbles: true }));
+  const remove = (row) => {
+    row.remove();
+    update();
+    changed();
+  };
+  const addButton = h(
+    "button",
+    {
+      class: "primary small",
+      type: "button",
+      onclick: () => {
+        const row = tagRow({ name: "", content: "" }, remove);
+        list.append(row);
+        update();
+        row.querySelector(".tag-name").focus();
+      },
+    },
+    t("tagAdd"),
+  );
+  (data.settings.tags ?? []).forEach((tag) => list.append(tagRow(tag, remove)));
+  update();
+
+  settingsPage({
+    data,
+    pageId: "tags",
+    intro: t("tagsIntro"),
+    cards: [
+      card(
+        t("sectionTags"),
+        "💬",
+        "amber",
+        h("div", { class: "toolbar" }, h("p", { class: "help grow" }, t("tagsHelp")), count, addButton),
+        empty,
+        list,
+      ),
+    ],
+    fields: { tags: readTags },
+  });
+}
+
 async function showCountry(guildId) {
   const data = await loadManagedGuild(guildId);
   if (!data) {
@@ -1870,6 +1975,7 @@ const SHOW_PAGE = {
   logging: showLogging,
   automod: showAutomod,
   community: showCommunity,
+  tags: showTags,
   country: showCountry,
   access: showAccess,
 };

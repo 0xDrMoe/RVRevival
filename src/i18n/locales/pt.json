@@ -482,5 +482,28 @@
 
   "welcomeOnboardingTip": "Dica: este é um servidor da comunidade, então a **Integração** do próprio Discord (Configurações do servidor → Integração) é a melhor forma de dar cargos a novos membros. Use cargos automáticos só se não usar a Integração.",
 
-  "rolePanelOnboardingTip": "Dica: este é um servidor da comunidade, então a **Integração** do próprio Discord (Configurações do servidor → Integração) permite que os membros escolham cargos sem um painel. Painéis de cargos são melhores para servidores que não usam a Integração."
+  "rolePanelOnboardingTip": "Dica: este é um servidor da comunidade, então a **Integração** do próprio Discord (Configurações do servidor → Integração) permite que os membros escolham cargos sem um painel. Painéis de cargos são melhores para servidores que não usam a Integração.",
+
+  "tagCommandDescription": "Publica uma resposta salva (um comando personalizado) neste canal.",
+  "tagNameOptionDescription": "Qual resposta salva publicar.",
+  "tagUserOptionDescription": "Alguém para mencionar junto.",
+  "tagsCommandDescription": "Equipe: adicione, altere ou remova respostas salvas do /tag.",
+  "tagsAddDescription": "Escreva uma nova resposta salva.",
+  "tagsNewNameOptionDescription": "O nome, como download ou bug-report (letras, números e hífens).",
+  "tagsEditDescription": "Altere o texto de uma resposta salva.",
+  "tagsRemoveDescription": "Apague uma resposta salva.",
+  "tagsListDescription": "Lista as respostas salvas.",
+  "tagsFormTitle": "Resposta salva: {name}",
+  "tagsFormLabel": "O que o /tag publica",
+  "tagNotFound": "Não há resposta salva com esse nome. `/tags list` mostra todas.",
+  "tagCooldown": "Espere alguns segundos antes de publicar outra resposta salva.",
+  "tagsBadName": "Os nomes só podem ter letras, números e hífens, até {max} caracteres.",
+  "tagsExists": "Já existe uma resposta salva chamada `{name}`. Use `/tags edit` para alterá-la.",
+  "tagsFull": "Este servidor já tem {max} respostas salvas. Remova uma primeiro.",
+  "tagsAdded": "Salva. Agora qualquer pessoa pode publicá-la com `/tag name:{name}`.",
+  "tagsEdited": "`{name}` foi atualizada.",
+  "tagsRemoved": "`{name}` foi apagada.",
+  "tagsListEmpty": "Ainda não há respostas salvas. Adicione uma com `/tags add`.",
+  "tagsListTitle": "**Respostas salvas ({count}/{max})**",
+  "tagsEmpty": "O texto não pode ficar vazio."
 }

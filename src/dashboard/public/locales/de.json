@@ -270,5 +270,17 @@
   "rolePanelMode_unique": "Nur eine Rolle",
   "setupWelcome": "Neue Mitglieder begrüßen",
   "onboardingTip": "Das ist ein Community-Server, daher empfehlen wir Discords eigenes Onboarding (Servereinstellungen → Onboarding), um neuen Mitgliedern Rollen zu geben. Nutze Autorollen nur, wenn du kein Onboarding verwendest.",
-  "rolePanelsOnboardingTip": "Das ist ein Community-Server, daher empfehlen wir Discords eigenes Onboarding (Servereinstellungen → Onboarding), damit Mitglieder Rollen wählen. Rollen-Panels eignen sich am besten für Server ohne Onboarding."
+  "rolePanelsOnboardingTip": "Das ist ein Community-Server, daher empfehlen wir Discords eigenes Onboarding (Servereinstellungen → Onboarding), damit Mitglieder Rollen wählen. Rollen-Panels eignen sich am besten für Server ohne Onboarding.",
+  "page_tags": "Eigene Befehle",
+  "tagsIntro": "Gespeicherte Antworten, die jeder mit /tag posten kann: der Download-Link, wie man Bugs meldet, die FAQ.",
+  "sectionTags": "Gespeicherte Antworten",
+  "tagsHelp": "Namen bestehen aus Buchstaben, Zahlen und Bindestrichen. Das Team kann sie auch in Discord mit /tags verwalten.",
+  "tagsCount": "{count}/{max}",
+  "tagAdd": "Hinzufügen",
+  "tagsNone": "Noch keine eigenen Befehle. Füge einen hinzu, um loszulegen.",
+  "tagRemove": "Entfernen",
+  "tagName": "Name",
+  "tagNamePlaceholder": "download",
+  "tagContent": "Text",
+  "tagContentPlaceholder": "Was /tag postet (bis zu 2000 Zeichen)"
 }

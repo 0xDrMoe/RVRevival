@@ -482,5 +482,28 @@
 
   "welcomeOnboardingTip": "Suggerimento: questo è un server community, quindi l'**Onboarding** di Discord (Impostazioni server → Onboarding) è il modo migliore per dare ruoli ai nuovi membri. Usa i ruoli automatici solo se non usi l'Onboarding.",
 
-  "rolePanelOnboardingTip": "Suggerimento: questo è un server community, quindi l'**Onboarding** di Discord (Impostazioni server → Onboarding) permette ai membri di scegliere i ruoli senza un pannello. I pannelli dei ruoli sono ideali per i server che non usano l'Onboarding."
+  "rolePanelOnboardingTip": "Suggerimento: questo è un server community, quindi l'**Onboarding** di Discord (Impostazioni server → Onboarding) permette ai membri di scegliere i ruoli senza un pannello. I pannelli dei ruoli sono ideali per i server che non usano l'Onboarding.",
+
+  "tagCommandDescription": "Pubblica una risposta salvata (un comando personalizzato) in questo canale.",
+  "tagNameOptionDescription": "Quale risposta salvata pubblicare.",
+  "tagUserOptionDescription": "Qualcuno da menzionare insieme.",
+  "tagsCommandDescription": "Staff: aggiungi, modifica o elimina le risposte salvate per /tag.",
+  "tagsAddDescription": "Scrivi una nuova risposta salvata.",
+  "tagsNewNameOptionDescription": "Il nome, come download o bug-report (lettere, numeri e trattini).",
+  "tagsEditDescription": "Modifica il testo di una risposta salvata.",
+  "tagsRemoveDescription": "Elimina una risposta salvata.",
+  "tagsListDescription": "Elenca le risposte salvate.",
+  "tagsFormTitle": "Risposta salvata: {name}",
+  "tagsFormLabel": "Cosa pubblica /tag",
+  "tagNotFound": "Non c'è nessuna risposta salvata con quel nome. `/tags list` le mostra tutte.",
+  "tagCooldown": "Aspetta qualche secondo prima di pubblicare un'altra risposta salvata.",
+  "tagsBadName": "I nomi possono contenere solo lettere, numeri e trattini, fino a {max} caratteri.",
+  "tagsExists": "Esiste già una risposta salvata chiamata `{name}`. Usa `/tags edit` per modificarla.",
+  "tagsFull": "Questo server ha già {max} risposte salvate. Eliminane prima una.",
+  "tagsAdded": "Salvata. Ora chiunque può pubblicarla con `/tag name:{name}`.",
+  "tagsEdited": "`{name}` è stata aggiornata.",
+  "tagsRemoved": "`{name}` è stata eliminata.",
+  "tagsListEmpty": "Non ci sono ancora risposte salvate. Aggiungine una con `/tags add`.",
+  "tagsListTitle": "**Risposte salvate ({count}/{max})**",
+  "tagsEmpty": "Il testo non può essere vuoto."
 }
