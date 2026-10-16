@@ -12,6 +12,8 @@ The Discord bot for the Rumbleverse Revival server. It is built as a set of inde
 | [Channel and member tools](#channel-and-member-tools) | `/lock`, `/unlock`, `/slowmode`, `/role`, `/nick` | The matching Discord permission, or the mod role |
 | [Server log](#server-log) | `/settings server-log-channel`, `/settings log-event`, `/settings log-ignore` | Manage Server |
 | [Automod](#automod) | `/settings automod …`, or the dashboard's Automod page | Manage Server |
+| [Welcome and leave messages](#welcome-and-leave-messages) | `/welcome`, or the dashboard's Community page | Manage Server |
+| [Role panels](#role-panels) | `/rolepanel` | Manage Roles (members click the buttons) |
 | [Country roles](#country-roles) | `/country`, `/country-staff`, `/country-help` | Everyone (`/country`), the staff role (`/country-staff`), Manage Server (`/country-help`) |
 | [Web dashboard](#web-dashboard) | https://rumbleverse.cedartechsolutions.ca | Manage Server, or a dashboard role |
 
@@ -137,6 +139,33 @@ Admins set it up on the dashboard's **Automod** page, or with:
 
 Reading messages needs the **Message Content** intent; without it only spam and mention counts work. Deleting needs **Manage Messages**, timeouts **Moderate Members**, which the invite link already includes.
 
+### Welcome and leave messages
+
+When someone joins, the bot can post a welcome message in a channel, DM them, and give them **autoroles** (starter roles, up to 10). When someone leaves, it can post a leave message. Bots get none of this. If the server makes new members accept the rules first (membership screening), autoroles wait until they've accepted.
+
+Messages can use `{user}` (a mention), `{username}`, `{server}` and `{count}` (the member count), up to 1000 characters. Only `{user}` pings anyone. Unset messages use a default in the server's language: *Welcome to {server}, {user}! You're member #{count}.* and *{username} has left the server.*
+
+Admins set it up on the dashboard's **Community** page, or with:
+
+- `/welcome channel channel:<channel>` and `/welcome leave-channel channel:<channel>` switch welcome or leave messages on, in that channel.
+- `/welcome message text:<…>`, `/welcome leave-message text:<…>` and `/welcome dm text:<…>` set the messages. Type `\n` for a new line.
+- `/welcome autorole role:<role>` adds an autorole, or removes it if it's already one. Bot roles, `@everyone` and roles with Administrator or Manage Server are refused.
+- `/welcome off what:<Welcome messages | Leave messages | Welcome DM | Autoroles | Custom messages>` switches one off (custom messages go back to the default).
+- `/welcome test` previews everything privately, with you as the new member. `/welcome show` lists the setup.
+
+Giving roles needs **Manage Roles** and the bot's role above the autoroles.
+
+### Role panels
+
+A role panel is a message with a button per role. Members click a button to get the role, and click again to take it off. Good for platforms (PC, PlayStation, Xbox), regions, and ping roles for events or playtests. In **Pick only one role** mode, picking a role takes away the panel's other roles.
+
+- `/rolepanel create channel:<channel> title:<…> description:<…> mode:<Pick any number | Pick only one>` posts a new, empty panel (up to 10 per server).
+- `/rolepanel add panel:<panel> role:<role> emoji:<emoji> label:<text>` adds a button (up to 25 per panel); adding a role that's already there updates its emoji and label.
+- `/rolepanel remove panel:<panel> role:<role>` removes a button; `/rolepanel delete panel:<panel>` deletes the panel and its message.
+- `/rolepanel list` lists the panels. They're also shown (read-only) on the dashboard's Community page.
+
+Panels are edited in place; if the message was deleted, the next change posts it again. Roles with moderator or admin permissions (Administrator, Manage Server/Roles/Channels/Messages, Ban, Kick, Timeout, Mention Everyone and similar), bot roles, `@everyone`, roles above the bot and roles above your own top role can't go on a panel, and each click checks the role again.
+
 ### Country roles
 
 Members pick the country they live in and get a role named after it. They can only pick once; after that, only staff can change it.
@@ -177,6 +206,7 @@ A website where admins log in with Discord and manage the bot without slash comm
 - **Moderation:** staff and mod roles, and the mod-log channel.
 - **Logging:** the logs and server-log channels, a switch for each server-log event, and ignored channels or categories (with a filter).
 - **Automod:** the main switch, each rule with its action and numbers, banned words and allowed websites (one per line), timeout length and escalation, and exempt roles and channels (see [Automod](#automod)).
+- **Community:** the welcome and leave channels and messages (empty boxes show the default), the welcome DM, autoroles, and the server's role panels (read-only; change them with `/rolepanel`).
 - **Country:** the `/country` channel.
 - **Roles & access:** the **dashboard roles** (see below), and a table of every role with its color, its strongest permissions and what the bot uses it for, filterable by name or kind.
 
@@ -314,10 +344,13 @@ src/
     cases.js             Moderation: /case, /modlogs, /clearwarns
     channelTools.js      Channel tools: /lock, /unlock, /slowmode
     memberTools.js       Member tools: /role, /nick
+    welcome.js           Community: /welcome
+    rolePanel.js         Community: /rolepanel and its buttons
     commandHelpers.js    Shared start of moderation-style commands (language, permission check)
   countries/             Country roles: country list, name matching and search
   roles/                 Country roles: find, create, assign and remove roles
   channels/              Country roles: keeps the /country channel clean
+  community/             Community: welcome and leave messages, autoroles (welcome.js), role panels (rolePanels.js)
   automod/               Automod: settings (config.js), what each rule matches (rules.js), acting on messages
   logs/                  Logs channel, server log, and posting to log channels
   moderation/            Moderation: cases (SQLite), checks, actions, mod log, temporary bans

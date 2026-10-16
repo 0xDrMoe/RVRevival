@@ -7,6 +7,7 @@
 //   #/g/<id>/moderation    staff and mod roles, the mod log
 //   #/g/<id>/logging       log channels, events and ignored channels
 //   #/g/<id>/automod       automod rules, punishments and exemptions
+//   #/g/<id>/community     welcome and leave messages, autoroles, role panels
 //   #/g/<id>/country       the /country channel
 //   #/g/<id>/access        roles: who can open the dashboard, and every role
 //
@@ -32,6 +33,10 @@ const AUTOMOD_NUMBERS = {
     { path: "rules.caps.minLength", key: "amCapsMinLength", min: 5, max: 200 },
   ],
 };
+const MAX_MESSAGE_LENGTH = 1000;
+const MAX_AUTOROLES = 10;
+// Administrator and Manage Server: roles the bot won't give new members.
+const AUTOROLE_FORBIDDEN = (1n << 3n) | (1n << 5n);
 const CHANNEL = { TEXT: 0, VOICE: 2, CATEGORY: 4, ANNOUNCEMENT: 5, FORUM: 15 };
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -48,6 +53,7 @@ const PAGES = [
   { id: "moderation", icon: "🛡️", tone: "red", settings: true },
   { id: "logging", icon: "📜", tone: "amber", settings: true },
   { id: "automod", icon: "🤖", tone: "blue", settings: true },
+  { id: "community", icon: "👋", tone: "pink", settings: true },
   { id: "country", icon: "🌍", tone: "green", settings: true },
   { id: "access", icon: "🎭", tone: "purple", settings: true },
 ];
@@ -1038,6 +1044,112 @@ async function showAutomod(guildId) {
   });
 }
 
+// --- Community -------------------------------------------------------------------
+
+// A message box with a character count. Empty means the default (or off, for the DM).
+function messageBox(id, value, placeholder) {
+  const count = h("span", { class: "char-count" });
+  const box = h("textarea", { id, rows: 3, maxLength: MAX_MESSAGE_LENGTH, placeholder: placeholder ?? "" }, value ?? "");
+  const update = () => {
+    count.textContent = `${box.value.length}/${MAX_MESSAGE_LENGTH}`;
+  };
+  box.addEventListener("input", update);
+  update();
+  return h("span", { class: "message-box" }, box, count);
+}
+
+const textValue = (id) => (form) => form.querySelector(`#${id}`).value.replace(/\r\n?/g, "\n").trim() || null;
+
+// The server's role panels, read-only: they're made with /rolepanel in Discord.
+function rolePanelList(data) {
+  const panels = Array.isArray(data.settings.rolePanels) ? data.settings.rolePanels : [];
+  if (panels.length === 0) {
+    return h("p", { class: "muted" }, t("rolePanelsNone"));
+  }
+  const roleName = (id) => data.roles.find((role) => role.id === id)?.name ?? t("unknownOption", { id });
+  const channelName = (id) => {
+    const channel = data.channels.find((entry) => entry.id === id);
+    return channel ? `#${channel.name}` : t("unknownOption", { id });
+  };
+  return h(
+    "ul",
+    { class: "panel-list" },
+    panels.map((panel) =>
+      h(
+        "li",
+        {},
+        h(
+          "div",
+          { class: "toolbar" },
+          h("strong", { class: "grow" }, `#${panel.id} ${panel.title}`),
+          h("span", { class: "badge" }, t(`rolePanelMode_${panel.mode === "unique" ? "unique" : "toggle"}`)),
+          h("span", { class: "muted" }, channelName(panel.channelId)),
+        ),
+        h(
+          "div",
+          { class: "badges" },
+          panel.roles.length > 0
+            ? panel.roles.map((entry) => h("span", { class: "badge" }, `${entry.emoji ? `${entry.emoji} ` : ""}@${roleName(entry.roleId)}`))
+            : h("span", { class: "muted" }, t("rolePanelsEmpty")),
+        ),
+      ),
+    ),
+  );
+}
+
+async function showCommunity(guildId) {
+  const data = await loadManagedGuild(guildId);
+  if (!data) {
+    return;
+  }
+  const { settings } = data;
+  const defaults = data.communityDefaults ?? {};
+  const postable = postableChannels(data);
+  const channelPicker = (key) => picker({ id: key, options: postable, value: settings[key], emptyLabel: t("communityOff") });
+  const givable = data.roles
+    .filter((role) => !role.managed && (BigInt(role.permissions ?? 0) & AUTOROLE_FORBIDDEN) === 0n)
+    .map((role) => ({ id: role.id, label: `@${role.name}`, dot: roleDot(role) }));
+
+  settingsPage({
+    data,
+    pageId: "community",
+    intro: t("communityIntro"),
+    cards: [
+      card(
+        t("sectionWelcome"),
+        "👋",
+        "pink",
+        field("welcomeChannel", "welcomeChannelHelp", channelPicker("welcomeChannelId")),
+        field("welcomeMessage", "messagePlaceholdersHelp", messageBox("welcomeMessage", settings.welcomeMessage, defaults.welcomeMessage)),
+        field("welcomeDm", "welcomeDmHelp", messageBox("welcomeDm", settings.welcomeDm, t("welcomeDmPlaceholder"))),
+      ),
+      card(
+        t("sectionLeave"),
+        "🚪",
+        "gray",
+        field("leaveChannel", "leaveChannelHelp", channelPicker("leaveChannelId")),
+        field("leaveMessage", "messagePlaceholdersHelp", messageBox("leaveMessage", settings.leaveMessage, defaults.leaveMessage)),
+      ),
+      card(
+        t("sectionAutoroles"),
+        "🎁",
+        "green",
+        h("p", { class: "help" }, t("autorolesHelp", { max: MAX_AUTOROLES })),
+        checkList({ name: "autorole", items: givable, checked: settings.autoroleIds ?? [], filterKey: "filterRoles" }),
+      ),
+    ],
+    fields: {
+      welcomeChannelId: selectValue("welcomeChannelId"),
+      welcomeMessage: textValue("welcomeMessage"),
+      welcomeDm: textValue("welcomeDm"),
+      leaveChannelId: selectValue("leaveChannelId"),
+      leaveMessage: textValue("leaveMessage"),
+      autoroleIds: checkedList("autorole"),
+    },
+    after: card(t("sectionRolePanels"), "🔘", "blue", h("p", { class: "help" }, t("rolePanelsHelp")), rolePanelList(data)),
+  });
+}
+
 async function showCountry(guildId) {
   const data = await loadManagedGuild(guildId);
   if (!data) {
@@ -1399,6 +1511,7 @@ function setupCard(data) {
     { key: "setupCountry", done: Boolean(settings.countryChannelId), page: "country" },
     { key: "setupDashboard", done: (settings.dashboardRoleIds ?? []).length > 0, page: "access" },
     { key: "setupAutomod", done: Boolean(settings.automod?.enabled), page: "automod" },
+    { key: "setupWelcome", done: Boolean(settings.welcomeChannelId), page: "community" },
   ];
   const done = steps.filter((step) => step.done).length;
   return h(
@@ -1748,6 +1861,7 @@ const SHOW_PAGE = {
   moderation: showModeration,
   logging: showLogging,
   automod: showAutomod,
+  community: showCommunity,
   country: showCountry,
   access: showAccess,
 };

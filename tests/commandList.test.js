@@ -28,6 +28,8 @@ describe("command list", () => {
       "slowmode",
       "role",
       "nick",
+      "welcome",
+      "rolepanel",
     ]);
     for (const command of commands.values()) {
       expect(command.data.name).toBe(command.name);

@@ -4,6 +4,7 @@
 
 import { ChannelType } from "discord.js";
 import { activeRules, checkAutomod, InvalidAutomod, normalizeAutomod, RULE_LABELS } from "../automod/config.js";
+import { MAX_AUTOROLES, MAX_MESSAGE_LENGTH } from "../community/welcome.js";
 import { LogEvent } from "../logs/serverLog.js";
 import { Setting } from "../settings/guildSettings.js";
 
@@ -26,6 +27,8 @@ const IGNORABLE_CHANNELS = [
 const MAX_IGNORED_CHANNELS = 100;
 const MAX_DASHBOARD_ROLES = 25;
 const LOG_EVENTS = Object.values(LogEvent);
+// Roles new members must never get automatically: Administrator and Manage Server.
+const AUTOROLE_FORBIDDEN = (1n << 3n) | (1n << 5n);
 
 // Each setting: the kind of value, and (for lists) what each item may be.
 export const SETTING_RULES = Object.freeze({
@@ -39,6 +42,12 @@ export const SETTING_RULES = Object.freeze({
   [Setting.LOG_IGNORED_CHANNELS]: { kind: "channels", types: IGNORABLE_CHANNELS, label: "Ignored log channels" },
   [Setting.DASHBOARD_ROLES]: { kind: "roles", label: "Dashboard access roles" },
   [Setting.AUTOMOD]: { kind: "automod", label: "Automod" },
+  [Setting.WELCOME_CHANNEL]: { kind: "channel", types: POSTING_CHANNELS, label: "Welcome channel" },
+  [Setting.WELCOME_MESSAGE]: { kind: "text", label: "Welcome message" },
+  [Setting.LEAVE_CHANNEL]: { kind: "channel", types: POSTING_CHANNELS, label: "Leave channel" },
+  [Setting.LEAVE_MESSAGE]: { kind: "text", label: "Leave message" },
+  [Setting.WELCOME_DM]: { kind: "text", label: "Welcome DM" },
+  [Setting.AUTOROLES]: { kind: "autoroles", label: "Autoroles" },
 });
 
 // Checks one value. Returns what to save: null clears the setting, and empty
@@ -92,6 +101,30 @@ function checkValue(setting, value, { guildId, channels, roles }) {
       }
       return ids.length > 0 ? ids : null;
     }
+    case "text": {
+      if (typeof value !== "string") {
+        throw new InvalidSetting(setting, "Send the message as text.");
+      }
+      const text = value.replace(/\r\n?/g, "\n").trim();
+      if (text.length > MAX_MESSAGE_LENGTH) {
+        throw new InvalidSetting(setting, `Keep the message under ${MAX_MESSAGE_LENGTH} characters.`);
+      }
+      return text || null;
+    }
+    case "autoroles": {
+      if (!Array.isArray(value) || value.length > MAX_AUTOROLES) {
+        throw new InvalidSetting(setting, `Pick at most ${MAX_AUTOROLES} roles.`);
+      }
+      const ids = [...new Set(value)];
+      const allowed = (id) => {
+        const role = roles.find((entry) => entry.id === id);
+        return roleOk(id) && !role.managed && (BigInt(role.permissions ?? 0) & AUTOROLE_FORBIDDEN) === 0n;
+      };
+      if (!ids.every(allowed)) {
+        throw new InvalidSetting(setting, "Pick roles from this server that aren't bot roles or admin roles.");
+      }
+      return ids.length > 0 ? ids : null;
+    }
     case "automod":
       try {
         return checkAutomod(value, {
@@ -130,7 +163,10 @@ export function describeValue(setting, value) {
     case "channels":
       return value.map((id) => `<#${id}>`).join(", ");
     case "roles":
+    case "autoroles":
       return value.map((id) => `<@&${id}>`).join(", ");
+    case "text":
+      return `"${value.length > 80 ? `${value.slice(0, 80)}…` : value}"`.replace(/\n/g, " ");
     case "automod": {
       const config = normalizeAutomod(value);
       const rules = activeRules(config).map((rule) => `${RULE_LABELS[rule]} (${config.rules[rule].action})`);

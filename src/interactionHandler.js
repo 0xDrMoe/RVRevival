@@ -12,6 +12,11 @@ export function createInteractionHandler({ commands, logger, forcedLanguage, act
   const components = new Map(
     [...commands.values()].flatMap((command) => Object.entries(command.components ?? {})),
   );
+  // Buttons whose custom ID starts with a prefix and carries data after it
+  // (role panel buttons: "rp:<panel>:<role>").
+  const prefixed = [...commands.values()].flatMap((command) => Object.entries(command.componentPrefixes ?? {}));
+  const componentFor = (customId) =>
+    components.get(customId) ?? prefixed.find(([prefix]) => customId.startsWith(prefix))?.[1];
 
   async function handleAutocomplete(interaction) {
     const command = commands.get(interaction.commandName);
@@ -71,7 +76,7 @@ export function createInteractionHandler({ commands, logger, forcedLanguage, act
   }
 
   async function handleComponent(interaction) {
-    const component = components.get(interaction.customId);
+    const component = componentFor(interaction.customId);
     if (!component) {
       // Buttons on old messages can outlive the feature that posted them.
       logger.warn("Got a button or form the bot doesn't know", { customId: interaction.customId });
