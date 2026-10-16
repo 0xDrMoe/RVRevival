@@ -1077,5 +1077,27 @@
   "leaderboardEmptyPeriod": "In dieser Zeit hat niemand XP bekommen. Fangt an zu chatten!",
   "leaderboardLinePeriod": "{place} {member} · +{gained} XP · Level {level}",
   "leaderboardTitle_week": "🏆 {server} · diese Woche",
-  "leaderboardTitle_month": "🏆 {server} · diesen Monat"
+  "leaderboardTitle_month": "🏆 {server} · diesen Monat",
+
+  "mediaOnlyCommandDescription": "Kanäle, in denen nur Bilder, Videos, Dateien und Links gepostet werden können",
+  "mediaOnlyAddDescription": "Einen Kanal nur für Medien machen",
+  "mediaOnlyRemoveDescription": "Einen Kanal wieder normal machen",
+  "mediaOnlyLinksDescription": "Ob Links als Medien zählen",
+  "mediaOnlyAllowOptionDescription": "Wahr, um Links zu erlauben, falsch nur für Uploads",
+  "mediaOnlyListDescription": "Die Medienkanäle",
+  "mediaOnlyChannelOptionDescription": "Der Kanal",
+  "mediaOnlyAlready": "{channel} ist schon nur für Medien.",
+  "mediaOnlyFull": "Bis zu {max} Kanäle können nur für Medien sein. Entferne zuerst einen mit `/mediaonly remove`.",
+  "mediaOnlyNeedsManageMessages": "Ich brauche Kanal ansehen und Nachrichten verwalten in {channel}, um reine Textnachrichten zu löschen.",
+  "mediaOnlyAdded": "{channel} ist jetzt nur für Medien: Nachrichten brauchen ein Bild, Video, eine Datei oder einen Link. Team mit Nachrichten verwalten kann weiter schreiben, und Threads bleiben für Kommentare offen.",
+  "mediaOnlyAddedNoLinks": "{channel} ist jetzt nur für Medien: Nachrichten brauchen ein Bild, Video oder eine Datei. Team mit Nachrichten verwalten kann weiter schreiben, und Threads bleiben für Kommentare offen.",
+  "mediaOnlyNot": "{channel} ist nicht nur für Medien.",
+  "mediaOnlyRemoved": "{channel} ist wieder ein normaler Kanal.",
+  "mediaOnlyLinksOn": "Links zählen jetzt als Medien.",
+  "mediaOnlyLinksOff": "Jetzt zählen nur Uploads; reine Links werden gelöscht.",
+  "mediaOnlyListEmpty": "Keine Medienkanäle. Füge einen mit `/mediaonly add` hinzu.",
+  "mediaOnlyList": "**Medienkanäle:** {list}\nLinks zählen als Medien.",
+  "mediaOnlyListNoLinks": "**Medienkanäle:** {list}\nNur Uploads zählen als Medien.",
+  "mediaOnlyNote": "{user} dieser Kanal ist für Bilder, Videos, Dateien und Links. Kommentiere lieber in einem Thread.",
+  "mediaOnlyNoteNoLinks": "{user} dieser Kanal ist für Bilder, Videos und Dateien. Kommentiere lieber in einem Thread."
 }

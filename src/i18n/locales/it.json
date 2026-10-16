@@ -1077,5 +1077,27 @@
   "leaderboardEmptyPeriod": "Nessuno ha guadagnato XP in quel periodo. Iniziate a chattare!",
   "leaderboardLinePeriod": "{place} {member} · +{gained} XP · Livello {level}",
   "leaderboardTitle_week": "🏆 {server} · questa settimana",
-  "leaderboardTitle_month": "🏆 {server} · questo mese"
+  "leaderboardTitle_month": "🏆 {server} · questo mese",
+
+  "mediaOnlyCommandDescription": "Canali dove si possono pubblicare solo immagini, video, file e link",
+  "mediaOnlyAddDescription": "Rendi un canale solo per media",
+  "mediaOnlyRemoveDescription": "Rendi di nuovo normale un canale",
+  "mediaOnlyLinksDescription": "Se i link contano come media",
+  "mediaOnlyAllowOptionDescription": "Vero per permettere i link, falso solo per i caricamenti",
+  "mediaOnlyListDescription": "I canali solo per media",
+  "mediaOnlyChannelOptionDescription": "Il canale",
+  "mediaOnlyAlready": "{channel} è già solo per media.",
+  "mediaOnlyFull": "Fino a {max} canali possono essere solo per media. Rimuovine uno con `/mediaonly remove` prima.",
+  "mediaOnlyNeedsManageMessages": "Mi servono Visualizzare il canale e Gestire i messaggi in {channel} per eliminare lì i messaggi senza media.",
+  "mediaOnlyAdded": "{channel} ora è solo per media: i messaggi devono avere un'immagine, un video, un file o un link. Lo staff con Gestire i messaggi può ancora scrivere, e i thread restano aperti per i commenti.",
+  "mediaOnlyAddedNoLinks": "{channel} ora è solo per media: i messaggi devono avere un'immagine, un video o un file. Lo staff con Gestire i messaggi può ancora scrivere, e i thread restano aperti per i commenti.",
+  "mediaOnlyNot": "{channel} non è solo per media.",
+  "mediaOnlyRemoved": "{channel} è di nuovo un canale normale.",
+  "mediaOnlyLinksOn": "Ora i link contano come media.",
+  "mediaOnlyLinksOff": "Ora contano solo i caricamenti; i link da soli vengono eliminati.",
+  "mediaOnlyListEmpty": "Nessun canale solo per media. Aggiungine uno con `/mediaonly add`.",
+  "mediaOnlyList": "**Canali solo per media:** {list}\nI link contano come media.",
+  "mediaOnlyListNoLinks": "**Canali solo per media:** {list}\nContano solo i caricamenti.",
+  "mediaOnlyNote": "{user} questo canale è per immagini, video, file e link. Commenta in un thread.",
+  "mediaOnlyNoteNoLinks": "{user} questo canale è per immagini, video e file. Commenta in un thread."
 }

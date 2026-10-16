@@ -1629,6 +1629,7 @@ async function showAutomod(guildId) {
   }
   const config = data.settings.automod;
   const roles = data.roles.filter((role) => !role.managed).map((role) => ({ id: role.id, label: role.name, dot: roleDot(role) }));
+  const mediaOnly = data.settings.mediaOnly ?? { channelIds: [], allowLinks: true };
   const channels = data.channels
     .filter((channel) => [CHANNEL.TEXT, CHANNEL.ANNOUNCEMENT, CHANNEL.FORUM, CHANNEL.VOICE, CHANNEL.CATEGORY].includes(channel.type))
     .map((channel) => ({ id: channel.id, label: channelLabel(channel, data.channels) }));
@@ -1696,8 +1697,26 @@ async function showAutomod(guildId) {
         h("p", { class: "help" }, t("amExemptChannelsHelp")),
         checkList({ name: "amChannel", items: channels, checked: config.exemptChannelIds, filterKey: "filterChannels" }),
       ),
+      card(
+        t("mediaOnlyTitle"),
+        "image",
+        "green",
+        h("p", { class: "help" }, t("mediaOnlyHelp")),
+        data.guild.community ? h("p", { class: "tip" }, icon("sparkles"), h("span", {}, t("mediaOnlyNativeTip"))) : null,
+        h(
+          "label",
+          { class: "switch-card" },
+          h("span", { class: "switch-text" }, h("strong", {}, t("mediaOnlyLinks")), h("span", { class: "help" }, t("mediaOnlyLinksHelp"))),
+          h("span", { class: "switch" }, h("input", { id: "mediaOnlyLinks", type: "checkbox", role: "switch", checked: mediaOnly.allowLinks, "aria-label": t("mediaOnlyLinks") })),
+        ),
+        h("p", { class: "help" }, t("mediaOnlyPick")),
+        checkList({ name: "mediaOnly", items: postableChannels(data), checked: mediaOnly.channelIds, filterKey: "filterChannels" }),
+      ),
     ],
-    fields: { automod: (form) => readAutomod(form, data.settings.automod) },
+    fields: {
+      automod: (form) => readAutomod(form, data.settings.automod),
+      mediaOnly: (form) => ({ channelIds: checkedList("mediaOnly")(form) ?? [], allowLinks: form.querySelector("#mediaOnlyLinks").checked }),
+    },
   });
 }
 

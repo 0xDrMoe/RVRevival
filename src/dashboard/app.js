@@ -50,6 +50,7 @@ import { SentMessageStore } from "../messages/sentMessageStore.js";
 import { addFeed, FeedDuplicate, FeedError, FeedLimit } from "../feeds/feeds.js";
 import { FEED_KINDS } from "../feeds/fetchFeed.js";
 import { FeedStore, MAX_FEEDS } from "../feeds/feedStore.js";
+import { normalizeMediaOnly } from "../community/mediaOnly.js";
 import { MAX_STICKIES, MAX_STICKY_LENGTH, StickyStore } from "../sticky/stickyStore.js";
 import { checkTemplate, COUNTER_PRESETS, InvalidCounter, MAX_COUNTERS, newCounterId, normalizeCounters } from "../stats/statsCounters.js";
 import { buildPanelButtons, buildPanelMessage } from "../tickets/tickets.js";
@@ -390,6 +391,7 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     [Setting.LEVELING]: normalizeLeveling(guildSettings.get(guildId, Setting.LEVELING)),
     [Setting.ANTI_NUKE]: normalizeAntiNuke(guildSettings.get(guildId, Setting.ANTI_NUKE)),
     [Setting.APPEALS]: normalizeAppeals(guildSettings.get(guildId, Setting.APPEALS)),
+    [Setting.MEDIA_ONLY]: normalizeMediaOnly(guildSettings.get(guildId, Setting.MEDIA_ONLY)),
   });
 
   // Gives the ticket panel's message the current category buttons. Panels
@@ -572,6 +574,7 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
       [Setting.LEVELING]: normalizeLeveling,
       [Setting.ANTI_NUKE]: normalizeAntiNuke,
       [Setting.APPEALS]: normalizeAppeals,
+      [Setting.MEDIA_ONLY]: normalizeMediaOnly,
     };
     const ownerOnly = Object.keys(changes).filter((setting) => {
       if (!SETTING_RULES[setting].ownerOnly) {

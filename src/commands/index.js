@@ -30,6 +30,7 @@ import { createStatsCommand } from "./stats.js";
 import { createAfkCommand } from "./afk.js";
 import { createStickyCommand } from "./sticky.js";
 import { createHighlightCommand } from "./highlight.js";
+import { createMediaOnlyCommand } from "./mediaOnly.js";
 import { createBirthdayCommand } from "./birthday.js";
 import { createWelcomeCommand } from "./welcome.js";
 
@@ -113,6 +114,7 @@ export function createCommands({
     createAfkCommand({ afk, forcedLanguage }),
     createStickyCommand({ store: stickyStore, stickies, forcedLanguage }),
     createHighlightCommand({ store: highlightStore, highlights, forcedLanguage }),
+    createMediaOnlyCommand({ guildSettings, forcedLanguage }),
     createBirthdayCommand({ guildSettings, store: birthdays, forcedLanguage }),
     ...createLevelCommands({ levels, leveling, guildSettings, forcedLanguage }),
   ];

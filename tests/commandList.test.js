@@ -48,6 +48,7 @@ describe("command list", () => {
       "afk",
       "sticky",
       "highlight",
+      "mediaonly",
       "birthday",
       "rank",
       "leaderboard",

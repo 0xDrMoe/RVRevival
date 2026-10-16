@@ -55,6 +55,7 @@ export const Setting = Object.freeze({
   QUARANTINE_ROLE: "quarantineRoleId", // given to quarantined members (see moderation/quarantine.js)
   ANTI_NUKE: "antiNuke", // anti-nuke limits, punishment and trusted users, an object (see raid/antiNuke.js)
   STATS_COUNTERS: "statsCounters", // server stats channels, a list of { id, template, channelId, categoryId, error } (see stats/statsCounters.js)
+  MEDIA_ONLY: "mediaOnly", // media-only channels, { channelIds, allowLinks } (see community/mediaOnly.js)
 });
 
 const KNOWN_SETTINGS = new Set(Object.values(Setting));

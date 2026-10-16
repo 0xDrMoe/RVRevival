@@ -1077,5 +1077,27 @@
   "leaderboardEmptyPeriod": "Nadie ganó XP en ese tiempo. ¡A chatear!",
   "leaderboardLinePeriod": "{place} {member} · +{gained} XP · Nivel {level}",
   "leaderboardTitle_week": "🏆 {server} · esta semana",
-  "leaderboardTitle_month": "🏆 {server} · este mes"
+  "leaderboardTitle_month": "🏆 {server} · este mes",
+
+  "mediaOnlyCommandDescription": "Canales donde solo se pueden publicar imágenes, videos, archivos y enlaces",
+  "mediaOnlyAddDescription": "Haz que un canal sea solo multimedia",
+  "mediaOnlyRemoveDescription": "Vuelve a hacer normal un canal",
+  "mediaOnlyLinksDescription": "Si los enlaces cuentan como multimedia",
+  "mediaOnlyAllowOptionDescription": "Verdadero para permitir enlaces, falso solo para archivos subidos",
+  "mediaOnlyListDescription": "Los canales solo multimedia",
+  "mediaOnlyChannelOptionDescription": "El canal",
+  "mediaOnlyAlready": "{channel} ya es solo multimedia.",
+  "mediaOnlyFull": "Hasta {max} canales pueden ser solo multimedia. Quita uno con `/mediaonly remove` primero.",
+  "mediaOnlyNeedsManageMessages": "Necesito Ver canal y Gestionar mensajes en {channel} para borrar allí los mensajes sin multimedia.",
+  "mediaOnlyAdded": "{channel} ahora es solo multimedia: los mensajes necesitan una imagen, video, archivo o enlace. El staff con Gestionar mensajes puede hablar, y los hilos quedan abiertos para comentar.",
+  "mediaOnlyAddedNoLinks": "{channel} ahora es solo multimedia: los mensajes necesitan una imagen, video o archivo. El staff con Gestionar mensajes puede hablar, y los hilos quedan abiertos para comentar.",
+  "mediaOnlyNot": "{channel} no es solo multimedia.",
+  "mediaOnlyRemoved": "{channel} vuelve a ser un canal normal.",
+  "mediaOnlyLinksOn": "Ahora los enlaces cuentan como multimedia.",
+  "mediaOnlyLinksOff": "Ahora solo cuentan los archivos subidos; los enlaces solos se borran.",
+  "mediaOnlyListEmpty": "No hay canales solo multimedia. Añade uno con `/mediaonly add`.",
+  "mediaOnlyList": "**Canales solo multimedia:** {list}\nLos enlaces cuentan como multimedia.",
+  "mediaOnlyListNoLinks": "**Canales solo multimedia:** {list}\nSolo cuentan los archivos subidos.",
+  "mediaOnlyNote": "{user} este canal es para imágenes, videos, archivos y enlaces. Comenta en un hilo.",
+  "mediaOnlyNoteNoLinks": "{user} este canal es para imágenes, videos y archivos. Comenta en un hilo."
 }

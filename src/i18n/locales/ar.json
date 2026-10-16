@@ -1077,5 +1077,27 @@
   "leaderboardEmptyPeriod": "لم يكسب أحد نقاطًا في هذه المدة. ابدأوا الدردشة!",
   "leaderboardLinePeriod": "{place} {member} · +{gained} نقطة · المستوى {level}",
   "leaderboardTitle_week": "🏆 {server} · هذا الأسبوع",
-  "leaderboardTitle_month": "🏆 {server} · هذا الشهر"
+  "leaderboardTitle_month": "🏆 {server} · هذا الشهر",
+
+  "mediaOnlyCommandDescription": "قنوات لا يُنشر فيها إلا الصور والفيديوهات والملفات والروابط",
+  "mediaOnlyAddDescription": "اجعل قناة للوسائط فقط",
+  "mediaOnlyRemoveDescription": "أعد القناة عادية",
+  "mediaOnlyLinksDescription": "هل تُحسب الروابط وسائط",
+  "mediaOnlyAllowOptionDescription": "صحيح للسماح بالروابط، خطأ للملفات المرفوعة فقط",
+  "mediaOnlyListDescription": "قنوات الوسائط فقط",
+  "mediaOnlyChannelOptionDescription": "القناة",
+  "mediaOnlyAlready": "{channel} للوسائط فقط بالفعل.",
+  "mediaOnlyFull": "يمكن أن تكون {max} قنوات للوسائط فقط كحد أقصى. أزل واحدة بـ `/mediaonly remove` أولًا.",
+  "mediaOnlyNeedsManageMessages": "أحتاج عرض القناة وإدارة الرسائل في {channel} لحذف الرسائل النصية فقط هناك.",
+  "mediaOnlyAdded": "أصبحت {channel} للوسائط فقط: تحتاج الرسائل إلى صورة أو فيديو أو ملف أو رابط. يمكن للطاقم الذي لديه إدارة الرسائل الحديث، وتبقى السلاسل مفتوحة للتعليقات.",
+  "mediaOnlyAddedNoLinks": "أصبحت {channel} للوسائط فقط: تحتاج الرسائل إلى صورة أو فيديو أو ملف. يمكن للطاقم الذي لديه إدارة الرسائل الحديث، وتبقى السلاسل مفتوحة للتعليقات.",
+  "mediaOnlyNot": "{channel} ليست للوسائط فقط.",
+  "mediaOnlyRemoved": "عادت {channel} قناة عادية.",
+  "mediaOnlyLinksOn": "أصبحت الروابط تُحسب وسائط.",
+  "mediaOnlyLinksOff": "الآن تُحسب الملفات المرفوعة فقط؛ تُحذف الروابط وحدها.",
+  "mediaOnlyListEmpty": "لا توجد قنوات للوسائط فقط. أضف واحدة بـ `/mediaonly add`.",
+  "mediaOnlyList": "**قنوات الوسائط فقط:** {list}\nالروابط تُحسب وسائط.",
+  "mediaOnlyListNoLinks": "**قنوات الوسائط فقط:** {list}\nالملفات المرفوعة فقط تُحسب.",
+  "mediaOnlyNote": "{user} هذه القناة للصور والفيديوهات والملفات والروابط. علّق في سلسلة بدلًا من ذلك.",
+  "mediaOnlyNoteNoLinks": "{user} هذه القناة للصور والفيديوهات والملفات. علّق في سلسلة بدلًا من ذلك."
 }

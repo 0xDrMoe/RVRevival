@@ -1077,5 +1077,27 @@
   "leaderboardEmptyPeriod": "Personne n'a gagné d'XP sur cette période. À vos claviers !",
   "leaderboardLinePeriod": "{place} {member} · +{gained} XP · Niveau {level}",
   "leaderboardTitle_week": "🏆 {server} · cette semaine",
-  "leaderboardTitle_month": "🏆 {server} · ce mois-ci"
+  "leaderboardTitle_month": "🏆 {server} · ce mois-ci",
+
+  "mediaOnlyCommandDescription": "Salons où l'on ne peut publier que des images, vidéos, fichiers et liens",
+  "mediaOnlyAddDescription": "Réserver un salon aux médias",
+  "mediaOnlyRemoveDescription": "Rendre un salon normal",
+  "mediaOnlyLinksDescription": "Si les liens comptent comme médias",
+  "mediaOnlyAllowOptionDescription": "Vrai pour autoriser les liens, faux pour les fichiers envoyés seulement",
+  "mediaOnlyListDescription": "Les salons réservés aux médias",
+  "mediaOnlyChannelOptionDescription": "Le salon",
+  "mediaOnlyAlready": "{channel} est déjà réservé aux médias.",
+  "mediaOnlyFull": "Jusqu'à {max} salons peuvent être réservés aux médias. Retirez-en un avec `/mediaonly remove` d'abord.",
+  "mediaOnlyNeedsManageMessages": "J'ai besoin de Voir le salon et Gérer les messages dans {channel} pour y supprimer les messages sans média.",
+  "mediaOnlyAdded": "{channel} est maintenant réservé aux médias : les messages doivent contenir une image, une vidéo, un fichier ou un lien. L'équipe avec Gérer les messages peut toujours parler, et les fils restent ouverts pour commenter.",
+  "mediaOnlyAddedNoLinks": "{channel} est maintenant réservé aux médias : les messages doivent contenir une image, une vidéo ou un fichier. L'équipe avec Gérer les messages peut toujours parler, et les fils restent ouverts pour commenter.",
+  "mediaOnlyNot": "{channel} n'est pas réservé aux médias.",
+  "mediaOnlyRemoved": "{channel} est de nouveau un salon normal.",
+  "mediaOnlyLinksOn": "Les liens comptent maintenant comme médias.",
+  "mediaOnlyLinksOff": "Seuls les fichiers envoyés comptent maintenant ; un lien seul est supprimé.",
+  "mediaOnlyListEmpty": "Aucun salon réservé aux médias. Ajoutez-en un avec `/mediaonly add`.",
+  "mediaOnlyList": "**Salons réservés aux médias :** {list}\nLes liens comptent comme médias.",
+  "mediaOnlyListNoLinks": "**Salons réservés aux médias :** {list}\nSeuls les fichiers envoyés comptent.",
+  "mediaOnlyNote": "{user} ce salon est pour les images, vidéos, fichiers et liens. Commentez plutôt dans un fil.",
+  "mediaOnlyNoteNoLinks": "{user} ce salon est pour les images, vidéos et fichiers. Commentez plutôt dans un fil."
 }
