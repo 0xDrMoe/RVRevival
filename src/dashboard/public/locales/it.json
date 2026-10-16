@@ -548,5 +548,9 @@
   "memberQuarantineReason": "Motivo: {reason}",
   "sectionQuarantine": "Quarantena",
   "quarantineRole": "Ruolo di quarantena",
-  "quarantineRoleHelp": "Dato ai membri messi in quarantena con /quarantine o dall'anti-nuke, dopo aver tolto i loro ruoli. Usa un ruolo che vede un solo canale."
+  "quarantineRoleHelp": "Dato ai membri messi in quarantena con /quarantine o dall'anti-nuke, dopo aver tolto i loro ruoli. Usa un ruolo che vede un solo canale.",
+  "sectionPersist": "Ruoli al rientro",
+  "persistEnabled": "Ridare i ruoli quando un membro rientra",
+  "persistHelp": "Il bot ricorda i ruoli di chi esce, così uscire non toglie un ruolo restrittivo. Ruoli con permessi di moderazione, ruoli dei bot e ruoli sopra il bot non vengono mai restituiti in automatico.",
+  "persistIgnoreHelp": "Ruoli mai restituiti:"
 }

@@ -12,6 +12,7 @@ import { cleanTagContent, cleanTagName, MAX_TAG_LENGTH, MAX_TAGS, sortTags } fro
 import { MAX_AUTOROLES, MAX_MESSAGE_LENGTH } from "../community/welcome.js";
 import { checkLeveling, InvalidLeveling, normalizeLeveling } from "../leveling/config.js";
 import { checkAntiNuke, describeAntiNuke, InvalidAntiNuke } from "../raid/antiNuke.js";
+import { checkRolePersist, InvalidRolePersist } from "../members/rolePersistence.js";
 import { checkJoinGate, InvalidJoinGate } from "../raid/raid.js";
 import { LogEvent } from "../logs/serverLog.js";
 import { Setting } from "../settings/guildSettings.js";
@@ -67,6 +68,7 @@ export const SETTING_RULES = Object.freeze({
   [Setting.LEAVE_MESSAGE]: { kind: "text", label: "Leave message" },
   [Setting.WELCOME_DM]: { kind: "text", label: "Welcome DM" },
   [Setting.AUTOROLES]: { kind: "autoroles", label: "Autoroles" },
+  [Setting.ROLE_PERSIST]: { kind: "rolePersist", label: "Roles on rejoin" },
   [Setting.TAGS]: { kind: "tags", label: "Custom commands" },
   [Setting.STARBOARD]: { kind: "starboard", types: POSTING_CHANNELS, label: "Starboard" },
   [Setting.LEVELING]: { kind: "leveling", label: "Leveling" },
@@ -217,6 +219,15 @@ function checkValue(setting, value, { guildId, channels, roles }) {
         }
         throw error;
       }
+    case "rolePersist":
+      try {
+        return checkRolePersist(value, { isRole: roleOk });
+      } catch (error) {
+        if (error instanceof InvalidRolePersist) {
+          throw new InvalidSetting(setting, error.message);
+        }
+        throw error;
+      }
     case "antiNuke":
       try {
         return checkAntiNuke(value);
@@ -309,6 +320,8 @@ export function describeValue(setting, value) {
       return `<#${value.channelId}> · ${value.emoji} ${value.threshold}`;
     case "antiNuke":
       return describeAntiNuke(value);
+    case "rolePersist":
+      return `${value.enabled ? "given back" : "not given back"}${value.ignoredRoleIds.length > 0 ? ` · ignoring ${value.ignoredRoleIds.map((id) => `<@&${id}>`).join(", ")}` : ""}`;
     case "joinGate":
       return [
         value.minAgeDays ? `${value.action} accounts under ${value.minAgeDays} days` : "no account-age gate",

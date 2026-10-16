@@ -941,5 +941,12 @@
   "quarantineListMore": "…und {count} weitere.",
   "quarantineRoleCleared": "Mitglieder in Quarantäne bekommen keine Rolle; ihre Rollen werden nur weggenommen.",
   "quarantineRoleUnusable": "Ich kann {role} nicht vergeben: Es ist eine Bot- oder Booster-Rolle oder liegt über meiner.",
-  "quarantineRoleSet": "Mitglieder in Quarantäne bekommen {role}. Achte darauf, dass sie nur die richtigen Kanäle sieht."
+  "quarantineRoleSet": "Mitglieder in Quarantäne bekommen {role}. Achte darauf, dass sie nur die richtigen Kanäle sieht.",
+
+  "welcomePersistDescription": "Gibt Mitgliedern ihre Rollen zurück, wenn sie gehen und wiederkommen",
+  "welcomePersistOptionDescription": "An oder aus",
+  "welcomePersistOn": "Mitglieder, die gehen und wiederkommen, bekommen ihre Rollen zurück. Rollen mit Moderationsrechten, Bot-Rollen und Rollen über meiner werden nie automatisch zurückgegeben.",
+  "welcomePersistOff": "Mitglieder, die wiederkommen, bekommen ihre alten Rollen nicht zurück.",
+  "welcomeShowPersistOn": "**Rollen beim Wiederkommen:** werden zurückgegeben",
+  "welcomeShowPersistOff": "**Rollen beim Wiederkommen:** werden nicht zurückgegeben"
 }

@@ -548,5 +548,9 @@
   "memberQuarantineReason": "Reason: {reason}",
   "sectionQuarantine": "Quarantine",
   "quarantineRole": "Quarantine role",
-  "quarantineRoleHelp": "Given to members quarantined with /quarantine or by anti-nuke, after their roles are taken. Make it a role that can only see one channel."
+  "quarantineRoleHelp": "Given to members quarantined with /quarantine or by anti-nuke, after their roles are taken. Make it a role that can only see one channel.",
+  "sectionPersist": "Roles on rejoin",
+  "persistEnabled": "Give roles back when members rejoin",
+  "persistHelp": "The bot remembers members' roles when they leave, so leaving can't shake off a restricted role. Roles with moderator permissions, bot roles and roles above the bot are never given back automatically.",
+  "persistIgnoreHelp": "Roles never given back:"
 }

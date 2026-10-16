@@ -941,5 +941,12 @@
   "quarantineListMore": "…and {count} more.",
   "quarantineRoleCleared": "Quarantined members won't get a role; their roles are just taken away.",
   "quarantineRoleUnusable": "I can't give {role}: it's a bot or booster role, or above my role.",
-  "quarantineRoleSet": "Quarantined members will get {role}. Make sure it can only see the channels they should."
+  "quarantineRoleSet": "Quarantined members will get {role}. Make sure it can only see the channels they should.",
+
+  "welcomePersistDescription": "Give members their roles back when they leave and rejoin",
+  "welcomePersistOptionDescription": "On or off",
+  "welcomePersistOn": "Members who leave and rejoin get their roles back. Roles with moderator permissions, bot roles and roles above mine are never given back automatically.",
+  "welcomePersistOff": "Members who rejoin won't get their old roles back.",
+  "welcomeShowPersistOn": "**Roles on rejoin:** given back",
+  "welcomeShowPersistOff": "**Roles on rejoin:** not given back"
 }

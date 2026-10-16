@@ -7,6 +7,7 @@
 //   /welcome leave-message text:<…>          the leave message
 //   /welcome dm text:<…>                     DM new members this
 //   /welcome autorole role:@Member           give new members a role, or stop giving it
+//   /welcome persist enabled:<true|false>    give members their roles back when they rejoin
 //   /welcome off what:<…>                    switch one of these off, or reset a message to the default
 //   /welcome test                            preview everything privately, with yourself as the new member
 //   /welcome show
@@ -17,6 +18,7 @@ import { ChannelType, InteractionContextType, MessageFlags, PermissionFlagsBits,
 import { MAX_AUTOROLES, MAX_MESSAGE_LENGTH, renderTemplate, welcomeText } from "../community/welcome.js";
 import { discordLocalizations, pickLanguage, translate } from "../i18n/i18n.js";
 import { result, Status } from "../logs/actionLog.js";
+import { normalizeRolePersist } from "../members/rolePersistence.js";
 import { Setting } from "../settings/guildSettings.js";
 
 const COMMAND_NAME = "welcome";
@@ -83,6 +85,11 @@ export function buildWelcomeCommandData() {
     .addSubcommand((sub) =>
       withDescription(sub.setName("autorole"), "welcomeAutoroleDescription").addRoleOption((option) =>
         withDescription(option.setName("role"), "welcomeAutoroleOptionDescription").setRequired(true),
+      ),
+    )
+    .addSubcommand((sub) =>
+      withDescription(sub.setName("persist"), "welcomePersistDescription").addBooleanOption((option) =>
+        withDescription(option.setName("enabled"), "welcomePersistOptionDescription").setRequired(true),
       ),
     )
     .addSubcommand((sub) =>
@@ -188,6 +195,12 @@ export function createWelcomeCommand({ guildSettings, forcedLanguage }) {
         const notes = [...(botCanGive ? [] : ["welcomeAutoroleAboveBot"]), ...(hasOnboarding(guild) ? ["welcomeOnboardingTip"] : [])];
         return reply(Status.SUCCESS, "welcomeAutoroleAdded", values, notes);
       }
+      case "persist": {
+        const enabled = interaction.options.getBoolean("enabled", true);
+        const config = normalizeRolePersist(guildSettings.get(guildId, Setting.ROLE_PERSIST));
+        await guildSettings.set(guildId, Setting.ROLE_PERSIST, { ...config, enabled });
+        return reply(Status.SUCCESS, enabled ? "welcomePersistOn" : "welcomePersistOff");
+      }
       case "off": {
         const choice = OFF_CHOICES.find(({ value }) => value === interaction.options.getString("what", true));
         if (!choice) {
@@ -226,6 +239,7 @@ export function createWelcomeCommand({ guildSettings, forcedLanguage }) {
             ? text("welcomeShowAutoroles", { roles: roles.map((id) => `<@&${id}>`).join(", ") })
             : text("welcomeShowNoAutoroles"),
           roles.length > 0 && hasOnboarding(guild) ? text("welcomeOnboardingTip") : "",
+          text(normalizeRolePersist(guildSettings.get(guildId, Setting.ROLE_PERSIST)).enabled ? "welcomeShowPersistOn" : "welcomeShowPersistOff"),
           text("welcomeShowTestHint"),
         ].filter(Boolean));
       }

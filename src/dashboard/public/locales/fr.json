@@ -548,5 +548,9 @@
   "memberQuarantineReason": "Raison : {reason}",
   "sectionQuarantine": "Quarantaine",
   "quarantineRole": "Rôle de quarantaine",
-  "quarantineRoleHelp": "Donné aux membres mis en quarantaine avec /quarantine ou par l'anti-nuke, après le retrait de leurs rôles. Choisissez un rôle qui ne voit qu'un salon."
+  "quarantineRoleHelp": "Donné aux membres mis en quarantaine avec /quarantine ou par l'anti-nuke, après le retrait de leurs rôles. Choisissez un rôle qui ne voit qu'un salon.",
+  "sectionPersist": "Rôles au retour",
+  "persistEnabled": "Rendre les rôles quand un membre revient",
+  "persistHelp": "Le bot retient les rôles de ceux qui partent, pour qu'on ne puisse pas se débarrasser d'un rôle restrictif en partant. Les rôles avec des permissions de modération, les rôles de bot et ceux au-dessus du bot ne sont jamais rendus automatiquement.",
+  "persistIgnoreHelp": "Rôles jamais rendus :"
 }

@@ -202,6 +202,7 @@ describe("/welcome", () => {
       "leave-message",
       "dm",
       "autorole",
+      "persist",
       "off",
       "test",
       "show",
