@@ -42,7 +42,8 @@ export function welcomeText(guildSettings, guild, member, kind, forcedLanguage) 
 // Options:
 //   guildSettings, logger
 //   forcedLanguage   the default messages' language (BOT_LANGUAGE); otherwise the server's
-export function createWelcomer({ guildSettings, logger, forcedLanguage }) {
+//   skipAutoroles    (member) => true for members who mustn't get autoroles (quarantined)
+export function createWelcomer({ guildSettings, logger, forcedLanguage, skipAutoroles = () => false }) {
   // "<server>:<what>" already warned about, so a busy server can't flood the console.
   const warned = new Set();
   const warnOnce = (guild, what, message, error) => {
@@ -69,6 +70,9 @@ export function createWelcomer({ guildSettings, logger, forcedLanguage }) {
 
   // Gives the autoroles the bot is allowed to give.
   async function giveAutoroles(member) {
+    if (skipAutoroles(member)) {
+      return;
+    }
     const guild = member.guild;
     const me = guild.members.me;
     const ids = guildSettings.getList(guild.id, Setting.AUTOROLES).filter((id) => {

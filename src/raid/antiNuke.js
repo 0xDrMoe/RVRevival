@@ -128,9 +128,10 @@ export function describeAntiNuke(value) {
 
 const sentence = (action, count) => `${count} ${ACTION_LABELS[action]}`;
 
-// Options: guildSettings, moderation (kicks and bans with a case), modLog,
-// logger, forcedLanguage, now
-export function createAntiNuke({ guildSettings, moderation, modLog = noModLog, logger, forcedLanguage, now = Date.now }) {
+// Options: guildSettings, moderation (kicks and bans with a case), quarantine
+// (takes roles so /quarantine release can give them back), modLog, logger,
+// forcedLanguage, now
+export function createAntiNuke({ guildSettings, moderation, quarantine, modLog = noModLog, logger, forcedLanguage, now = Date.now }) {
   // "<guild>:<user>:<action>" -> recent times
   const recent = new Map();
   // "<guild>:<user>" -> when the bot stepped in
@@ -166,6 +167,10 @@ export function createAntiNuke({ guildSettings, moderation, modLog = noModLog, l
       await moderation.kick({ guild, member, moderator, reason });
       return { done: "kicked", kept: [] };
     }
+    if (quarantine && !quarantine.isQuarantined(guild.id, member.id)) {
+      const result = await quarantine.quarantine({ guild, member, moderator, reason });
+      return { done: result.removed.length > 0 || result.roleGiven ? "stripped" : "failed", removed: result.removed, kept: result.kept };
+    }
     const roles = [...member.roles.cache.values()].filter((role) => role.id !== guild.id);
     const removable = roles.filter((role) => !role.managed && role.editable !== false);
     const kept = roles.filter((role) => !removable.includes(role));
@@ -197,7 +202,7 @@ export function createAntiNuke({ guildSettings, moderation, modLog = noModLog, l
     }
     logger.warn("Anti-nuke stepped in", { guildId: guild.id, userId, action, count, outcome: outcome.done });
     const results = {
-      stripped: `Their roles were taken away: ${(outcome.removed ?? []).map((id) => `<@&${id}>`).join(", ")}.`,
+      stripped: `Their roles were taken away${quarantine ? " (they're quarantined; `/quarantine release` gives them back)" : ""}: ${(outcome.removed ?? []).map((id) => `<@&${id}>`).join(", ")}.`,
       kicked: "They were kicked.",
       banned: "They were banned.",
       left: "They're no longer in the server.",

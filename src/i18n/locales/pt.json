@@ -920,5 +920,26 @@
   "antinukeResult_kicked": "A pessoa foi expulsa.",
   "antinukeResult_banned": "A pessoa foi banida.",
   "antinukeResult_left": "A pessoa não está mais no servidor.",
-  "antinukeResult_failed": "O bot não conseguiu agir: o cargo mais alto está acima do bot."
+  "antinukeResult_failed": "O bot não conseguiu agir: o cargo mais alto está acima do bot.",
+
+  "quarantineCommandDescription": "Tira os cargos de um membro enquanto a equipe verifica algo, e devolve depois",
+  "quarantineAddDescription": "Colocar um membro em quarentena: os cargos são salvos e retirados",
+  "quarantineReleaseDescription": "Liberar um membro e devolver todos os cargos salvos",
+  "quarantineListDescription": "Listar membros em quarentena",
+  "quarantineRoleDescription": "Definir o cargo que membros em quarentena recebem (vazio = nenhum)",
+  "quarantineRoleOptionDescription": "Por exemplo, um cargo que só vê um canal",
+  "quarantineDone": "{user} está em quarentena: {count} cargo(s) salvos e retirados, e o cargo de quarentena dado. Use `/quarantine release` para devolver.",
+  "quarantineDoneNoRole": "{user} está em quarentena: {count} cargo(s) salvos e retirados. Dica: defina um cargo de quarentena com `/quarantine role` para que só veja um canal.",
+  "quarantineAlready": "{user} já está em quarentena.",
+  "quarantineBotMissingPermission": "Não consegui mudar os cargos de {user}. Me dê **Gerenciar cargos** e coloque meu cargo acima do dele.",
+  "quarantineNotQuarantined": "{user} não está em quarentena.",
+  "quarantineForgotten": "{user} saiu do servidor, então a quarentena foi apagada.",
+  "quarantineReleased": "{user} foi liberado: {count} cargo(s) devolvidos.",
+  "quarantineReleasedMissing": "{user} foi liberado: {count} cargo(s) devolvidos. {missing} não puderam ser devolvidos (apagados ou agora acima do meu cargo).",
+  "quarantineListEmpty": "Ninguém está em quarentena.",
+  "quarantineList": "**Em quarentena ({count}):**\n{list}",
+  "quarantineListMore": "…e mais {count}.",
+  "quarantineRoleCleared": "Membros em quarentena não receberão cargo; os cargos deles só serão retirados.",
+  "quarantineRoleUnusable": "Não posso dar {role}: é um cargo de bot ou de booster, ou está acima do meu.",
+  "quarantineRoleSet": "Membros em quarentena receberão {role}. Garanta que ele só vê os canais certos."
 }

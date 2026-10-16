@@ -13,6 +13,7 @@ import { DEFAULT_LEVELING } from "../src/leveling/config.js";
 import { LevelStore } from "../src/leveling/levelStore.js";
 import { TicketStore } from "../src/tickets/ticketStore.js";
 import { MemberEvent, MemberEventStore } from "../src/members/memberEventStore.js";
+import { SavedRoles, SavedRoleStore } from "../src/members/savedRoleStore.js";
 import { CaseAction, CaseStore } from "../src/moderation/caseStore.js";
 import { GuildSettings, Setting } from "../src/settings/guildSettings.js";
 import { closeDatabase, openDatabase } from "../src/storage/database.js";
@@ -684,7 +685,12 @@ describe("dashboard", () => {
     expect(history.joins).toBe(2);
     expect(history.tickets).toEqual([]);
     expect(history.banned).toBeNull();
+    expect(history.quarantine).toBeNull();
     expect(discord.ban).not.toHaveBeenCalled();
+
+    new SavedRoleStore(db).save({ guildId: GUILD_ID, userId: MEMBER_ID, kind: SavedRoles.QUARANTINE, roleIds: [ROLE_ID], reason: "alt", moderatorId: USER_ID, savedAt: 9_000 });
+    const quarantined = await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}/members/${MEMBER_ID}`, cookies });
+    expect(quarantined.json().quarantine).toEqual({ since: 9_000, reason: "alt", moderatorId: USER_ID, roleIds: [ROLE_ID] });
   });
 
   it("shows someone who left and was banned, from their cases alone if Discord doesn't know them", async () => {

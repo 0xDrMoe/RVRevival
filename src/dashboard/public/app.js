@@ -1244,6 +1244,7 @@ async function showModeration(guildId) {
         field("staffRole", "staffRoleHelp", rolePicker("staffRoleId")),
         field("modRole", "modRoleHelp", rolePicker("modRoleId")),
       ),
+      card(t("sectionQuarantine"), "lock", "amber", field("quarantineRole", "quarantineRoleHelp", rolePicker("quarantineRoleId"))),
       card(
         t("sectionModLog"),
         "list",
@@ -1263,6 +1264,7 @@ async function showModeration(guildId) {
     fields: {
       staffRoleId: selectValue("staffRoleId"),
       modRoleId: selectValue("modRoleId"),
+      quarantineRoleId: selectValue("quarantineRoleId"),
       modLogChannelId: selectValue("modLogChannelId"),
     },
   });
@@ -3372,6 +3374,9 @@ async function showMemberHistory(guildId, userId) {
   if (member?.timedOutUntil) {
     status.push(h("span", { class: "badge badge-amber" }, t("memberTimedOutUntil", { date: formatDate(member.timedOutUntil) })));
   }
+  if (history.quarantine) {
+    status.push(h("span", { class: "badge badge-amber" }, icon("lock", "icon tiny"), t("memberQuarantined", { date: formatDate(history.quarantine.since) })));
+  }
   if (user.bot) {
     status.push(h("span", { class: "badge badge-accent" }, t("memberBot")));
   }
@@ -3524,6 +3529,19 @@ async function showMemberHistory(guildId, userId) {
       h("a", { class: "back", href: `#/g/${guildId}/members` }, t("memberBackToSearch")),
       header,
       history.banned?.reason ? h("p", { class: "tip danger" }, t("memberBanReason", { reason: history.banned.reason })) : null,
+      history.quarantine
+        ? h(
+            "p",
+            { class: "tip" },
+            icon("lock"),
+            h(
+              "span",
+              {},
+              t("memberQuarantineInfo", { count: history.quarantine.roleIds.length }),
+              history.quarantine.reason ? ` ${t("memberQuarantineReason", { reason: history.quarantine.reason })}` : "",
+            ),
+          )
+        : null,
       tiles,
       h(
         "div",

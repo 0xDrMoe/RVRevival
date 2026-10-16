@@ -54,6 +54,7 @@ export const SETTING_RULES = Object.freeze({
   [Setting.MOD_ROLE]: { kind: "role", label: "Mod role" },
   [Setting.COUNTRY_CHANNEL]: { kind: "channel", types: POSTING_CHANNELS, label: "/country channel" },
   [Setting.LOGS_CHANNEL]: { kind: "channel", types: POSTING_CHANNELS, label: "Logs channel" },
+  [Setting.QUARANTINE_ROLE]: { kind: "role", label: "Quarantine role" },
   [Setting.MOD_LOG_CHANNEL]: { kind: "channel", types: POSTING_CHANNELS, label: "Mod-log channel" },
   [Setting.SERVER_LOG_CHANNEL]: { kind: "channel", types: POSTING_CHANNELS, label: "Server-log channel" },
   [Setting.DISABLED_LOG_EVENTS]: { kind: "events", label: "Switched-off log events" },

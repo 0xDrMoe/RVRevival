@@ -38,6 +38,7 @@ describe("command list", () => {
       "tickets",
       "raid",
       "antinuke",
+      "quarantine",
       "voice",
       "autoresponder",
       "schedule",

@@ -510,7 +510,7 @@
   "search_tags": "tags custom commands saved answers",
   "search_responders": "auto reply responder keyword trigger",
   "search_scheduled": "schedule timer repeat announcement post later",
-  "search_moderation": "staff mod roles mod log",
+  "search_moderation": "staff mod roles mod log quarantine",
   "search_logging": "logs channel server log events",
   "search_access": "permissions dashboard access roles",
   "menu": "Menu",
@@ -542,5 +542,11 @@
   "antinukeAddTrusted": "Add person",
   "antinukeUserId": "User ID",
   "antinukeOwnerOnly": "Only the server owner can change anti-nuke, since trusted people can do anything.",
-  "search_antinuke": "nuke wick protection mass delete ban trusted whitelist"
+  "search_antinuke": "nuke wick protection mass delete ban trusted whitelist",
+  "memberQuarantined": "Quarantined since {date}",
+  "memberQuarantineInfo": "Quarantined with {count} role(s) saved. /quarantine release gives them back.",
+  "memberQuarantineReason": "Reason: {reason}",
+  "sectionQuarantine": "Quarantine",
+  "quarantineRole": "Quarantine role",
+  "quarantineRoleHelp": "Given to members quarantined with /quarantine or by anti-nuke, after their roles are taken. Make it a role that can only see one channel."
 }

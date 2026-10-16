@@ -510,7 +510,7 @@
   "search_tags": "tags comandos personalizados respostas salvas",
   "search_responders": "resposta automática palavra-chave gatilho",
   "search_scheduled": "agendar repetir anúncio publicar depois",
-  "search_moderation": "staff moderadores cargos registro",
+  "search_moderation": "staff moderadores cargos registro quarentena",
   "search_logging": "logs canal eventos registro",
   "search_access": "permissões acesso painel cargos",
   "menu": "Menu",
@@ -542,5 +542,11 @@
   "antinukeAddTrusted": "Adicionar pessoa",
   "antinukeUserId": "ID de usuário",
   "antinukeOwnerOnly": "Só o dono do servidor pode mudar o anti-nuke, porque pessoas de confiança podem fazer qualquer coisa.",
-  "search_antinuke": "nuke proteção exclusão em massa ban confiança lista branca"
+  "search_antinuke": "nuke proteção exclusão em massa ban confiança lista branca",
+  "memberQuarantined": "Em quarentena desde {date}",
+  "memberQuarantineInfo": "Em quarentena com {count} cargo(s) salvos. /quarantine release os devolve.",
+  "memberQuarantineReason": "Motivo: {reason}",
+  "sectionQuarantine": "Quarentena",
+  "quarantineRole": "Cargo de quarentena",
+  "quarantineRoleHelp": "Dado a membros em quarentena com /quarantine ou pelo anti-nuke, depois que os cargos são retirados. Use um cargo que só vê um canal."
 }

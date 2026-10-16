@@ -920,5 +920,26 @@
   "antinukeResult_kicked": "They were kicked.",
   "antinukeResult_banned": "They were banned.",
   "antinukeResult_left": "They're no longer in the server.",
-  "antinukeResult_failed": "The bot couldn't act: their highest role is above the bot's."
+  "antinukeResult_failed": "The bot couldn't act: their highest role is above the bot's.",
+
+  "quarantineCommandDescription": "Take a member's roles away while staff look into something, and give them back later",
+  "quarantineAddDescription": "Quarantine a member: their roles are saved and taken away",
+  "quarantineReleaseDescription": "Release a member and give back every saved role",
+  "quarantineListDescription": "List quarantined members",
+  "quarantineRoleDescription": "Set the role quarantined members get (leave empty for none)",
+  "quarantineRoleOptionDescription": "A role that can only see one channel, for example",
+  "quarantineDone": "{user} is quarantined: {count} role(s) saved and taken away, and the quarantine role given. Use `/quarantine release` to give them back.",
+  "quarantineDoneNoRole": "{user} is quarantined: {count} role(s) saved and taken away. Tip: set a quarantine role with `/quarantine role` so they can only see one channel.",
+  "quarantineAlready": "{user} is already quarantined.",
+  "quarantineBotMissingPermission": "I couldn't change {user}'s roles. Give me **Manage Roles** and move my role above theirs.",
+  "quarantineNotQuarantined": "{user} isn't quarantined.",
+  "quarantineForgotten": "{user} left the server, so their quarantine was cleared.",
+  "quarantineReleased": "{user} is released: {count} role(s) given back.",
+  "quarantineReleasedMissing": "{user} is released: {count} role(s) given back. {missing} couldn't be (deleted, or now above my role).",
+  "quarantineListEmpty": "Nobody is quarantined.",
+  "quarantineList": "**Quarantined ({count}):**\n{list}",
+  "quarantineListMore": "…and {count} more.",
+  "quarantineRoleCleared": "Quarantined members won't get a role; their roles are just taken away.",
+  "quarantineRoleUnusable": "I can't give {role}: it's a bot or booster role, or above my role.",
+  "quarantineRoleSet": "Quarantined members will get {role}. Make sure it can only see the channels they should."
 }

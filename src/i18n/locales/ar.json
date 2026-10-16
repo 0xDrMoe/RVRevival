@@ -920,5 +920,26 @@
   "antinukeResult_kicked": "تم طرده.",
   "antinukeResult_banned": "تم حظره.",
   "antinukeResult_left": "لم يعد في الخادم.",
-  "antinukeResult_failed": "لم يستطع البوت التصرف: أعلى رتبة له فوق رتبة البوت."
+  "antinukeResult_failed": "لم يستطع البوت التصرف: أعلى رتبة له فوق رتبة البوت.",
+
+  "quarantineCommandDescription": "اسحب رتب عضو بينما يتحقق الطاقم من أمر ما، ثم أعدها لاحقًا",
+  "quarantineAddDescription": "ضع عضوًا في الحجر: تُحفظ رتبه وتُسحب",
+  "quarantineReleaseDescription": "أخرج عضوًا من الحجر وأعد كل رتبه المحفوظة",
+  "quarantineListDescription": "اعرض الأعضاء في الحجر",
+  "quarantineRoleDescription": "حدد الرتبة التي يحصل عليها أعضاء الحجر (فارغ = لا شيء)",
+  "quarantineRoleOptionDescription": "مثلًا رتبة لا ترى إلا قناة واحدة",
+  "quarantineDone": "{user} في الحجر: حُفظت {count} رتبة وسُحبت، وأُعطي رتبة الحجر. استخدم ‎`/quarantine release` لإعادتها.",
+  "quarantineDoneNoRole": "{user} في الحجر: حُفظت {count} رتبة وسُحبت. نصيحة: حدد رتبة حجر بـ ‎`/quarantine role` كي لا يرى إلا قناة واحدة.",
+  "quarantineAlready": "{user} في الحجر بالفعل.",
+  "quarantineBotMissingPermission": "لم أستطع تغيير رتب {user}. امنحني **إدارة الرتب** وضع رتبتي فوق رتبته.",
+  "quarantineNotQuarantined": "{user} ليس في الحجر.",
+  "quarantineForgotten": "غادر {user} الخادم، لذا أُلغي حجره.",
+  "quarantineReleased": "خرج {user} من الحجر: أُعيدت {count} رتبة.",
+  "quarantineReleasedMissing": "خرج {user} من الحجر: أُعيدت {count} رتبة. تعذرت إعادة {missing} (محذوفة أو أصبحت فوق رتبتي).",
+  "quarantineListEmpty": "لا أحد في الحجر.",
+  "quarantineList": "**في الحجر ({count}):**\n{list}",
+  "quarantineListMore": "…و{count} آخرون.",
+  "quarantineRoleCleared": "لن يحصل أعضاء الحجر على رتبة؛ ستُسحب رتبهم فقط.",
+  "quarantineRoleUnusable": "لا يمكنني إعطاء {role}: إنها رتبة بوت أو داعم، أو فوق رتبتي.",
+  "quarantineRoleSet": "سيحصل أعضاء الحجر على {role}. تأكد أنها لا ترى إلا القنوات المناسبة."
 }

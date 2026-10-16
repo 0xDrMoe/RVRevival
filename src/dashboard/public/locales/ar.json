@@ -510,7 +510,7 @@
   "search_tags": "وسوم أوامر مخصصة ردود محفوظة",
   "search_responders": "رد تلقائي كلمة مفتاحية",
   "search_scheduled": "جدولة تكرار إعلان نشر لاحقًا",
-  "search_moderation": "طاقم مشرفين رتب سجل",
+  "search_moderation": "طاقم مشرفين رتب سجل حجر",
   "search_logging": "سجلات قناة أحداث logs",
   "search_access": "صلاحيات وصول لوحة التحكم رتب",
   "menu": "القائمة",
@@ -542,5 +542,11 @@
   "antinukeAddTrusted": "إضافة شخص",
   "antinukeUserId": "معرّف المستخدم",
   "antinukeOwnerOnly": "مالك السيرفر وحده يمكنه تغيير الحماية من التدمير، لأن الموثوقين يمكنهم فعل أي شيء.",
-  "search_antinuke": "تدمير nuke حماية حذف جماعي حظر موثوق قائمة بيضاء"
+  "search_antinuke": "تدمير nuke حماية حذف جماعي حظر موثوق قائمة بيضاء",
+  "memberQuarantined": "في الحجر منذ {date}",
+  "memberQuarantineInfo": "في الحجر مع حفظ {count} رتبة. ‎/quarantine release يعيدها.",
+  "memberQuarantineReason": "السبب: {reason}",
+  "sectionQuarantine": "الحجر",
+  "quarantineRole": "رتبة الحجر",
+  "quarantineRoleHelp": "تُعطى للأعضاء المحجورين بـ ‎/quarantine أو بالحماية من التدمير بعد سحب رتبهم. اجعلها رتبة لا ترى إلا قناة واحدة."
 }

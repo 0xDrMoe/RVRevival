@@ -23,6 +23,7 @@ The Discord bot for the Rumbleverse Revival server. It is built as a set of inde
 | [Starboard](#starboard) | `/starboard`, or the dashboard's Starboard page | Manage Server (everyone stars messages) |
 | [Support tickets](#support-tickets) | `/tickets` | Manage Server (`panel`, `off`), ticket staff (the rest); members click Open a ticket |
 | [Raid protection](#raid-protection) | `/raid`, or the dashboard's Raid protection page | Manage Channels or the mod role (`lockdown`, `end`, `status`), Manage Server (`gate`, `gate-off`, `alert`) |
+| [Quarantine](#quarantine) | `/quarantine` | Manage Roles or the mod role (`role`: Manage Server) |
 | [Anti-nuke](#anti-nuke) | `/antinuke`, or the dashboard's Anti-nuke page | The server owner (`status`: Administrator) |
 | [Join-to-create voice](#join-to-create-voice) | `/voice` | Manage Server (`setup`, `off`), the channel's owner (`lock`, `unlock`), anyone in the channel (`claim`) |
 | [Leveling](#leveling) | `/rank`, `/leaderboard`, `/levels`, or the dashboard's Leveling page | Everyone (`/rank`, `/leaderboard`), Manage Server (`/levels`) |
@@ -292,9 +293,20 @@ Discord has no built-in way to give each group its own voice channel, so the bot
 
 The bot needs **View Channel**, **Manage Channels**, **Manage Roles**, **Move Members** and **Connect** in the category. It uses the Guild Voice States intent, which isn't privileged.
 
+### Quarantine
+
+Takes a member's roles away while staff look into something (a possible alt, a compromised account), then gives every one of them back. The roles are saved in the database, so a restart changes nothing.
+
+- `/quarantine add member [reason]` saves and takes every role the bot can (roles above the bot, bot roles and the booster role stay), and gives the quarantine role.
+- `/quarantine release member [reason]` gives back every saved role that still exists and takes the quarantine role. If they left, it just clears the quarantine.
+- `/quarantine list` shows who's quarantined.
+- `/quarantine role [role]` sets the quarantine role (needs Manage Server; leave it empty for none). Make it a role that can only see one channel, like `#quarantine`. It's also on the dashboard's **Staff roles** page.
+
+Someone who leaves and rejoins while quarantined gets the quarantine role back and no autoroles. Each quarantine and release goes in the mod log, and the member's dashboard page shows it. When [anti-nuke](#anti-nuke) takes someone's roles, it quarantines them, so `/quarantine release` gives the roles back.
+
 ### Anti-nuke
 
-Stops someone with staff permissions, or a hacked bot, from wrecking the server. When one person goes over a limit in a minute, the bot steps in at once: it takes away every role it can (bots are kicked instead, since their own role can't be removed), or kicks or bans them if you chose that. It posts what happened in the mod log and DMs the server owner.
+Stops someone with staff permissions, or a hacked bot, from wrecking the server. When one person goes over a limit in a minute, the bot steps in at once: it quarantines them, taking away every role it can (bots are kicked instead, since their own role can't be removed), or kicks or bans them if you chose that. It posts what happened in the mod log and DMs the server owner.
 
 | Watched | Default limit per minute |
 | --- | --- |
@@ -383,7 +395,7 @@ A website where admins log in with Discord and manage the bot without slash comm
 - **Custom commands:** every saved answer for `/tag`, with its name and text; add, edit or remove them (see [Custom commands](#custom-commands)).
 - **Auto-responders:** each trigger, match, channel and reply (see [Auto-responders](#auto-responders)).
 - **Scheduled:** schedule a message (channel, first post in your own time zone, repeat), and see or delete the upcoming ones (see [Scheduled messages](#scheduled-messages)).
-- **Staff roles:** staff and mod roles, and the mod-log channel.
+- **Staff roles:** staff and mod roles, the quarantine role, and the mod-log channel.
 - **Logging:** the logs and server-log channels, a switch for each server-log event, and ignored channels or categories (with a filter).
 - **Roles & access:** the **dashboard roles** (see below), and a table of every role with its color, its strongest permissions and what the bot uses it for, filterable by name or kind.
 
