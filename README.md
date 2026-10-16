@@ -249,8 +249,9 @@ Country names are the English ISO names, with a few shortened (for example *Unit
 A website where admins log in with Discord and manage the bot without slash commands. Each server has a sidebar with these pages:
 
 - **Servers:** every server you can open, with a search box. Servers without the bot get an invite link.
-- **Overview:** member and online counts, total cases, cases in the last 7 and 30 days, running temporary bans, a chart of cases per day for the last 30 days (click the legend to hide actions), cases per action, the latest cases, the busiest moderators and the most moderated members (each links to their cases), and a setup checklist with links to what isn't set yet.
+- **Overview:** member and online counts, total cases, cases in the last 7 and 30 days, running temporary bans, a chart of cases per day for the last 30 days (click the legend to hide actions), cases per action, the latest cases, the busiest moderators (each links to their cases) and the most moderated members (each links to their history), and a setup checklist with links to what isn't set yet.
 - **Cases:** every moderation case, newest first. Search reasons and names, pick one or more actions, and filter by member ID, moderator ID and date range; clicking a name shows only their cases. Active filters show as chips you can remove. **Export CSV** downloads the filtered list (up to 10,000 cases). Reasons can be edited (the mod-log post is updated too) and cases deleted.
+- **Members:** find someone by the start of their username or nickname, or paste a user ID to find someone who left. Each person's page shows when their account was made (flagged if under 7 days old), when they joined, how many times they joined, their roles, a timeout or temporary ban in progress, Discord's ban reason if they're banned, every case as a timeline, and their recent joins and leaves (the bot keeps the newest 50 per person). Each case in **Cases** has a *History* link to it.
 - **Moderation:** staff and mod roles, and the mod-log channel.
 - **Logging:** the logs and server-log channels, a switch for each server-log event, and ignored channels or categories (with a filter).
 - **Automod:** the main switch, each rule with its action and numbers, banned words and allowed websites (one per line), timeout length and escalation, and exempt roles and channels (see [Automod](#automod)).
@@ -261,7 +262,7 @@ A website where admins log in with Discord and manage the bot without slash comm
 
 Settings pages show a save bar when something changed, and ask before you leave with unsaved changes.
 
-**Dashboard roles.** Members with one of the roles ticked under *Roles & access* can open the server's Overview and Cases (view, edit reasons, delete, export) without Manage Server. Only people with Manage Server can see or change settings. Roles are checked against Discord on every request (at most 30 seconds old), so removing someone's role takes their access away right away.
+**Dashboard roles.** Members with one of the roles ticked under *Roles & access* can open the server's Overview, Cases (view, edit reasons, delete, export) and Members without Manage Server. Only people with Manage Server can see or change settings. Roles are checked against Discord on every request (at most 30 seconds old), so removing someone's role takes their access away right away.
 
 **Appearance.** The 🎨 button picks a theme (match the device, light or dark), one of 8 accent colors and comfortable or compact spacing. It's remembered per browser.
 
@@ -405,6 +406,7 @@ src/
   channels/              Country roles: keeps the /country channel clean
   community/             Community: welcome and leave messages, autoroles (welcome.js), role panels (rolePanels.js), custom commands (tags.js), the starboard (starboard.js, starboardStore.js)
   giveaways/             Giveaways: saved in SQLite (giveawayStore.js), drawing winners (giveaways.js), ended on time (giveawayScheduler.js)
+  members/               Member history: when members joined and left (memberEventStore.js)
   reminders/             Reminders: saved in SQLite (reminderStore.js), sent when due (reminderScheduler.js)
   automod/               Automod: settings (config.js), what each rule matches (rules.js), acting on messages
   logs/                  Logs channel, server log, and posting to log channels
