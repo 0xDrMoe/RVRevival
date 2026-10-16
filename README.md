@@ -18,6 +18,7 @@ The Discord bot for the Rumbleverse Revival server. It is built as a set of inde
 | [Reminders](#reminders) | `/remind` | Everyone |
 | [Giveaways](#giveaways) | `/giveaway` | Manage Server or the mod role (members click Enter) |
 | [Starboard](#starboard) | `/starboard`, or the dashboard's Community page | Manage Server (everyone stars messages) |
+| [Support tickets](#support-tickets) | `/tickets` | Manage Server (`panel`, `off`), ticket staff (the rest); members click Open a ticket |
 | [Country roles](#country-roles) | `/country`, `/country-staff`, `/country-help` | Everyone (`/country`), the staff role (`/country-staff`), Manage Server (`/country-help`) |
 | [Web dashboard](#web-dashboard) | https://rumbleverse.cedartechsolutions.ca | Manage Server, or a dashboard role |
 
@@ -214,6 +215,18 @@ When a message gets enough ⭐ reactions, the bot reposts it in a starboard chan
 
 Needs **Manage Server**. The bot needs View Channel, Send Messages and Embed Links in the starboard channel, and Read Message History in the channels people star in. Message text needs the **Message Content** intent.
 
+### Support tickets
+
+Members open a private ticket with a button, and only they and the staff can see it. Discord has no ticket feature of its own, so each ticket is a **private thread** in the ticket channel.
+
+- `/tickets panel channel:#support` posts the **🎫 Open a ticket** button there. Optional: `staff-role` (who answers tickets; default the mod role, or the staff role), `title` and `message` for the panel. Running it again replaces the old panel.
+- A member clicks the button and says what they need help with. The bot opens a private thread named like `🎫 0007 · Name`, adds the member, pings the staff role into it (or adds up to 25 of its members one by one when the role can't be pinged), and posts their question with a **🔒 Close ticket** button.
+- The member or staff close it with the button or `/tickets close [reason]`. The thread is locked and archived, so staff can still read it afterwards.
+- `/tickets add member:@x` and `/tickets remove member:@x` bring someone in or take them out (never the person who opened it). `/tickets list` shows the open tickets. `/tickets off` removes the button; open tickets stay open.
+- One open ticket per member and 50 per server. A ticket whose thread was deleted or archived counts as closed. Each member's tickets show on their dashboard **Members** page.
+
+`panel` and `off` need **Manage Server**. Closing any ticket, `add`, `remove` and `list` need **Manage Threads**, Manage Server, the panel's staff role or the mod role. The bot needs View Channel, Send Messages, Embed Links, Create Private Threads, Send Messages in Threads and Manage Threads in the ticket channel, and members need **Send Messages in Threads** there (they don't need Send Messages, so the channel can stay read-only apart from the threads).
+
 ### Country roles
 
 Members pick the country they live in and get a role named after it. They can only pick once; after that, only staff can change it.
@@ -251,7 +264,7 @@ A website where admins log in with Discord and manage the bot without slash comm
 - **Servers:** every server you can open, with a search box. Servers without the bot get an invite link.
 - **Overview:** member and online counts, total cases, cases in the last 7 and 30 days, running temporary bans, a chart of cases per day for the last 30 days (click the legend to hide actions), cases per action, the latest cases, the busiest moderators (each links to their cases) and the most moderated members (each links to their history), and a setup checklist with links to what isn't set yet.
 - **Cases:** every moderation case, newest first. Search reasons and names, pick one or more actions, and filter by member ID, moderator ID and date range; clicking a name shows only their cases. Active filters show as chips you can remove. **Export CSV** downloads the filtered list (up to 10,000 cases). Reasons can be edited (the mod-log post is updated too) and cases deleted.
-- **Members:** find someone by the start of their username or nickname, or paste a user ID to find someone who left. Each person's page shows when their account was made (flagged if under 7 days old), when they joined, how many times they joined, their roles, a timeout or temporary ban in progress, Discord's ban reason if they're banned, every case as a timeline, and their recent joins and leaves (the bot keeps the newest 50 per person). Each case in **Cases** has a *History* link to it.
+- **Members:** find someone by the start of their username or nickname, or paste a user ID to find someone who left. Each person's page shows when their account was made (flagged if under 7 days old), when they joined, how many times they joined, their roles, a timeout or temporary ban in progress, Discord's ban reason if they're banned, every case as a timeline, their support tickets (with links to the threads), and their recent joins and leaves (the bot keeps the newest 50 per person). Each case in **Cases** has a *History* link to it.
 - **Moderation:** staff and mod roles, and the mod-log channel.
 - **Logging:** the logs and server-log channels, a switch for each server-log event, and ignored channels or categories (with a filter).
 - **Automod:** the main switch, each rule with its action and numbers, banned words and allowed websites (one per line), timeout length and escalation, and exempt roles and channels (see [Automod](#automod)).
@@ -326,10 +339,10 @@ After that, updates are the usual `git pull && npm ci`, then `pm2 restart rv-bot
 2. **Invite it.** Replace `YOUR_CLIENT_ID` and open:
 
    ```
-   https://discord.com/oauth2/authorize?client_id=YOUR_CLIENT_ID&scope=bot+applications.commands&permissions=1374792314006
+   https://discord.com/oauth2/authorize?client_id=YOUR_CLIENT_ID&scope=bot+applications.commands&permissions=1460691659926
    ```
 
-   `permissions=1374792314006` is **Kick Members**, **Ban Members**, **Timeout Members**, **View Audit Log**, **Manage Roles**, **Manage Channels**, **Manage Nicknames**, **Manage Messages**, **Read Message History**, **View Channels**, **Send Messages**, **Send Messages in Threads**, **Embed Links** and **Attach Files**, which is what the current features need. If the bot was invited with fewer, either re-invite it with this link or give its role the missing permissions (for moderation: Kick Members, Ban Members, Timeout Members and View Audit Log server-wide, Read Message History for `/purge`). If a new feature needs more, update this number and re-invite the bot.
+   `permissions=1460691659926` is **Kick Members**, **Ban Members**, **Timeout Members**, **View Audit Log**, **Manage Roles**, **Manage Channels**, **Manage Nicknames**, **Manage Messages**, **Read Message History**, **View Channels**, **Send Messages**, **Send Messages in Threads**, **Create Private Threads**, **Manage Threads**, **Embed Links** and **Attach Files**, which is what the current features need. If the bot was invited with fewer, either re-invite it with this link or give its role the missing permissions (for moderation: Kick Members, Ban Members, Timeout Members and View Audit Log server-wide, Read Message History for `/purge`, Create Private Threads and Manage Threads for tickets). If a new feature needs more, update this number and re-invite the bot.
 
 3. **Fix the role hierarchy.** In *Server Settings > Roles*, drag the bot's role above any roles it manages (existing country roles; new ones are created below it automatically) and above every member it should be able to ban, kick or time out. Keep it below your admin roles so moderators can't use it on admins.
 
@@ -400,12 +413,14 @@ src/
     remind.js            Reminders: /remind
     giveaway.js          Giveaways: /giveaway and its Enter button
     starboard.js         Starboard: /starboard
+    tickets.js           Support tickets: /tickets, the panel's button, the form and the Close button
     commandHelpers.js    Shared start of moderation-style commands (language, permission check)
   countries/             Country roles: country list, name matching and search
   roles/                 Country roles: find, create, assign and remove roles
   channels/              Country roles: keeps the /country channel clean
   community/             Community: welcome and leave messages, autoroles (welcome.js), role panels (rolePanels.js), custom commands (tags.js), the starboard (starboard.js, starboardStore.js)
   giveaways/             Giveaways: saved in SQLite (giveawayStore.js), drawing winners (giveaways.js), ended on time (giveawayScheduler.js)
+  tickets/               Support tickets: saved in SQLite (ticketStore.js), the panel, staff and messages (tickets.js)
   members/               Member history: when members joined and left (memberEventStore.js)
   reminders/             Reminders: saved in SQLite (reminderStore.js), sent when due (reminderScheduler.js)
   automod/               Automod: settings (config.js), what each rule matches (rules.js), acting on messages

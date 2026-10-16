@@ -323,5 +323,9 @@
   "memberRoles": "Rollen",
   "memberJoinsLeaves": "Beitritte und Austritte",
   "memberJoinsLeavesHelp": "Pro Person werden die neuesten 50 behalten.",
-  "memberHistory": "Verlauf"
+  "memberHistory": "Verlauf",
+  "memberTickets": "Tickets",
+  "memberNoTickets": "Keine Tickets.",
+  "memberTicketOpen": "Offen",
+  "memberTicketClosed": "Geschlossen"
 }

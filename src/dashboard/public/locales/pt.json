@@ -323,5 +323,9 @@
   "memberRoles": "Cargos",
   "memberJoinsLeaves": "Entradas e saídas",
   "memberJoinsLeavesHelp": "As 50 mais recentes são guardadas para cada pessoa.",
-  "memberHistory": "Histórico"
+  "memberHistory": "Histórico",
+  "memberTickets": "Tickets",
+  "memberNoTickets": "Nenhum ticket.",
+  "memberTicketOpen": "Aberto",
+  "memberTicketClosed": "Fechado"
 }

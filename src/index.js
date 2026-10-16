@@ -25,6 +25,7 @@ import { createTempBanScheduler } from "./moderation/tempBans.js";
 import { ReminderStore } from "./reminders/reminderStore.js";
 import { createReminderScheduler } from "./reminders/reminderScheduler.js";
 import { GuildSettings, Setting } from "./settings/guildSettings.js";
+import { TicketStore } from "./tickets/ticketStore.js";
 import { closeDatabase, DEFAULT_DATABASE_FILE, openDatabase } from "./storage/database.js";
 import { logger, registerSecret } from "./utils/logger.js";
 
@@ -82,6 +83,8 @@ async function start() {
   const giveaways = new GiveawayStore(db);
   // When members joined and left, for the dashboard's member history.
   const memberEvents = new MemberEventStore(db);
+  // Support tickets opened from the /tickets panel.
+  const tickets = new TicketStore(db);
   // Pick up settings changed on the web dashboard (another process).
   const settingsReload = setInterval(() => {
     try {
@@ -124,6 +127,7 @@ async function start() {
     botDeletions,
     reminders,
     giveaways,
+    tickets,
   });
   const handleInteraction = createInteractionHandler({ commands, logger, forcedLanguage, actionLog });
   const guardCountryChannel = createCountryChannelGuard({ guildSettings, logger, actionLog, botDeletions });
@@ -254,6 +258,8 @@ async function start() {
     client.on(Events.GuildBanAdd, safely("a ban", (ban) => externalActions.onBan(ban)));
     client.on(Events.GuildBanRemove, safely("an unban", (ban) => externalActions.onUnban(ban)));
 
+    client.on(Events.ThreadDelete, safely("a deleted thread", (thread) => commands.get("tickets").threadDeleted(thread)));
+
     client.on(Events.ChannelDelete, (channel) => {
       // A deleted channel no longer needs ignoring in the server log.
       if (channel.guildId && guildSettings.getList(channel.guildId, Setting.LOG_IGNORED_CHANNELS).includes(channel.id)) {
@@ -262,6 +268,12 @@ async function start() {
           .catch((error) => logger.error("Couldn't forget a deleted ignored channel", { error }));
       }
       forgetAutomodExemption(channel.guildId, "exemptChannelIds", channel.id);
+      if (channel.guildId && guildSettings.get(channel.guildId, Setting.TICKETS)?.channelId === channel.id) {
+        guildSettings
+          .clear(channel.guildId, Setting.TICKETS)
+          .then(() => logger.info("The ticket channel was deleted; post a new panel with /tickets panel", { guildId: channel.guildId }))
+          .catch((error) => logger.error("Couldn't turn off tickets after their channel was deleted", { error }));
+      }
       if (channel.guildId && guildSettings.get(channel.guildId, Setting.STARBOARD)?.channelId === channel.id) {
         guildSettings
           .clear(channel.guildId, Setting.STARBOARD)

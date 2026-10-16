@@ -323,5 +323,9 @@
   "memberRoles": "Roles",
   "memberJoinsLeaves": "Joins and leaves",
   "memberJoinsLeavesHelp": "The newest 50 are kept for each person.",
-  "memberHistory": "History"
+  "memberHistory": "History",
+  "memberTickets": "Tickets",
+  "memberNoTickets": "No tickets.",
+  "memberTicketOpen": "Open",
+  "memberTicketClosed": "Closed"
 }

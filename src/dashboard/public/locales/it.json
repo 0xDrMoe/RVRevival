@@ -323,5 +323,9 @@
   "memberRoles": "Ruoli",
   "memberJoinsLeaves": "Entrate e uscite",
   "memberJoinsLeavesHelp": "Per ogni persona si tengono le 50 più recenti.",
-  "memberHistory": "Cronologia"
+  "memberHistory": "Cronologia",
+  "memberTickets": "Ticket",
+  "memberNoTickets": "Nessun ticket.",
+  "memberTicketOpen": "Aperto",
+  "memberTicketClosed": "Chiuso"
 }

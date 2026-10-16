@@ -131,6 +131,24 @@ const MIGRATIONS = [
   );
   CREATE INDEX member_events_by_user ON member_events (guild_id, user_id, at);
   `,
+  // 8: support tickets (/tickets): a private thread per ticket. Numbered per server.
+  `
+  CREATE TABLE tickets (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    guild_id     TEXT    NOT NULL,
+    number       INTEGER NOT NULL,
+    user_id      TEXT    NOT NULL,
+    thread_id    TEXT,
+    subject      TEXT    NOT NULL,
+    created_at   INTEGER NOT NULL,
+    closed_at    INTEGER,
+    closed_by    TEXT,
+    close_reason TEXT,
+    UNIQUE (guild_id, number)
+  );
+  CREATE INDEX tickets_open ON tickets (guild_id, user_id) WHERE closed_at IS NULL;
+  CREATE INDEX tickets_by_thread ON tickets (thread_id);
+  `,
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS.length;

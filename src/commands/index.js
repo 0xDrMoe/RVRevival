@@ -16,6 +16,7 @@ import { createRolePanelCommand } from "./rolePanel.js";
 import { createSettingsCommand } from "./settings.js";
 import { createStarboardCommand } from "./starboard.js";
 import { createTagCommands } from "./tags.js";
+import { createTicketsCommand } from "./tickets.js";
 import { createWelcomeCommand } from "./welcome.js";
 
 // Each command is { name, data, execute(interaction), autocomplete?(interaction),
@@ -25,8 +26,9 @@ import { createWelcomeCommand } from "./welcome.js";
 //
 // `moderation` (moderation/moderationService.js), `modLog` and `botDeletions`
 // are only needed to run the moderation commands, `reminders`
-// (reminders/reminderStore.js) to run /remind and `giveaways`
-// (giveaways/giveawayStore.js) to run /giveaway, not to register them.
+// (reminders/reminderStore.js) to run /remind, `giveaways`
+// (giveaways/giveawayStore.js) to run /giveaway and `tickets`
+// (tickets/ticketStore.js) to run /tickets, not to register them.
 export function createCommands({
   logger,
   guildSettings,
@@ -36,6 +38,7 @@ export function createCommands({
   botDeletions,
   reminders,
   giveaways,
+  tickets,
 }) {
   // Shared, so /country and /country-staff can't change the same member at the same time.
   const roleService = new CountryRoleService(logger);
@@ -58,6 +61,7 @@ export function createCommands({
     createRemindCommand({ reminders, forcedLanguage }),
     createGiveawayCommand({ giveaways, guildSettings, logger, forcedLanguage }),
     createStarboardCommand({ guildSettings, forcedLanguage }),
+    createTicketsCommand({ tickets, guildSettings, logger, forcedLanguage }),
   ];
   return new Map(commands.map((command) => [command.name, command]));
 }

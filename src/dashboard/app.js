@@ -12,7 +12,7 @@
 //   PATCH  /api/guilds/:id/cases/:number  change a case's reason
 //   DELETE /api/guilds/:id/cases/:number  delete a case
 //   GET  /api/guilds/:id/members          find members by name, or a user by ID (?q=)
-//   GET  /api/guilds/:id/members/:user    one person's history: cases, joins, leaves, roles
+//   GET  /api/guilds/:id/members/:user    one person's history: cases, tickets, joins, leaves, roles
 //
 // Two levels of access to a server the bot is in:
 //   - "manage": Manage Server, Administrator or the owner. Everything.
@@ -33,6 +33,7 @@ import { normalizeAutomod } from "../automod/config.js";
 import { pickLanguage, translate } from "../i18n/i18n.js";
 import { CaseAction } from "../moderation/caseStore.js";
 import { MemberEventStore } from "../members/memberEventStore.js";
+import { TicketStore } from "../tickets/ticketStore.js";
 import { buildCaseEmbed } from "../moderation/modLog.js";
 import { Setting } from "../settings/guildSettings.js";
 import { canManage, DiscordApiError } from "./discordApi.js";
@@ -157,6 +158,7 @@ const sameText = (a, b) =>
 export async function buildDashboard({ config, db, discord, guildSettings, store, logger }) {
   const sessions = new SessionStore(db, { secret: config.sessionSecret });
   const memberEvents = new MemberEventStore(db);
+  const tickets = new TicketStore(db);
   const secureCookies = config.url.startsWith("https://");
   const cookieOptions = { path: "/", httpOnly: true, secure: secureCookies, sameSite: "lax" };
 
@@ -403,7 +405,7 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
         guilds: listed.filter(Boolean),
         inviteUrl:
           `https://discord.com/oauth2/authorize?client_id=${discord.clientId}` +
-          "&scope=bot+applications.commands&permissions=1374792314006",
+          "&scope=bot+applications.commands&permissions=1460691659926",
       };
     });
   });
@@ -683,6 +685,14 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
       cases: cases.map(caseJson),
       events: memberEvents.list(guildId, userId),
       joins: memberEvents.countJoins(guildId, userId),
+      tickets: tickets.listForUser(guildId, userId).map((ticket) => ({
+        number: ticket.number,
+        subject: ticket.subject,
+        threadId: ticket.threadId,
+        createdAt: ticket.createdAt,
+        closedAt: ticket.closedAt,
+        closeReason: ticket.closeReason,
+      })),
     };
   });
 
