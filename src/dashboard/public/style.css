@@ -3200,3 +3200,18 @@ dialog textarea {
 .counter-row .counter-edit {
   margin-bottom: 4px;
 }
+
+/* Sticky messages */
+.ticket-main .sticky-preview {
+  white-space: pre-line;
+  text-overflow: clip;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+@media (min-width: 640px) {
+  .sent-row .row-actions {
+    grid-auto-flow: column;
+  }
+}

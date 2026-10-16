@@ -333,6 +333,19 @@ const MIGRATIONS = [
     PRIMARY KEY (guild_id, user_id)
   ) WITHOUT ROWID;
   `,
+  // 22: sticky messages (/sticky): re-posted at the bottom of their channel.
+  // message_id is the copy posted last, deleted when the next one goes up.
+  `
+  CREATE TABLE stickies (
+    channel_id  TEXT    PRIMARY KEY,
+    guild_id    TEXT    NOT NULL,
+    content     TEXT    NOT NULL,
+    message_id  TEXT,
+    created_by  TEXT    NOT NULL,
+    updated_at  INTEGER NOT NULL
+  ) WITHOUT ROWID;
+  CREATE INDEX stickies_by_guild ON stickies (guild_id);
+  `,
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS.length;

@@ -740,5 +740,22 @@
   "countersSaved": "Salvato. Il canale viene rinominato entro pochi minuti.",
   "countersRemoveConfirm": "Rimuovere questo contatore ed eliminare il suo canale?",
   "countersRemoved": "Contatore rimosso e canale eliminato.",
-  "countersRemovedKeptChannel": "Contatore rimosso. Il bot non è riuscito a eliminare il canale, eliminalo su Discord."
+  "countersRemovedKeptChannel": "Contatore rimosso. Il bot non è riuscito a eliminare il canale, eliminalo su Discord.",
+  "page_sticky": "Messaggi fissi",
+  "stickyIntro": "Tieni un messaggio in fondo a un canale, come le regole o come chiedere aiuto. Quando le persone scrivono, il bot lo ripubblica sotto dopo pochi secondi.",
+  "search_sticky": "fisso fissato fondo messaggio regole",
+  "stickyNew": "Imposta un messaggio fisso",
+  "stickyChannel": "Canale",
+  "stickyChannelHelp": "Se il canale ne ha già uno, viene sostituito.",
+  "stickyContent": "Messaggio",
+  "stickyContentHelp": "Le menzioni non notificano mai nessuno.",
+  "stickyPlaceholder": "📌 Leggi le regole in #regole prima di scrivere.",
+  "stickySave": "Salva e pubblica",
+  "stickyAdded": "Messaggio fisso pubblicato.",
+  "stickyChanged": "Messaggio fisso cambiato.",
+  "stickyRemoved": "Messaggio fisso rimosso.",
+  "stickyRemoveConfirm": "Rimuovere questo messaggio fisso? Anche la sua ultima copia viene eliminata.",
+  "stickyNone": "Ancora nessun messaggio fisso.",
+  "stickyListHelp": "Fino a 10 per server, uno per canale.",
+  "stickyUpdated": "Aggiornato {date}"
 }

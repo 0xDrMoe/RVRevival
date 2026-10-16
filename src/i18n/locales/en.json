@@ -1033,5 +1033,22 @@
   "afkSetNoMessage": "You're AFK. Send any message here to come back.",
   "afkBack": "Welcome back {user}! You were AFK since {since}.",
   "afkNotice": "💤 {user} is AFK ({since}): {message}",
-  "afkNoticeNoMessage": "💤 {user} is AFK ({since})."
+  "afkNoticeNoMessage": "💤 {user} is AFK ({since}).",
+
+  "stickyCommandDescription": "Keep a message at the bottom of a channel",
+  "stickySetDescription": "Set or change a channel's sticky message",
+  "stickyMessageOptionDescription": "The message; type \\n for a new line",
+  "stickyChannelOptionDescription": "The channel (this one if you leave it out)",
+  "stickyRemoveDescription": "Remove a channel's sticky message",
+  "stickyListDescription": "Every sticky message on this server",
+  "stickyBadChannel": "Sticky messages work in text and announcement channels.",
+  "stickyCannotPost": "I can't post in {channel}. Give me View Channel and Send Messages there.",
+  "stickyFull": "This server already has {max} sticky messages. Remove one with `/sticky remove` first.",
+  "stickyEmpty": "Type a message to keep at the bottom.",
+  "stickySet": "{channel} now has a sticky message. It moves back to the bottom a few seconds after people talk.",
+  "stickyChanged": "Changed the sticky message in {channel}.",
+  "stickyNone": "{channel} has no sticky message.",
+  "stickyRemoved": "Removed the sticky message from {channel}.",
+  "stickyListEmpty": "No sticky messages yet. Add one with `/sticky set`.",
+  "stickyList": "**Sticky messages ({count}/{max})**\n{list}"
 }

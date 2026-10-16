@@ -740,5 +740,22 @@
   "countersSaved": "Salvo. O canal é renomeado em alguns minutos.",
   "countersRemoveConfirm": "Remover este contador e apagar o canal dele?",
   "countersRemoved": "Contador removido e o canal apagado.",
-  "countersRemovedKeptChannel": "Contador removido. O bot não conseguiu apagar o canal, então apague-o no Discord."
+  "countersRemovedKeptChannel": "Contador removido. O bot não conseguiu apagar o canal, então apague-o no Discord.",
+  "page_sticky": "Mensagens fixas",
+  "stickyIntro": "Mantenha uma mensagem no fim de um canal, como as regras ou como pedir ajuda. Quando as pessoas falam, o bot a posta de novo abaixo delas depois de alguns segundos.",
+  "search_sticky": "fixa fixada fim mensagem regras",
+  "stickyNew": "Definir uma mensagem fixa",
+  "stickyChannel": "Canal",
+  "stickyChannelHelp": "Se o canal já tiver uma, ela é substituída.",
+  "stickyContent": "Mensagem",
+  "stickyContentHelp": "Menções nunca notificam ninguém.",
+  "stickyPlaceholder": "📌 Leia as regras em #regras antes de postar.",
+  "stickySave": "Salvar e postar",
+  "stickyAdded": "Mensagem fixa postada.",
+  "stickyChanged": "Mensagem fixa alterada.",
+  "stickyRemoved": "Mensagem fixa removida.",
+  "stickyRemoveConfirm": "Remover esta mensagem fixa? A última cópia também é apagada.",
+  "stickyNone": "Ainda não há mensagens fixas.",
+  "stickyListHelp": "Até 10 por servidor, uma por canal.",
+  "stickyUpdated": "Atualizada {date}"
 }

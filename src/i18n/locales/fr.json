@@ -1033,5 +1033,22 @@
   "afkSetNoMessage": "Vous êtes AFK. Envoyez un message ici pour revenir.",
   "afkBack": "Bon retour {user} ! Vous étiez AFK depuis {since}.",
   "afkNotice": "💤 {user} est AFK ({since}) : {message}",
-  "afkNoticeNoMessage": "💤 {user} est AFK ({since})."
+  "afkNoticeNoMessage": "💤 {user} est AFK ({since}).",
+
+  "stickyCommandDescription": "Garder un message en bas d'un salon",
+  "stickySetDescription": "Définir ou modifier le message collant d'un salon",
+  "stickyMessageOptionDescription": "Le message ; tapez \\n pour une nouvelle ligne",
+  "stickyChannelOptionDescription": "Le salon (celui-ci si vous n'en choisissez pas)",
+  "stickyRemoveDescription": "Retirer le message collant d'un salon",
+  "stickyListDescription": "Tous les messages collants de ce serveur",
+  "stickyBadChannel": "Les messages collants fonctionnent dans les salons textuels et d'annonces.",
+  "stickyCannotPost": "Je ne peux pas publier dans {channel}. Donnez-moi Voir le salon et Envoyer des messages.",
+  "stickyFull": "Ce serveur a déjà {max} messages collants. Retirez-en un avec `/sticky remove` d'abord.",
+  "stickyEmpty": "Tapez un message à garder en bas.",
+  "stickySet": "{channel} a maintenant un message collant. Il revient en bas quelques secondes après que les gens parlent.",
+  "stickyChanged": "Message collant de {channel} modifié.",
+  "stickyNone": "{channel} n'a pas de message collant.",
+  "stickyRemoved": "Message collant retiré de {channel}.",
+  "stickyListEmpty": "Aucun message collant pour l'instant. Ajoutez-en un avec `/sticky set`.",
+  "stickyList": "**Messages collants ({count}/{max})**\n{list}"
 }

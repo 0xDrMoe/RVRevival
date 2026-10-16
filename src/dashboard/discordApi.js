@@ -194,6 +194,7 @@ export function createDiscordApi({ config, fetch = globalThis.fetch, rest }) {
       bot.post(Routes.channelMessages(channelId), { body: { ...payload, allowed_mentions: { parse: [] } } }),
     editMessage: (channelId, messageId, payload) =>
       bot.patch(Routes.channelMessage(channelId, messageId), { body: { ...payload, allowed_mentions: { parse: [] } } }),
+    deleteMessage: (channelId, messageId) => bot.delete(Routes.channelMessage(channelId, messageId)),
     // One message, or null if it's gone (or the bot can't see the channel).
     message: (channelId, messageId) => orNull(bot.get(Routes.channelMessage(channelId, messageId))),
 

@@ -740,5 +740,22 @@
   "countersSaved": "Enregistré. Le salon est renommé d'ici quelques minutes.",
   "countersRemoveConfirm": "Retirer ce compteur et supprimer son salon ?",
   "countersRemoved": "Compteur retiré et son salon supprimé.",
-  "countersRemovedKeptChannel": "Compteur retiré. Le bot n'a pas pu supprimer son salon, supprimez-le dans Discord."
+  "countersRemovedKeptChannel": "Compteur retiré. Le bot n'a pas pu supprimer son salon, supprimez-le dans Discord.",
+  "page_sticky": "Messages collants",
+  "stickyIntro": "Gardez un message en bas d'un salon, comme les règles ou comment obtenir de l'aide. Quand les gens parlent, le bot le republie en dessous après quelques secondes.",
+  "search_sticky": "collant épinglé bas message règles",
+  "stickyNew": "Définir un message collant",
+  "stickyChannel": "Salon",
+  "stickyChannelHelp": "Si le salon en a déjà un, il est remplacé.",
+  "stickyContent": "Message",
+  "stickyContentHelp": "Les mentions ne notifient jamais personne.",
+  "stickyPlaceholder": "📌 Lisez les règles dans #règles avant de publier.",
+  "stickySave": "Enregistrer et publier",
+  "stickyAdded": "Message collant publié.",
+  "stickyChanged": "Message collant modifié.",
+  "stickyRemoved": "Message collant retiré.",
+  "stickyRemoveConfirm": "Retirer ce message collant ? Sa dernière copie est aussi supprimée.",
+  "stickyNone": "Aucun message collant pour l'instant.",
+  "stickyListHelp": "Jusqu'à 10 par serveur, un par salon.",
+  "stickyUpdated": "Mis à jour {date}"
 }
