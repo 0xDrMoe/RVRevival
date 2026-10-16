@@ -12,11 +12,13 @@ export const MOD_LOG_SETTINGS = [Setting.MOD_LOG_CHANNEL, Setting.LOGS_CHANNEL];
 
 const ACTION_STYLE = {
   [CaseAction.BAN]: { key: "caseActionBan", color: 0xed4245 },
+  [CaseAction.SOFTBAN]: { key: "caseActionSoftban", color: 0xe67e22 },
   [CaseAction.UNBAN]: { key: "caseActionUnban", color: 0x57f287 },
   [CaseAction.KICK]: { key: "caseActionKick", color: 0xe67e22 },
   [CaseAction.TIMEOUT]: { key: "caseActionTimeout", color: 0xfee75c },
   [CaseAction.UNTIMEOUT]: { key: "caseActionUntimeout", color: 0x57f287 },
   [CaseAction.WARN]: { key: "caseActionWarn", color: 0xf1c40f },
+  [CaseAction.NOTE]: { key: "caseActionNote", color: 0x99aab5 },
 };
 
 // The translated name of a case's action ("Ban", "Temporary ban", …).
@@ -107,3 +109,14 @@ export const noModLog = Object.freeze({
   refreshCase: async () => false,
   post: async () => undefined,
 });
+
+// An entry for a moderation action that isn't a case (lock, slowmode, role or
+// nickname changes, purge): "**Channel locked** in #general" plus detail lines.
+export function buildActionLogEmbed({ moderator, summary, lines = [], color = 0x5865f2 }) {
+  return new EmbedBuilder()
+    .setColor(color)
+    .setAuthor(moderator.tag ? { name: moderator.tag } : { name: moderator.id })
+    .setDescription([summary, ...lines].join("\n").slice(0, 4096))
+    .setFooter({ text: `Moderator ID ${moderator.id}` })
+    .setTimestamp();
+}

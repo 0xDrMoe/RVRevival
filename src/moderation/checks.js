@@ -4,14 +4,20 @@
 import { PermissionFlagsBits } from "discord.js";
 import { Setting } from "../settings/guildSettings.js";
 
-// Members with the Discord permission, or with the staff role from /settings,
-// may use a moderation command.
+// The role that may use every moderation command: the mod role from /settings,
+// or the staff role if no mod role is set.
+export function moderatorRoleId(guildSettings, guildId) {
+  return guildSettings?.get(guildId, Setting.MOD_ROLE) ?? guildSettings?.get(guildId, Setting.STAFF_ROLE);
+}
+
+// Members with the Discord permission, or with the moderator role, may use a
+// moderation command.
 export function isModerator(interaction, permission, guildSettings) {
   if (interaction.memberPermissions?.has(permission)) {
     return true;
   }
-  const staffRoleId = guildSettings?.get(interaction.guildId, Setting.STAFF_ROLE);
-  return Boolean(staffRoleId && interaction.member?.roles?.cache?.has(staffRoleId));
+  const roleId = moderatorRoleId(guildSettings, interaction.guildId);
+  return Boolean(roleId && interaction.member?.roles?.cache?.has(roleId));
 }
 
 const topPosition = (member) => member?.roles?.highest?.position ?? 0;

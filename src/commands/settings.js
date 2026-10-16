@@ -5,7 +5,10 @@
 //   /settings logs-channel channel:#bot-logs     log everything members do with the bot in #bot-logs
 //   /settings mod-log-channel channel:#mod-log   post moderation cases in #mod-log (otherwise the logs channel)
 //   /settings server-log-channel channel:#server-log   log edits, deletions, joins, leaves and role changes
-//   /settings clear setting:<staff role | /country channel | logs channel | mod-log channel | server-log channel>
+//   /settings mod-role role:@Mods                members with this role can use the moderation commands
+//   /settings log-event event:<…> enabled:false  switch one kind of server-log event off (or back on)
+//   /settings log-ignore channel:#spam           stop (or start again) logging messages from #spam
+//   /settings clear setting:<any of the above>
 //   /settings show                               list the current settings
 //
 // Only members with the Manage Server permission can see or use it.
@@ -13,12 +16,25 @@
 import { ChannelType, InteractionContextType, MessageFlags, PermissionFlagsBits, SlashCommandBuilder } from "discord.js";
 import { discordLocalizations, pickLanguage, translate } from "../i18n/i18n.js";
 import { result, Status } from "../logs/actionLog.js";
+import { LogEvent } from "../logs/serverLog.js";
 import { Setting } from "../settings/guildSettings.js";
 
 const COMMAND_NAME = "settings";
 const ROLE_OPTION = "role";
 const CHANNEL_OPTION = "channel";
 const SETTING_OPTION = "setting";
+const EVENT_OPTION = "event";
+const ENABLED_OPTION = "enabled";
+
+// The server-log events admins can switch off, and how each is named.
+const LOG_EVENT_NAMES = [
+  { value: LogEvent.MESSAGE_EDIT, nameKey: "logEventMessageEdit" },
+  { value: LogEvent.MESSAGE_DELETE, nameKey: "logEventMessageDelete" },
+  { value: LogEvent.BULK_DELETE, nameKey: "logEventBulkDelete" },
+  { value: LogEvent.MEMBER_JOIN, nameKey: "logEventMemberJoin" },
+  { value: LogEvent.MEMBER_LEAVE, nameKey: "logEventMemberLeave" },
+  { value: LogEvent.MEMBER_UPDATE, nameKey: "logEventMemberUpdate" },
+];
 
 // The choices for /settings clear, and the message for each.
 const CLEARABLE = [
@@ -31,7 +47,14 @@ const CLEARABLE = [
     nameKey: "settingsServerLogChannelName",
     clearedKey: "settingsServerLogChannelCleared",
   },
+  { value: Setting.MOD_ROLE, nameKey: "settingsModRoleName", clearedKey: "settingsModRoleCleared" },
+  { value: Setting.DISABLED_LOG_EVENTS, nameKey: "settingsLogEventsName", clearedKey: "settingsLogEventsCleared" },
+  { value: Setting.LOG_IGNORED_CHANNELS, nameKey: "settingsLogIgnoreName", clearedKey: "settingsLogIgnoreCleared" },
 ];
+
+// Discord choices for `entries` ({ value, nameKey }), named in every language.
+const choicesOf = (entries) =>
+  entries.map(({ value, nameKey }) => ({ name: translate("en", nameKey), name_localizations: discordLocalizations(nameKey), value }));
 
 // Whether the bot has every permission in `wanted` in `channel`.
 function botHasPermissionsIn(channel, guild, wanted) {
@@ -92,16 +115,39 @@ export function buildSettingsCommandData() {
       ),
     )
     .addSubcommand((sub) =>
+      withDescription(sub.setName("mod-role"), "settingsModRoleDescription").addRoleOption((option) =>
+        withDescription(option.setName(ROLE_OPTION), "settingsModRoleOptionDescription").setRequired(true),
+      ),
+    )
+    .addSubcommand((sub) =>
+      withDescription(sub.setName("log-event"), "settingsLogEventDescription")
+        .addStringOption((option) =>
+          withDescription(option.setName(EVENT_OPTION), "settingsLogEventOptionDescription")
+            .setRequired(true)
+            .addChoices(...choicesOf(LOG_EVENT_NAMES)),
+        )
+        .addBooleanOption((option) =>
+          withDescription(option.setName(ENABLED_OPTION), "settingsLogEventEnabledDescription").setRequired(true),
+        ),
+    )
+    .addSubcommand((sub) =>
+      withDescription(sub.setName("log-ignore"), "settingsLogIgnoreDescription").addChannelOption((option) =>
+        withDescription(option.setName(CHANNEL_OPTION), "settingsLogIgnoreOptionDescription")
+          .setRequired(true)
+          .addChannelTypes(
+            ChannelType.GuildText,
+            ChannelType.GuildAnnouncement,
+            ChannelType.GuildForum,
+            ChannelType.GuildVoice,
+            ChannelType.GuildCategory,
+          ),
+      ),
+    )
+    .addSubcommand((sub) =>
       withDescription(sub.setName("clear"), "settingsClearDescription").addStringOption((option) =>
         withDescription(option.setName(SETTING_OPTION), "settingsSettingOptionDescription")
           .setRequired(true)
-          .addChoices(
-            ...CLEARABLE.map(({ value, nameKey }) => ({
-              name: translate("en", nameKey),
-              name_localizations: discordLocalizations(nameKey),
-              value,
-            })),
-          ),
+          .addChoices(...choicesOf(CLEARABLE)),
       ),
     )
     .addSubcommand((sub) => withDescription(sub.setName("show"), "settingsShowDescription"))
@@ -176,6 +222,36 @@ export function createSettingsCommand({ guildSettings, forcedLanguage }) {
           POST_LOGS,
           "settingsLogsChannelNeedsPermissions",
         );
+      case "mod-role": {
+        const role = interaction.options.getRole(ROLE_OPTION, true);
+        // Making @everyone the mod role would let anyone ban, kick and time out.
+        if (role.id === guildId) {
+          return reply(Status.REFUSED, "settingsModRoleEveryone");
+        }
+        await guildSettings.set(guildId, Setting.MOD_ROLE, role.id);
+        return reply(Status.SUCCESS, "settingsModRoleSet", { role: `<@&${role.id}>` });
+      }
+      case "log-event": {
+        const choice = LOG_EVENT_NAMES.find(({ value }) => value === interaction.options.getString(EVENT_OPTION, true));
+        if (!choice) {
+          return reply(Status.FAILED, "unexpected");
+        }
+        const enabled = interaction.options.getBoolean(ENABLED_OPTION, true);
+        const disabled = guildSettings.getList(guildId, Setting.DISABLED_LOG_EVENTS);
+        if (disabled.includes(choice.value) === enabled) {
+          await guildSettings.toggleInList(guildId, Setting.DISABLED_LOG_EVENTS, choice.value);
+        }
+        return reply(Status.SUCCESS, enabled ? "settingsLogEventOn" : "settingsLogEventOff", {
+          event: text(choice.nameKey),
+        });
+      }
+      case "log-ignore": {
+        const channel = interaction.options.getChannel(CHANNEL_OPTION, true);
+        const added = await guildSettings.toggleInList(guildId, Setting.LOG_IGNORED_CHANNELS, channel.id);
+        return reply(Status.SUCCESS, added ? "settingsLogIgnoreAdded" : "settingsLogIgnoreRemoved", {
+          channel: `<#${channel.id}>`,
+        });
+      }
       case "clear": {
         const choice = CLEARABLE.find(({ value }) => value === interaction.options.getString(SETTING_OPTION, true));
         if (!choice) {
@@ -190,6 +266,11 @@ export function createSettingsCommand({ guildSettings, forcedLanguage }) {
         const logsChannelId = guildSettings.get(guildId, Setting.LOGS_CHANNEL);
         const modLogChannelId = guildSettings.get(guildId, Setting.MOD_LOG_CHANNEL);
         const serverLogChannelId = guildSettings.get(guildId, Setting.SERVER_LOG_CHANNEL);
+        const modRoleId = guildSettings.get(guildId, Setting.MOD_ROLE);
+        const offEvents = LOG_EVENT_NAMES.filter(({ value }) =>
+          guildSettings.getList(guildId, Setting.DISABLED_LOG_EVENTS).includes(value),
+        );
+        const ignored = guildSettings.getList(guildId, Setting.LOG_IGNORED_CHANNELS);
         const lines = [
           staffRoleId ? text("settingsShowStaffRole", { role: `<@&${staffRoleId}>` }) : text("settingsShowNoStaffRole"),
           channelId ? text("settingsShowCountryChannel", { channel: `<#${channelId}>` }) : text("settingsShowNoCountryChannel"),
@@ -200,6 +281,13 @@ export function createSettingsCommand({ guildSettings, forcedLanguage }) {
           serverLogChannelId
             ? text("settingsShowServerLogChannel", { channel: `<#${serverLogChannelId}>` })
             : text("settingsShowNoServerLogChannel"),
+          modRoleId ? text("settingsShowModRole", { role: `<@&${modRoleId}>` }) : text("settingsShowNoModRole"),
+          offEvents.length > 0
+            ? text("settingsShowLogEvents", { events: offEvents.map(({ nameKey }) => text(nameKey)).join(", ") })
+            : text("settingsShowAllLogEvents"),
+          ignored.length > 0
+            ? text("settingsShowLogIgnore", { channels: ignored.map((id) => `<#${id}>`).join(", ") })
+            : text("settingsShowNoLogIgnore"),
         ];
         // Mentions in an ephemeral reply never ping, but say so explicitly anyway.
         await interaction.reply({ content: lines.join("\n"), flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] } });

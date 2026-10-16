@@ -8,8 +8,9 @@ The Discord bot for the Rumbleverse Revival server. It is built as a set of inde
 | --- | --- | --- |
 | [Settings](#settings) | `/settings` | Manage Server |
 | [Logs channel](#logs-channel) | `/settings logs-channel` | Manage Server |
-| [Moderation](#moderation) | `/ban`, `/unban`, `/kick`, `/timeout`, `/untimeout`, `/warn`, `/purge`, `/case`, `/modlogs` | The matching Discord permission, or the staff role |
-| [Server log](#server-log) | `/settings server-log-channel` | Manage Server |
+| [Moderation](#moderation) | `/ban`, `/unban`, `/softban`, `/kick`, `/timeout`, `/untimeout`, `/warn`, `/note`, `/purge`, `/case`, `/modlogs`, `/clearwarns` | The matching Discord permission, or the mod role |
+| [Channel and member tools](#channel-and-member-tools) | `/lock`, `/unlock`, `/slowmode`, `/role`, `/nick` | The matching Discord permission, or the mod role |
+| [Server log](#server-log) | `/settings server-log-channel`, `/settings log-event`, `/settings log-ignore` | Manage Server |
 | [Country roles](#country-roles) | `/country`, `/country-staff`, `/country-help` | Everyone (`/country`), the staff role (`/country-staff`), Manage Server (`/country-help`) |
 
 Every reply is translated into English, Spanish, German, French, Portuguese, Italian or Arabic (see [Languages](#languages)).
@@ -23,10 +24,13 @@ Every reply is translated into English, Spanish, German, French, Portuguese, Ita
 - **`/settings logs-channel channel:<channel>`** chooses the channel where the bot logs everything members do with it (see [Logs channel](#logs-channel)). The bot needs **View Channel**, **Send Messages**, **Embed Links** and **Attach Files** there; `/settings` warns the admin if it doesn't have them.
 - **`/settings mod-log-channel channel:<channel>`** chooses where moderation cases are posted (see [Moderation](#moderation)). Without one, cases go to the logs channel.
 - **`/settings server-log-channel channel:<channel>`** chooses where server events are logged (see [Server log](#server-log)). Nothing is logged until it's set.
-- **`/settings clear setting:<Staff role | /country channel | Logs channel | Mod-log channel | Server-log channel>`** resets one setting. Clearing the logs channel stops logging.
+- **`/settings mod-role role:<role>`** chooses the role that can use the moderation, channel and member commands without the Discord permission. Until one is set, the staff role does. `@everyone` is refused.
+- **`/settings log-event event:<event> enabled:<true | false>`** switches one kind of server-log event off or back on: edited messages, deleted messages, bulk deletions, members joining, members leaving, or nickname, role and timeout changes.
+- **`/settings log-ignore channel:<channel or category>`** stops logging edited and deleted messages from a channel (and its threads), or every channel in a category. Run it again on the same channel to log it again.
+- **`/settings clear setting:<Staff role | /country channel | Logs channel | Mod-log channel | Server-log channel | Mod role | Switched-off log events | Ignored log channels>`** resets one setting. Clearing the logs channel stops logging; clearing the log events switches them all back on.
 - **`/settings show`** lists the current settings.
 
-If the staff role or any of these channels is deleted, the bot forgets it automatically. The log channels need **View Channel**, **Send Messages**, **Embed Links** and **Attach Files**; `/settings` warns the admin if any is missing.
+Settings are saved in `data/bot.db` (see [Operational notes](#operational-notes)). If the staff role, the mod role or any of these channels is deleted, the bot forgets it automatically. The log channels need **View Channel**, **Send Messages**, **Embed Links** and **Attach Files**; `/settings` warns the admin if any is missing.
 
 ### Logs channel
 
@@ -52,24 +56,39 @@ Dyno-style moderation. Every action gets a numbered case (per server, never reus
 | --- | --- | --- |
 | `/ban user [reason] [duration] [delete-messages]` | Bans a member, or anyone by pasted user ID. With a `duration` (`1d`, `2w`, up to `365d`) it's a temporary ban: the bot lifts it when it ends, even after a restart, and records an Unban case. `delete-messages` also deletes their last hour to 7 days of messages. | Ban Members |
 | `/unban user [reason]` | Lifts a ban (paste the user ID). | Ban Members |
+| `/softban member [reason] [delete-messages]` | Bans and immediately unbans a member to wipe their recent messages (the last day unless `delete-messages` says otherwise). They can rejoin with an invite. | Ban Members |
 | `/kick member [reason]` | Removes a member; they can rejoin with an invite. | Kick Members |
 | `/timeout member duration [reason]` | Discord's own timeout (`10m`, `1h`, `1d`, up to `28d`): no chatting, reacting or talking. | Timeout Members |
 | `/untimeout member [reason]` | Ends a timeout early. | Timeout Members |
 | `/warn member reason` | A warning: DMed to the member and kept in their history. | Timeout Members |
+| `/note user note` | A private note in someone's history (they can have left). The member isn't told. | Timeout Members |
 | `/purge amount [member]` | Deletes up to 100 recent messages in the channel, optionally only one member's. Pinned messages and messages older than 14 days (a Discord limit) are kept. The mod log gets a `.txt` transcript of what was deleted. | Manage Messages |
 | `/case view number` | Shows a case. | Timeout Members |
 | `/case reason number reason` | Changes a case's reason; its mod-log post is updated too. | Timeout Members |
 | `/case delete number` | Deletes a case. | Manage Server |
 | `/modlogs user` | A member's last 20 cases, newest first, with the total. | Timeout Members |
+| `/clearwarns user` | Deletes all of a member's warnings (other cases stay). Posted in the mod log. | Manage Server |
 
-- **Who can moderate.** Members with the permission in the table, **or** with the staff role from `/settings staff-role`. Discord hides each command from members without its permission; to show the commands to the staff role too, add the role under *Server Settings > Integrations > the bot*, or give the role the permission.
+- **Who can moderate.** Members with the permission in the table, **or** with the mod role from `/settings mod-role` (the staff role from `/settings staff-role` until a mod role is set). `/case delete` and `/clearwarns` always need Manage Server. Discord hides each command from members without its permission; to show the commands to the mod role too, add the role under *Server Settings > Integrations > the bot*, or give the role the permission.
 - **Hierarchy.** Nobody can act on themselves, the server owner or the bot, or on anyone whose highest role is equal to or above theirs (the owner can act on anyone). The bot also refuses when the member's highest role is equal to or above its own, and Discord never allows timing out administrators. These are checked before anything happens.
-- **DMs.** The member is DMed in the server's language: before a ban or kick (afterwards there's no shared server), after a timeout, timeout removal or warning. If their DMs are closed, the action still happens; the reply and the case say the DM couldn't be sent.
+- **DMs.** The member is DMed in the server's language: before a ban, softban or kick (afterwards there's no shared server), after a timeout, timeout removal or warning. Notes are never sent. If their DMs are closed, the action still happens; the reply and the case say the DM couldn't be sent.
 - **Audit log.** Discord's audit log shows the reason followed by `(by <moderator>)`, since the bot is the one acting.
 - **Actions done outside the bot** (right-click > Ban, Kick or Timeout in Discord, or another bot) still get a case, with the moderator and reason read from the audit log. This needs **View Audit Log**; without it the moderator shows as unknown, and kicks can't be told apart from members leaving, so they aren't recorded.
 - **Storage.** Cases live in `data/bot.db`, an SQLite database using Node's built-in `node:sqlite` (no extra install). Node prints an "SQLite is an experimental feature" warning at startup; that's expected.
 
 The mod-log embeds show the case number, action, member, moderator, duration and end time, reason, and whether the DM arrived. They are in English like the other logs; `/case view` and `/modlogs` reply in the moderator's language.
+
+### Channel and member tools
+
+| Command | What it does | Permission |
+| --- | --- | --- |
+| `/lock [channel] [reason]` | Stops `@everyone` from posting and creating threads in a channel (this one by default), and posts a notice there first. | Manage Channels |
+| `/unlock [channel] [reason]` | Undoes `/lock`, resetting those permissions to the channel's default, and posts a notice. | Manage Channels |
+| `/slowmode duration [channel]` | Members can post once per `duration` (`10s`, `5m`, `1h`, up to `6h`; `off` turns it off). | Manage Channels |
+| `/role add\|remove member role [reason]` | Gives or takes a role. Nobody can hand out a role at or above their own highest role or the bot's, `@everyone`, or a role managed by a bot or integration. | Manage Roles |
+| `/nick member [nickname]` | Changes a member's nickname; leave it empty to reset it. | Manage Nicknames |
+
+The mod role can use these too, and the same hierarchy rules as moderation apply (moderators may change their own roles and nickname). Each change is posted in the mod-log channel. The bot needs **Manage Channels** and **Manage Roles** in the channel to lock it, **Manage Channels** for slowmode, and **Manage Nicknames** for `/nick`; replies say so when it can't.
 
 ### Server log
 
@@ -80,7 +99,7 @@ Once an admin runs `/settings server-log-channel`, the bot posts there when:
 - **A member joins** (account age, flagged if under 7 days old, and member count) or **leaves** (when they joined and the roles they had).
 - **A member's nickname or roles change.**
 
-Messages from bots and webhooks, and messages the bot deletes itself (the `/country` channel and `/purge`, which are already logged), are skipped. Message text needs the **Message Content** intent; joins, leaves and member changes need the **Server Members** intent (see [Setup](#setup), step 1). If either is off, the bot still starts and logs what it can. Entries are in English and never ping anyone. Make this channel visible to staff only.
+Admins can switch any of these off with `/settings log-event`, and stop logging messages from noisy channels or whole categories with `/settings log-ignore`. Messages from bots and webhooks, and messages the bot deletes itself (the `/country` channel and `/purge`, which are already logged), are skipped. Message text needs the **Message Content** intent; joins, leaves and member changes need the **Server Members** intent (see [Setup](#setup), step 1). If either is off, the bot still starts and logs what it can. Entries are in English and never ping anyone. Make this channel visible to staff only.
 
 ### Country roles
 
@@ -124,10 +143,10 @@ Country names are the English ISO names, with a few shortened (for example *Unit
 2. **Invite it.** Replace `YOUR_CLIENT_ID` and open:
 
    ```
-   https://discord.com/oauth2/authorize?client_id=YOUR_CLIENT_ID&scope=bot+applications.commands&permissions=1374658096262
+   https://discord.com/oauth2/authorize?client_id=YOUR_CLIENT_ID&scope=bot+applications.commands&permissions=1374792314006
    ```
 
-   `permissions=1374658096262` is **Kick Members**, **Ban Members**, **Timeout Members**, **View Audit Log**, **Manage Roles**, **Manage Messages**, **Read Message History**, **View Channels**, **Send Messages**, **Send Messages in Threads**, **Embed Links** and **Attach Files**, which is what the current features need. If the bot was invited with fewer, either re-invite it with this link or give its role the missing permissions (for moderation: Kick Members, Ban Members, Timeout Members and View Audit Log server-wide, Read Message History for `/purge`). If a new feature needs more, update this number and re-invite the bot.
+   `permissions=1374792314006` is **Kick Members**, **Ban Members**, **Timeout Members**, **View Audit Log**, **Manage Roles**, **Manage Channels**, **Manage Nicknames**, **Manage Messages**, **Read Message History**, **View Channels**, **Send Messages**, **Send Messages in Threads**, **Embed Links** and **Attach Files**, which is what the current features need. If the bot was invited with fewer, either re-invite it with this link or give its role the missing permissions (for moderation: Kick Members, Ban Members, Timeout Members and View Audit Log server-wide, Read Message History for `/purge`). If a new feature needs more, update this number and re-invite the bot.
 
 3. **Fix the role hierarchy.** In *Server Settings > Roles*, drag the bot's role above any roles it manages (existing country roles; new ones are created below it automatically) and above every member it should be able to ban, kick or time out. Keep it below your admin roles so moderators can't use it on admins.
 
@@ -185,15 +204,19 @@ src/
     countryPicker.js     Country roles: the guide's continent buttons, form and lists
     countryStaff.js      Country roles: /country-staff
     countryHelp.js       Country roles: /country-help
-    moderation.js        Moderation: /ban, /unban, /kick, /timeout, /untimeout, /warn
+    moderation.js        Moderation: /ban, /unban, /kick, /timeout, /untimeout, /softban, /note, /warn
     purge.js             Moderation: /purge
-    cases.js             Moderation: /case, /modlogs
+    cases.js             Moderation: /case, /modlogs, /clearwarns
+    channelTools.js      Channel tools: /lock, /unlock, /slowmode
+    memberTools.js       Member tools: /role, /nick
+    commandHelpers.js    Shared start of moderation-style commands (language, permission check)
   countries/             Country roles: country list, name matching and search
   roles/                 Country roles: find, create, assign and remove roles
   channels/              Country roles: keeps the /country channel clean
   logs/                  Logs channel, server log, and posting to log channels
   moderation/            Moderation: cases (SQLite), checks, actions, mod log, temporary bans
-  settings/              Per-server settings (saved to data/settings.json, git-ignored)
+  settings/              Per-server settings (saved in data/bot.db)
+  storage/               The SQLite database: opening it and schema migrations
   i18n/                  Language selection and locales/*.json (all features)
   utils/                 Shared: logger with token redaction, keyed lock, Discord error codes
 tests/                   Unit tests using in-memory Discord fakes
@@ -229,7 +252,8 @@ Replies use each user's Discord language when it's supported, otherwise English.
 | Deleted messages are logged without their text | Turn on **Message Content Intent** in the Developer Portal (*Bot* tab), then restart the bot. |
 | A member needs a different country | Staff run `/country-staff set`. |
 | A moderation command says my role must be above theirs | Move the bot's role above the member's highest role in *Server Settings > Roles*. |
-| Moderators with the staff role can't see `/ban` etc. | Add the staff role to each command under *Server Settings > Integrations > the bot*, or give the role the Discord permission. |
+| `/lock` or `/nick` says I'm missing a permission | Re-invite the bot with the link in [Setup](#setup), or give its role **Manage Channels** and **Manage Nicknames**. |
+| Moderators with the mod role can't see `/ban` etc. | Add the mod role to each command under *Server Settings > Integrations > the bot*, or give the role the Discord permission. |
 | Bans or kicks from Discord's menu show "Unknown" moderator | Give the bot **View Audit Log**. |
 | No joins, leaves or role changes in the server log | Turn on **Server Members Intent** in the Developer Portal (*Bot* tab), then restart the bot. |
 | Temporary bans aren't lifted | The bot needs **Ban Members**; it keeps retrying and warns once in the console. |
@@ -239,8 +263,8 @@ Set `LOG_LEVEL=debug` for more detail.
 ## Operational notes
 
 - **Run one instance.** Some safeguards (like the duplicate-role guard) are in memory, so two instances could race.
-- **Moderation cases** are stored in `data/bot.db` (plus `bot.db-wal` and `bot.db-shm` while running). Back up the whole `data/` folder; to copy the database safely while the bot runs, use `sqlite3 data/bot.db ".backup backup.db"`.
-- **Settings** are stored in `data/settings.json` next to the project. Keep the `data/` folder when moving or updating the bot. A `/country` channel saved by older versions in `data/country-channels.json` is carried over automatically the first time the new version starts.
+- **Settings and moderation cases** are stored in `data/bot.db` (plus `bot.db-wal` and `bot.db-shm` while running). Back up the whole `data/` folder, and keep it when moving or updating the bot; to copy the database safely while the bot runs, use `sqlite3 data/bot.db ".backup backup.db"`.
+- **Upgrading from older versions.** Settings saved in `data/settings.json` (or the even older `data/country-channels.json`) are copied into the database the first time the new version starts, and `settings.json` is renamed to `settings.json.migrated` as a backup. The database is upgraded in place; existing cases are kept.
 
 ## Security
 

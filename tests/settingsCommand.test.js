@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createSettingsCommand } from "../src/commands/settings.js";
 import { translate } from "../src/i18n/i18n.js";
 import { Status } from "../src/logs/actionLog.js";
+import { LogEvent } from "../src/logs/serverLog.js";
 import { GuildSettings, Setting } from "../src/settings/guildSettings.js";
 
 const GUILD_ID = "900000000000000001";
@@ -12,7 +13,7 @@ const ROLE_ID = "700000000000000001";
 // A fake /settings <subcommand> interaction from someone with Manage Server.
 function fakeInteraction(
   subcommand,
-  { setting, roleId = ROLE_ID, canDeleteMessages = true, canPost = true, ...overrides } = {},
+  { setting, enabled, roleId = ROLE_ID, canDeleteMessages = true, canPost = true, ...overrides } = {},
 ) {
   const botMember = {};
   return {
@@ -40,6 +41,7 @@ function fakeInteraction(
       }),
       getRole: () => ({ id: roleId }),
       getString: () => setting,
+      getBoolean: () => enabled,
     },
     reply: vi.fn(async () => {}),
     ...overrides,
@@ -63,6 +65,9 @@ describe("/settings definition", () => {
       "logs-channel",
       "mod-log-channel",
       "server-log-channel",
+      "mod-role",
+      "log-event",
+      "log-ignore",
       "clear",
       "show",
     ]);
@@ -78,13 +83,20 @@ describe("/settings definition", () => {
     expect(logsChannelOption).toMatchObject({ name: "channel", type: ApplicationCommandOptionType.Channel, required: true });
     expect(logsChannelOption.channel_types).toEqual([ChannelType.GuildText, ChannelType.GuildAnnouncement]);
 
-    const [settingOption] = data.options[5].options;
+    const [eventOption, enabledOption] = data.options[6].options;
+    expect(eventOption.choices.map((choice) => choice.value)).toEqual(Object.values(LogEvent));
+    expect(enabledOption).toMatchObject({ name: "enabled", type: ApplicationCommandOptionType.Boolean, required: true });
+
+    const [settingOption] = data.options[8].options;
     expect(settingOption.choices.map((choice) => choice.value)).toEqual([
       Setting.STAFF_ROLE,
       Setting.COUNTRY_CHANNEL,
       Setting.LOGS_CHANNEL,
       Setting.MOD_LOG_CHANNEL,
       Setting.SERVER_LOG_CHANNEL,
+      Setting.MOD_ROLE,
+      Setting.DISABLED_LOG_EVENTS,
+      Setting.LOG_IGNORED_CHANNELS,
     ]);
     expect(settingOption.choices[0].name_localizations.de).toBe(translate("de", "settingsStaffRoleName"));
   });
@@ -182,6 +194,9 @@ describe("/settings", () => {
     [Setting.LOGS_CHANNEL, "settingsLogsChannelCleared"],
     [Setting.MOD_LOG_CHANNEL, "settingsModLogChannelCleared"],
     [Setting.SERVER_LOG_CHANNEL, "settingsServerLogChannelCleared"],
+    [Setting.MOD_ROLE, "settingsModRoleCleared"],
+    [Setting.DISABLED_LOG_EVENTS, "settingsLogEventsCleared"],
+    [Setting.LOG_IGNORED_CHANNELS, "settingsLogIgnoreCleared"],
   ])("clears %s", async (setting, messageKey) => {
     await guildSettings.set(GUILD_ID, Setting.STAFF_ROLE, ROLE_ID);
     await guildSettings.set(GUILD_ID, Setting.COUNTRY_CHANNEL, CHANNEL_ID);
@@ -203,7 +218,8 @@ describe("/settings", () => {
       expect.objectContaining({
         content:
           "Staff role: not set\n/country channel: any channel\nLogs channel: not set\n" +
-          "Mod-log channel: not set (cases go to the logs channel)\nServer-log channel: not set",
+          "Mod-log channel: not set (cases go to the logs channel)\nServer-log channel: not set\n" +
+          "Mod role: not set (the staff role is used)\nServer-log events: all on\nIgnored by the server log: none",
       }),
     );
 
@@ -212,15 +228,62 @@ describe("/settings", () => {
     await guildSettings.set(GUILD_ID, Setting.LOGS_CHANNEL, CHANNEL_ID);
     await guildSettings.set(GUILD_ID, Setting.MOD_LOG_CHANNEL, CHANNEL_ID);
     await guildSettings.set(GUILD_ID, Setting.SERVER_LOG_CHANNEL, CHANNEL_ID);
+    await guildSettings.set(GUILD_ID, Setting.MOD_ROLE, ROLE_ID);
+    await guildSettings.set(GUILD_ID, Setting.DISABLED_LOG_EVENTS, [LogEvent.MEMBER_JOIN, LogEvent.MESSAGE_EDIT]);
+    await guildSettings.set(GUILD_ID, Setting.LOG_IGNORED_CHANNELS, [CHANNEL_ID]);
     const after = fakeInteraction("show");
     await command.execute(after);
     expect(after.reply).toHaveBeenCalledWith({
       content:
         `Staff role: <@&${ROLE_ID}>\n/country channel: <#${CHANNEL_ID}>\nLogs channel: <#${CHANNEL_ID}>\n` +
-        `Mod-log channel: <#${CHANNEL_ID}>\nServer-log channel: <#${CHANNEL_ID}>`,
+        `Mod-log channel: <#${CHANNEL_ID}>\nServer-log channel: <#${CHANNEL_ID}>\nMod role: <@&${ROLE_ID}>\n` +
+        `Server-log events switched off: Edited messages, Members joining\nIgnored by the server log: <#${CHANNEL_ID}>`,
       flags: MessageFlags.Ephemeral,
       allowedMentions: { parse: [] },
     });
+  });
+
+  it("sets the mod role and refuses @everyone", async () => {
+    const interaction = fakeInteraction("mod-role");
+    await command.execute(interaction);
+    expect(guildSettings.get(GUILD_ID, Setting.MOD_ROLE)).toBe(ROLE_ID);
+    expect(interaction.reply).toHaveBeenCalledWith(
+      privateReply(`Members with the <@&${ROLE_ID}> role can now use the moderation commands.`),
+    );
+
+    const everyone = fakeInteraction("mod-role", { roleId: GUILD_ID });
+    const outcome = await command.execute(everyone);
+    expect(outcome).toMatchObject({ status: Status.REFUSED, key: "settingsModRoleEveryone" });
+    expect(guildSettings.get(GUILD_ID, Setting.MOD_ROLE)).toBe(ROLE_ID);
+  });
+
+  it("switches a server-log event off and back on, without duplicates", async () => {
+    const off = fakeInteraction("log-event", { setting: LogEvent.MESSAGE_EDIT, enabled: false });
+    await command.execute(off);
+    await command.execute(fakeInteraction("log-event", { setting: LogEvent.MESSAGE_EDIT, enabled: false }));
+    expect(guildSettings.getList(GUILD_ID, Setting.DISABLED_LOG_EVENTS)).toEqual([LogEvent.MESSAGE_EDIT]);
+    expect(off.reply).toHaveBeenCalledWith(privateReply("Edited messages will no longer be logged in the server log."));
+
+    const on = fakeInteraction("log-event", { setting: LogEvent.MESSAGE_EDIT, enabled: true });
+    const outcome = await command.execute(on);
+    expect(guildSettings.getList(GUILD_ID, Setting.DISABLED_LOG_EVENTS)).toEqual([]);
+    expect(outcome).toMatchObject({ status: Status.SUCCESS, key: "settingsLogEventOn" });
+  });
+
+  it("rejects an unknown server-log event", async () => {
+    const outcome = await command.execute(fakeInteraction("log-event", { setting: "nope", enabled: false }));
+    expect(outcome.status).toBe(Status.FAILED);
+    expect(guildSettings.getList(GUILD_ID, Setting.DISABLED_LOG_EVENTS)).toEqual([]);
+  });
+
+  it("ignores a channel in the server log, then stops ignoring it", async () => {
+    const first = await command.execute(fakeInteraction("log-ignore"));
+    expect(first).toMatchObject({ key: "settingsLogIgnoreAdded" });
+    expect(guildSettings.getList(GUILD_ID, Setting.LOG_IGNORED_CHANNELS)).toEqual([CHANNEL_ID]);
+
+    const second = await command.execute(fakeInteraction("log-ignore"));
+    expect(second).toMatchObject({ key: "settingsLogIgnoreRemoved" });
+    expect(guildSettings.getList(GUILD_ID, Setting.LOG_IGNORED_CHANNELS)).toEqual([]);
   });
 
   it("refuses members without Manage Server", async () => {

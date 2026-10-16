@@ -9,12 +9,13 @@ import { createActionLog } from "./logs/actionLog.js";
 import { createLogChannelPoster } from "./logs/logChannel.js";
 import { RecentIds } from "./logs/recentIds.js";
 import { createServerLog } from "./logs/serverLog.js";
-import { CaseStore, DEFAULT_DATABASE_FILE } from "./moderation/caseStore.js";
+import { CaseStore } from "./moderation/caseStore.js";
 import { createExternalActionRecorder } from "./moderation/externalActions.js";
 import { createModLog } from "./moderation/modLog.js";
 import { createModerationService } from "./moderation/moderationService.js";
 import { createTempBanScheduler } from "./moderation/tempBans.js";
 import { GuildSettings, Setting } from "./settings/guildSettings.js";
+import { closeDatabase, DEFAULT_DATABASE_FILE, openDatabase } from "./storage/database.js";
 import { logger, registerSecret } from "./utils/logger.js";
 
 // Log unexpected errors instead of letting them silently kill the bot.
@@ -55,9 +56,10 @@ async function start() {
   const config = loadBotConfig();
   registerSecret(config.token);
 
-  const guildSettings = await GuildSettings.load();
-  // Moderation cases live in data/bot.db (SQLite).
-  const store = new CaseStore(DEFAULT_DATABASE_FILE);
+  // Settings and moderation cases live in data/bot.db (SQLite).
+  const db = openDatabase(DEFAULT_DATABASE_FILE);
+  const guildSettings = await GuildSettings.load(db);
+  const store = new CaseStore(db);
   const forcedLanguage = config.forcedLanguage;
 
   // What the bot did itself, so the events Discord sends back aren't logged twice.
@@ -69,7 +71,7 @@ async function start() {
   const actionLog = createActionLog({ guildSettings, logger, poster });
   // Posts cases in the mod-log channel, and server events in the server-log channel.
   const modLog = createModLog({ poster, store });
-  const serverLog = createServerLog({ poster, botDeletions });
+  const serverLog = createServerLog({ poster, botDeletions, guildSettings });
   const moderation = createModerationService({ store, modLog, logger, forcedLanguage, botActions });
   const externalActions = createExternalActionRecorder({ moderation, botActions, logger });
 
@@ -151,6 +153,12 @@ async function start() {
     client.on(Events.GuildBanRemove, safely("an unban", (ban) => externalActions.onUnban(ban)));
 
     client.on(Events.ChannelDelete, (channel) => {
+      // A deleted channel no longer needs ignoring in the server log.
+      if (channel.guildId && guildSettings.getList(channel.guildId, Setting.LOG_IGNORED_CHANNELS).includes(channel.id)) {
+        guildSettings
+          .toggleInList(channel.guildId, Setting.LOG_IGNORED_CHANNELS, channel.id)
+          .catch((error) => logger.error("Couldn't forget a deleted ignored channel", { error }));
+      }
       for (const [setting, message] of CHANNEL_SETTINGS) {
         if (channel.guildId && guildSettings.get(channel.guildId, setting) === channel.id) {
           guildSettings
@@ -161,13 +169,15 @@ async function start() {
       }
     });
 
-    // Forget a deleted staff role, so /settings show never points at a role that is gone.
+    // Forget a deleted staff or mod role, so /settings show never points at a role that is gone.
     client.on(Events.GuildRoleDelete, (role) => {
-      if (guildSettings.get(role.guild.id, Setting.STAFF_ROLE) === role.id) {
-        guildSettings
-          .clear(role.guild.id, Setting.STAFF_ROLE)
-          .then(() => logger.info("The staff role was deleted; set a new one with /settings staff-role", { guildId: role.guild.id }))
-          .catch((error) => logger.error("Couldn't clear the deleted staff role", { error }));
+      for (const setting of [Setting.STAFF_ROLE, Setting.MOD_ROLE]) {
+        if (guildSettings.get(role.guild.id, setting) === role.id) {
+          guildSettings
+            .clear(role.guild.id, setting)
+            .then(() => logger.info("A role chosen in /settings was deleted; choose a new one", { guildId: role.guild.id, setting }))
+            .catch((error) => logger.error("Couldn't clear a deleted role from the settings", { setting, error }));
+        }
       }
     });
 
@@ -190,7 +200,7 @@ async function start() {
       logger.info("Shutting down");
       tempBans?.stop();
       await client?.destroy().catch(() => {});
-      store.close();
+      closeDatabase(db);
       process.exit(0);
     });
   }

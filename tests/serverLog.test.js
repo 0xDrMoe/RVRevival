@@ -2,7 +2,7 @@ import { Collection, GatewayIntentBits, IntentsBitField } from "discord.js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createLogChannelPoster } from "../src/logs/logChannel.js";
 import { RecentIds } from "../src/logs/recentIds.js";
-import { buildMemberChangedEmbed, createServerLog } from "../src/logs/serverLog.js";
+import { buildMemberChangedEmbed, createServerLog, LogEvent } from "../src/logs/serverLog.js";
 import { GuildSettings, Setting } from "../src/settings/guildSettings.js";
 import { fakeLogger } from "./helpers/fakes.js";
 
@@ -44,7 +44,11 @@ describe("server log", () => {
     settings = new GuildSettings();
     await settings.set(GUILD_ID, Setting.SERVER_LOG_CHANNEL, LOG_ID);
     botDeletions = new RecentIds();
-    serverLog = createServerLog({ poster: createLogChannelPoster({ guildSettings: settings, logger: fakeLogger() }), botDeletions });
+    serverLog = createServerLog({
+      poster: createLogChannelPoster({ guildSettings: settings, logger: fakeLogger() }),
+      botDeletions,
+      guildSettings: settings,
+    });
   });
 
   const posted = () => logChannel.send.mock.calls.map((call) => call[0].embeds[0].toJSON());
@@ -123,6 +127,35 @@ describe("server log", () => {
     expect(description).toContain("**Nickname:** *none* → `Rumbler`");
     expect(description).toContain("**Roles added:** <@&3>");
     expect(description).toContain("**Roles removed:** <@&1>");
+  });
+
+  it("skips events switched off in /settings log-event", async () => {
+    await settings.set(GUILD_ID, Setting.DISABLED_LOG_EVENTS, [LogEvent.MESSAGE_DELETE, LogEvent.MEMBER_JOIN]);
+    await serverLog.messageDeleted(fakeMessage({ guild }));
+    await serverLog.memberJoined({ id: USER_ID, guild, user: { ...author, createdTimestamp: 0 } });
+    expect(logChannel.send).not.toHaveBeenCalled();
+
+    await serverLog.messageEdited(fakeMessage({ guild }), fakeMessage({ guild, content: "edited", editedTimestamp: 1 }));
+    expect(logChannel.send).toHaveBeenCalledTimes(1);
+  });
+
+  it("skips messages in ignored channels, their threads and channels in ignored categories", async () => {
+    const CATEGORY_ID = "800000000000000050";
+    const THREAD_ID = "800000000000000051";
+    const OTHER_ID = "800000000000000052";
+    await settings.set(GUILD_ID, Setting.LOG_IGNORED_CHANNELS, [CHANNEL_ID, CATEGORY_ID]);
+
+    await serverLog.messageDeleted(fakeMessage({ guild }));
+    await serverLog.messageDeleted(fakeMessage({ guild, channel: { id: THREAD_ID, parentId: CHANNEL_ID } }));
+    await serverLog.messageDeleted(fakeMessage({ guild, channel: { id: OTHER_ID, parentId: CATEGORY_ID } }));
+    await serverLog.messageDeleted(
+      fakeMessage({ guild, channel: { id: THREAD_ID, parentId: OTHER_ID, parent: { id: OTHER_ID, parentId: CATEGORY_ID } } }),
+    );
+    await serverLog.messagesBulkDeleted(new Collection([["9", fakeMessage({ id: "9" })]]), { id: CHANNEL_ID, guild });
+    expect(logChannel.send).not.toHaveBeenCalled();
+
+    await serverLog.messageDeleted(fakeMessage({ guild, channelId: OTHER_ID }));
+    expect(logChannel.send).toHaveBeenCalledTimes(1);
   });
 
   it("can't compare members the bot never saw", () => {
