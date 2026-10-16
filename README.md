@@ -26,6 +26,7 @@ The Discord bot for the Rumbleverse Revival server. It is built as a set of inde
 | [Temporary roles](#temporary-roles) | `/temprole` | Manage Roles or the mod role |
 | [Quarantine](#quarantine) | `/quarantine` | Manage Roles or the mod role (`role`: Manage Server) |
 | [Anti-nuke](#anti-nuke) | `/antinuke`, or the dashboard's Anti-nuke page | The server owner (`status`: Administrator) |
+| [Embed builder](#embed-builder) | The dashboard's Embed builder page | Manage Server or a dashboard role that can change settings |
 | [Ban appeals](#ban-appeals) | The dashboard's Ban appeals page | Manage Server or a dashboard role that can change settings (banned members fill in the form) |
 | [Join-to-create voice](#join-to-create-voice) | `/voice` | Manage Server (`setup`, `off`), the channel's owner (`lock`, `unlock`), anyone in the channel (`claim`) |
 | [Leveling](#leveling) | `/rank`, `/leaderboard`, `/levels`, or the dashboard's Leveling page | Everyone (`/rank`, `/leaderboard`), Manage Server (`/levels`) |
@@ -342,6 +343,17 @@ Only the **server owner** can change anti-nuke, on Discord or on the dashboard's
 
 Who did what comes from the audit log, so the bot needs **View Audit Log**. Its role must be above the roles it should take away: put it near the top of the role list. Anti-nuke doesn't rebuild deleted channels or roles.
 
+### Embed builder
+
+The dashboard's **Embed builder** page writes announcements, rules and info posts as the bot, with a live preview that looks like Discord.
+
+- Pick a channel, write the text above the embed, and fill in any of: color bar, author (with icon), title (with link), description, up to 25 fields (side by side or full width), image, thumbnail and footer. The preview updates as you type, including **bold**, *italic*, links and mentions shown as names.
+- **Send** posts it. Mentions never ping anyone, including @everyone.
+- To edit a message the bot already posted (from here or anywhere else), paste its link (right-click → Copy Message Link) and press **Load**. Only the bot's own messages can be edited. Messages with several embeds load the first one; saving keeps only that one.
+- The newest messages posted from the dashboard are listed under the editor with an Edit button. Every post and edit shows on the Activity page.
+
+Discord's limits are checked before sending: 2,000 characters of text, 6,000 in the embed. The bot needs View Channel, Send Messages and Embed Links in the channel.
+
 ### Ban appeals
 
 Lets banned members ask to be unbanned without a second account or a DM to a moderator. Turn it on in the dashboard's **Ban appeals** page (off by default), then:
@@ -585,6 +597,7 @@ src/
   tickets/               Support tickets: saved in SQLite (ticketStore.js), the panel, staff and messages (tickets.js), transcripts (transcript.js)
   raid/                  Raid protection: lockdown planning and restoring, the new-account gate and join alerts (raid.js), anti-nuke (antiNuke.js)
   tempRoles/             Temporary roles: saved in SQLite (tempRoleStore.js), taken away when due (tempRoleScheduler.js)
+  messages/              Embed builder: checking messages against Discord's limits (embedMessage.js), messages posted from the dashboard (sentMessageStore.js)
   appeals/               Ban appeals: settings (config.js), saved in SQLite (appealStore.js); the form and decisions live in the dashboard
   voice/                 Join-to-create voice: making and deleting channels (tempVoice.js), saved in SQLite (tempVoiceStore.js)
   leveling/              Leveling: settings and level math (config.js), XP in SQLite (levelStore.js), earning XP and rewards (leveling.js)

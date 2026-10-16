@@ -135,6 +135,7 @@ const NAV = [
       { id: "tags", icon: "tag", tone: "amber", manage: true, on: (s) => (s.tags ?? []).length > 0 },
       { id: "responders", icon: "repeat", tone: "cyan", manage: true, on: (s) => (s.autoResponders ?? []).length > 0 },
       { id: "scheduled", icon: "calendar", tone: "blue", manage: true },
+      { id: "embeds", icon: "edit", tone: "purple", manage: true },
     ],
   },
   {
@@ -188,6 +189,7 @@ const ICONS = {
   mic: '<rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 17v4"/>',
   clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
   alert: '<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/>',
+  eye: '<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
   eyeOff: '<path d="m3 3 18 18"/><path d="M10.6 5.1A10 10 0 0 1 12 5c6 0 10 7 10 7a17 17 0 0 1-3.2 3.9M6.6 6.6C3.9 8.4 2 12 2 12s4 7 10 7a9.7 9.7 0 0 0 5.4-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/>',
   zap: '<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>',
   gavel: '<path d="m14 13-8.5 8.5a2.1 2.1 0 0 1-3-3L11 10"/><path d="m16 16 6-6M8 8l6-6M9 7l8 8M21 11l-8-8"/>',
@@ -2081,9 +2083,13 @@ function editableList({ items, max, makeRow, focus, emptyKey, addKey }) {
     },
     t(addKey),
   );
-  items.forEach((item) => list.append(makeRow(item, remove)));
-  update();
-  return { list, count, empty, addButton };
+  // Replaces every row (loading saved values again).
+  const set = (values) => {
+    list.replaceChildren(...values.map((item) => makeRow(item, remove)));
+    update();
+  };
+  set(items);
+  return { list, count, empty, addButton, set };
 }
 
 async function showTags(guildId) {
@@ -4147,6 +4153,368 @@ async function showAppealForm(guildId) {
   );
 }
 
+// --- Embed builder ---------------------------------------------------------------
+
+const MAX_EMBED_FIELDS = 25;
+const EMBED_DEFAULT_COLOR = "#5865f2";
+const EMBED_SWATCHES = ["#5865f2", "#57f287", "#fee75c", "#eb459e", "#ed4245", "#f0b232", "#00a8fc", "#99aab5"];
+
+// Discord-style markdown for the preview: **bold**, *italic*, __underline__,
+// ~~strike~~, `code`, [links](https://…) and mentions shown as names.
+function discordMarkdown(text, data) {
+  const pattern = /(\*\*(.+?)\*\*|__(.+?)__|\*(.+?)\*|_(.+?)_|~~(.+?)~~|`([^`]+)`|\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)|<@!?(\d{17,20})>|<@&(\d{17,20})>|<#(\d{17,20})>)/s;
+  const nodes = [];
+  let rest = text;
+  while (rest) {
+    const match = rest.match(pattern);
+    if (!match) {
+      nodes.push(rest);
+      break;
+    }
+    if (match.index > 0) {
+      nodes.push(rest.slice(0, match.index));
+    }
+    const [whole, , bold, underline, italic, italic2, strike, code, linkText, linkUrl, userId, roleId, channelId] = match;
+    if (bold !== undefined) {
+      nodes.push(h("strong", {}, discordMarkdown(bold, data)));
+    } else if (underline !== undefined) {
+      nodes.push(h("u", {}, discordMarkdown(underline, data)));
+    } else if (italic !== undefined || italic2 !== undefined) {
+      nodes.push(h("em", {}, discordMarkdown(italic ?? italic2, data)));
+    } else if (strike !== undefined) {
+      nodes.push(h("s", {}, discordMarkdown(strike, data)));
+    } else if (code !== undefined) {
+      nodes.push(h("code", {}, code));
+    } else if (linkText !== undefined) {
+      nodes.push(h("a", { href: linkUrl, target: "_blank", rel: "noopener noreferrer" }, linkText));
+    } else if (userId) {
+      nodes.push(h("span", { class: "mention" }, `@${data.people?.[userId] ?? t("embedUnknownUser")}`));
+    } else if (roleId) {
+      nodes.push(h("span", { class: "mention" }, `@${data.roles.find((role) => role.id === roleId)?.name ?? t("embedUnknownRole")}`));
+    } else if (channelId) {
+      nodes.push(h("span", { class: "mention" }, `#${data.channels.find((channel) => channel.id === channelId)?.name ?? t("embedUnknownChannel")}`));
+    }
+    rest = rest.slice(match.index + whole.length);
+  }
+  return nodes;
+}
+
+const hexColor = (number) => `#${number.toString(16).padStart(6, "0")}`;
+const colorNumber = (hex) => Number.parseInt(hex.slice(1), 16);
+const httpUrl = (text) => (/^https?:\/\/\S+$/.test(text) ? text : null);
+
+function embedFieldRow(field, onRemove) {
+  const row = h(
+    "div",
+    { class: "embed-field-row" },
+    h("input", { class: "embed-field-name", type: "text", maxLength: 256, placeholder: t("embedFieldName"), value: field?.name ?? "", "aria-label": t("embedFieldName") }),
+    h("textarea", { class: "embed-field-value", rows: 2, maxLength: 1024, placeholder: t("embedFieldValue"), "aria-label": t("embedFieldValue") }, field?.value ?? ""),
+    h(
+      "div",
+      { class: "toolbar" },
+      h("label", { class: "switch" }, h("input", { class: "embed-field-inline", type: "checkbox", checked: Boolean(field?.inline) }), h("span", {}, t("embedFieldInline"))),
+      h("span", { class: "grow" }),
+      h("button", { class: "ghost small", type: "button", onclick: () => onRemove(row) }, t("tagRemove")),
+    ),
+  );
+  return row;
+}
+
+// The editor's message, in the shape the server checks ({ content, embed }).
+function readEmbedForm(form) {
+  const value = (selector) => form.querySelector(selector).value.trim();
+  return {
+    content: value("#embedContent"),
+    embed: {
+      title: value("#embedTitle"),
+      url: value("#embedUrl"),
+      description: value("#embedDescription"),
+      color: form.querySelector("#embedUseColor").checked ? colorNumber(form.querySelector("#embedColor").value) : null,
+      author: { name: value("#embedAuthor"), icon_url: value("#embedAuthorIcon") },
+      footer: { text: value("#embedFooter") },
+      image: { url: value("#embedImage") },
+      thumbnail: { url: value("#embedThumbnail") },
+      fields: [...form.querySelectorAll(".embed-field-row")].map((row) => ({
+        name: row.querySelector(".embed-field-name").value.trim(),
+        value: row.querySelector(".embed-field-value").value.trim(),
+        inline: row.querySelector(".embed-field-inline").checked,
+      })),
+    },
+  };
+}
+
+// The message as Discord would show it.
+function embedPreview(message, data) {
+  const md = (text) => discordMarkdown(text, data);
+  const embed = message.embed;
+  const fields = embed.fields.filter((field) => field.name || field.value);
+  const hasEmbed = Boolean(embed.title || embed.description || embed.author.name || embed.footer.text || httpUrl(embed.image.url) || httpUrl(embed.thumbnail.url) || fields.length > 0);
+  const bar = embed.color === null ? null : hexColor(embed.color);
+  const thumbnail = httpUrl(embed.thumbnail.url);
+  return h(
+    "div",
+    { class: "discord-message" },
+    h("img", { class: "discord-avatar", src: "favicon.svg", alt: "" }),
+    h(
+      "div",
+      { class: "discord-body" },
+      h("div", { class: "discord-head" }, h("strong", {}, t("embedBotName")), h("span", { class: "discord-bot-tag" }, t("embedBotTag")), h("span", { class: "muted" }, t("embedToday"))),
+      message.content ? h("div", { class: "discord-content" }, md(message.content)) : null,
+      hasEmbed
+        ? h(
+            "div",
+            { class: `discord-embed${bar ? "" : " no-color"}`, "data-color": bar ?? "" },
+            h(
+              "div",
+              { class: "discord-embed-main" },
+              embed.author.name
+                ? h("div", { class: "discord-embed-author" }, httpUrl(embed.author.icon_url) ? h("img", { src: embed.author.icon_url, alt: "" }) : null, embed.author.name)
+                : null,
+              embed.title
+                ? h("div", { class: "discord-embed-title" }, httpUrl(embed.url) ? h("a", { href: embed.url, target: "_blank", rel: "noopener noreferrer" }, md(embed.title)) : md(embed.title))
+                : null,
+              embed.description ? h("div", { class: "discord-embed-description" }, md(embed.description)) : null,
+              fields.length > 0
+                ? h(
+                    "div",
+                    { class: "discord-embed-fields" },
+                    fields.map((field) => h("div", { class: `discord-embed-field${field.inline ? " inline" : ""}` }, h("strong", {}, md(field.name)), h("div", {}, md(field.value)))),
+                  )
+                : null,
+              httpUrl(embed.image.url) ? h("img", { class: "discord-embed-image", src: embed.image.url, alt: "" }) : null,
+              embed.footer.text ? h("div", { class: "discord-embed-footer" }, embed.footer.text) : null,
+            ),
+            thumbnail ? h("img", { class: "discord-embed-thumbnail", src: thumbnail, alt: "" }) : null,
+          )
+        : null,
+      !message.content && !hasEmbed ? h("p", { class: "muted" }, t("embedEmpty")) : null,
+    ),
+  );
+}
+
+function sentRow(guildId, entry, data, onEdit) {
+  const channel = data.channels.find((item) => item.id === entry.channelId);
+  return h(
+    "li",
+    { class: "sent-row" },
+    iconChip("message", "blue", "sm"),
+    h(
+      "span",
+      { class: "ticket-main" },
+      h("span", { class: "ticket-subject" }, entry.summary),
+      h(
+        "span",
+        { class: "muted" },
+        [channel ? `#${channel.name}` : null, entry.sentByName ?? entry.sentBy, formatDate(entry.editedAt ?? entry.sentAt), entry.editedAt ? t("embedEdited") : null].filter(Boolean).join(" · "),
+      ),
+    ),
+    h("a", { class: "button ghost small", href: `https://discord.com/channels/${guildId}/${entry.channelId}/${entry.messageId}`, target: "_blank", rel: "noopener" }, icon("external", "icon small")),
+    h("button", { class: "ghost small", type: "button", onclick: () => onEdit(`https://discord.com/channels/${guildId}/${entry.channelId}/${entry.messageId}`) }, icon("edit", "icon small"), t("embedEdit")),
+  );
+}
+
+async function showEmbeds(guildId) {
+  const data = await loadManagedGuild(guildId);
+  if (!data) {
+    return;
+  }
+  // Editing an existing message: { channelId, messageId }.
+  let editing = null;
+  const blank = { content: "", embed: { title: "", url: "", description: "", color: colorNumber(EMBED_DEFAULT_COLOR), author: { name: "", icon_url: "" }, footer: { text: "" }, image: { url: "" }, thumbnail: { url: "" }, fields: [] } };
+
+  const input = (id, attributes = {}) => h("input", { id, type: "text", ...attributes });
+  const fields = editableList({ items: [], max: MAX_EMBED_FIELDS, makeRow: embedFieldRow, focus: ".embed-field-name", emptyKey: "embedNoFields", addKey: "embedAddField" });
+  const colorInput = h("input", { id: "embedColor", type: "color", value: EMBED_DEFAULT_COLOR, "aria-label": t("embedColor") });
+  const useColor = h("input", { id: "embedUseColor", type: "checkbox", checked: true });
+  const swatches = EMBED_SWATCHES.map((swatch) => {
+    const button = h("button", {
+      type: "button",
+      class: "swatch",
+      "data-swatch": swatch,
+      title: swatch,
+      "aria-label": swatch,
+      onclick: () => {
+        colorInput.value = swatch;
+        useColor.checked = true;
+        refresh();
+      },
+    });
+    button.style.setProperty("--swatch", swatch);
+    return button;
+  });
+  const channelSelect = picker({ id: "embedChannel", options: postableChannels(data), value: null, emptyLabel: t("embedPickChannel") });
+  const modeLine = h("p", { class: "help" });
+  const send = h("button", { class: "primary", type: "submit" }, icon("upload", "icon small"), h("span", {}, t("embedSend")));
+  const preview = h("div", { class: "embed-preview" });
+  const count = h("span", { class: "char-count" });
+
+  const form = h(
+    "form",
+    {
+      class: "embed-form",
+      oninput: () => refresh(),
+      onchange: () => refresh(),
+      onsubmit: async (event) => {
+        event.preventDefault();
+        await submit();
+      },
+    },
+    card(
+      t("embedWhere"),
+      "hash",
+      "blue",
+      modeLine,
+      field("embedChannel", null, channelSelect),
+      field("embedContent", "embedContentHelp", h("textarea", { id: "embedContent", rows: 3, maxLength: 2000, placeholder: t("embedContentPlaceholder") })),
+    ),
+    card(
+      t("embedEmbed"),
+      "image",
+      "purple",
+      h(
+        "div",
+        { class: "embed-color-row" },
+        h("label", { class: "switch" }, useColor, h("span", {}, t("embedUseColor"))),
+        colorInput,
+        h("div", { class: "swatches" }, swatches),
+      ),
+      h("div", { class: "embed-grid" }, field("embedAuthor", null, input("embedAuthor", { maxLength: 256 })), field("embedAuthorIcon", null, input("embedAuthorIcon", { placeholder: "https://…" }))),
+      h("div", { class: "embed-grid" }, field("embedTitle", null, input("embedTitle", { maxLength: 256 })), field("embedUrl", null, input("embedUrl", { placeholder: "https://…" }))),
+      field("embedDescription", "embedDescriptionHelp", h("textarea", { id: "embedDescription", rows: 5, maxLength: 4096 })),
+      h("div", { class: "toolbar" }, h("strong", { class: "grow" }, t("embedFields")), fields.count, fields.addButton),
+      fields.empty,
+      fields.list,
+      h("div", { class: "embed-grid" }, field("embedImage", null, input("embedImage", { placeholder: "https://…" })), field("embedThumbnail", null, input("embedThumbnail", { placeholder: "https://…" }))),
+      field("embedFooter", null, input("embedFooter", { maxLength: 2048 })),
+      h("div", { class: "toolbar" }, count),
+    ),
+    h(
+      "div",
+      { class: "save-bar embed-actions" },
+      h("button", { class: "ghost", type: "button", onclick: () => load(null) }, t("embedClear")),
+      h("span", { class: "grow" }),
+      send,
+    ),
+  );
+
+  function refresh() {
+    const message = readEmbedForm(form);
+    preview.replaceChildren(embedPreview(message, data));
+    preview.querySelectorAll("[data-color]").forEach((element) => element.style.setProperty("--embed-color", element.dataset.color || "transparent"));
+    const embed = message.embed;
+    const total = [embed.title, embed.description, embed.author.name, embed.footer.text, ...embed.fields.flatMap((entry) => [entry.name, entry.value])].join("").length;
+    count.textContent = t("embedTotal", { count: formatNumber(total), max: "6,000" });
+    count.classList.toggle("danger-text", total > 6000);
+    state.unsaved = true;
+  }
+
+  // Fills the editor with a message (or empties it) and says what Send does.
+  function load(target) {
+    editing = target ? { channelId: target.channelId, messageId: target.messageId } : null;
+    const message = target?.message ?? blank;
+    const embed = message.embed ?? blank.embed;
+    const set = (id, value) => (form.querySelector(`#${id}`).value = value ?? "");
+    set("embedContent", message.content);
+    set("embedTitle", embed.title);
+    set("embedUrl", embed.url);
+    set("embedDescription", embed.description);
+    set("embedAuthor", embed.author.name);
+    set("embedAuthorIcon", embed.author.icon_url);
+    set("embedFooter", embed.footer.text);
+    set("embedImage", embed.image.url);
+    set("embedThumbnail", embed.thumbnail.url);
+    useColor.checked = embed.color !== null;
+    colorInput.value = embed.color === null ? EMBED_DEFAULT_COLOR : hexColor(embed.color);
+    fields.set(embed.fields);
+    channelSelect.value = editing?.channelId ?? "";
+    channelSelect.disabled = Boolean(editing);
+    const channel = editing && data.channels.find((item) => item.id === editing.channelId);
+    modeLine.textContent = editing
+      ? t(target.message.extraEmbeds > 0 ? "embedEditingExtra" : "embedEditing", { channel: channel ? `#${channel.name}` : editing.channelId, count: target.message.extraEmbeds })
+      : t("embedNew");
+    send.lastChild.textContent = t(editing ? "embedSave" : "embedSend");
+    refresh();
+    state.unsaved = false;
+  }
+
+  async function submit() {
+    const message = readEmbedForm(form);
+    send.disabled = true;
+    try {
+      if (editing) {
+        await api(`/api/guilds/${guildId}/messages/${editing.channelId}/${editing.messageId}`, { method: "PUT", body: { message } });
+        toast(t("embedSaved"));
+      } else {
+        if (!channelSelect.value) {
+          toast(t("embedPickChannel"), "error");
+          return;
+        }
+        const result = await api(`/api/guilds/${guildId}/messages`, { method: "POST", body: { channelId: channelSelect.value, message } });
+        toast(t("embedSent"));
+        load({ channelId: result.message.channelId, messageId: result.message.messageId, message: { ...message, extraEmbeds: 0, embed: { ...message.embed } } });
+      }
+      state.unsaved = false;
+      await loadSent();
+    } catch (error) {
+      failed(error);
+    } finally {
+      send.disabled = false;
+    }
+  }
+
+  async function lookUp(link) {
+    if (state.unsaved && !confirm(t("leaveUnsaved"))) {
+      return;
+    }
+    try {
+      const found = await api(`/api/guilds/${guildId}/messages/lookup?${new URLSearchParams({ link })}`);
+      load(found);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch (error) {
+      failed(error);
+    }
+  }
+
+  const linkInput = h("input", { type: "url", class: "grow", placeholder: t("embedLinkPlaceholder"), "aria-label": t("embedLinkPlaceholder") });
+  const editBar = h(
+    "form",
+    {
+      class: "card toolbar link-bar",
+      onsubmit: (event) => {
+        event.preventDefault();
+        if (linkInput.value.trim()) {
+          lookUp(linkInput.value.trim());
+        }
+      },
+    },
+    icon("edit"),
+    h("span", { class: "muted" }, t("embedEditExisting")),
+    linkInput,
+    h("button", { class: "ghost", type: "submit" }, t("embedLoad")),
+  );
+
+  const sentList = h("ul", { class: "ticket-list" });
+  const sentEmpty = h("p", { class: "muted empty" }, t("embedNoneSent"));
+  async function loadSent() {
+    const { messages } = await api(`/api/guilds/${guildId}/messages`);
+    sentList.replaceChildren(...messages.map((entry) => sentRow(guildId, entry, data, lookUp)));
+    sentEmpty.hidden = messages.length > 0;
+  }
+
+  show(
+    guildLayout(
+      data,
+      "embeds",
+      pageHero("embeds", t("embedsIntro"), data),
+      editBar,
+      h("div", { class: "embed-layout" }, form, h("aside", { class: "embed-side" }, card(t("embedPreview"), "eye", "green", preview))),
+      card(t("embedRecent"), "list", "amber", sentEmpty, sentList),
+    ),
+  );
+  load(null);
+  await loadSent();
+}
+
 // --- Activity ----------------------------------------------------------------------
 
 // A line of a dashboard change: **bold** as bold, and channel and role mentions as names.
@@ -4227,6 +4595,7 @@ const SHOW_PAGE = {
   tags: showTags,
   responders: showResponders,
   scheduled: showScheduled,
+  embeds: showEmbeds,
   moderation: showModeration,
   logging: showLogging,
   access: showAccess,

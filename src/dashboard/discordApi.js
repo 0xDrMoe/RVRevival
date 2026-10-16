@@ -193,7 +193,9 @@ export function createDiscordApi({ config, fetch = globalThis.fetch, rest }) {
     postMessage: (channelId, payload) =>
       bot.post(Routes.channelMessages(channelId), { body: { ...payload, allowed_mentions: { parse: [] } } }),
     editMessage: (channelId, messageId, payload) =>
-      bot.patch(Routes.channelMessage(channelId, messageId), { body: payload }),
+      bot.patch(Routes.channelMessage(channelId, messageId), { body: { ...payload, allowed_mentions: { parse: [] } } }),
+    // One message, or null if it's gone (or the bot can't see the channel).
+    message: (channelId, messageId) => orNull(bot.get(Routes.channelMessage(channelId, messageId))),
 
     // Lifts a ban (an accepted appeal). `reason` goes in the audit log.
     async unban(guildId, userId, reason) {

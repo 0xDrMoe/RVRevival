@@ -282,6 +282,21 @@ const MIGRATIONS = [
   ALTER TABLE tickets ADD COLUMN category_id TEXT;
   ALTER TABLE tickets ADD COLUMN category_label TEXT;
   `,
+  // 19: messages posted from the dashboard's embed builder, to find and edit them again.
+  `
+  CREATE TABLE sent_messages (
+    guild_id    TEXT    NOT NULL,
+    channel_id  TEXT    NOT NULL,
+    message_id  TEXT    NOT NULL,
+    summary     TEXT    NOT NULL,
+    sent_by     TEXT    NOT NULL,
+    sent_at     INTEGER NOT NULL,
+    edited_by   TEXT,
+    edited_at   INTEGER,
+    PRIMARY KEY (guild_id, message_id)
+  ) WITHOUT ROWID;
+  CREATE INDEX sent_messages_by_time ON sent_messages (guild_id, sent_at);
+  `,
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS.length;

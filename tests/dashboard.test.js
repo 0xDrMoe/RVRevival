@@ -898,6 +898,41 @@ describe("dashboard", () => {
     expect(bad.statusCode).toBe(400);
   });
 
+  it("posts and edits the bot's messages from the embed builder", async () => {
+    const posted = new Map();
+    discord.postMessage = vi.fn(async (channelId, body) => {
+      const id = "810000000000000001";
+      posted.set(id, { id, author: { id: config.clientId }, ...body });
+      return { id };
+    });
+    discord.editMessage = vi.fn(async (channelId, id, body) => posted.set(id, { ...posted.get(id), ...body }));
+    discord.message = vi.fn(async (channelId, id) => posted.get(id) ?? null);
+    const cookies = await login();
+    const message = { content: "Hello", embed: { title: "Patch notes", description: "Big changes", color: 0x5865f2, fields: [] } };
+
+    expect((await write(cookies, "POST", `/api/guilds/${GUILD_ID}/messages`, { channelId: VOICE_ID, message })).statusCode).toBe(400);
+    expect((await write(cookies, "POST", `/api/guilds/${GUILD_ID}/messages`, { channelId: TEXT_ID, message: { content: "" } })).statusCode).toBe(400);
+    const sent = await write(cookies, "POST", `/api/guilds/${GUILD_ID}/messages`, { channelId: TEXT_ID, message });
+    expect(sent.statusCode).toBe(200);
+    expect(discord.postMessage).toHaveBeenCalledWith(TEXT_ID, { content: "Hello", embeds: [{ title: "Patch notes", description: "Big changes", color: 0x5865f2 }] });
+    expect((await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}/messages`, cookies })).json().messages).toMatchObject([{ summary: "Patch notes", channelId: TEXT_ID, sentBy: USER_ID }]);
+
+    const link = `https://discord.com/channels/${GUILD_ID}/${TEXT_ID}/810000000000000001`;
+    const found = await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}/messages/lookup?link=${encodeURIComponent(link)}`, cookies });
+    expect(found.json()).toMatchObject({ channelId: TEXT_ID, messageId: "810000000000000001", message: { content: "Hello", embed: { title: "Patch notes" } } });
+    const otherServer = `https://discord.com/channels/${OTHER_GUILD_ID}/${TEXT_ID}/810000000000000001`;
+    expect((await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}/messages/lookup?link=${encodeURIComponent(otherServer)}`, cookies })).statusCode).toBe(400);
+
+    const edited = await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/messages/${TEXT_ID}/810000000000000001`, { message: { content: "", embed: { title: "Patch notes v2" } } });
+    expect(edited.statusCode).toBe(200);
+    expect(discord.editMessage).toHaveBeenCalledWith(TEXT_ID, "810000000000000001", { content: "", embeds: [{ title: "Patch notes v2" }] });
+    expect((await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}/messages`, cookies })).json().messages[0]).toMatchObject({ summary: "Patch notes v2", editedBy: USER_ID });
+
+    // Someone else's message can't be edited.
+    posted.set("810000000000000002", { id: "810000000000000002", author: { id: USER_ID }, content: "mine" });
+    expect((await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/messages/${TEXT_ID}/810000000000000002`, { message: { content: "x" } })).statusCode).toBe(400);
+  });
+
   it("logs out and forgets the session", async () => {
     const cookies = await login();
     expect((await write(cookies, "POST", "/auth/logout")).statusCode).toBe(200);
