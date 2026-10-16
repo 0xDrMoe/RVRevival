@@ -27,6 +27,7 @@ The Discord bot for the Rumbleverse Revival server. It is built as a set of inde
 | [Quarantine](#quarantine) | `/quarantine` | Manage Roles or the mod role (`role`: Manage Server) |
 | [Anti-nuke](#anti-nuke) | `/antinuke`, or the dashboard's Anti-nuke page | The server owner (`status`: Administrator) |
 | [Embed builder](#embed-builder) | The dashboard's Embed builder page | Manage Server or a dashboard role that can change settings |
+| [Feeds](#feeds) | `/feed`, or the dashboard's Feeds page | Manage Server or a dashboard role that can change settings |
 | [Ban appeals](#ban-appeals) | The dashboard's Ban appeals page | Manage Server or a dashboard role that can change settings (banned members fill in the form) |
 | [Join-to-create voice](#join-to-create-voice) | `/voice` | Manage Server (`setup`, `off`), the channel's owner (`lock`, `unlock`), anyone in the channel (`claim`) |
 | [Leveling](#leveling) | `/rank`, `/leaderboard`, `/levels`, or the dashboard's Leveling page | Everyone (`/rank`, `/leaderboard`), Manage Server (`/levels`) |
@@ -354,6 +355,15 @@ The dashboard's **Embed builder** page writes announcements, rules and info post
 
 Discord's limits are checked before sending: 2,000 characters of text, 6,000 in the embed. The bot needs View Channel, Send Messages and Embed Links in the channel.
 
+### Feeds
+
+`/feed` (or the dashboard's **Feeds** page) posts new YouTube videos, subreddit posts and blog or news articles in a channel.
+
+- **`/feed add type source channel [role] [message]`** follows something. `type` is YouTube, Reddit or RSS. For YouTube, `source` is the channel's link (`https://youtube.com/@name` or a `/channel/UC…` link); for Reddit, the subreddit (`r/gaming`); for RSS, the feed's full link. `role` is pinged with each post. `message` replaces the default text and can use `{title}`, `{link}`, `{author}` and `{feed}`.
+- **`/feed remove id`** stops following it. **`/feed list`** shows what the server follows, with the problem next to any feed that can't be read or posted.
+
+The bot checks each feed every 10 minutes and posts only items that appear after the feed was added, at most three at a time (oldest first), so a feed never floods a channel. A server can follow up to 10 feeds. Feed links must point to the public internet: addresses on private networks (like the VPS itself) are refused, also after redirects. Needs **Manage Server**. The bot needs View Channel and Send Messages in the channel.
+
 ### Ban appeals
 
 Lets banned members ask to be unbanned without a second account or a DM to a moderator. Turn it on in the dashboard's **Ban appeals** page (off by default), then:
@@ -588,6 +598,7 @@ src/
     quarantine.js        Quarantine: /quarantine
     tempRole.js          Temporary roles: /temprole
     voice.js             Join-to-create voice: /voice
+    feed.js              Feeds: /feed
     commandHelpers.js    Shared start of moderation-style commands (language, permission check)
   countries/             Country roles: country list, name matching and search
   roles/                 Country roles: find, create, assign and remove roles
@@ -598,6 +609,7 @@ src/
   raid/                  Raid protection: lockdown planning and restoring, the new-account gate and join alerts (raid.js), anti-nuke (antiNuke.js)
   tempRoles/             Temporary roles: saved in SQLite (tempRoleStore.js), taken away when due (tempRoleScheduler.js)
   messages/              Embed builder: checking messages against Discord's limits (embedMessage.js), messages posted from the dashboard (sentMessageStore.js)
+  feeds/                 Feeds: reading RSS and Atom (parseFeed.js), safe fetching and finding YouTube and Reddit feeds (fetchFeed.js), saved in SQLite (feedStore.js), adding feeds and posts (feeds.js), checked on time (feedPoller.js)
   appeals/               Ban appeals: settings (config.js), saved in SQLite (appealStore.js); the form and decisions live in the dashboard
   voice/                 Join-to-create voice: making and deleting channels (tempVoice.js), saved in SQLite (tempVoiceStore.js)
   leveling/              Leveling: settings and level math (config.js), XP in SQLite (levelStore.js), earning XP and rewards (leveling.js)

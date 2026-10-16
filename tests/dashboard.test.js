@@ -933,6 +933,34 @@ describe("dashboard", () => {
     expect((await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/messages/${TEXT_ID}/810000000000000002`, { message: { content: "x" } })).statusCode).toBe(400);
   });
 
+  it("follows and unfollows feeds", async () => {
+    await app.close();
+    const rss = `<rss><channel><title>Patch News</title><item><title>One</title><guid>1</guid></item></channel></rss>`;
+    const feedFetchOptions = {
+      fetchImpl: vi.fn(async (url) => (String(url) === "https://example.com/rss" ? new Response(rss) : new Response("", { status: 404 }))),
+      lookup: vi.fn(async () => [{ address: "93.184.216.34" }]),
+    };
+    app = await buildDashboard({ config, db, discord, guildSettings, store, logger: fakeLogger(), feedFetchOptions });
+    const cookies = await login();
+    const add = (body) => write(cookies, "POST", `/api/guilds/${GUILD_ID}/feeds`, { kind: "rss", source: "https://example.com/rss", channelId: TEXT_ID, ...body });
+
+    expect((await add({ kind: "tiktok" })).statusCode).toBe(400);
+    expect((await add({ channelId: VOICE_ID })).statusCode).toBe(400);
+    expect((await add({ roleId: GUILD_ID })).statusCode).toBe(400);
+    expect((await add({ message: "x".repeat(501) })).statusCode).toBe(400);
+    expect((await add({ source: "http://127.0.0.1/" })).json()).toMatchObject({ error: "blocked" });
+    const added = await add({ roleId: ROLE_ID, message: "New: {title}" });
+    expect(added.statusCode).toBe(200);
+    expect(added.json().feed).toMatchObject({ id: 1, name: "Patch News", roleId: ROLE_ID, message: "New: {title}" });
+    expect((await add({})).statusCode).toBe(409);
+
+    const list = await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}/feeds`, cookies });
+    expect(list.json()).toMatchObject({ max: 10, feeds: [{ id: 1, kind: "rss", channelId: TEXT_ID }] });
+    expect((await write(cookies, "DELETE", `/api/guilds/${GUILD_ID}/feeds/2`)).statusCode).toBe(404);
+    expect((await write(cookies, "DELETE", `/api/guilds/${GUILD_ID}/feeds/1`)).statusCode).toBe(200);
+    expect((await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}/feeds`, cookies })).json().feeds).toEqual([]);
+  });
+
   it("logs out and forgets the session", async () => {
     const cookies = await login();
     expect((await write(cookies, "POST", "/auth/logout")).statusCode).toBe(200);

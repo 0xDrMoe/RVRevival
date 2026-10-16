@@ -47,6 +47,9 @@ import { appealQuestions, MAX_ANSWER_LENGTH, normalizeAppeals } from "../appeals
 import { normalizeCategories } from "../tickets/categories.js";
 import { checkMessage, editableMessage, InvalidMessage, messageSummary, parseMessageLink } from "../messages/embedMessage.js";
 import { SentMessageStore } from "../messages/sentMessageStore.js";
+import { addFeed, FeedDuplicate, FeedError, FeedLimit } from "../feeds/feeds.js";
+import { FEED_KINDS } from "../feeds/fetchFeed.js";
+import { FeedStore, MAX_FEEDS } from "../feeds/feedStore.js";
 import { buildPanelButtons, buildPanelMessage } from "../tickets/tickets.js";
 import { ScheduledMessageStore } from "../scheduled/scheduledMessageStore.js";
 import { MAX_DELAY_MS, MAX_INTERVAL_MS, MAX_SCHEDULED, MAX_SCHEDULED_LENGTH, MIN_INTERVAL_MS } from "../scheduled/scheduler.js";
@@ -176,7 +179,8 @@ const sameText = (a, b) =>
 //   guildSettings   GuildSettings on the same database
 //   store           CaseStore on the same database
 //   logger
-export async function buildDashboard({ config, db, discord, guildSettings, store, logger }) {
+// `feedFetchOptions` replaces fetch and DNS for feeds in tests.
+export async function buildDashboard({ config, db, discord, guildSettings, store, logger, feedFetchOptions }) {
   const sessions = new SessionStore(db, { secret: config.sessionSecret });
   const memberEvents = new MemberEventStore(db);
   const tickets = new TicketStore(db);
@@ -187,6 +191,7 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
   const tempRoles = new TempRoleStore(db);
   const appeals = new AppealStore(db);
   const sentMessages = new SentMessageStore(db);
+  const feeds = new FeedStore(db);
   const secureCookies = config.url.startsWith("https://");
   const cookieOptions = { path: "/", httpOnly: true, secure: secureCookies, sameSite: "lax" };
 
@@ -1372,6 +1377,82 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     const summary = messageSummary(body);
     sentMessages.edited(guildId, messageId, { summary, editedBy: session.userId });
     await logAction(guildId, session, `**Message edited** in <#${channelId}>`, [summary, `https://discord.com/channels/${guildId}/${channelId}/${messageId}`]);
+    return { ok: true };
+  });
+
+  // --- Feeds ------------------------------------------------------------------
+
+  const feedJson = (feed) => ({
+    id: feed.id,
+    kind: feed.kind,
+    source: feed.source,
+    name: feed.name,
+    channelId: feed.channelId,
+    roleId: feed.roleId,
+    message: feed.message,
+    createdAt: feed.createdAt,
+    checkedAt: feed.checkedAt,
+    postedAt: feed.postedAt,
+    lastError: feed.lastError,
+  });
+
+  app.get("/api/guilds/:id/feeds", async (request, reply) => {
+    const access = await requireGuild(request, reply, { manage: true });
+    if (!access) {
+      return reply;
+    }
+    return { feeds: feeds.list(access.guildId).map(feedJson), max: MAX_FEEDS };
+  });
+
+  // Adding reads the feed once, which can take a few seconds.
+  app.post("/api/guilds/:id/feeds", { config: { rateLimit: { max: 20, timeWindow: "1 minute" } } }, async (request, reply) => {
+    const access = await requireGuild(request, reply, { manage: true });
+    if (!access) {
+      return reply;
+    }
+    const { guildId, session } = access;
+    const { kind, source, channelId, roleId = null, message = null } = request.body ?? {};
+    if (!FEED_KINDS.includes(kind) || typeof source !== "string") {
+      return reply.code(400).send({ error: "bad-feed", message: "Pick YouTube, Reddit or RSS and type what to follow." });
+    }
+    const [guild, channels] = await Promise.all([discord.guild(guildId), discord.channels(guildId)]);
+    if (!channels.some((channel) => channel.id === channelId && POSTABLE.has(channel.type))) {
+      return reply.code(400).send({ error: "bad-channel", message: "Pick a text or announcement channel." });
+    }
+    if (roleId !== null && (roleId === guildId || !guild.roles.some((role) => role.id === roleId))) {
+      return reply.code(400).send({ error: "bad-role", message: "Pick a role from this server (not @everyone)." });
+    }
+    if (message !== null && (typeof message !== "string" || message.length > 500)) {
+      return reply.code(400).send({ error: "bad-message", message: "The message is at most 500 characters." });
+    }
+    let feed;
+    try {
+      feed = await addFeed({ store: feeds, guildId, kind, source, channelId, roleId, message, createdBy: session.userId, fetchOptions: feedFetchOptions });
+    } catch (error) {
+      if (error instanceof FeedLimit || error instanceof FeedDuplicate) {
+        return reply.code(409).send({ error: "feed-refused", message: error.message });
+      }
+      if (error instanceof FeedError) {
+        return reply.code(400).send({ error: error.reason, message: error.message });
+      }
+      throw error;
+    }
+    await logAction(guildId, session, `**Feed added:** ${feed.name} → <#${channelId}>`, [feed.url]);
+    return { feed: feedJson(feed) };
+  });
+
+  app.delete("/api/guilds/:id/feeds/:feedId", async (request, reply) => {
+    const access = await requireGuild(request, reply, { manage: true });
+    if (!access) {
+      return reply;
+    }
+    const id = Number.parseInt(request.params.feedId, 10);
+    const feed = Number.isInteger(id) ? feeds.get(id) : undefined;
+    if (!feed || feed.guildId !== access.guildId) {
+      return reply.code(404).send({ error: "not-found" });
+    }
+    feeds.delete(access.guildId, id);
+    await logAction(access.guildId, access.session, `**Feed removed:** ${feed.name}`, []);
     return { ok: true };
   });
 

@@ -18,6 +18,8 @@ import { createQuarantine } from "./moderation/quarantine.js";
 import { SavedRoleStore } from "./members/savedRoleStore.js";
 import { createRolePersistence } from "./members/rolePersistence.js";
 import { TempRoleStore } from "./tempRoles/tempRoleStore.js";
+import { FeedStore } from "./feeds/feedStore.js";
+import { createFeedPoller } from "./feeds/feedPoller.js";
 import { createTempRoleScheduler } from "./tempRoles/tempRoleScheduler.js";
 import { createRaidGuard } from "./raid/raid.js";
 import { createTempVoice } from "./voice/tempVoice.js";
@@ -155,6 +157,8 @@ async function start() {
   const quarantine = createQuarantine({ guildSettings, store: savedRoles, modLog, logger });
   // Roles that end by themselves (/temprole).
   const tempRoles = new TempRoleStore(db);
+  // YouTube channels, subreddits and RSS feeds followed with /feed.
+  const feeds = new FeedStore(db);
   // Gives members their roles back when they rejoin (/welcome persist).
   const rolePersistence = createRolePersistence({
     guildSettings,
@@ -194,6 +198,7 @@ async function start() {
     birthdays: birthdayStore,
     quarantine,
     tempRoles,
+    feeds,
     giveaways,
     tickets,
     levels,
@@ -242,6 +247,7 @@ async function start() {
   let scheduledMessageScheduler;
   let birthdays;
   let tempRoleScheduler;
+  let feedPoller;
 
   function connect(intents) {
     client = new Client({ intents, partials: PARTIALS });
@@ -276,6 +282,9 @@ async function start() {
       tempRoleScheduler?.stop();
       tempRoleScheduler = createTempRoleScheduler({ client: readyClient, store: tempRoles, modLog, logger });
       tempRoleScheduler.start();
+      feedPoller?.stop();
+      feedPoller = createFeedPoller({ client: readyClient, store: feeds, logger, forcedLanguage });
+      feedPoller.start();
     });
 
     client.on(Events.InteractionCreate, (interaction) => {

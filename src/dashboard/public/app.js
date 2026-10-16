@@ -136,6 +136,7 @@ const NAV = [
       { id: "responders", icon: "repeat", tone: "cyan", manage: true, on: (s) => (s.autoResponders ?? []).length > 0 },
       { id: "scheduled", icon: "calendar", tone: "blue", manage: true },
       { id: "embeds", icon: "edit", tone: "purple", manage: true },
+      { id: "feeds", icon: "rss", tone: "amber", manage: true },
     ],
   },
   {
@@ -4515,6 +4516,149 @@ async function showEmbeds(guildId) {
   await loadSent();
 }
 
+// --- Feeds ---------------------------------------------------------------------------
+
+const FEED_KINDS = ["youtube", "reddit", "rss"];
+const FEED_TONES = { youtube: "red", reddit: "amber", rss: "blue" };
+
+function feedRow(guildId, feed, data, onRemoved) {
+  const channel = data.channels.find((item) => item.id === feed.channelId);
+  const role = feed.roleId && data.roles.find((item) => item.id === feed.roleId);
+  const facts = [
+    channel ? `#${channel.name}` : t("unknownOption", { id: feed.channelId }),
+    role ? `@${role.name}` : null,
+    feed.postedAt ? t("feedsLastPost", { date: formatAgo(feed.postedAt) }) : t("feedsNoPostYet"),
+  ].filter(Boolean);
+  const row = h(
+    "li",
+    { class: "sent-row" },
+    iconChip(feed.kind === "rss" ? "rss" : feed.kind === "youtube" ? "image" : "message", FEED_TONES[feed.kind], "sm"),
+    h(
+      "span",
+      { class: "ticket-main" },
+      h("span", { class: "ticket-subject" }, h("strong", {}, feed.name), " ", h("span", { class: "badge" }, t(`feedsKind_${feed.kind}`))),
+      h("span", { class: "muted" }, facts.join(" · ")),
+      feed.lastError ? h("span", { class: "danger-text small-text" }, t("feedsProblem", { error: feed.lastError })) : null,
+    ),
+    h(
+      "button",
+      {
+        class: "ghost small",
+        type: "button",
+        onclick: async () => {
+          if (!confirm(t("feedsRemoveConfirm", { name: feed.name }))) {
+            return;
+          }
+          try {
+            await api(`/api/guilds/${guildId}/feeds/${feed.id}`, { method: "DELETE" });
+            toast(t("feedsRemoved"));
+            onRemoved();
+          } catch (error) {
+            failed(error);
+          }
+        },
+      },
+      t("tagRemove"),
+    ),
+  );
+  return row;
+}
+
+async function showFeeds(guildId) {
+  const data = await loadManagedGuild(guildId);
+  if (!data) {
+    return;
+  }
+  const list = h("ul", { class: "ticket-list" });
+  const empty = h("p", { class: "muted empty" }, t("feedsNone"));
+  const countPill = h("span", { class: "count-pill" });
+  let kind = "youtube";
+  const sourceHelp = h("span", { class: "help" });
+  const sourceInput = h("input", { id: "feedSource", type: "text", required: true, maxLength: 500 });
+  const showKind = () => {
+    sourceInput.placeholder = t(`feedsSourcePlaceholder_${kind}`);
+    sourceHelp.textContent = t(`feedsSourceHelp_${kind}`);
+  };
+  const roles = data.roles.filter((role) => role.id !== guildId && !role.managed).map((role) => ({ id: role.id, label: `@${role.name}` }));
+  const add = h("button", { class: "primary", type: "submit" }, icon("plus", "icon small"), t("feedsAdd"));
+  const messageInput = h("textarea", { id: "feedMessage", rows: 2, maxLength: 500, placeholder: t("feedsMessagePlaceholder") });
+
+  async function load() {
+    const result = await api(`/api/guilds/${guildId}/feeds`);
+    list.replaceChildren(...result.feeds.map((feed) => feedRow(guildId, feed, data, () => load().catch(failed))));
+    empty.hidden = result.feeds.length > 0;
+    countPill.textContent = t("tagsCount", { count: result.feeds.length, max: result.max });
+    add.disabled = result.feeds.length >= result.max;
+  }
+
+  const form = h(
+    "form",
+    {
+      onsubmit: async (event) => {
+        event.preventDefault();
+        add.disabled = true;
+        add.lastChild.textContent = t("feedsAdding");
+        try {
+          const result = await api(`/api/guilds/${guildId}/feeds`, {
+            method: "POST",
+            body: {
+              kind,
+              source: sourceInput.value.trim(),
+              channelId: form.querySelector("#feedChannel").value || null,
+              roleId: form.querySelector("#feedRole").value || null,
+              message: messageInput.value.trim() || null,
+            },
+          });
+          toast(t("feedsAdded", { name: result.feed.name }));
+          sourceInput.value = "";
+          messageInput.value = "";
+          await load();
+        } catch (error) {
+          failed(error);
+        } finally {
+          add.lastChild.textContent = t("feedsAdd");
+          add.disabled = false;
+        }
+      },
+    },
+    field(
+      "feedsKind",
+      null,
+      segmented(
+        t("feedsKind"),
+        FEED_KINDS.map((value) => ({ value, text: t(`feedsKind_${value}`) })),
+        kind,
+        (value) => {
+          kind = value;
+          showKind();
+        },
+      ),
+    ),
+    h("label", { class: "field" }, h("span", { class: "field-label" }, t("feedsSource")), sourceInput, sourceHelp),
+    h(
+      "div",
+      { class: "embed-grid" },
+      field("feedsChannel", null, picker({ id: "feedChannel", options: postableChannels(data), value: null, emptyLabel: t("embedPickChannel") })),
+      field("feedsRole", "feedsRoleHelp", picker({ id: "feedRole", options: roles, value: null, emptyLabel: t("feedsNoRole") })),
+    ),
+    field("feedsMessage", "feedsMessageHelp", messageInput),
+    h("div", { class: "toolbar" }, h("span", { class: "grow" }), add),
+  );
+  form.querySelector("#feedChannel").required = true;
+  showKind();
+
+  show(
+    guildLayout(
+      data,
+      "feeds",
+      pageHero("feeds", t("feedsIntro"), data),
+      card(t("feedsNew"), "plus", "green", form),
+      card(t("page_feeds"), "rss", "amber", h("div", { class: "toolbar" }, h("p", { class: "help grow" }, t("feedsListHelp")), countPill), empty, list),
+    ),
+  );
+  await load();
+}
+
 // --- Activity ----------------------------------------------------------------------
 
 // A line of a dashboard change: **bold** as bold, and channel and role mentions as names.
@@ -4596,6 +4740,7 @@ const SHOW_PAGE = {
   responders: showResponders,
   scheduled: showScheduled,
   embeds: showEmbeds,
+  feeds: showFeeds,
   moderation: showModeration,
   logging: showLogging,
   access: showAccess,

@@ -3178,3 +3178,7 @@ dialog textarea {
 .link-bar > .muted {
   white-space: nowrap;
 }
+
+.small-text {
+  font-size: 0.82rem;
+}
