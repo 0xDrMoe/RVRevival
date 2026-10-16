@@ -23,6 +23,7 @@ const IGNORABLE_CHANNELS = [
   ChannelType.GuildCategory,
 ];
 const MAX_IGNORED_CHANNELS = 100;
+const MAX_DASHBOARD_ROLES = 25;
 const LOG_EVENTS = Object.values(LogEvent);
 
 // Each setting: the kind of value, and (for lists) what each item may be.
@@ -35,6 +36,7 @@ export const SETTING_RULES = Object.freeze({
   [Setting.SERVER_LOG_CHANNEL]: { kind: "channel", types: POSTING_CHANNELS, label: "Server-log channel" },
   [Setting.DISABLED_LOG_EVENTS]: { kind: "events", label: "Switched-off log events" },
   [Setting.LOG_IGNORED_CHANNELS]: { kind: "channels", types: IGNORABLE_CHANNELS, label: "Ignored log channels" },
+  [Setting.DASHBOARD_ROLES]: { kind: "roles", label: "Dashboard access roles" },
 });
 
 // Checks one value. Returns what to save: null clears the setting, and empty
@@ -47,11 +49,12 @@ function checkValue(setting, value, { guildId, channels, roles }) {
   if (value === null) {
     return null;
   }
+  const roleOk = (id) => typeof id === "string" && id !== guildId && roles.some((role) => role.id === id);
   const channelOk = (id, types) => channels.some((channel) => channel.id === id && types.includes(channel.type));
 
   switch (rule.kind) {
     case "role":
-      if (typeof value !== "string" || value === guildId || !roles.some((role) => role.id === value)) {
+      if (!roleOk(value)) {
         throw new InvalidSetting(setting, "Pick a role from this server (not @everyone).");
       }
       return value;
@@ -66,6 +69,16 @@ function checkValue(setting, value, { guildId, channels, roles }) {
       }
       const events = LOG_EVENTS.filter((event) => value.includes(event));
       return events.length > 0 ? events : null;
+    }
+    case "roles": {
+      if (!Array.isArray(value) || value.length > MAX_DASHBOARD_ROLES) {
+        throw new InvalidSetting(setting, `Pick at most ${MAX_DASHBOARD_ROLES} roles.`);
+      }
+      const ids = [...new Set(value)];
+      if (!ids.every(roleOk)) {
+        throw new InvalidSetting(setting, "Pick roles from this server (not @everyone).");
+      }
+      return ids.length > 0 ? ids : null;
     }
     case "channels": {
       if (!Array.isArray(value) || value.length > MAX_IGNORED_CHANNELS) {
@@ -90,7 +103,7 @@ export function checkSettingChanges(changes, server) {
   return Object.fromEntries(Object.entries(changes).map(([setting, value]) => [setting, checkValue(setting, value, server)]));
 }
 
-// "<@&123>", "<#456>", "Edited messages, Members joining" or "none", for the log entry.
+// "<@&123>", "<#456>", "<@&1>, <@&2>", "Edited messages, Members joining" or "none", for the log entry.
 export function describeValue(setting, value) {
   if (value === null || value === undefined || (Array.isArray(value) && value.length === 0)) {
     return "*none*";
@@ -102,6 +115,8 @@ export function describeValue(setting, value) {
       return `<#${value}>`;
     case "channels":
       return value.map((id) => `<#${id}>`).join(", ");
+    case "roles":
+      return value.map((id) => `<@&${id}>`).join(", ");
     default:
       return Array.isArray(value) ? value.join(", ") : String(value);
   }

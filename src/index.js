@@ -178,7 +178,7 @@ async function start() {
       }
     });
 
-    // Forget a deleted staff or mod role, so /settings show never points at a role that is gone.
+    // Forget a deleted staff, mod or dashboard role, so settings never point at a role that is gone.
     client.on(Events.GuildRoleDelete, (role) => {
       for (const setting of [Setting.STAFF_ROLE, Setting.MOD_ROLE]) {
         if (guildSettings.get(role.guild.id, setting) === role.id) {
@@ -187,6 +187,11 @@ async function start() {
             .then(() => logger.info("A role chosen in /settings was deleted; choose a new one", { guildId: role.guild.id, setting }))
             .catch((error) => logger.error("Couldn't clear a deleted role from the settings", { setting, error }));
         }
+      }
+      if (guildSettings.getList(role.guild.id, Setting.DASHBOARD_ROLES).includes(role.id)) {
+        guildSettings
+          .toggleInList(role.guild.id, Setting.DASHBOARD_ROLES, role.id)
+          .catch((error) => logger.error("Couldn't remove a deleted dashboard role", { error }));
       }
     });
 

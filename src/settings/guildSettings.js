@@ -31,6 +31,7 @@ export const Setting = Object.freeze({
   SERVER_LOG_CHANNEL: "serverLogChannelId",
   DISABLED_LOG_EVENTS: "disabledLogEvents", // server-log events switched off, a list of names
   LOG_IGNORED_CHANNELS: "logIgnoredChannels", // channels the server log skips, a list of IDs
+  DASHBOARD_ROLES: "dashboardRoleIds", // roles that may see the dashboard and manage cases, a list of IDs
 });
 
 const KNOWN_SETTINGS = new Set(Object.values(Setting));

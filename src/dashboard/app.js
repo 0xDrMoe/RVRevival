@@ -3,16 +3,22 @@
 //   GET  /auth/login                      sends the person to Discord to log in
 //   GET  /auth/callback                   Discord sends them back here
 //   POST /auth/logout
-//   GET  /api/me                          who is logged in, and the servers they can manage
+//   GET  /api/me                          who is logged in, and the servers they can open
 //   GET  /api/guilds/:id                  a server's settings, channels, roles and case counts
+//   GET  /api/guilds/:id/stats            numbers for the overview page (?tz=)
 //   PUT  /api/guilds/:id/settings         change some settings
-//   GET  /api/guilds/:id/cases            search cases (?user=&action=&before=)
+//   GET  /api/guilds/:id/cases            search cases (?user=&moderator=&action=&from=&to=&q=&before=)
+//   GET  /api/guilds/:id/cases/export     the same search as a CSV file
 //   PATCH  /api/guilds/:id/cases/:number  change a case's reason
 //   DELETE /api/guilds/:id/cases/:number  delete a case
 //
-// Only people with Manage Server (or Administrator, or the owner) in a server
-// the bot is in can see or change it. That is checked on every request against
-// their Discord server list, re-read from Discord at most every few minutes.
+// Two levels of access to a server the bot is in:
+//   - "manage": Manage Server, Administrator or the owner. Everything.
+//   - "cases": anyone with one of the server's dashboard roles (a setting). The
+//     overview and the cases, but not the settings.
+// That is checked on every request: permissions against their Discord server
+// list (re-read at most every few minutes), roles against the bot's view of
+// the member (re-read at most every 30 seconds).
 // Every change is posted in the server's logs channel, like bot commands are.
 
 import { randomBytes, timingSafeEqual } from "node:crypto";
@@ -35,7 +41,14 @@ const STATE_COOKIE = "rv_oauth_state";
 const GUILD_LIST_MS = 5 * 60 * 1000;
 const MAX_REASON_LENGTH = 512;
 const CASES_PAGE = 50;
+const EXPORT_LIMIT = 10_000;
+const MAX_SEARCH_LENGTH = 100;
+const STATS_DAYS = 30;
+const DAY_MS = 24 * 60 * 60 * 1000;
 const DISCORD_ID = /^\d{17,20}$/;
+const CASE_ACTIONS = Object.values(CaseAction);
+
+export const Access = Object.freeze({ MANAGE: "manage", CASES: "cases" });
 
 // What the browser gets for a case.
 const caseJson = (moderationCase) => ({
@@ -53,6 +66,62 @@ const caseJson = (moderationCase) => ({
   updatedAt: moderationCase.updatedAt ?? null,
 });
 
+// What the browser gets for a role.
+const roleJson = ({ id, name, color, position, managed, hoist, mentionable, permissions, unicode_emoji: emoji }) => ({
+  id,
+  name,
+  color,
+  position,
+  managed,
+  hoist: hoist ?? false,
+  mentionable: mentionable ?? false,
+  permissions: permissions ?? "0",
+  emoji: emoji ?? null,
+});
+
+// The case search filters from a query string, or { error } for a 400 reply.
+export function parseCaseFilters(query = {}) {
+  const { user, moderator, action, from, to, q } = query;
+  if (user && !DISCORD_ID.test(user)) {
+    return { error: "bad-user", message: "Paste a user ID (17 to 20 digits)." };
+  }
+  if (moderator && !DISCORD_ID.test(moderator)) {
+    return { error: "bad-moderator", message: "Paste a moderator's user ID (17 to 20 digits)." };
+  }
+  const actions = action ? [...new Set(String(action).split(","))] : [];
+  if (!actions.every((name) => CASE_ACTIONS.includes(name))) {
+    return { error: "bad-action" };
+  }
+  const time = (value) => (value === undefined || value === "" ? undefined : Number(value));
+  const [fromMs, toMs] = [time(from), time(to)];
+  if ([fromMs, toMs].some((value) => value !== undefined && !(Number.isSafeInteger(value) && value >= 0))) {
+    return { error: "bad-date" };
+  }
+  const text = typeof q === "string" ? q.trim() : "";
+  if (text.length > MAX_SEARCH_LENGTH) {
+    return { error: "bad-search", message: `Search for at most ${MAX_SEARCH_LENGTH} characters.` };
+  }
+  return {
+    filters: {
+      userId: user || undefined,
+      moderatorId: moderator || undefined,
+      actions: actions.length > 0 ? actions : undefined,
+      from: fromMs,
+      to: toMs,
+      text: text || undefined,
+    },
+  };
+}
+
+// One CSV cell. Cells a spreadsheet would run as a formula get a leading '.
+function csvCell(value) {
+  let text = value === undefined || value === null ? "" : String(value);
+  if (/^[=+\-@\t\r]/.test(text)) {
+    text = `'${text}`;
+  }
+  return /[",\r\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
+}
+
 const sameText = (a, b) =>
   typeof a === "string" && typeof b === "string" && a.length === b.length && timingSafeEqual(Buffer.from(a), Buffer.from(b));
 
@@ -68,7 +137,7 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
   const secureCookies = config.url.startsWith("https://");
   const cookieOptions = { path: "/", httpOnly: true, secure: secureCookies, sameSite: "lax" };
 
-  // Caddy (or nginx) on the same machine forwards requests to us.
+  // nginx (or Caddy) on the same machine forwards requests to us.
   const app = Fastify({ logger: false, trustProxy: "127.0.0.1", bodyLimit: 64 * 1024 });
   await app.register(fastifyCookie, { secret: config.sessionSecret });
   await app.register(fastifyRateLimit, { max: 300, timeWindow: "1 minute" });
@@ -175,18 +244,34 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     return { ...session, token };
   }
 
-  // The servers this person can manage ([{ id, name, icon }]), from Discord at
-  // most every GUILD_LIST_MS (or right away with `refresh`).
-  async function manageableGuilds(session, { refresh = false } = {}) {
+  // The servers this person might open: the ones they manage, and the ones the
+  // bot is in (where a dashboard role could let them in). [{ id, name, icon,
+  // manage }], from Discord at most every GUILD_LIST_MS (or right away with
+  // `refresh`). Lists saved by older versions only held managed servers.
+  async function knownGuilds(session, { refresh = false } = {}) {
     const fresh = session.guilds && Date.now() - session.guildsLoadedAt < GUILD_LIST_MS;
     if (fresh && !refresh) {
-      return session.guilds;
+      return session.guilds.map((guild) => ({ manage: true, ...guild }));
     }
-    const guilds = (await discord.fetchUserGuilds(session.accessToken))
-      .filter(canManage)
-      .map(({ id, name, icon }) => ({ id, name, icon: icon ?? null }));
+    const [userGuilds, botGuilds] = await Promise.all([discord.fetchUserGuilds(session.accessToken), discord.botGuildIds()]);
+    const guilds = userGuilds
+      .filter((guild) => canManage(guild) || botGuilds.has(guild.id))
+      .map((guild) => ({ id: guild.id, name: guild.name, icon: guild.icon ?? null, manage: canManage(guild) }));
     sessions.setGuilds(session.token, guilds);
     return guilds;
+  }
+
+  // Access.MANAGE, Access.CASES or undefined, for one entry of knownGuilds.
+  async function accessTo(session, guild) {
+    if (guild.manage) {
+      return Access.MANAGE;
+    }
+    const roles = guildSettings.getList(guild.id, Setting.DASHBOARD_ROLES);
+    if (roles.length === 0) {
+      return undefined;
+    }
+    const member = await discord.member(guild.id, session.userId);
+    return member?.roles?.some((role) => roles.includes(role)) ? Access.CASES : undefined;
   }
 
   // Ends the session if Discord no longer accepts its access token.
@@ -203,9 +288,9 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     }
   }
 
-  // The session and server for /api/guilds/:id routes, or undefined after
-  // replying 401, 403 or 404.
-  async function requireGuild(request, reply) {
+  // The session, server and access level for /api/guilds/:id routes, or
+  // undefined after replying 401, 403 or 404. `manage` routes need Access.MANAGE.
+  async function requireGuild(request, reply, { manage = false } = {}) {
     const session = requireSession(request, reply);
     if (!session) {
       return undefined;
@@ -215,11 +300,12 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
       reply.code(404).send({ error: "not-found" });
       return undefined;
     }
-    const guilds = await withDiscordLogin(session, reply, () => manageableGuilds(session));
+    const guilds = await withDiscordLogin(session, reply, () => knownGuilds(session));
     if (reply.sent) {
       return undefined;
     }
-    if (!guilds.some((guild) => guild.id === guildId)) {
+    const guild = guilds.find((entry) => entry.id === guildId);
+    if (!guild) {
       reply.code(403).send({ error: "forbidden" });
       return undefined;
     }
@@ -227,7 +313,12 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
       reply.code(404).send({ error: "bot-not-in-server" });
       return undefined;
     }
-    return { session, guildId };
+    const access = await accessTo(session, guild);
+    if (!access || (manage && access !== Access.MANAGE)) {
+      reply.code(403).send({ error: "forbidden" });
+      return undefined;
+    }
+    return { session, guildId, access };
   }
 
   // Posts what someone did on the dashboard in the server's logs channel.
@@ -256,11 +347,22 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
       return reply;
     }
     return withDiscordLogin(session, reply, async () => {
-      const guilds = await manageableGuilds(session, { refresh: request.query?.refresh === "1" });
+      const guilds = await knownGuilds(session, { refresh: request.query?.refresh === "1" });
       const botGuilds = await discord.botGuildIds();
+      const listed = await Promise.all(
+        guilds.map(async (guild) => {
+          const botPresent = botGuilds.has(guild.id);
+          // A role lookup fails if the bot just left; then the server isn't listed.
+          const access = botPresent ? await accessTo(session, guild).catch(() => undefined) : guild.manage && Access.MANAGE;
+          if (!access) {
+            return undefined;
+          }
+          return { id: guild.id, name: guild.name, icon: guild.icon, botPresent, access };
+        }),
+      );
       return {
         user: { id: session.userId, username: session.username, avatar: session.avatar ?? null },
-        guilds: guilds.map((guild) => ({ ...guild, botPresent: botGuilds.has(guild.id) })),
+        guilds: listed.filter(Boolean),
         inviteUrl:
           `https://discord.com/oauth2/authorize?client_id=${discord.clientId}` +
           "&scope=bot+applications.commands&permissions=1374792314006",
@@ -274,23 +376,61 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
       return reply;
     }
     const { guildId } = access;
-    const [guild, channels] = await Promise.all([discord.guild(guildId), discord.channels(guildId)]);
+    const manage = access.access === Access.MANAGE;
+    const [guild, channels] = await Promise.all([discord.guild(guildId), manage ? discord.channels(guildId) : []]);
     return {
-      guild: { id: guild.id, name: guild.name, icon: guild.icon ?? null },
-      settings: guildSettings.all(guildId),
+      guild: {
+        id: guild.id,
+        name: guild.name,
+        icon: guild.icon ?? null,
+        memberCount: guild.approximate_member_count ?? null,
+        onlineCount: guild.approximate_presence_count ?? null,
+      },
+      access: access.access,
+      // People with a dashboard role only see the cases, not how the server is set up.
+      settings: manage ? guildSettings.all(guildId) : null,
       channels: channels
         .map(({ id, name, type, parent_id: parentId, position }) => ({ id, name, type, parentId: parentId ?? null, position }))
         .sort((a, b) => a.position - b.position),
-      roles: guild.roles
-        .filter((role) => role.id !== guildId)
-        .map(({ id, name, color, position, managed }) => ({ id, name, color, position, managed }))
-        .sort((a, b) => b.position - a.position),
+      roles: manage
+        ? guild.roles
+            .filter((role) => role.id !== guildId)
+            .map(roleJson)
+            .sort((a, b) => b.position - a.position)
+        : [],
       caseCounts: store.countGuildCases(guildId),
     };
   });
 
-  app.put("/api/guilds/:id/settings", async (request, reply) => {
+  app.get("/api/guilds/:id/stats", async (request, reply) => {
     const access = await requireGuild(request, reply);
+    if (!access) {
+      return reply;
+    }
+    // The viewer's time zone, as Date.getTimezoneOffset() gives it (minutes behind UTC).
+    const tz = Number(request.query?.tz ?? 0);
+    if (!Number.isInteger(tz) || Math.abs(tz) > 14 * 60) {
+      return reply.code(400).send({ error: "bad-time-zone" });
+    }
+    const dayOffsetMs = tz * 60 * 1000;
+    const today = Math.floor((Date.now() - dayOffsetMs) / DAY_MS);
+    const firstDay = today - (STATS_DAYS - 1);
+    const stats = store.caseStats(access.guildId, { since: firstDay * DAY_MS + dayOffsetMs, dayOffsetMs });
+    return {
+      days: STATS_DAYS,
+      firstDay,
+      dayStarts: Array.from({ length: STATS_DAYS }, (_, index) => (firstDay + index) * DAY_MS + dayOffsetMs),
+      perDay: stats.perDay.map((entry) => ({ ...entry, day: entry.day - firstDay })),
+      topModerators: stats.topModerators,
+      topMembers: stats.topMembers,
+      runningTempBans: stats.runningTempBans,
+      caseCounts: store.countGuildCases(access.guildId),
+      recent: store.searchCases(access.guildId, { limit: 6 }).map(caseJson),
+    };
+  });
+
+  app.put("/api/guilds/:id/settings", async (request, reply) => {
+    const access = await requireGuild(request, reply, { manage: true });
     if (!access) {
       return reply;
     }
@@ -331,28 +471,51 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     if (!access) {
       return reply;
     }
-    const { user, action, before } = request.query ?? {};
-    if (user && !DISCORD_ID.test(user)) {
-      return reply.code(400).send({ error: "bad-user", message: "Paste a user ID (17 to 20 digits)." });
+    const { filters, error, message } = parseCaseFilters(request.query);
+    if (error) {
+      return reply.code(400).send({ error, message });
     }
-    if (action && !Object.values(CaseAction).includes(action)) {
-      return reply.code(400).send({ error: "bad-action" });
-    }
+    const before = request.query?.before;
     const beforeNumber = before === undefined ? undefined : Number(before);
     if (beforeNumber !== undefined && !Number.isInteger(beforeNumber)) {
       return reply.code(400).send({ error: "bad-page" });
     }
-    const cases = store.searchCases(access.guildId, {
-      userId: user || undefined,
-      action: action || undefined,
-      before: beforeNumber,
-      limit: CASES_PAGE + 1,
-    });
+    const cases = store.searchCases(access.guildId, { ...filters, before: beforeNumber, limit: CASES_PAGE + 1 });
     const page = cases.slice(0, CASES_PAGE);
     return {
       cases: page.map(caseJson),
       nextBefore: cases.length > CASES_PAGE ? page.at(-1).number : null,
+      // Only counted for the first page.
+      total: beforeNumber === undefined ? store.countMatchingCases(access.guildId, filters) : null,
     };
+  });
+
+  app.get("/api/guilds/:id/cases/export", async (request, reply) => {
+    const access = await requireGuild(request, reply);
+    if (!access) {
+      return reply;
+    }
+    const { filters, error, message } = parseCaseFilters(request.query);
+    if (error) {
+      return reply.code(400).send({ error, message });
+    }
+    const header = ["Case", "Action", "Member ID", "Member", "Moderator ID", "Moderator", "Reason", "Duration (minutes)", "Date (UTC)"];
+    const rows = store.searchCases(access.guildId, { ...filters, limit: EXPORT_LIMIT }).map((entry) => [
+      entry.number,
+      entry.action,
+      entry.userId,
+      entry.userTag,
+      entry.moderatorId,
+      entry.moderatorTag,
+      entry.reason,
+      entry.durationMs ? Math.round(entry.durationMs / 60000) : "",
+      new Date(entry.createdAt).toISOString(),
+    ]);
+    const csv = [header, ...rows].map((row) => row.map(csvCell).join(",")).join("\r\n");
+    return reply
+      .header("Content-Type", "text/csv; charset=utf-8")
+      .header("Content-Disposition", `attachment; filename="cases-${access.guildId}.csv"`)
+      .send(`\uFEFF${csv}\r\n`);
   });
 
   // The case number from the URL, or undefined after replying 404.
