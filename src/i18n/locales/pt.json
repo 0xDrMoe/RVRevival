@@ -948,5 +948,21 @@
   "welcomePersistOn": "Membros que saem e voltam recebem seus cargos de volta. Cargos com permissões de moderação, cargos de bot e cargos acima do meu nunca são devolvidos sozinhos.",
   "welcomePersistOff": "Membros que voltarem não recebem os cargos antigos.",
   "welcomeShowPersistOn": "**Cargos ao voltar:** devolvidos",
-  "welcomeShowPersistOff": "**Cargos ao voltar:** não devolvidos"
+  "welcomeShowPersistOff": "**Cargos ao voltar:** não devolvidos",
+
+  "temproleCommandDescription": "Dá um cargo que é retirado sozinho depois",
+  "temproleAddDescription": "Dar um cargo a um membro por um tempo (dar de novo muda o fim)",
+  "temproleRemoveDescription": "Tirar um cargo temporário agora",
+  "temproleListDescription": "Listar cargos temporários, os que acabam antes primeiro",
+  "temproleDurationOptionDescription": "Por quanto tempo: 30m, 12h, 3d, 2w (1 minuto a 365 dias)",
+  "temproleBadDuration": "Essa duração não é válida. Use algo como 30m, 12h, 3d ou 2w (1 minuto a 365 dias).",
+  "temproleAlreadyHas": "{user} já tem {role} de forma permanente. Tire primeiro se deve acabar.",
+  "temproleFull": "Este servidor já tem {max} cargos temporários ativos.",
+  "temproleAdded": "{user} tem {role} até {when}.",
+  "temproleExtended": "{user} agora fica com {role} até {when}.",
+  "temproleNotTemporary": "{user} não tem {role} como cargo temporário.",
+  "temproleRemoved": "{role} foi tirado de {user}.",
+  "temproleListEmpty": "Nenhum cargo temporário ativo.",
+  "temproleList": "**Cargos temporários:**\n{list}",
+  "temproleListMore": "…e mais {count}."
 }

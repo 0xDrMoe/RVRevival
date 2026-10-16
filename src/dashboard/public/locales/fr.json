@@ -552,5 +552,6 @@
   "sectionPersist": "Rôles au retour",
   "persistEnabled": "Rendre les rôles quand un membre revient",
   "persistHelp": "Le bot retient les rôles de ceux qui partent, pour qu'on ne puisse pas se débarrasser d'un rôle restrictif en partant. Les rôles avec des permissions de modération, les rôles de bot et ceux au-dessus du bot ne sont jamais rendus automatiquement.",
-  "persistIgnoreHelp": "Rôles jamais rendus :"
+  "persistIgnoreHelp": "Rôles jamais rendus :",
+  "memberTempRole": "{role} jusqu'au {date}"
 }

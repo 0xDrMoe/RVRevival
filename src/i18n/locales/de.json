@@ -948,5 +948,21 @@
   "welcomePersistOn": "Mitglieder, die gehen und wiederkommen, bekommen ihre Rollen zurück. Rollen mit Moderationsrechten, Bot-Rollen und Rollen über meiner werden nie automatisch zurückgegeben.",
   "welcomePersistOff": "Mitglieder, die wiederkommen, bekommen ihre alten Rollen nicht zurück.",
   "welcomeShowPersistOn": "**Rollen beim Wiederkommen:** werden zurückgegeben",
-  "welcomeShowPersistOff": "**Rollen beim Wiederkommen:** werden nicht zurückgegeben"
+  "welcomeShowPersistOff": "**Rollen beim Wiederkommen:** werden nicht zurückgegeben",
+
+  "temproleCommandDescription": "Vergibt eine Rolle, die später von selbst wieder weggenommen wird",
+  "temproleAddDescription": "Einem Mitglied eine Rolle auf Zeit geben (erneut geben verschiebt das Ende)",
+  "temproleRemoveDescription": "Eine Zeitrolle sofort wegnehmen",
+  "temproleListDescription": "Zeitrollen auflisten, die bald endenden zuerst",
+  "temproleDurationOptionDescription": "Wie lange: 30m, 12h, 3d, 2w (1 Minute bis 365 Tage)",
+  "temproleBadDuration": "Das ist keine gültige Dauer. Nutze etwa 30m, 12h, 3d oder 2w (1 Minute bis 365 Tage).",
+  "temproleAlreadyHas": "{user} hat {role} schon dauerhaft. Nimm sie zuerst weg, wenn sie enden soll.",
+  "temproleFull": "Auf diesem Server laufen schon {max} Zeitrollen.",
+  "temproleAdded": "{user} hat {role} bis {when}.",
+  "temproleExtended": "{user} behält {role} jetzt bis {when}.",
+  "temproleNotTemporary": "{user} hat {role} nicht als Zeitrolle.",
+  "temproleRemoved": "{role} wurde {user} weggenommen.",
+  "temproleListEmpty": "Es laufen keine Zeitrollen.",
+  "temproleList": "**Zeitrollen:**\n{list}",
+  "temproleListMore": "…und {count} weitere."
 }

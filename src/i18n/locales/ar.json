@@ -948,5 +948,21 @@
   "welcomePersistOn": "الأعضاء الذين يغادرون ثم يعودون يستعيدون رتبهم. الرتب ذات صلاحيات الإشراف ورتب البوتات والرتب فوق رتبتي لا تُعاد تلقائيًا أبدًا.",
   "welcomePersistOff": "الأعضاء العائدون لن يستعيدوا رتبهم القديمة.",
   "welcomeShowPersistOn": "**الرتب عند العودة:** تُعاد",
-  "welcomeShowPersistOff": "**الرتب عند العودة:** لا تُعاد"
+  "welcomeShowPersistOff": "**الرتب عند العودة:** لا تُعاد",
+
+  "temproleCommandDescription": "أعطِ رتبة تُسحب تلقائيًا لاحقًا",
+  "temproleAddDescription": "أعطِ عضوًا رتبة لفترة (إعطاؤها مجددًا يغيّر موعد الانتهاء)",
+  "temproleRemoveDescription": "اسحب رتبة مؤقتة الآن",
+  "temproleListDescription": "اعرض الرتب المؤقتة، الأقرب انتهاءً أولًا",
+  "temproleDurationOptionDescription": "المدة: 30m أو 12h أو 3d أو 2w (من دقيقة إلى 365 يومًا)",
+  "temproleBadDuration": "هذه مدة غير صالحة. استخدم مثلًا 30m أو 12h أو 3d أو 2w (من دقيقة إلى 365 يومًا).",
+  "temproleAlreadyHas": "لدى {user} الرتبة {role} بشكل دائم. اسحبها أولًا إن كان يجب أن تنتهي.",
+  "temproleFull": "لدى هذا الخادم {max} رتبة مؤقتة جارية بالفعل.",
+  "temproleAdded": "لدى {user} الرتبة {role} حتى {when}.",
+  "temproleExtended": "سيحتفظ {user} الآن بـ {role} حتى {when}.",
+  "temproleNotTemporary": "ليست لدى {user} الرتبة {role} كرتبة مؤقتة.",
+  "temproleRemoved": "سُحبت {role} من {user}.",
+  "temproleListEmpty": "لا توجد رتب مؤقتة جارية.",
+  "temproleList": "**الرتب المؤقتة:**\n{list}",
+  "temproleListMore": "…و{count} أخرى."
 }

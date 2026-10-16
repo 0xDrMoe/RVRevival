@@ -20,6 +20,7 @@ import { createTagCommands } from "./tags.js";
 import { createRaidCommand } from "./raid.js";
 import { createAntiNukeCommand } from "./antiNuke.js";
 import { createQuarantineCommand } from "./quarantine.js";
+import { createTempRoleCommand } from "./tempRole.js";
 import { createTicketsCommand } from "./tickets.js";
 import { createVoiceCommand } from "./voice.js";
 import { createAutoResponderCommand } from "./autoResponder.js";
@@ -41,7 +42,8 @@ import { createWelcomeCommand } from "./welcome.js";
 // `tempVoice` (voice/tempVoiceStore.js) to run /voice, `scheduledMessages`
 // (scheduled/scheduledMessageStore.js) to run /schedule, `birthdays`
 // (birthdays/birthdayStore.js) to run /birthday, `quarantine`
-// (moderation/quarantine.js) to run /quarantine,
+// (moderation/quarantine.js) to run /quarantine, `tempRoles`
+// (tempRoles/tempRoleStore.js) to run /temprole,
 // not to register them.
 export function createCommands({
   logger,
@@ -59,6 +61,7 @@ export function createCommands({
   scheduledMessages,
   birthdays,
   quarantine,
+  tempRoles,
 }) {
   // Shared, so /country and /country-staff can't change the same member at the same time.
   const roleService = new CountryRoleService(logger);
@@ -85,6 +88,7 @@ export function createCommands({
     createRaidCommand({ guildSettings, modLog, forcedLanguage }),
     createAntiNukeCommand({ guildSettings, forcedLanguage }),
     createQuarantineCommand({ guildSettings, quarantine, forcedLanguage }),
+    createTempRoleCommand({ guildSettings, store: tempRoles, modLog, forcedLanguage }),
     createVoiceCommand({ guildSettings, store: tempVoice, forcedLanguage }),
     createAutoResponderCommand({ guildSettings, forcedLanguage }),
     createScheduleCommand({ store: scheduledMessages, forcedLanguage }),

@@ -948,5 +948,21 @@
   "welcomePersistOn": "Los miembros que se van y vuelven recuperan sus roles. Los roles con permisos de moderación, los de bots y los que están por encima del mío nunca se devuelven solos.",
   "welcomePersistOff": "Los miembros que vuelvan no recuperarán sus roles.",
   "welcomeShowPersistOn": "**Roles al volver:** se devuelven",
-  "welcomeShowPersistOff": "**Roles al volver:** no se devuelven"
+  "welcomeShowPersistOff": "**Roles al volver:** no se devuelven",
+
+  "temproleCommandDescription": "Da un rol que se quita solo después",
+  "temproleAddDescription": "Da a un miembro un rol durante un tiempo (darlo otra vez mueve el final)",
+  "temproleRemoveDescription": "Quita ya un rol temporal",
+  "temproleListDescription": "Lista los roles temporales, los que acaban antes primero",
+  "temproleDurationOptionDescription": "Cuánto tiempo: 30m, 12h, 3d, 2w (de 1 minuto a 365 días)",
+  "temproleBadDuration": "Esa duración no es válida. Usa algo como 30m, 12h, 3d o 2w (de 1 minuto a 365 días).",
+  "temproleAlreadyHas": "{user} ya tiene {role} de forma permanente. Quítaselo primero si debe acabar.",
+  "temproleFull": "Este servidor ya tiene {max} roles temporales activos.",
+  "temproleAdded": "{user} tiene {role} hasta {when}.",
+  "temproleExtended": "{user} conserva ahora {role} hasta {when}.",
+  "temproleNotTemporary": "{user} no tiene {role} como rol temporal.",
+  "temproleRemoved": "Se le quitó {role} a {user}.",
+  "temproleListEmpty": "No hay roles temporales activos.",
+  "temproleList": "**Roles temporales:**\n{list}",
+  "temproleListMore": "…y {count} más."
 }

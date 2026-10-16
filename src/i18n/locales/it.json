@@ -948,5 +948,21 @@
   "welcomePersistOn": "I membri che escono e rientrano riavranno i loro ruoli. Ruoli con permessi di moderazione, ruoli dei bot e ruoli sopra il mio non vengono mai restituiti in automatico.",
   "welcomePersistOff": "I membri che rientrano non riavranno i vecchi ruoli.",
   "welcomeShowPersistOn": "**Ruoli al rientro:** restituiti",
-  "welcomeShowPersistOff": "**Ruoli al rientro:** non restituiti"
+  "welcomeShowPersistOff": "**Ruoli al rientro:** non restituiti",
+
+  "temproleCommandDescription": "Dai un ruolo che viene tolto da solo dopo",
+  "temproleAddDescription": "Dai a un membro un ruolo per un po' (ridarlo sposta la fine)",
+  "temproleRemoveDescription": "Togli subito un ruolo temporaneo",
+  "temproleListDescription": "Elenca i ruoli temporanei, prima quelli che finiscono presto",
+  "temproleDurationOptionDescription": "Per quanto: 30m, 12h, 3d, 2w (da 1 minuto a 365 giorni)",
+  "temproleBadDuration": "Durata non valida. Usa ad esempio 30m, 12h, 3d o 2w (da 1 minuto a 365 giorni).",
+  "temproleAlreadyHas": "{user} ha già {role} in modo permanente. Toglilo prima se deve finire.",
+  "temproleFull": "Questo server ha già {max} ruoli temporanei attivi.",
+  "temproleAdded": "{user} ha {role} fino a {when}.",
+  "temproleExtended": "{user} ora tiene {role} fino a {when}.",
+  "temproleNotTemporary": "{user} non ha {role} come ruolo temporaneo.",
+  "temproleRemoved": "{role} è stato tolto a {user}.",
+  "temproleListEmpty": "Nessun ruolo temporaneo attivo.",
+  "temproleList": "**Ruoli temporanei:**\n{list}",
+  "temproleListMore": "…e altri {count}."
 }

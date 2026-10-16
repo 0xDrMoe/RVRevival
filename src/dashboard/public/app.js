@@ -3400,6 +3400,11 @@ async function showMemberHistory(guildId, userId) {
   if (member?.timedOutUntil) {
     status.push(h("span", { class: "badge badge-amber" }, t("memberTimedOutUntil", { date: formatDate(member.timedOutUntil) })));
   }
+  for (const entry of history.tempRoles ?? []) {
+    status.push(
+      h("span", { class: "badge badge-accent" }, icon("clock", "icon tiny"), t("memberTempRole", { role: `@${entry.roleName ?? entry.roleId}`, date: formatDate(entry.expiresAt) })),
+    );
+  }
   if (history.quarantine) {
     status.push(h("span", { class: "badge badge-amber" }, icon("lock", "icon tiny"), t("memberQuarantined", { date: formatDate(history.quarantine.since) })));
   }

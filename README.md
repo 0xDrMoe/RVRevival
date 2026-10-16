@@ -23,6 +23,7 @@ The Discord bot for the Rumbleverse Revival server. It is built as a set of inde
 | [Starboard](#starboard) | `/starboard`, or the dashboard's Starboard page | Manage Server (everyone stars messages) |
 | [Support tickets](#support-tickets) | `/tickets` | Manage Server (`panel`, `off`), ticket staff (the rest); members click Open a ticket |
 | [Raid protection](#raid-protection) | `/raid`, or the dashboard's Raid protection page | Manage Channels or the mod role (`lockdown`, `end`, `status`), Manage Server (`gate`, `gate-off`, `alert`) |
+| [Temporary roles](#temporary-roles) | `/temprole` | Manage Roles or the mod role |
 | [Quarantine](#quarantine) | `/quarantine` | Manage Roles or the mod role (`role`: Manage Server) |
 | [Anti-nuke](#anti-nuke) | `/antinuke`, or the dashboard's Anti-nuke page | The server owner (`status`: Administrator) |
 | [Join-to-create voice](#join-to-create-voice) | `/voice` | Manage Server (`setup`, `off`), the channel's owner (`lock`, `unlock`), anyone in the channel (`claim`) |
@@ -294,6 +295,16 @@ Discord has no built-in way to give each group its own voice channel, so the bot
 - Someone who already has a channel and joins the hub again is moved back into theirs. At most 50 channels per server. Empty channels left over from a restart are deleted when the bot starts.
 
 The bot needs **View Channel**, **Manage Channels**, **Manage Roles**, **Move Members** and **Connect** in the category. It uses the Guild Voice States intent, which isn't privileged.
+
+### Temporary roles
+
+Gives a role that's taken away again by itself: a muted role for a day, an event role for a week, a VIP role for a month.
+
+- `/temprole add member role duration [reason]` gives the role for `30m`, `12h`, `3d`, `2w`… (1 minute to 365 days). Giving it again moves the end.
+- `/temprole remove member role` takes it away now.
+- `/temprole list [member]` shows temporary roles, soonest to end first.
+
+Needs **Manage Roles** or the mod role, with the same rules as `/role`: nobody can hand out a role at or above their own highest role, or above the bot's. A role the member already has for good is refused, so the bot never takes away something it didn't give. The bot checks every 30 seconds and catches up after a restart; each role given, extended, removed or ended goes in the mod log. Up to 500 per server. Temporary roles show on the member's dashboard page.
 
 ### Quarantine
 
