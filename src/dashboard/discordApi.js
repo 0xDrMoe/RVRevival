@@ -3,7 +3,8 @@
 //   - as the person logged in (OAuth2): who they are and which servers they're in;
 //   - as the bot (its token): the servers it's in, their channels and roles, a
 //     member's roles (for role-based dashboard access and member history),
-//     member search, bans, and posting in or editing messages of the log channels.
+//     member search, bans (and lifting them for accepted appeals), posting in or
+//     editing messages of the log channels, and DMing appeal decisions.
 //
 // Bot calls go through discord.js's REST client, which waits and retries when
 // Discord rate-limits us. Server details are cached for a short while, since
@@ -193,6 +194,19 @@ export function createDiscordApi({ config, fetch = globalThis.fetch, rest }) {
       bot.post(Routes.channelMessages(channelId), { body: { ...payload, allowed_mentions: { parse: [] } } }),
     editMessage: (channelId, messageId, payload) =>
       bot.patch(Routes.channelMessage(channelId, messageId), { body: payload }),
+
+    // Lifts a ban (an accepted appeal). `reason` goes in the audit log.
+    async unban(guildId, userId, reason) {
+      await bot.delete(Routes.guildBan(guildId, userId), { reason });
+      bans.forget(`${guildId}:${userId}`);
+    },
+
+    // DMs someone as the bot. Fails if they don't share a server with it or
+    // closed their DMs.
+    async dm(userId, payload) {
+      const channel = await bot.post(Routes.userChannels(), { body: { recipient_id: userId } });
+      return bot.post(Routes.channelMessages(channel.id), { body: { ...payload, allowed_mentions: { parse: [] } } });
+    },
 
     // The bot's own user ID, for the invite link.
     clientId: config.clientId,

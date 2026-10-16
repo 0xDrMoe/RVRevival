@@ -74,6 +74,23 @@ describe("moderation service", () => {
     expect(botActions.has(`${GUILD_ID}:${TARGET_ID}:ban`)).toBe(true);
   });
 
+  it("adds the appeal link to ban DMs when the server takes appeals", async () => {
+    const appealing = createModerationService({
+      store,
+      logger: fakeLogger(),
+      appealLink: (target) => `https://dash.example.com/#/appeal/${target.id}`,
+      now: () => NOW,
+    });
+    const member = fakeMember(TARGET_ID);
+    await appealing.ban({ guild, user: member.user, member, moderator, reason: "cheating" });
+    expect(member.user.send.mock.calls[0][0].content).toBe(
+      `You have been banned from **Rumbleverse \\*Revival\\***.\nReason: cheating\nYou can appeal this ban here: https://dash.example.com/#/appeal/${GUILD_ID}`,
+    );
+    const kicked = fakeMember("300000000000000099");
+    await appealing.kick({ guild, member: kicked, moderator, reason: "spam" });
+    expect(kicked.user.send.mock.calls[0][0].content).not.toContain("appeal");
+  });
+
   it("records a temporary ban as waiting to be lifted", async () => {
     const user = fakeUser(TARGET_ID);
     const moderationCase = await moderation.ban({ guild, user, member: null, moderator, durationMs: 60_000 });

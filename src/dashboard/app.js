@@ -42,6 +42,8 @@ import { MemberEventStore } from "../members/memberEventStore.js";
 import { TicketStore } from "../tickets/ticketStore.js";
 import { SavedRoles, SavedRoleStore } from "../members/savedRoleStore.js";
 import { TempRoleStore } from "../tempRoles/tempRoleStore.js";
+import { AppealStatus, APPEAL_STATUSES, AppealStore } from "../appeals/appealStore.js";
+import { appealQuestions, MAX_ANSWER_LENGTH, normalizeAppeals } from "../appeals/config.js";
 import { ScheduledMessageStore } from "../scheduled/scheduledMessageStore.js";
 import { MAX_DELAY_MS, MAX_INTERVAL_MS, MAX_SCHEDULED, MAX_SCHEDULED_LENGTH, MIN_INTERVAL_MS } from "../scheduled/scheduler.js";
 import { buildCaseEmbed } from "../moderation/modLog.js";
@@ -179,6 +181,7 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
   const activity = new ActivityStore(db);
   const savedRoles = new SavedRoleStore(db);
   const tempRoles = new TempRoleStore(db);
+  const appeals = new AppealStore(db);
   const secureCookies = config.url.startsWith("https://");
   const cookieOptions = { path: "/", httpOnly: true, secure: secureCookies, sameSite: "lax" };
 
@@ -373,6 +376,7 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     [Setting.AUTOMOD]: normalizeAutomod(guildSettings.get(guildId, Setting.AUTOMOD)),
     [Setting.LEVELING]: normalizeLeveling(guildSettings.get(guildId, Setting.LEVELING)),
     [Setting.ANTI_NUKE]: normalizeAntiNuke(guildSettings.get(guildId, Setting.ANTI_NUKE)),
+    [Setting.APPEALS]: normalizeAppeals(guildSettings.get(guildId, Setting.APPEALS)),
   });
 
   const communityDefaults = (guild) => {
@@ -528,6 +532,7 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
       [Setting.AUTOMOD]: normalizeAutomod,
       [Setting.LEVELING]: normalizeLeveling,
       [Setting.ANTI_NUKE]: normalizeAntiNuke,
+      [Setting.APPEALS]: normalizeAppeals,
     };
     const ownerOnly = Object.keys(changes).filter((setting) => {
       if (!SETTING_RULES[setting].ownerOnly) {
@@ -971,6 +976,232 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     }
     await logAction(access.guildId, access.session, `**Scheduled message #${number} deleted**`);
     return { ok: true };
+  });
+
+  // --- Ban appeals ------------------------------------------------------------
+  //
+  // Anyone logged in can open a server's appeal page; only people the server
+  // banned can send an appeal there. Staff accept (which lifts the ban) or deny.
+
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  const appealLimit = { config: { rateLimit: { max: 5, timeWindow: "1 hour" } } };
+
+  const appealJson = (appeal, names = {}) => ({
+    number: appeal.number,
+    userId: appeal.userId,
+    userTag: appeal.userTag,
+    userName: names[appeal.userId] ?? null,
+    banReason: appeal.banReason,
+    answers: appeal.answers,
+    status: appeal.status,
+    createdAt: appeal.createdAt,
+    decidedAt: appeal.decidedAt,
+    decidedBy: appeal.decidedBy,
+    decidedByName: names[appeal.decidedBy] ?? null,
+    decisionReason: appeal.decisionReason,
+  });
+
+  // Where someone stands with a server's appeals: closed (appeals are off),
+  // not-banned, pending (an appeal is open), cooldown (recently denied) or
+  // can-appeal. Returns { state, ban, latest, cooldownEndsAt, config }.
+  async function appealState(guildId, userId) {
+    const config = normalizeAppeals(guildSettings.get(guildId, Setting.APPEALS));
+    const latest = appeals.latestFor(guildId, userId);
+    if (!config.enabled) {
+      return { state: "closed", latest, config };
+    }
+    // Without Ban Members the bot can't check (403); treat it as not banned.
+    const ban = await discord.ban(guildId, userId).catch(() => null);
+    const cooldownEndsAt =
+      latest?.status === AppealStatus.DENIED && config.cooldownDays > 0 ? latest.decidedAt + config.cooldownDays * DAY_MS : null;
+    const state = !ban
+      ? "not-banned"
+      : latest?.status === AppealStatus.OPEN
+        ? "pending"
+        : cooldownEndsAt && cooldownEndsAt > Date.now()
+          ? "cooldown"
+          : "can-appeal";
+    return { state, ban, latest, cooldownEndsAt, config };
+  }
+
+  // The appeal page's server, or undefined after replying 404.
+  async function appealGuild(request, reply) {
+    const guildId = request.params.guildId;
+    if (!DISCORD_ID.test(guildId) || !(await discord.botGuildIds()).has(guildId)) {
+      reply.code(404).send({ error: "not-found" });
+      return undefined;
+    }
+    return discord.guild(guildId);
+  }
+
+  app.get("/api/appeals/:guildId", async (request, reply) => {
+    const session = requireSession(request, reply);
+    if (!session) {
+      return reply;
+    }
+    const guild = await appealGuild(request, reply);
+    if (!guild) {
+      return reply;
+    }
+    const { state, ban, latest, cooldownEndsAt, config: appealConfig } = await appealState(guild.id, session.userId);
+    return {
+      guild: { id: guild.id, name: guild.name, icon: guild.icon ?? null },
+      state,
+      banReason: ban?.reason ?? null,
+      questions: appealQuestions(appealConfig),
+      maxAnswer: MAX_ANSWER_LENGTH,
+      latest: latest
+        ? { number: latest.number, status: latest.status, createdAt: latest.createdAt, decidedAt: latest.decidedAt, decisionReason: latest.decisionReason }
+        : null,
+      cooldownEndsAt: state === "cooldown" ? cooldownEndsAt : null,
+    };
+  });
+
+  app.post("/api/appeals/:guildId", appealLimit, async (request, reply) => {
+    const session = requireSession(request, reply);
+    if (!session) {
+      return reply;
+    }
+    const guild = await appealGuild(request, reply);
+    if (!guild) {
+      return reply;
+    }
+    const { state, ban, config: appealConfig } = await appealState(guild.id, session.userId);
+    if (state !== "can-appeal") {
+      return reply.code(409).send({ error: state });
+    }
+    const questions = appealQuestions(appealConfig);
+    const answers = Array.isArray(request.body?.answers) ? request.body.answers : [];
+    const cleaned = answers.map((answer) => (typeof answer === "string" ? answer.replace(/\r\n?/g, "\n").trim() : ""));
+    if (cleaned.length !== questions.length || cleaned.some((answer) => !answer || answer.length > MAX_ANSWER_LENGTH)) {
+      return reply.code(400).send({ error: "bad-answers", message: `Answer every question (up to ${MAX_ANSWER_LENGTH} characters each).` });
+    }
+    const appeal = appeals.add({
+      guildId: guild.id,
+      userId: session.userId,
+      userTag: session.username,
+      banReason: ban?.reason ?? null,
+      answers: questions.map((question, index) => ({ question, answer: cleaned[index] })),
+    });
+    logger.info("Ban appeal sent", { guildId: guild.id, number: appeal.number });
+
+    // Tell staff where they asked, or in the mod-log or logs channel.
+    const channelId =
+      appealConfig.channelId ?? guildSettings.get(guild.id, Setting.MOD_LOG_CHANNEL) ?? guildSettings.get(guild.id, Setting.LOGS_CHANNEL);
+    if (channelId) {
+      const embed = {
+        color: 0xfee75c,
+        title: `Ban appeal #${appeal.number}`,
+        description: `<@${session.userId}> (${session.username}) asks to be unbanned.`,
+        fields: [
+          { name: "Ban reason", value: (appeal.banReason ?? "*none given*").slice(0, 1024) },
+          ...appeal.answers.map((entry) => ({ name: (entry.question ?? "Why should the ban be lifted?").slice(0, 256), value: entry.answer.slice(0, 1024) })),
+          { name: "Decide", value: `${config.url}/#/g/${guild.id}/appeals?appeal=${appeal.number}` },
+        ],
+        footer: { text: `User ID ${session.userId}` },
+        timestamp: new Date(appeal.createdAt).toISOString(),
+      };
+      await discord.postMessage(channelId, { embeds: [embed] }).catch((error) =>
+        logger.warn("Couldn't post a ban appeal for staff", { guildId: guild.id, error }),
+      );
+    }
+    return { appeal: { number: appeal.number, status: appeal.status, createdAt: appeal.createdAt } };
+  });
+
+  app.get("/api/guilds/:id/appeals", async (request, reply) => {
+    const access = await requireGuild(request, reply, { manage: true });
+    if (!access) {
+      return reply;
+    }
+    const status = APPEAL_STATUSES.includes(request.query?.status) ? request.query.status : undefined;
+    const page = Math.max(0, Number.parseInt(request.query?.page ?? "0", 10) || 0);
+    const list = appeals.list(access.guildId, { status, limit: 26, offset: page * 25 });
+    const shown = list.slice(0, 25);
+    const names = await peopleNames(access.guildId, shown.flatMap((appeal) => [appeal.userId, appeal.decidedBy]));
+    return { appeals: shown.map((appeal) => appealJson(appeal, names)), more: list.length > 25, openCount: appeals.countOpen(access.guildId) };
+  });
+
+  app.get("/api/guilds/:id/appeals/:number", async (request, reply) => {
+    const access = await requireGuild(request, reply, { manage: true });
+    const number = access && caseNumber(request, reply);
+    if (!number) {
+      return reply;
+    }
+    const appeal = appeals.get(access.guildId, number);
+    if (!appeal) {
+      return reply.code(404).send({ error: "not-found" });
+    }
+    const names = await peopleNames(access.guildId, [appeal.userId, appeal.decidedBy]);
+    return { appeal: appealJson(appeal, names) };
+  });
+
+  app.post("/api/guilds/:id/appeals/:number", async (request, reply) => {
+    const access = await requireGuild(request, reply, { manage: true });
+    const number = access && caseNumber(request, reply);
+    if (!number) {
+      return reply;
+    }
+    const { guildId, session } = access;
+    const decision = request.body?.decision;
+    if (decision !== "accept" && decision !== "deny") {
+      return reply.code(400).send({ error: "bad-decision" });
+    }
+    const reason = typeof request.body?.reason === "string" ? request.body.reason.trim().slice(0, MAX_REASON_LENGTH) || null : null;
+    const appeal = appeals.get(guildId, number);
+    if (!appeal) {
+      return reply.code(404).send({ error: "not-found" });
+    }
+    if (appeal.status !== AppealStatus.OPEN) {
+      return reply.code(409).send({ error: "already-decided" });
+    }
+
+    if (decision === "accept") {
+      try {
+        await discord.unban(guildId, appeal.userId, `Appeal #${number} accepted by ${session.username}${reason ? `: ${reason}` : ""}`);
+      } catch (error) {
+        // Already unbanned (10026 Unknown Ban) is fine; anything else isn't.
+        if (error.status !== 404) {
+          logger.warn("Couldn't lift a ban for an accepted appeal", { guildId, number, error });
+          return reply.code(502).send({ error: "unban-failed", message: "Discord refused to lift the ban. Does the bot have Ban Members?" });
+        }
+      }
+      const unbanCase = store.createCase({
+        guildId,
+        action: CaseAction.UNBAN,
+        userId: appeal.userId,
+        userTag: appeal.userTag ?? undefined,
+        moderatorId: session.userId,
+        moderatorTag: session.username,
+        reason: `Appeal #${number} accepted${reason ? `: ${reason}` : ""}`,
+      });
+      const logChannelId = guildSettings.get(guildId, Setting.MOD_LOG_CHANNEL) ?? guildSettings.get(guildId, Setting.LOGS_CHANNEL);
+      if (logChannelId) {
+        const posted = await discord.postMessage(logChannelId, { embeds: [buildCaseEmbed(unbanCase).toJSON()] }).catch(() => null);
+        if (posted?.id) {
+          store.setLogMessage(guildId, unbanCase.number, logChannelId, posted.id);
+        }
+      }
+    }
+    const decided = appeals.decide(guildId, number, {
+      status: decision === "accept" ? AppealStatus.ACCEPTED : AppealStatus.DENIED,
+      decidedBy: session.userId,
+      reason,
+    });
+    if (!decided) {
+      return reply.code(409).send({ error: "already-decided" });
+    }
+
+    // Let them know, in the server's language. Fails quietly when DMs are closed.
+    const guild = await discord.guild(guildId);
+    const language = pickLanguage(guild.preferred_locale, config.forcedLanguage);
+    const lines = [translate(language, decision === "accept" ? "appealAcceptedDm" : "appealDeniedDm", { server: guild.name })];
+    if (reason) {
+      lines.push(translate(language, "dmReason", { reason }));
+    }
+    await discord.dm(appeal.userId, { content: lines.join("\n").slice(0, 2000) }).catch(() => {});
+    await logAction(guildId, session, `**Ban appeal #${number} ${decision === "accept" ? "accepted" : "denied"}** for <@${appeal.userId}>`, reason ? [reason] : []);
+    const names = await peopleNames(guildId, [decided.userId, decided.decidedBy]);
+    return { appeal: appealJson(decided, names) };
   });
 
   // --- Activity -------------------------------------------------------------

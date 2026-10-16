@@ -8,6 +8,7 @@ import { createCommands } from "./commands/index.js";
 import { createStarboard } from "./community/starboard.js";
 import { StarboardStore } from "./community/starboardStore.js";
 import { createWelcomer } from "./community/welcome.js";
+import { normalizeAppeals } from "./appeals/config.js";
 import { ConfigError, loadBotConfig } from "./config.js";
 import { createGiveawayScheduler } from "./giveaways/giveawayScheduler.js";
 import { GiveawayStore } from "./giveaways/giveawayStore.js";
@@ -143,6 +144,11 @@ async function start() {
     forcedLanguage,
     botActions,
     onModeratorAction: (guild, moderatorId, action) => antiNuke?.record(guild, moderatorId, action),
+    // Ban DMs link the dashboard's appeal form when the server takes appeals.
+    appealLink: (guild) =>
+      config.dashboardUrl && normalizeAppeals(guildSettings.get(guild.id, Setting.APPEALS)).enabled
+        ? `${config.dashboardUrl}/#/appeal/${guild.id}`
+        : null,
   });
   // Quarantined members' roles (/quarantine), saved so they can be given back.
   const savedRoles = new SavedRoleStore(db);

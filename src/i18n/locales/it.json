@@ -964,5 +964,9 @@
   "temproleRemoved": "{role} è stato tolto a {user}.",
   "temproleListEmpty": "Nessun ruolo temporaneo attivo.",
   "temproleList": "**Ruoli temporanei:**\n{list}",
-  "temproleListMore": "…e altri {count}."
+  "temproleListMore": "…e altri {count}.",
+
+  "appealAcceptedDm": "Il tuo ricorso contro il ban su **{server}** è stato accettato. Puoi rientrare.",
+  "appealDeniedDm": "Il tuo ricorso contro il ban su **{server}** è stato respinto.",
+  "dmAppeal": "Puoi fare ricorso contro questo ban qui: {url}"
 }

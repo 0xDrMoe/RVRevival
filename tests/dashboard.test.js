@@ -817,6 +817,63 @@ describe("dashboard", () => {
     expect(page.json()).toMatchObject({ isOwner: true, settings: { antiNuke }, people: { [MOD_ID]: null } });
   });
 
+  it("takes a ban appeal from a banned member and lets staff decide it", async () => {
+    discord.unban = vi.fn(async () => {});
+    discord.dm = vi.fn(async () => ({}));
+    const cookies = await login();
+    const appealUrl = `/api/appeals/${GUILD_ID}`;
+
+    // Appeals are off until staff turn them on.
+    expect((await app.inject({ method: "GET", url: appealUrl, cookies })).json()).toMatchObject({ state: "closed" });
+    expect((await app.inject({ method: "GET", url: `/api/appeals/${NO_BOT_GUILD_ID}`, cookies })).statusCode).toBe(404);
+    const appeals = { enabled: true, channelId: TEXT_ID, questions: ["Why were you banned?"], cooldownDays: 7 };
+    expect((await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, { appeals })).statusCode).toBe(200);
+    expect((await app.inject({ method: "GET", url: appealUrl, cookies })).json()).toMatchObject({ state: "not-banned" });
+
+    discord.ban.mockImplementation(async () => ({ reason: "spam", user: { id: USER_ID } }));
+    const form = (await app.inject({ method: "GET", url: appealUrl, cookies })).json();
+    expect(form).toMatchObject({ state: "can-appeal", banReason: "spam", questions: ["Why were you banned?"], guild: { id: GUILD_ID } });
+    expect((await write(cookies, "POST", appealUrl, { answers: [] })).statusCode).toBe(400);
+    const sent = await write(cookies, "POST", appealUrl, { answers: [" I spammed, sorry. "] });
+    expect(sent.statusCode).toBe(200);
+    expect(sent.json().appeal).toMatchObject({ number: 1, status: "open" });
+    expect(discord.postMessage).toHaveBeenCalledWith(TEXT_ID, expect.objectContaining({ embeds: [expect.objectContaining({ title: "Ban appeal #1" })] }));
+    expect(JSON.stringify(discord.postMessage.mock.calls.at(-1)[1])).toContain(`${URL_ORIGIN}/#/g/${GUILD_ID}/appeals?appeal=1`);
+    // One open appeal at a time.
+    expect((await write(cookies, "POST", appealUrl, { answers: ["again"] })).statusCode).toBe(409);
+    expect((await app.inject({ method: "GET", url: appealUrl, cookies })).json()).toMatchObject({ state: "pending" });
+
+    const list = (await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}/appeals?status=open`, cookies })).json();
+    expect(list).toMatchObject({ openCount: 1, more: false, appeals: [{ number: 1, banReason: "spam", answers: [{ question: "Why were you banned?", answer: "I spammed, sorry." }] }] });
+    expect((await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}/appeals/1`, cookies })).json().appeal.number).toBe(1);
+    expect((await write(cookies, "POST", `/api/guilds/${GUILD_ID}/appeals/1`, { decision: "maybe" })).statusCode).toBe(400);
+
+    const accepted = await write(cookies, "POST", `/api/guilds/${GUILD_ID}/appeals/1`, { decision: "accept", reason: "Second chance" });
+    expect(accepted.statusCode).toBe(200);
+    expect(accepted.json().appeal).toMatchObject({ status: "accepted", decidedBy: USER_ID, decisionReason: "Second chance" });
+    expect(discord.unban).toHaveBeenCalledWith(GUILD_ID, USER_ID, expect.stringContaining("Appeal #1 accepted"));
+    expect(store.listCases(GUILD_ID, USER_ID).find((entry) => entry.action === CaseAction.UNBAN)).toMatchObject({ userId: USER_ID, moderatorId: USER_ID });
+    expect(discord.dm).toHaveBeenCalledWith(USER_ID, { content: "Your ban appeal for **Rumbleverse Revival** was accepted. You can join again.\nReason: Second chance" });
+    expect((await write(cookies, "POST", `/api/guilds/${GUILD_ID}/appeals/1`, { decision: "deny" })).statusCode).toBe(409);
+  });
+
+  it("makes someone wait after a denied appeal", async () => {
+    discord.dm = vi.fn(async () => ({}));
+    const cookies = await login();
+    await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, { appeals: { enabled: true, channelId: null, questions: [], cooldownDays: 7 } });
+    discord.ban.mockImplementation(async () => ({ reason: null }));
+    const form = (await app.inject({ method: "GET", url: `/api/appeals/${GUILD_ID}`, cookies })).json();
+    expect(form.questions).toEqual([null]);
+    await write(cookies, "POST", `/api/appeals/${GUILD_ID}`, { answers: ["please"] });
+    const denied = await write(cookies, "POST", `/api/guilds/${GUILD_ID}/appeals/1`, { decision: "deny" });
+    expect(denied.json().appeal.status).toBe("denied");
+    expect(discord.dm.mock.calls[0][1].content).toBe("Your ban appeal for **Rumbleverse Revival** was denied.");
+    const after = (await app.inject({ method: "GET", url: `/api/appeals/${GUILD_ID}`, cookies })).json();
+    expect(after.state).toBe("cooldown");
+    expect(after.cooldownEndsAt).toBeGreaterThan(Date.now() + 6 * 24 * 60 * 60 * 1000);
+    expect((await write(cookies, "POST", `/api/appeals/${GUILD_ID}`, { answers: ["again"] })).statusCode).toBe(409);
+  });
+
   it("logs out and forgets the session", async () => {
     const cookies = await login();
     expect((await write(cookies, "POST", "/auth/logout")).statusCode).toBe(200);

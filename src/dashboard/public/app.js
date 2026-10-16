@@ -107,6 +107,7 @@ const NAV = [
       { id: "cases", icon: "folder", tone: "pink" },
       { id: "members", icon: "users", tone: "purple" },
       { id: "tickets", icon: "ticket", tone: "cyan" },
+      { id: "appeals", icon: "inbox", tone: "amber", manage: true, on: (s) => Boolean(s.appeals?.enabled) },
     ],
   },
   {
@@ -209,6 +210,7 @@ const ICONS = {
   moon: '<path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z"/>',
   archive: '<rect x="2" y="3" width="20" height="5" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8M10 12h4"/>',
   userX: '<circle cx="9" cy="8" r="4"/><path d="M2 21a7 7 0 0 1 14 0"/><path d="m17 8 5 5M22 8l-5 5"/>',
+  inbox: '<path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>',
   volume: '<path d="M11 5 6 9H2v6h4l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14"/>',
 };
 
@@ -724,13 +726,17 @@ async function logout() {
 
 function showLogin() {
   const failedLogin = new URLSearchParams(location.hash.split("?")[1] ?? "").get("login") === "failed";
+  const appealing = /^#\/appeal\/\d{17,20}$/.test(location.hash);
+  if (appealing) {
+    rememberReturn(location.hash);
+  }
   show(
     h(
       "section",
       { class: "login card" },
       h("div", { class: "login-art" }, h("img", { src: "favicon.svg", alt: "", width: 72, height: 72 })),
       h("h1", {}, t("loginTitle")),
-      h("p", { class: "muted" }, t("loginIntro")),
+      h("p", { class: "muted" }, t(appealing ? "appealLoginIntro" : "loginIntro")),
       failedLogin ? h("p", { class: "error-text" }, t("loginFailed")) : null,
       h("a", { class: "button primary big", href: "/auth/login" }, t("loginButton")),
     ),
@@ -3753,6 +3759,302 @@ async function showTickets(guildId) {
   return Number.isInteger(number) && number > 0 ? showTicket(guildId, data, number) : showTicketList(guildId, data, query);
 }
 
+// --- Ban appeals -------------------------------------------------------------------
+
+const MAX_APPEAL_QUESTIONS = 5;
+const MAX_APPEAL_QUESTION_LENGTH = 200;
+const APPEAL_FILTERS = ["open", "accepted", "denied", "all"];
+const APPEAL_BADGES = { open: "badge-amber", accepted: "badge-green", denied: "badge-red" };
+const appealLink = (guildId, number) => `#/g/${guildId}/appeals?appeal=${number}`;
+const appealPageUrl = (guildId) => `${location.origin}/#/appeal/${guildId}`;
+const appealBadge = (appeal) => h("span", { class: `badge ${APPEAL_BADGES[appeal.status] ?? ""}` }, t(`appealStatus_${appeal.status}`));
+
+function questionRow(question, onRemove) {
+  const row = h(
+    "div",
+    { class: "reward-row" },
+    icon("message"),
+    h("input", {
+      class: "appeal-question grow",
+      type: "text",
+      maxLength: MAX_APPEAL_QUESTION_LENGTH,
+      required: true,
+      placeholder: t("appealsQuestionPlaceholder"),
+      value: question ?? "",
+      "aria-label": t("appealsQuestion"),
+    }),
+    h("button", { class: "ghost small", type: "button", onclick: () => onRemove(row) }, t("tagRemove")),
+  );
+  return row;
+}
+
+function readAppeals(form) {
+  return {
+    enabled: form.querySelector("#appealsEnabled").checked,
+    channelId: form.querySelector("#appealsChannelId").value || null,
+    questions: [...form.querySelectorAll(".appeal-question")].map((input) => input.value.replace(/\s+/g, " ").trim()).filter(Boolean),
+    cooldownDays: Number(form.querySelector("#appealsCooldown").value),
+  };
+}
+
+function appealRow(guildId, appeal) {
+  return h(
+    "li",
+    {},
+    h(
+      "a",
+      { class: "ticket-row", href: appealLink(guildId, appeal.number) },
+      h("strong", { class: "ticket-number" }, `#${appeal.number}`),
+      h(
+        "span",
+        { class: "ticket-main" },
+        h("span", { class: "ticket-subject" }, appeal.userName ?? appeal.userTag ?? appeal.userId),
+        h("span", { class: "muted" }, [formatDate(appeal.createdAt), appeal.banReason].filter(Boolean).join(" · ")),
+      ),
+      appealBadge(appeal),
+    ),
+  );
+}
+
+// The appeals sent to the server, filtered by status, with "Load more".
+function appealList(guildId) {
+  let status = "open";
+  let page = 0;
+  const list = h("ul", { class: "ticket-list" });
+  const empty = h("p", { class: "muted empty", hidden: true });
+  const summary = h("p", { class: "help" });
+  const more = h("button", { class: "ghost", type: "button", hidden: true }, t("loadMore"));
+  const load = async ({ reset = false } = {}) => {
+    if (reset) {
+      page = 0;
+      list.replaceChildren();
+    }
+    more.disabled = true;
+    const params = new URLSearchParams({ page: String(page) });
+    if (status !== "all") {
+      params.set("status", status);
+    }
+    const result = await api(`/api/guilds/${guildId}/appeals?${params}`);
+    list.append(...result.appeals.map((appeal) => appealRow(guildId, appeal)));
+    summary.textContent = t("appealsOpenCount", { count: formatNumber(result.openCount) });
+    empty.textContent = t(status === "open" ? "appealsNoneOpen" : "appealsNone");
+    empty.hidden = list.children.length > 0;
+    page += 1;
+    more.hidden = !result.more;
+    more.disabled = false;
+  };
+  more.addEventListener("click", () => load().catch(failed));
+  const filter = segmented(
+    t("appealsFilter"),
+    APPEAL_FILTERS.map((value) => ({ value, text: t(`appealStatus_${value}`) })),
+    status,
+    (value) => {
+      status = value;
+      load({ reset: true }).catch(failed);
+    },
+  );
+  const element = card(t("appealsList"), "folder", "amber", h("div", { class: "toolbar" }, summary, h("span", { class: "grow" }), filter), empty, list, h("div", { class: "center" }, more));
+  return { element, load };
+}
+
+async function showAppeal(guildId, data, number) {
+  let { appeal } = await api(`/api/guilds/${guildId}/appeals/${number}`);
+  const render = () => {
+    const person = h("a", { href: memberLink(guildId, appeal.userId) }, appeal.userName ?? appeal.userTag ?? appeal.userId);
+    const facts = [
+      [t("appealsFrom"), person],
+      [t("appealsSent"), formatDate(appeal.createdAt)],
+      [t("appealsBanReason"), appeal.banReason ?? t("appealsNoReason")],
+      appeal.decidedAt ? [t("appealsDecidedBy"), appeal.decidedBy ? h("a", { href: memberLink(guildId, appeal.decidedBy) }, appeal.decidedByName ?? appeal.decidedBy) : "—"] : null,
+      appeal.decidedAt ? [t("appealsDecided"), formatDate(appeal.decidedAt)] : null,
+      appeal.decisionReason ? [t("appealsDecisionReason"), appeal.decisionReason] : null,
+    ].filter(Boolean);
+    const answers = appeal.answers.map((entry) =>
+      h("div", { class: "appeal-answer" }, h("strong", {}, entry.question ?? t("appealDefaultQuestion")), h("p", {}, entry.answer)),
+    );
+    let decide = null;
+    if (appeal.status === "open") {
+      const reason = h("textarea", { id: "appealReason", rows: 2, maxLength: 512, placeholder: t("appealsReasonPlaceholder") });
+      const buttons = [];
+      const send = async (decision) => {
+        if (decision === "accept" && !confirm(t("appealsAcceptConfirm"))) {
+          return;
+        }
+        buttons.forEach((button) => (button.disabled = true));
+        try {
+          ({ appeal } = await api(`/api/guilds/${guildId}/appeals/${number}`, { method: "POST", body: { decision, reason: reason.value } }));
+          toast(t(decision === "accept" ? "appealsAccepted" : "appealsDenied"));
+          render();
+        } catch (error) {
+          failed(error);
+          buttons.forEach((button) => (button.disabled = false));
+        }
+      };
+      buttons.push(
+        h("button", { class: "primary", type: "button", onclick: () => send("accept") }, icon("check", "icon small"), t("appealsAccept")),
+        h("button", { class: "danger", type: "button", onclick: () => send("deny") }, icon("x", "icon small"), t("appealsDeny")),
+      );
+      decide = card(
+        t("appealsDecide"),
+        "gavel",
+        "red",
+        h("p", { class: "help" }, t("appealsDecideHelp")),
+        field("appealsDecisionReason", "appealsReasonHelp", reason),
+        h("div", { class: "toolbar" }, buttons),
+      );
+    }
+    show(
+      guildLayout(
+        data,
+        "appeals",
+        h("a", { class: "back", href: `#/g/${guildId}/appeals` }, t("appealsBack")),
+        h(
+          "section",
+          { class: "card" },
+          h("div", { class: "toolbar" }, h("h1", { class: "grow ticket-title" }, t("appealsTitle", { number: appeal.number })), appealBadge(appeal)),
+          h("dl", { class: "facts" }, facts.flatMap(([label, value]) => [h("dt", {}, label), h("dd", {}, value)])),
+        ),
+        card(t("appealsAnswers"), "message", "blue", answers),
+        decide,
+      ),
+    );
+  };
+  render();
+}
+
+async function showAppeals(guildId) {
+  const query = new URLSearchParams(location.hash.split("?")[1] ?? "");
+  const data = await loadManagedGuild(guildId);
+  if (!data) {
+    return;
+  }
+  const number = Number.parseInt(query.get("appeal") ?? "", 10);
+  if (Number.isInteger(number) && number > 0) {
+    return showAppeal(guildId, data, number);
+  }
+  const config = data.settings.appeals;
+  const questions = editableList({
+    items: config.questions,
+    max: MAX_APPEAL_QUESTIONS,
+    makeRow: questionRow,
+    focus: ".appeal-question",
+    emptyKey: "appealsNoQuestions",
+    addKey: "appealsAddQuestion",
+  });
+  const link = h("input", { type: "text", readOnly: true, value: appealPageUrl(guildId), class: "grow", "aria-label": t("appealsLink") });
+  const appeals = appealList(guildId);
+  settingsPage({
+    data,
+    pageId: "appeals",
+    intro: t("appealsIntro"),
+    cards: [
+      card(
+        t("appealsSettings"),
+        "gavel",
+        "amber",
+        h(
+          "label",
+          { class: "switch-card" },
+          h("span", { class: "switch-text" }, h("strong", {}, t("appealsEnabled")), h("span", { class: "help" }, t("appealsEnabledHelp"))),
+          h("span", { class: "switch" }, h("input", { id: "appealsEnabled", type: "checkbox", role: "switch", checked: config.enabled, "aria-label": t("appealsEnabled") })),
+        ),
+        h(
+          "div",
+          { class: "field" },
+          h("span", { class: "field-label" }, t("appealsLink")),
+          h(
+            "div",
+            { class: "link-row" },
+            link,
+            h(
+              "button",
+              {
+                class: "ghost small",
+                type: "button",
+                onclick: () => navigator.clipboard?.writeText(link.value).then(() => toast(t("appealsLinkCopied")), () => link.select()),
+              },
+              icon("copy", "icon small"),
+              t("appealsCopyLink"),
+            ),
+          ),
+          h("span", { class: "help" }, t("appealsLinkHelp")),
+        ),
+        field("appealsChannel", "appealsChannelHelp", picker({ id: "appealsChannelId", options: postableChannels(data), value: config.channelId, emptyLabel: t("appealsChannelDefault") })),
+        field("appealsCooldown", "appealsCooldownHelp", h("input", { id: "appealsCooldown", type: "number", min: 0, max: 365, step: 1, required: true, value: config.cooldownDays })),
+      ),
+      card(
+        t("appealsQuestions"),
+        "message",
+        "blue",
+        h("div", { class: "toolbar" }, h("p", { class: "help grow" }, t("appealsQuestionsHelp")), questions.count, questions.addButton),
+        questions.empty,
+        questions.list,
+      ),
+    ],
+    fields: { appeals: readAppeals },
+    after: appeals.element,
+  });
+  await appeals.load();
+}
+
+// The page a banned member opens (from the link in their ban DM) to appeal.
+async function showAppealForm(guildId) {
+  state.me = await api("/api/me");
+  renderChrome();
+  const info = await api(`/api/appeals/${guildId}`);
+  const header = h("div", { class: "appeal-head" }, guildIcon(info.guild, "lg"), h("h1", {}, t("appealPageTitle", { server: info.guild.name })));
+  const panel = (...children) => show(h("section", { class: "card appeal-page" }, header, ...children));
+  const notice = (key, values) => panel(h("p", { class: "muted" }, t(key, values)));
+  switch (info.state) {
+    case "closed":
+      return notice("appealClosed");
+    case "not-banned":
+      return notice("appealNotBanned");
+    case "pending":
+      return notice("appealPending", { date: formatDate(info.latest.createdAt) });
+    case "cooldown":
+      return notice("appealCooldown", { date: formatDate(info.cooldownEndsAt) });
+  }
+  const boxes = info.questions.map((question, index) => {
+    const box = messageBox(`appealAnswer${index}`, "", t("appealAnswerPlaceholder"), info.maxAnswer);
+    box.querySelector("textarea").required = true;
+    return h("label", { class: "field" }, h("span", { class: "field-label" }, question ?? t("appealDefaultQuestion")), box);
+  });
+  const submit = h("button", { class: "primary big", type: "submit" }, t("appealSend"));
+  const form = h(
+    "form",
+    {
+      class: "appeal-form",
+      onsubmit: async (event) => {
+        event.preventDefault();
+        const answers = [...form.querySelectorAll("textarea")].map((box) => box.value.trim());
+        if (answers.some((answer) => !answer)) {
+          toast(t("appealAnswerAll"), "error");
+          return;
+        }
+        submit.disabled = true;
+        try {
+          await api(`/api/appeals/${guildId}`, { method: "POST", body: { answers } });
+          notice("appealSent");
+        } catch (error) {
+          failed(error);
+          submit.disabled = false;
+        }
+      },
+    },
+    boxes,
+    submit,
+  );
+  const previous =
+    info.latest?.status === "denied" ? h("p", { class: "tip" }, icon("alert"), h("span", {}, t("appealPreviouslyDenied", { date: formatDate(info.latest.decidedAt) }))) : null;
+  panel(
+    h("p", { class: "muted" }, t("appealIntro")),
+    h("dl", { class: "facts" }, h("dt", {}, t("appealsBanReason")), h("dd", {}, info.banReason ?? t("appealsNoReason"))),
+    previous,
+    form,
+  );
+}
+
 // --- Activity ----------------------------------------------------------------------
 
 // A line of a dashboard change: **bold** as bold, and channel and role mentions as names.
@@ -3821,6 +4123,7 @@ const SHOW_PAGE = {
   cases: showCases,
   members: showMembers,
   tickets: showTickets,
+  appeals: showAppeals,
   automod: showAutomod,
   raid: showRaid,
   welcome: showWelcome,
@@ -3837,8 +4140,36 @@ const SHOW_PAGE = {
   access: showAccess,
 };
 
+// Where to go back to after logging in (the appeal page someone opened while
+// logged out). Session storage can be off, so this is best effort.
+const RETURN_KEY = "rv-return";
+function rememberReturn(hash) {
+  try {
+    sessionStorage.setItem(RETURN_KEY, hash);
+  } catch {
+    // Private mode.
+  }
+}
+function takeReturn() {
+  try {
+    const hash = sessionStorage.getItem(RETURN_KEY);
+    sessionStorage.removeItem(RETURN_KEY);
+    return hash;
+  } catch {
+    return null;
+  }
+}
+
 async function route() {
-  const [path] = location.hash.replace(/^#/, "").split("?");
+  let [path] = location.hash.replace(/^#/, "").split("?");
+  if (path === "" || path === "/") {
+    const back = takeReturn();
+    if (back && /^#\/appeal\/\d{17,20}$/.test(back)) {
+      history.replaceState(null, "", back);
+      [path] = location.hash.replace(/^#/, "").split("?");
+    }
+  }
+  const appeal = path.match(/^\/appeal\/(\d{17,20})$/);
   const match = path.match(/^\/g\/(\d{17,20})(?:\/(\w+))?$/);
   state.unsaved = false;
   state.lastHash = location.hash;
@@ -3861,7 +4192,9 @@ async function route() {
   }
   window.scrollTo({ top: 0 });
   try {
-    if (match && SHOW_PAGE[pageId]) {
+    if (appeal) {
+      await showAppealForm(appeal[1]);
+    } else if (match && SHOW_PAGE[pageId]) {
       await SHOW_PAGE[pageId](match[1]);
     } else {
       await showServers();

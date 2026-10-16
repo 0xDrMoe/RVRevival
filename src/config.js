@@ -49,7 +49,20 @@ export function loadBotConfig(env = process.env) {
   return {
     token: botToken(env),
     forcedLanguage: botLanguage(env),
+    // Optional for the bot: used for the ban-appeal link in ban DMs.
+    dashboardUrl: optionalDashboardUrl(env),
   };
+}
+
+function optionalDashboardUrl(env) {
+  if (!env.DASHBOARD_URL?.trim()) {
+    return undefined;
+  }
+  try {
+    return dashboardUrl(env);
+  } catch {
+    return undefined;
+  }
 }
 
 // Settings for registering slash commands.

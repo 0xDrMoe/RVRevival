@@ -964,5 +964,9 @@
   "temproleRemoved": "Se le quitó {role} a {user}.",
   "temproleListEmpty": "No hay roles temporales activos.",
   "temproleList": "**Roles temporales:**\n{list}",
-  "temproleListMore": "…y {count} más."
+  "temproleListMore": "…y {count} más.",
+
+  "appealAcceptedDm": "Tu apelación de baneo en **{server}** fue aceptada. Puedes volver a unirte.",
+  "appealDeniedDm": "Tu apelación de baneo en **{server}** fue rechazada.",
+  "dmAppeal": "Puedes apelar este baneo aquí: {url}"
 }

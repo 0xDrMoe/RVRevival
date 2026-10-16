@@ -28,6 +28,14 @@ describe("loadBotConfig", () => {
   });
 });
 
+describe("loadBotConfig DASHBOARD_URL", () => {
+  it("keeps a valid dashboard address for appeal links and ignores a bad one", () => {
+    expect(loadBotConfig({ DISCORD_TOKEN: TOKEN, DASHBOARD_URL: "https://dash.example.com/path" }).dashboardUrl).toBe("https://dash.example.com");
+    expect(loadBotConfig({ DISCORD_TOKEN: TOKEN, DASHBOARD_URL: "http://dash.example.com" }).dashboardUrl).toBeUndefined();
+    expect(loadBotConfig({ DISCORD_TOKEN: TOKEN, DASHBOARD_URL: "nope" }).dashboardUrl).toBeUndefined();
+  });
+});
+
 describe("loadRegisterConfig", () => {
   const env = { DISCORD_TOKEN: TOKEN, DISCORD_CLIENT_ID: CLIENT_ID, DISCORD_GUILD_ID: GUILD_ID };
 
