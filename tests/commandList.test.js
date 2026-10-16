@@ -33,6 +33,7 @@ describe("command list", () => {
       "tag",
       "tags",
       "remind",
+      "giveaway",
     ]);
     for (const command of commands.values()) {
       expect(command.data.name).toBe(command.name);

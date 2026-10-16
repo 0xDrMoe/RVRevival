@@ -7,6 +7,8 @@ import { createCountryChannelGuard } from "./channels/countryChannelGuard.js";
 import { createCommands } from "./commands/index.js";
 import { createWelcomer } from "./community/welcome.js";
 import { ConfigError, loadBotConfig } from "./config.js";
+import { createGiveawayScheduler } from "./giveaways/giveawayScheduler.js";
+import { GiveawayStore } from "./giveaways/giveawayStore.js";
 import { createInteractionHandler } from "./interactionHandler.js";
 import { createActionLog } from "./logs/actionLog.js";
 import { createLogChannelPoster } from "./logs/logChannel.js";
@@ -67,6 +69,8 @@ async function start() {
   const store = new CaseStore(db);
   // Reminders set with /remind.
   const reminders = new ReminderStore(db);
+  // Giveaways started with /giveaway, and who entered them.
+  const giveaways = new GiveawayStore(db);
   // Pick up settings changed on the web dashboard (another process).
   const settingsReload = setInterval(() => {
     try {
@@ -105,6 +109,7 @@ async function start() {
     modLog,
     botDeletions,
     reminders,
+    giveaways,
   });
   const handleInteraction = createInteractionHandler({ commands, logger, forcedLanguage, actionLog });
   const guardCountryChannel = createCountryChannelGuard({ guildSettings, logger, actionLog, botDeletions });
@@ -144,6 +149,7 @@ async function start() {
   let client;
   let tempBans;
   let reminderScheduler;
+  let giveawayScheduler;
 
   function connect(intents) {
     client = new Client({ intents, partials: PARTIALS });
@@ -164,6 +170,9 @@ async function start() {
       reminderScheduler?.stop();
       reminderScheduler = createReminderScheduler({ client: readyClient, store: reminders, logger, forcedLanguage });
       reminderScheduler.start();
+      giveawayScheduler?.stop();
+      giveawayScheduler = createGiveawayScheduler({ client: readyClient, store: giveaways, logger, forcedLanguage });
+      giveawayScheduler.start();
     });
 
     client.on(Events.InteractionCreate, (interaction) => {
@@ -267,6 +276,7 @@ async function start() {
       logger.info("Shutting down");
       tempBans?.stop();
       reminderScheduler?.stop();
+      giveawayScheduler?.stop();
       automod.stop();
       await client?.destroy().catch(() => {});
       closeDatabase(db);
