@@ -47,6 +47,7 @@ export const Setting = Object.freeze({
   JOIN_GATE: "joinGate", // new-account gate and join alerts, an object (see raid/raid.js)
   LOCKDOWN: "lockdown", // a running /raid lockdown and what to restore, an object (see raid/raid.js)
   TEMP_VOICE: "tempVoice", // join-to-create voice, { hubChannelId, categoryId, nameTemplate, userLimit } (see voice/tempVoice.js)
+  AUTO_RESPONDERS: "autoResponders", // auto-responders, a list of { trigger, match, reply, channelId } (see community/autoResponders.js)
 });
 
 const KNOWN_SETTINGS = new Set(Object.values(Setting));

@@ -46,6 +46,10 @@ const LEVEL_ANNOUNCE = ["here", "channel", "dm", "off"];
 const MAX_TAGS = 50;
 const MAX_TAG_LENGTH = 2000;
 const MAX_AUTOROLES = 10;
+// Auto-responders (community/autoResponders.js).
+const MAX_RESPONDERS = 25;
+const MAX_TRIGGER_LENGTH = 60;
+const RESPONDER_MATCHES = ["contains", "word", "exact", "starts"];
 // The starboard's limits and defaults (community/starboard.js).
 const STARBOARD_DEFAULTS = { threshold: 3, emoji: "⭐" };
 const MAX_STARBOARD_THRESHOLD = 50;
@@ -1318,25 +1322,69 @@ function readTags(form) {
   return tags.length > 0 ? tags : null;
 }
 
-async function showTags(guildId) {
-  const data = await loadManagedGuild(guildId);
-  if (!data) {
-    return;
-  }
+// One auto-responder: trigger, how it matches, where, the reply and a remove button.
+function responderRow(responder, channels, onRemove) {
+  const row = h(
+    "div",
+    { class: "tag-row responder-row" },
+    h(
+      "div",
+      { class: "toolbar" },
+      h("input", {
+        class: "grow responder-trigger",
+        value: responder.trigger,
+        maxLength: MAX_TRIGGER_LENGTH,
+        placeholder: t("responderTriggerPlaceholder"),
+        "aria-label": t("responderTrigger"),
+        spellcheck: false,
+      }),
+      h(
+        "select",
+        { class: "responder-match", "aria-label": t("responderMatch") },
+        RESPONDER_MATCHES.map((match) => h("option", { value: match, selected: match === (responder.match ?? "contains") }, t(`responderMatch_${match}`))),
+      ),
+      h("span", { class: "responder-channel" }, picker({ id: undefined, options: channels, value: responder.channelId ?? "", emptyLabel: t("responderEverywhere") })),
+      h("button", { class: "ghost small", type: "button", onclick: () => onRemove(row) }, t("tagRemove")),
+    ),
+    h(
+      "textarea",
+      { class: "responder-reply", rows: 3, maxLength: MAX_TAG_LENGTH, placeholder: t("responderReplyPlaceholder"), "aria-label": t("responderReply") },
+      responder.reply,
+    ),
+  );
+  return row;
+}
+
+// The auto-responders on the page, as the bot saves them (triggers lowercased,
+// spaces collapsed). Empty rows are ignored; bad ones are sent so the server explains.
+function readResponders(form) {
+  const responders = [...form.querySelectorAll(".responder-row")]
+    .map((row) => ({
+      trigger: row.querySelector(".responder-trigger").value.normalize("NFKC").toLowerCase().replace(/\s+/g, " ").trim(),
+      match: row.querySelector(".responder-match").value,
+      reply: row.querySelector(".responder-reply").value.replace(/\r\n?/g, "\n").trim(),
+      channelId: row.querySelector(".responder-channel select").value || null,
+    }))
+    .filter((responder) => responder.trigger || responder.reply)
+    .sort((a, b) => a.trigger.localeCompare(b.trigger));
+  return responders.length > 0 ? responders : null;
+}
+
+// An editable list with a count and an Add button, for custom commands and auto-responders.
+function editableList({ items, max, makeRow, focus, emptyKey, addKey }) {
   const list = h("div", { class: "tag-list" });
   const count = h("span", { class: "count-pill" });
-  const empty = h("p", { class: "muted" }, t("tagsNone"));
+  const empty = h("p", { class: "muted" }, t(emptyKey));
   const update = () => {
-    const rows = list.querySelectorAll(".tag-row").length;
-    count.textContent = t("tagsCount", { count: rows, max: MAX_TAGS });
+    const rows = list.children.length;
+    count.textContent = t("tagsCount", { count: rows, max });
     empty.hidden = rows > 0;
-    addButton.disabled = rows >= MAX_TAGS;
+    addButton.disabled = rows >= max;
   };
-  const changed = () => list.dispatchEvent(new Event("change", { bubbles: true }));
   const remove = (row) => {
     row.remove();
     update();
-    changed();
+    list.dispatchEvent(new Event("change", { bubbles: true }));
   };
   const addButton = h(
     "button",
@@ -1344,16 +1392,43 @@ async function showTags(guildId) {
       class: "primary small",
       type: "button",
       onclick: () => {
-        const row = tagRow({ name: "", content: "" }, remove);
+        const row = makeRow(null, remove);
         list.append(row);
         update();
-        row.querySelector(".tag-name").focus();
+        row.querySelector(focus).focus();
       },
     },
-    t("tagAdd"),
+    t(addKey),
   );
-  (data.settings.tags ?? []).forEach((tag) => list.append(tagRow(tag, remove)));
+  items.forEach((item) => list.append(makeRow(item, remove)));
   update();
+  return { list, count, empty, addButton };
+}
+
+async function showTags(guildId) {
+  const data = await loadManagedGuild(guildId);
+  if (!data) {
+    return;
+  }
+  const tags = editableList({
+    items: data.settings.tags ?? [],
+    max: MAX_TAGS,
+    makeRow: (tag, remove) => tagRow(tag ?? { name: "", content: "" }, remove),
+    focus: ".tag-name",
+    emptyKey: "tagsNone",
+    addKey: "tagAdd",
+  });
+  const responderChannels = data.channels
+    .filter((channel) => [CHANNEL.TEXT, CHANNEL.ANNOUNCEMENT, CHANNEL.FORUM, CHANNEL.CATEGORY].includes(channel.type))
+    .map((channel) => ({ id: channel.id, label: channelLabel(channel, data.channels) }));
+  const responders = editableList({
+    items: data.settings.autoResponders ?? [],
+    max: MAX_RESPONDERS,
+    makeRow: (responder, remove) => responderRow(responder ?? { trigger: "", match: "contains", reply: "", channelId: null }, responderChannels, remove),
+    focus: ".responder-trigger",
+    emptyKey: "respondersNone",
+    addKey: "responderAdd",
+  });
 
   settingsPage({
     data,
@@ -1364,12 +1439,20 @@ async function showTags(guildId) {
         t("sectionTags"),
         "💬",
         "amber",
-        h("div", { class: "toolbar" }, h("p", { class: "help grow" }, t("tagsHelp")), count, addButton),
-        empty,
-        list,
+        h("div", { class: "toolbar" }, h("p", { class: "help grow" }, t("tagsHelp")), tags.count, tags.addButton),
+        tags.empty,
+        tags.list,
+      ),
+      card(
+        t("sectionResponders"),
+        "🗨️",
+        "cyan",
+        h("div", { class: "toolbar" }, h("p", { class: "help grow" }, t("respondersHelp")), responders.count, responders.addButton),
+        responders.empty,
+        responders.list,
       ),
     ],
-    fields: { tags: readTags },
+    fields: { tags: readTags, autoResponders: readResponders },
   });
 }
 

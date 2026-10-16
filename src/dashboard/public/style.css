@@ -1737,6 +1737,33 @@ dialog textarea {
   flex: 1;
 }
 
+.responder-row .toolbar {
+  flex-wrap: wrap;
+}
+
+.responder-row .responder-trigger {
+  flex: 1 1 180px;
+  min-width: 0;
+}
+
+.responder-row select {
+  width: auto;
+}
+
+.responder-row .responder-channel select {
+  max-width: 220px;
+}
+
+@media (max-width: 560px) {
+  .responder-row .responder-match,
+  .responder-row .responder-channel,
+  .responder-row .responder-channel select {
+    flex: 1 1 100%;
+    width: 100%;
+    max-width: none;
+  }
+}
+
 /* --- Members ---------------------------------------------------------------------- */
 
 .tip.danger {

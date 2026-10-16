@@ -369,7 +369,9 @@ export function createAutomod({
       const violation = await findViolation(message, config, { recent });
       if (violation) {
         await enforce(message, member, config, violation);
+        return true;
       }
+      return false;
     },
 
     // Someone editing a message into something automod would have caught.

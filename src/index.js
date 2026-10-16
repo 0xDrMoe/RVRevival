@@ -14,6 +14,7 @@ import { GiveawayStore } from "./giveaways/giveawayStore.js";
 import { createInteractionHandler } from "./interactionHandler.js";
 import { createRaidGuard } from "./raid/raid.js";
 import { createTempVoice } from "./voice/tempVoice.js";
+import { createAutoResponder } from "./community/autoResponders.js";
 import { TempVoiceStore } from "./voice/tempVoiceStore.js";
 import { createLeveling } from "./leveling/leveling.js";
 import { LevelStore } from "./leveling/levelStore.js";
@@ -96,6 +97,8 @@ async function start() {
   // Join-to-create voice channels (/voice).
   const tempVoiceChannels = new TempVoiceStore(db);
   const tempVoice = createTempVoice({ guildSettings, store: tempVoiceChannels, logger });
+  // Answers messages that match a trigger (/autoresponder).
+  const autoResponder = createAutoResponder({ guildSettings, logger });
   // Pick up settings changed on the web dashboard (another process).
   const settingsReload = setInterval(() => {
     try {
@@ -219,7 +222,15 @@ async function start() {
     client.on(Events.MessageCreate, (message) => {
       guardCountryChannel(message).catch((error) => logger.error("Couldn't clean the /country channel", { error }));
     });
-    client.on(Events.MessageCreate, safely("automod", (message) => automod.handleMessage(message)));
+    // Auto-responders only answer messages automod let through.
+    client.on(
+      Events.MessageCreate,
+      safely("automod", async (message) => {
+        if (!(await automod.handleMessage(message))) {
+          await autoResponder.handleMessage(message);
+        }
+      }),
+    );
     client.on(Events.MessageCreate, safely("leveling", (message) => leveling.handleMessage(message)));
 
     // The server log (/settings server-log-channel).
