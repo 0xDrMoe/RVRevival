@@ -1050,5 +1050,23 @@
   "stickyNone": "{channel} n'a pas de message collant.",
   "stickyRemoved": "Message collant retiré de {channel}.",
   "stickyListEmpty": "Aucun message collant pour l'instant. Ajoutez-en un avec `/sticky set`.",
-  "stickyList": "**Messages collants ({count}/{max})**\n{list}"
+  "stickyList": "**Messages collants ({count}/{max})**\n{list}",
+
+  "highlightCommandDescription": "Recevez un MP quand quelqu'un dit un de vos mots",
+  "highlightAddDescription": "Ajouter un mot pour être prévenu",
+  "highlightRemoveDescription": "Retirer un de vos mots",
+  "highlightListDescription": "Vos mots sur ce serveur",
+  "highlightClearDescription": "Retirer tous vos mots",
+  "highlightWordOptionDescription": "Un mot ou une courte expression",
+  "highlightBadWord": "Un mot fait {min} à {max} caractères et contient au moins une lettre ou un chiffre.",
+  "highlightAlready": "`{word}` fait déjà partie de vos mots.",
+  "highlightFull": "Vous avez déjà {max} mots. Retirez-en un avec `/highlight remove` d'abord.",
+  "highlightAdded": "Je vous enverrai un MP quand quelqu'un dira `{word}` dans un salon que vous voyez (pas pendant que vous y discutez). Vos MP de ce serveur doivent être ouverts.",
+  "highlightNotFound": "`{word}` ne fait pas partie de vos mots. Voir `/highlight list`.",
+  "highlightRemoved": "`{word}` retiré.",
+  "highlightListEmpty": "Vous n'avez pas encore de mots. Ajoutez-en un avec `/highlight add`.",
+  "highlightList": "**Vos mots ({count}/{max}) :** {list}",
+  "highlightCleared": "Tous vos mots ont été retirés ({count}).",
+  "highlightDm": "🔔 `{word}` a été mentionné dans {channel} sur **{server}** :",
+  "highlightJump": "Aller au message"
 }

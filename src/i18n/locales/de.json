@@ -1050,5 +1050,23 @@
   "stickyNone": "{channel} hat keine Sticky-Nachricht.",
   "stickyRemoved": "Sticky-Nachricht aus {channel} entfernt.",
   "stickyListEmpty": "Noch keine Sticky-Nachrichten. Füge eine mit `/sticky set` hinzu.",
-  "stickyList": "**Sticky-Nachrichten ({count}/{max})**\n{list}"
+  "stickyList": "**Sticky-Nachrichten ({count}/{max})**\n{list}",
+
+  "highlightCommandDescription": "Bekomme eine DM, wenn jemand eines deiner Wörter sagt",
+  "highlightAddDescription": "Ein Wort hinzufügen, über das du informiert wirst",
+  "highlightRemoveDescription": "Eines deiner Wörter entfernen",
+  "highlightListDescription": "Deine Wörter auf diesem Server",
+  "highlightClearDescription": "Alle deine Wörter entfernen",
+  "highlightWordOptionDescription": "Ein Wort oder kurzer Ausdruck",
+  "highlightBadWord": "Ein Wort hat {min} bis {max} Zeichen und mindestens einen Buchstaben oder eine Zahl.",
+  "highlightAlready": "`{word}` ist schon eines deiner Wörter.",
+  "highlightFull": "Du hast schon {max} Wörter. Entferne zuerst eines mit `/highlight remove`.",
+  "highlightAdded": "Ich schreibe dir eine DM, wenn jemand `{word}` in einem Kanal sagt, den du sehen kannst (nicht, während du selbst dort schreibst). Deine DMs von diesem Server müssen offen sein.",
+  "highlightNotFound": "`{word}` ist keines deiner Wörter. Siehe `/highlight list`.",
+  "highlightRemoved": "`{word}` entfernt.",
+  "highlightListEmpty": "Du hast noch keine Wörter. Füge eines mit `/highlight add` hinzu.",
+  "highlightList": "**Deine Wörter ({count}/{max}):** {list}",
+  "highlightCleared": "Alle deine Wörter entfernt ({count}).",
+  "highlightDm": "🔔 `{word}` wurde in {channel} auf **{server}** erwähnt:",
+  "highlightJump": "Zur Nachricht"
 }

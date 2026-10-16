@@ -25,6 +25,8 @@ import { createAfk } from "./afk/afk.js";
 import { AfkStore } from "./afk/afkStore.js";
 import { createStickies } from "./sticky/stickies.js";
 import { StickyStore } from "./sticky/stickyStore.js";
+import { createHighlights } from "./highlights/highlights.js";
+import { HighlightStore } from "./highlights/highlightStore.js";
 import { createTempRoleScheduler } from "./tempRoles/tempRoleScheduler.js";
 import { createRaidGuard } from "./raid/raid.js";
 import { createTempVoice } from "./voice/tempVoice.js";
@@ -171,6 +173,9 @@ async function start() {
   // Sticky messages (/sticky), kept at the bottom of their channel.
   const stickyStore = new StickyStore(db);
   const stickies = createStickies({ store: stickyStore, logger });
+  // Words members get a DM about (/highlight).
+  const highlightStore = new HighlightStore(db);
+  const highlights = createHighlights({ store: highlightStore, logger, forcedLanguage });
   // Gives members their roles back when they rejoin (/welcome persist).
   const rolePersistence = createRolePersistence({
     guildSettings,
@@ -215,6 +220,8 @@ async function start() {
     afk,
     stickyStore,
     stickies,
+    highlightStore,
+    highlights,
     giveaways,
     tickets,
     levels,
@@ -324,6 +331,7 @@ async function start() {
     client.on(Events.MessageCreate, safely("leveling", (message) => leveling.handleMessage(message)));
     client.on(Events.MessageCreate, safely("AFK", (message) => afk.messageCreated(message)));
     client.on(Events.MessageCreate, safely("sticky messages", (message) => stickies.messageCreated(message)));
+    client.on(Events.MessageCreate, safely("highlights", (message) => highlights.messageCreated(message)));
 
     // The server log (/settings server-log-channel).
     client.on(Events.MessageDelete, safely("a deleted message", (message) => serverLog.messageDeleted(message)));
@@ -366,6 +374,7 @@ async function start() {
     client.on(Events.GuildMemberRemove, safely("a leave message", (member) => welcomer.memberLeft(member)));
     client.on(Events.GuildMemberRemove, safely("forgetting a birthday", (member) => birthdayStore.remove(member.guild.id, member.id)));
     client.on(Events.GuildMemberRemove, safely("forgetting an AFK", (member) => afk.memberLeft(member)));
+    client.on(Events.GuildMemberRemove, safely("forgetting highlights", (member) => highlights.memberLeft(member)));
     client.on(Events.GuildMemberUpdate, safely("autoroles after screening", (before, after) => welcomer.memberUpdated(before, after)));
     client.on(
       Events.GuildMemberRemove,

@@ -30,6 +30,7 @@ The Discord bot for the Rumbleverse Revival server. It is built as a set of inde
 | [Feeds](#feeds) | `/feed`, or the dashboard's Feeds page | Manage Server or a dashboard role that can change settings |
 | [Server stats](#server-stats) | `/stats`, or the dashboard's Server stats page | Manage Server or a dashboard role that can change settings |
 | [Sticky messages](#sticky-messages) | `/sticky`, or the dashboard's Sticky messages page | Manage Messages (dashboard: Manage Server or a dashboard role that can change settings) |
+| [Highlights](#highlights) | `/highlight` | Everyone |
 | [AFK](#afk) | `/afk` | Everyone |
 | [Ban appeals](#ban-appeals) | The dashboard's Ban appeals page | Manage Server or a dashboard role that can change settings (banned members fill in the form) |
 | [Join-to-create voice](#join-to-create-voice) | `/voice` | Manage Server (`setup`, `off`), the channel's owner (`lock`, `unlock`), anyone in the channel (`claim`) |
@@ -385,6 +386,12 @@ A server can have up to 5 counters. Discord lets the bot rename a channel only t
 
 When people talk, the bot waits a few seconds, deletes its last copy and posts the message again, at most once every 15 seconds per channel. Up to 10 per server, one per channel. Mentions never ping anyone. Needs **Manage Messages**. The bot needs View Channel and Send Messages.
 
+### Highlights
+
+**`/highlight add word`** gets you a DM when someone says that word (or short phrase) in a channel you can see. **`/highlight remove word`**, **`/highlight list`** and **`/highlight clear`** manage your words; up to 10 per server.
+
+The DM shows the message and a link to it. It matches whole words only ("cat" doesn't match "category"), never for your own messages or messages that already mention you, and not while you're chatting in that channel yourself (in the last 5 minutes). You get at most one DM per channel every 5 minutes. Your DMs from the server need to be open. Words are private: only you see them. Message text needs the **Message Content** intent.
+
 ### AFK
 
 **`/afk [message]`** says you're away. When someone mentions you or replies to you, the bot answers with your message and how long you've been away (once a minute per channel, and the notice deletes itself after 15 seconds). Your next message in the server marks you back.
@@ -629,6 +636,7 @@ src/
     stats.js             Server stats: /stats
     afk.js               AFK: /afk
     sticky.js            Sticky messages: /sticky
+    highlight.js         Highlights: /highlight
     commandHelpers.js    Shared start of moderation-style commands (language, permission check)
   countries/             Country roles: country list, name matching and search
   roles/                 Country roles: find, create, assign and remove roles
@@ -642,6 +650,7 @@ src/
   feeds/                 Feeds: reading RSS and Atom (parseFeed.js), safe fetching and finding YouTube and Reddit feeds (fetchFeed.js), saved in SQLite (feedStore.js), adding feeds and posts (feeds.js), checked on time (feedPoller.js)
   stats/                 Server stats: counters and counts (statsCounters.js), creating and renaming the channels (statsUpdater.js)
   sticky/                Sticky messages: saved in SQLite (stickyStore.js), reposting (stickies.js)
+  highlights/            Highlights: saved in SQLite (highlightStore.js), matching and DMs (highlights.js)
   afk/                   AFK: saved in SQLite (afkStore.js), notices and welcome-backs (afk.js)
   appeals/               Ban appeals: settings (config.js), saved in SQLite (appealStore.js); the form and decisions live in the dashboard
   voice/                 Join-to-create voice: making and deleting channels (tempVoice.js), saved in SQLite (tempVoiceStore.js)
