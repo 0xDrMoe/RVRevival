@@ -49,7 +49,8 @@ Members pick the country they live in and get a role named after it. They can on
   - **Type my country** opens a small form with one box. An exact match (`Germany`, `USA`, `Deutschland`) gives the role right away. Otherwise the bot shows a list of close matches to pick from, and never guesses. If nothing is close, it shows a *Try again* button.
   - Members who already have a country are told so as soon as they click.
   - The same rules and checks apply as for `/country`: one country per member, ISO-validated names, replies only the member sees, and every result in the logs channel (as *Country picker buttons*, with what they typed). It works in any channel the guide is posted in.
-  - The buttons keep working after the bot restarts. Guides posted before this feature have no buttons, so run `/country-help` again to post a new one.
+  - **Translate this message** privately shows the guide in the member's Discord language, with a menu to switch to any of the bot's seven languages (each listed in its own name, so Arabic is reachable too). The translated copy has the same continent and **Type my country** buttons, so members can get their role from it. The lists and replies that follow use the member's Discord language. These clicks aren't logged.
+  - The buttons keep working after the bot restarts. Guides posted before a button was added don't have it, so run `/country-help` again to post a new one.
 - **`/country country:<name>`** assigns a country role to the member who ran it.
   - Input is validated against the ISO 3166-1 list, so arbitrary text can never create a role.
   - Matching ignores case, spacing and accents, and accepts common aliases (`USA`, `UK`, `Turkey`) and the country's name in any of the bot's languages (`Deutschland`, `Estados Unidos`, `Allemagne`). Roles are always named in English.
@@ -63,7 +64,7 @@ Members pick the country they live in and get a role named after it. They can on
   - Discord can't hide a command by role, so everyone sees `/country-staff`, but the bot refuses anyone without the staff role (server admins included, unless they have it). To hide it, use *Server Settings > Integrations > the bot > /country-staff*.
   - Nothing works until an admin runs `/settings staff-role`.
   - Every change is logged with who made it.
-- **`/country-help`** (Manage Server only) posts a standalone message in the current channel telling members how to get their country, with the continent and **Type my country** buttons under it, and confirms privately to the admin. When posted in the `/country` channel, it also says that any other message there is deleted automatically.
+- **`/country-help`** (Manage Server only) posts a standalone message in the current channel telling members how to get their country, with the continent, **Type my country** and **Translate this message** buttons under it, and confirms privately to the admin. When posted in the `/country` channel, it also says that any other message there is deleted automatically.
 
 Needs: the **Manage Roles** permission, and the bot's role above every country role (including ones staff remove) (see [Setup](#setup), step 3). `/country-help` also needs **View Channel**, **Send Messages** (or **Send Messages in Threads**) and **Embed Links** in the channel it posts to. Keeping the `/country` channel clean needs **Manage Messages** in that channel.
 
@@ -164,7 +165,7 @@ tests/                   Unit tests using in-memory Discord fakes
 
 ## Languages
 
-Replies use each user's Discord language when it's supported, otherwise English. `BOT_LANGUAGE` forces one language for everyone. Discord has no Arabic app language, so Arabic only works via `BOT_LANGUAGE=ar`. Public posts (such as `/country-help`) use the server's language instead of the person who ran the command. Country roles are always named in English, but members can type a country's name in any of the bot's languages. Translations have not been reviewed by native speakers yet.
+Replies use each user's Discord language when it's supported, otherwise English. `BOT_LANGUAGE` forces one language for everyone. Discord has no Arabic app language, so the bot can't detect Arabic speakers: set `BOT_LANGUAGE=ar` to reply in Arabic to everyone, or members can pick Arabic from the guide's **Translate this message** menu. Public posts (such as `/country-help`) use the server's language instead of the person who ran the command. Country roles are always named in English, but members can type a country's name in any of the bot's languages. Translations have not been reviewed by native speakers yet.
 
 ## Troubleshooting
 

@@ -1,9 +1,9 @@
 import { MessageFlags, PermissionFlagsBits, RESTJSONErrorCodes } from "discord.js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createCountryHelpCommand } from "../src/commands/countryHelp.js";
+import { createCountryHelpCommand, TranslateId } from "../src/commands/countryHelp.js";
 import { PickerId } from "../src/commands/countryPicker.js";
 import { CONTINENTS } from "../src/countries/continents.js";
-import { translate } from "../src/i18n/i18n.js";
+import { SUPPORTED_LANGUAGES, translate } from "../src/i18n/i18n.js";
 import { Status } from "../src/logs/actionLog.js";
 import { GuildSettings, Setting } from "../src/settings/guildSettings.js";
 import { discordError } from "./helpers/fakes.js";
@@ -78,22 +78,25 @@ describe("/country-help", () => {
     ]);
   });
 
-  it("adds a button per continent and a Type my country button under the guide", async () => {
+  it("adds a button per continent, Type my country and Translate this message under the guide", async () => {
     const interaction = fakeInteraction();
     await command.execute(interaction);
     const buttons = postedButtons(interaction);
     expect(buttons.map((button) => button.custom_id)).toEqual([
       ...CONTINENTS.map((continent) => PickerId.CONTINENT + continent),
       PickerId.BUTTON,
+      TranslateId.BUTTON,
     ]);
     expect(buttons.map((button) => button.label)).toContain("North America");
-    expect(buttons.at(-1).label).toBe(translate("en", "pickButtonLabel"));
+    expect(buttons.at(-2).label).toBe(translate("en", "pickButtonLabel"));
+    expect(buttons.at(-1).label).toBe(translate("en", "translateButtonLabel"));
   });
 
-  it("labels the button in the server's language", async () => {
+  it("labels the buttons in the server's language", async () => {
     const interaction = fakeInteraction({ locale: "de", guildLocale: "es-ES" });
     await command.execute(interaction);
-    expect(postedButtons(interaction).at(-1).label).toBe(translate("es", "pickButtonLabel"));
+    expect(postedButtons(interaction).at(-2).label).toBe(translate("es", "pickButtonLabel"));
+    expect(postedButtons(interaction).at(-1).label).toBe(translate("es", "translateButtonLabel"));
     expect(postedButtons(interaction)[0].label).toBe(translate("es", "continentAfrica"));
   });
 
@@ -206,5 +209,116 @@ describe("/country-help", () => {
     const interaction = fakeInteraction({ guildLocale: "fr" });
     await forced.execute(interaction);
     expect(postedEmbed(interaction).title).toBe(translate("ar", "helpTitle"));
+  });
+});
+
+// A click on the guide's Translate button, or a pick from the language menu.
+function fakeComponentInteraction({ locale = "de", values, channelId = CHANNEL_ID } = {}) {
+  return {
+    locale,
+    guildId: GUILD_ID,
+    channelId,
+    values,
+    reply: vi.fn(async () => {}),
+    update: vi.fn(async () => {}),
+  };
+}
+
+const sentMessage = (mock) => mock.mock.calls[0][0];
+const embedOf = (message) => message.embeds[0].toJSON();
+const componentsOf = (message) => message.components.flatMap((row) => row.toJSON().components);
+const languageMenuOf = (message) => componentsOf(message).find((component) => component.custom_id === TranslateId.MENU);
+
+describe("Translate this message", () => {
+  const { components } = createCountryHelpCommand();
+  const clickTranslate = (interaction) => components[TranslateId.BUTTON].handle(interaction);
+  const pickLanguage = (interaction) => components[TranslateId.MENU].handle(interaction);
+
+  it("privately shows the guide in the clicker's Discord language", async () => {
+    const interaction = fakeComponentInteraction({ locale: "de" });
+    const outcome = await clickTranslate(interaction);
+
+    expect(outcome).toBeNull();
+    const message = sentMessage(interaction.reply);
+    expect(message.flags).toBe(MessageFlags.Ephemeral);
+    expect(embedOf(message).title).toBe(translate("de", "helpTitle"));
+    expect(embedOf(message).fields[0].value).toBe(translate("de", "helpSteps"));
+  });
+
+  it("keeps the continent and Type my country buttons, in the translated language", async () => {
+    const interaction = fakeComponentInteraction({ locale: "fr" });
+    await clickTranslate(interaction);
+    const ids = componentsOf(sentMessage(interaction.reply)).map((component) => component.custom_id);
+
+    expect(ids).toEqual([...CONTINENTS.map((continent) => PickerId.CONTINENT + continent), PickerId.BUTTON, TranslateId.MENU]);
+    expect(componentsOf(sentMessage(interaction.reply))[0].label).toBe(translate("fr", "continentAfrica"));
+  });
+
+  it("offers every language by its own name, with the current one selected", async () => {
+    const interaction = fakeComponentInteraction({ locale: "es-ES" });
+    await clickTranslate(interaction);
+    const menu = languageMenuOf(sentMessage(interaction.reply));
+
+    expect(menu.placeholder).toBe(translate("es", "translatePlaceholder"));
+    expect(menu.options.map((option) => option.value)).toEqual(SUPPORTED_LANGUAGES);
+    expect(menu.options.map((option) => option.label)).toEqual([
+      "English",
+      "Español",
+      "Deutsch",
+      "Français",
+      "Português",
+      "Italiano",
+      "العربية",
+    ]);
+    expect(menu.options.filter((option) => option.default).map((option) => option.value)).toEqual(["es"]);
+  });
+
+  it("falls back to English for Discord languages the bot doesn't have", async () => {
+    const interaction = fakeComponentInteraction({ locale: "ja" });
+    await clickTranslate(interaction);
+    expect(embedOf(sentMessage(interaction.reply)).title).toBe(translate("en", "helpTitle"));
+  });
+
+  it("ignores BOT_LANGUAGE, since the member asked for a translation", async () => {
+    const forced = createCountryHelpCommand({ forcedLanguage: "ar" });
+    const interaction = fakeComponentInteraction({ locale: "it" });
+    await forced.components[TranslateId.BUTTON].handle(interaction);
+    expect(embedOf(sentMessage(interaction.reply)).title).toBe(translate("it", "helpTitle"));
+  });
+
+  it.each(SUPPORTED_LANGUAGES)("switches the private copy to %s from the menu", async (language) => {
+    const interaction = fakeComponentInteraction({ locale: "en-US", values: [language] });
+    const outcome = await pickLanguage(interaction);
+
+    expect(outcome).toBeNull();
+    const message = sentMessage(interaction.update);
+    expect(embedOf(message).title).toBe(translate(language, "helpTitle"));
+    expect(languageMenuOf(message).options.find((option) => option.default).value).toBe(language);
+  });
+
+  it("makes Arabic reachable even though Discord has no Arabic setting", async () => {
+    const interaction = fakeComponentInteraction({ locale: "en-US", values: ["ar"] });
+    await pickLanguage(interaction);
+    expect(embedOf(sentMessage(interaction.update)).description).toBe(translate("ar", "helpIntro"));
+  });
+
+  it("ignores a language value the menu never offered", async () => {
+    const interaction = fakeComponentInteraction({ locale: "pt-BR", values: ["xx"] });
+    await pickLanguage(interaction);
+    expect(embedOf(sentMessage(interaction.update)).title).toBe(translate("pt", "helpTitle"));
+  });
+
+  it("includes the deletion note only for guides in the /country channel", async () => {
+    const guildSettings = new GuildSettings();
+    await guildSettings.set(GUILD_ID, Setting.COUNTRY_CHANNEL, CHANNEL_ID);
+    const { components: withChannel } = createCountryHelpCommand({ guildSettings });
+
+    const inChannel = fakeComponentInteraction({ locale: "de" });
+    await withChannel[TranslateId.BUTTON].handle(inChannel);
+    expect(embedOf(sentMessage(inChannel.reply)).fields[1].value).toContain(translate("de", "helpChannelNote"));
+
+    const elsewhere = fakeComponentInteraction({ locale: "de", channelId: "800000000000000002" });
+    await withChannel[TranslateId.BUTTON].handle(elsewhere);
+    expect(embedOf(sentMessage(elsewhere.reply)).fields[1].value).not.toContain(translate("de", "helpChannelNote"));
   });
 });

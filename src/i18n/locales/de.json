@@ -1,4 +1,6 @@
 {
+  "languageName": "Deutsch",
+
   "commandDescription": "Wähle oder gib das Land ein, in dem du derzeit wohnst.",
   "countryOptionDescription": "Wähle oder gib das Land ein, in dem du derzeit wohnst.",
 
@@ -74,6 +76,8 @@
   "helpNotes": "- Nur du siehst die Antwort des Bots.\n- Gängige Kurzformen wie USA oder UK funktionieren auch.\n- Du kannst nur ein Land wählen. Falsches Land gewählt? Bitte ein Teammitglied, es zu ändern.\n- Wenn etwas schiefgeht, sagt dir der Bot Bescheid. Passiert es immer wieder, wende dich an einen Server-Admin.",
   "helpFallbackNote": "- Lieber mit Befehlen? `/country` funktioniert auch.",
   "helpChannelNote": "- Dieser Kanal ist nur zum Wählen deines Landes. Alle anderen Nachrichten hier werden automatisch gelöscht.",
+  "translateButtonLabel": "Diese Nachricht übersetzen",
+  "translatePlaceholder": "Diese Nachricht in einer anderen Sprache anzeigen",
 
   "pickButtonLabel": "Land eintippen",
   "pickTryAgainLabel": "Nochmal versuchen",

@@ -1,4 +1,6 @@
 {
+  "languageName": "Français",
+
   "commandDescription": "Sélectionnez ou saisissez le pays où vous résidez actuellement.",
   "countryOptionDescription": "Sélectionnez ou saisissez le pays où vous résidez actuellement.",
 
@@ -74,6 +76,8 @@
   "helpNotes": "- Toi seul vois la réponse du bot.\n- Les noms courts courants comme USA ou UK fonctionnent aussi.\n- Tu ne peux choisir qu'un seul pays. Tu t'es trompé ? Demande à un membre du staff de le changer.\n- Si quelque chose ne va pas, le bot te le dira. Si ça continue, contacte un admin du serveur.",
   "helpFallbackNote": "- Tu préfères les commandes ? `/country` fonctionne aussi.",
   "helpChannelNote": "- Ce salon sert uniquement à choisir ton pays. Tout autre message publié ici est supprimé automatiquement.",
+  "translateButtonLabel": "Traduire ce message",
+  "translatePlaceholder": "Afficher ce message dans une autre langue",
 
   "pickButtonLabel": "Écrire mon pays",
   "pickTryAgainLabel": "Réessayer",
