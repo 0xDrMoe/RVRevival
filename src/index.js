@@ -230,6 +230,7 @@ async function start() {
       birthdays?.stop();
       birthdays = createBirthdays({ client: readyClient, guildSettings, store: birthdayStore, logger, forcedLanguage });
       birthdays.start();
+      leveling.startVoiceXp(readyClient);
     });
 
     client.on(Events.InteractionCreate, (interaction) => {
@@ -393,6 +394,7 @@ async function start() {
       giveawayScheduler?.stop();
       scheduledMessageScheduler?.stop();
       birthdays?.stop();
+      leveling.stopVoiceXp();
       automod.stop();
       await client?.destroy().catch(() => {});
       closeDatabase(db);

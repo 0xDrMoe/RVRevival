@@ -452,5 +452,14 @@
   "birthdayTimezone": "Zeitzone",
   "birthdayTimezoneHelp": "Wann der Tag beginnt, z. B. Europe/Berlin.",
   "birthdayMessage": "Glückwunsch",
-  "birthdayMessageHelp": "{user} ist das Mitglied (mehrere am selben Tag werden zusammen genannt), {server} der Server. Leer lassen für den Standardtext."
+  "birthdayMessageHelp": "{user} ist das Mitglied (mehrere am selben Tag werden zusammen genannt), {server} der Server. Leer lassen für den Standardtext.",
+  "levelsExtrasTitle": "Sprach-XP und Boni",
+  "levelsVoice": "Sprach-XP",
+  "levelsVoiceHelp": "10 XP pro Minute im Sprachkanal mit mindestens einer anderen Person, außer taub geschaltet oder im AFK-Kanal. Kanäle und Rollen ohne XP gelten auch hier.",
+  "levelsBooster": "Bonus für Server-Booster",
+  "levelsBoosterHelp": "XP-Multiplikator für Mitglieder, die den Server boosten, von 1 (keiner) bis 5.",
+  "levelsBoostsHelp": "Rollen, die mehr XP bekommen. Jeder bekommt seinen höchsten Bonus (Booster oder Rolle); Boni multiplizieren sich nicht.",
+  "levelsBoostsNone": "Keine Rollen-Boni.",
+  "levelsBoostMultiplier": "Multiplikator",
+  "levelsBoostAdd": "+ Bonus hinzufügen"
 }

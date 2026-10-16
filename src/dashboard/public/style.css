@@ -1764,6 +1764,24 @@ dialog textarea {
   }
 }
 
+.boost-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.boost-row select {
+  width: 100%;
+}
+
+.boost-row .boost-multiplier {
+  width: 80px;
+}
+
 /* --- Scheduled messages ----------------------------------------------------------- */
 
 .scheduled-form .grid-2 {

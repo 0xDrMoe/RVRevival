@@ -452,5 +452,14 @@
   "birthdayTimezone": "Fuso orario",
   "birthdayTimezoneHelp": "Quando inizia il giorno, come Europe/Rome.",
   "birthdayMessage": "Auguri",
-  "birthdayMessageHelp": "{user} è il membro (più persone nello stesso giorno sono citate insieme), {server} il server. Vuoto per il testo predefinito."
+  "birthdayMessageHelp": "{user} è il membro (più persone nello stesso giorno sono citate insieme), {server} il server. Vuoto per il testo predefinito.",
+  "levelsExtrasTitle": "XP vocale e bonus",
+  "levelsVoice": "XP vocale",
+  "levelsVoiceHelp": "10 XP al minuto in vocale con almeno un'altra persona, salvo audio disattivato o canale AFK. Anche qui valgono i canali e i ruoli senza XP.",
+  "levelsBooster": "Bonus per chi potenzia",
+  "levelsBoosterHelp": "Moltiplicatore di XP per chi potenzia il server, da 1 (nessuno) a 5.",
+  "levelsBoostsHelp": "Ruoli che guadagnano più XP. Ogni membro ha il suo bonus più alto (potenziamento o ruolo); non si moltiplicano.",
+  "levelsBoostsNone": "Nessun bonus di ruolo.",
+  "levelsBoostMultiplier": "Moltiplicatore",
+  "levelsBoostAdd": "+ Aggiungi bonus"
 }

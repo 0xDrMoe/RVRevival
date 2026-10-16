@@ -9,6 +9,8 @@
 //   /levels reward-remove level
 //   /levels reward-mode mode:<keep|highest>
 //   /levels no-xp [channel] [role] switch XP off (or back on) for a channel or role
+//   /levels voice enabled:<bool>   XP for time in voice channels
+//   /levels boost multiplier [role]  more XP for Server Boosters, or for a role (1 removes it)
 //   /levels set member level       move someone to a level
 //   /levels reset member           take all their XP away
 //
@@ -24,7 +26,11 @@ import {
   MAX_LEVEL_MESSAGE_LENGTH,
   MAX_NO_XP_CHANNELS,
   MAX_NO_XP_ROLES,
+  MAX_MULTIPLIER,
   MAX_REWARDS,
+  MAX_ROLE_MULTIPLIERS,
+  MIN_MULTIPLIER,
+  isMultiplier,
   normalizeLeveling,
   totalXpForLevel,
 } from "../leveling/config.js";
@@ -122,6 +128,21 @@ export function buildLevelsCommandData() {
           ),
         )
         .addRoleOption((option) => withDescription(option.setName("role"), "levelsNoXpRoleOptionDescription")),
+    )
+    .addSubcommand((sub) =>
+      withDescription(sub.setName("voice"), "levelsVoiceDescription").addBooleanOption((option) =>
+        withDescription(option.setName("enabled"), "levelsVoiceEnabledOptionDescription").setRequired(true),
+      ),
+    )
+    .addSubcommand((sub) =>
+      withDescription(sub.setName("boost"), "levelsBoostDescription")
+        .addNumberOption((option) =>
+          withDescription(option.setName("multiplier"), "levelsMultiplierOptionDescription")
+            .setRequired(true)
+            .setMinValue(MIN_MULTIPLIER)
+            .setMaxValue(MAX_MULTIPLIER),
+        )
+        .addRoleOption((option) => withDescription(option.setName("role"), "levelsBoostRoleOptionDescription")),
     )
     .addSubcommand((sub) =>
       withDescription(sub.setName("set"), "levelsSetDescription")
@@ -236,14 +257,19 @@ export function createLevelCommands({ levels, leveling, guildSettings, forcedLan
         : text(`levelsWhere_${config.announce}`);
     const rewards = config.rewards.length > 0 ? config.rewards.map((reward) => text("levelsRewardLine", { level: reward.level, role: `<@&${reward.roleId}>` })).join("\n") : text("levelsNone");
     const noXp = [...config.noXpChannelIds.map((id) => `<#${id}>`), ...config.noXpRoleIds.map((id) => `<@&${id}>`)];
-    return text("levelsShow", {
+    const boosts = config.roleMultipliers.map((boost) => `<@&${boost.roleId}> ×${boost.multiplier}`);
+    return `${text("levelsShow", {
       state: text(config.enabled ? "levelsStateOn" : "levelsStateOff"),
       where,
       message: config.message ?? text("levelsDefaultMessage"),
       mode: text(config.stackRewards ? "levelsMode_keep" : "levelsMode_highest"),
       rewards,
       noXp: noXp.length > 0 ? noXp.join(", ") : text("levelsNone"),
-    });
+    })}\n${text("levelsShowExtras", {
+      voice: text(config.voiceXp ? "levelsStateOn" : "levelsStateOff"),
+      booster: config.boosterMultiplier > 1 ? `×${config.boosterMultiplier}` : text("levelsNone"),
+      roles: boosts.length > 0 ? boosts.join(", ") : text("levelsNone"),
+    })}`;
   }
 
   async function executeLevels(interaction) {
@@ -334,6 +360,28 @@ export function createLevelCommands({ levels, leveling, guildSettings, forcedLan
         ].filter(Boolean);
         await interaction.reply({ content: lines.join("\n"), flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] } });
         return result(Status.SUCCESS);
+      }
+      case "voice": {
+        const enabled = interaction.options.getBoolean("enabled", true);
+        await save({ voiceXp: enabled });
+        return answer(Status.SUCCESS, enabled ? "levelsVoiceOn" : "levelsVoiceOff");
+      }
+      case "boost": {
+        const multiplier = interaction.options.getNumber("multiplier", true);
+        if (!isMultiplier(multiplier)) {
+          return answer(Status.REFUSED, "levelsBoostBadStep", { min: MIN_MULTIPLIER, max: MAX_MULTIPLIER });
+        }
+        const role = interaction.options.getRole("role");
+        if (!role) {
+          await save({ boosterMultiplier: multiplier });
+          return answer(Status.SUCCESS, multiplier > 1 ? "levelsBoostBoosterSet" : "levelsBoostBoosterOff", { multiplier });
+        }
+        const others = config.roleMultipliers.filter((boost) => boost.roleId !== role.id);
+        if (multiplier > 1 && others.length >= MAX_ROLE_MULTIPLIERS) {
+          return answer(Status.REFUSED, "levelsBoostTooMany", { max: MAX_ROLE_MULTIPLIERS });
+        }
+        await save({ roleMultipliers: multiplier > 1 ? [...others, { roleId: role.id, multiplier }] : others });
+        return answer(Status.SUCCESS, multiplier > 1 ? "levelsBoostRoleSet" : "levelsBoostRoleOff", { role: `<@&${role.id}>`, multiplier });
       }
       case "set": {
         const user = interaction.options.getUser("member", true);

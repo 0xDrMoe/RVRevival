@@ -452,5 +452,14 @@
   "birthdayTimezone": "المنطقة الزمنية",
   "birthdayTimezoneHelp": "متى يبدأ اليوم، مثل Asia/Riyadh أو Africa/Cairo.",
   "birthdayMessage": "التهنئة",
-  "birthdayMessageHelp": "{user} هو العضو (إذا كان أكثر من عضو في اليوم نفسه يُذكرون معًا)، و{server} الخادم. اتركه فارغًا للنص الافتراضي."
+  "birthdayMessageHelp": "{user} هو العضو (إذا كان أكثر من عضو في اليوم نفسه يُذكرون معًا)، و{server} الخادم. اتركه فارغًا للنص الافتراضي.",
+  "levelsExtrasTitle": "خبرة الصوت والمضاعفات",
+  "levelsVoice": "خبرة الصوت",
+  "levelsVoiceHelp": "10 خبرة كل دقيقة في الصوت مع شخص آخر على الأقل، إلا عند كتم السماع أو في قناة AFK. القنوات والرتب بلا خبرة تنطبق هنا أيضًا.",
+  "levelsBooster": "مضاعفة الداعمين",
+  "levelsBoosterHelp": "مضاعِف الخبرة لمن يدعمون الخادم، من 1 (لا شيء) إلى 5.",
+  "levelsBoostsHelp": "رتب تكسب خبرة أكثر. يحصل كل عضو على أعلى مضاعفة له (دعم أو رتبة)؛ ولا تتضاعف معًا.",
+  "levelsBoostsNone": "لا توجد مضاعفات رتب.",
+  "levelsBoostMultiplier": "المضاعِف",
+  "levelsBoostAdd": "+ إضافة مضاعفة"
 }

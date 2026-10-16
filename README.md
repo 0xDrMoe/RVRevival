@@ -301,6 +301,8 @@ Members earn XP for chatting and level up; reward roles are given automatically.
 - `/levels announce where:` picks where level-ups are posted: in the channel the member is chatting in (default), in one channel, by DM, or nowhere. `/levels message text:` changes the text (`{user}`, `{username}`, `{level}`, `{server}`); leave it empty for the default.
 - `/levels reward-add level: role:` gives a role at a level (up to 25), `/levels reward-remove level:` takes it off the list. `/levels reward-mode` picks whether members keep every reward role they reached (default) or only the highest. Reward roles are checked again on every level-up, and the bot never gives bot roles or roles with Administrator or Manage Server.
 - `/levels no-xp channel:` or `role:` switches XP off (or back on) in a channel, category or forum, or for members with a role.
+- `/levels voice enabled:` lets members earn 10 XP a minute in voice channels (off by default). It only counts when at least two people (not bots) are in the channel, and never for deafened members, the AFK channel or no-XP channels and roles. Voice level-ups are announced in the voice channel's chat.
+- `/levels boost multiplier:` gives server boosters more XP (for example `1.5`), and `/levels boost multiplier: role:` gives a role more XP (up to 10 roles). Boosts go from 1 to 5 in steps of 0.1; set `1` to remove one. Boosts don't add up: a member gets their highest one.
 - `/levels set member: level:` moves someone to a level, `/levels reset member:` clears their XP. `/levels show` lists the settings, `/levels off` pauses leveling and keeps everyone's XP.
 
 The dashboard's **Leveling** page has all the same settings plus the full leaderboard, and each member's history page shows their level and rank. `/levels` needs **Manage Server**; the bot needs **Manage Roles** (with its role above the reward roles) to give rewards.
@@ -350,7 +352,7 @@ A website where admins log in with Discord and manage the bot without slash comm
 - **Community:** the welcome and leave channels and messages (empty boxes show the default), the welcome DM, autoroles, the starboard (channel, stars needed, emoji), birthdays (channel, role, time zone, greeting), and the server's role panels (read-only; change them with `/rolepanel`).
 - **Custom commands:** every saved answer for `/tag`, with its name and text, and the auto-responders with their trigger, match, channel and reply; add, edit or remove them (see [Custom commands](#custom-commands) and [Auto-responders](#auto-responders)).
 - **Scheduled:** schedule a message (channel, first post in your own time zone, repeat), and see or delete the upcoming ones (see [Scheduled messages](#scheduled-messages)).
-- **Leveling:** the main switch, where and how level-ups are announced, reward roles, channels and roles that earn no XP, and the leaderboard with each member's level and progress (see [Leveling](#leveling)).
+- **Leveling:** the main switch, where and how level-ups are announced, reward roles, voice XP and XP boosts, channels and roles that earn no XP, and the leaderboard with each member's level and progress (see [Leveling](#leveling)).
 - **Country:** the `/country` channel.
 - **Roles & access:** the **dashboard roles** (see below), and a table of every role with its color, its strongest permissions and what the bot uses it for, filterable by name or kind.
 

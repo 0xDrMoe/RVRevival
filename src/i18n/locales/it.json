@@ -862,5 +862,20 @@
   "birthdayNeedsChannelOrRole": "Scegli un canale per gli auguri, un ruolo di compleanno o entrambi.",
   "birthdaySetupDone": "I compleanni sono attivi. Auguri: {channel} · Ruolo: {role} · Fuso orario: {timezone}.",
   "birthdayAlreadyOff": "Gli auguri di compleanno sono già disattivati.",
-  "birthdayOffDone": "Gli auguri e il ruolo di compleanno sono disattivati. I compleanni salvati restano."
+  "birthdayOffDone": "Gli auguri e il ruolo di compleanno sono disattivati. I compleanni salvati restano.",
+
+  "levelsVoiceDescription": "Attiva o disattiva l'XP per il tempo nei canali vocali.",
+  "levelsVoiceEnabledOptionDescription": "Guadagna XP in vocale (10 al minuto, con qualcun altro, senza audio disattivato).",
+  "levelsBoostDescription": "Dai più XP a chi potenzia il server o a un ruolo. 1 toglie il bonus.",
+  "levelsMultiplierOptionDescription": "Quanta XP in più: 1.5 è la metà in più, fino a 5.",
+  "levelsBoostRoleOptionDescription": "Il ruolo da potenziare (predefinito: chi potenzia il server).",
+  "levelsVoiceOn": "🎙️ L'XP vocale è attiva: i membri guadagnano 10 XP al minuto in vocale con qualcun altro, a meno che non abbiano l'audio disattivato o siano nel canale AFK.",
+  "levelsVoiceOff": "L'XP vocale è disattivata.",
+  "levelsBoostBadStep": "Usa un bonus da {min} a {max} a passi di 0.1, come 1.5 o 2.",
+  "levelsBoostBoosterSet": "💎 Chi potenzia il server ora guadagna ×{multiplier} XP.",
+  "levelsBoostBoosterOff": "Chi potenzia il server torna a guadagnare XP normale.",
+  "levelsBoostRoleSet": "{role} ora guadagna ×{multiplier} XP. Ogni membro ha il suo bonus più alto; non si moltiplicano.",
+  "levelsBoostRoleOff": "{role} torna a guadagnare XP normale.",
+  "levelsBoostTooMany": "Puoi potenziare al massimo {max} ruoli. Rimuovine prima uno (mettilo a 1).",
+  "levelsShowExtras": "**XP vocale:** {voice}\n**Bonus potenziamento:** {booster}\n**Bonus ruoli:** {roles}"
 }

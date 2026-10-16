@@ -862,5 +862,20 @@
   "birthdayNeedsChannelOrRole": "Elige un canal para las felicitaciones, un rol de cumpleaños o ambos.",
   "birthdaySetupDone": "Los cumpleaños están activos. Felicitaciones: {channel} · Rol: {role} · Zona horaria: {timezone}.",
   "birthdayAlreadyOff": "Las felicitaciones ya están desactivadas.",
-  "birthdayOffDone": "Las felicitaciones y el rol están desactivados. Los cumpleaños guardados se conservan."
+  "birthdayOffDone": "Las felicitaciones y el rol están desactivados. Los cumpleaños guardados se conservan.",
+
+  "levelsVoiceDescription": "Activa o desactiva la XP por tiempo en canales de voz.",
+  "levelsVoiceEnabledOptionDescription": "Ganar XP en voz (10 por minuto, con alguien más, sin ensordecer).",
+  "levelsBoostDescription": "Da más XP a quienes mejoran el servidor o a un rol. 1 quita el extra.",
+  "levelsMultiplierOptionDescription": "Cuánta XP más: 1.5 es la mitad más, hasta 5.",
+  "levelsBoostRoleOptionDescription": "El rol con extra (por defecto: quienes mejoran el servidor).",
+  "levelsVoiceOn": "🎙️ La XP de voz está activada: los miembros ganan 10 XP por minuto en voz con alguien más, salvo si están ensordecidos o en el canal AFK.",
+  "levelsVoiceOff": "La XP de voz está desactivada.",
+  "levelsBoostBadStep": "Usa un multiplicador de {min} a {max} en pasos de 0.1, como 1.5 o 2.",
+  "levelsBoostBoosterSet": "💎 Quienes mejoran el servidor ahora ganan ×{multiplier} XP.",
+  "levelsBoostBoosterOff": "Quienes mejoran el servidor vuelven a ganar la XP normal.",
+  "levelsBoostRoleSet": "{role} ahora gana ×{multiplier} XP. Cada miembro recibe su mayor extra; no se multiplican.",
+  "levelsBoostRoleOff": "{role} vuelve a ganar la XP normal.",
+  "levelsBoostTooMany": "Puedes dar extra a {max} roles como mucho. Quita uno primero (ponlo a 1).",
+  "levelsShowExtras": "**XP de voz:** {voice}\n**Extra por mejorar:** {booster}\n**Extras por rol:** {roles}"
 }

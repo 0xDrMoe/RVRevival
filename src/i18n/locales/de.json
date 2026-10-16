@@ -862,5 +862,20 @@
   "birthdayNeedsChannelOrRole": "Wähle einen Kanal für Glückwünsche, eine Geburtstagsrolle oder beides.",
   "birthdaySetupDone": "Geburtstage sind an. Glückwünsche: {channel} · Rolle: {role} · Zeitzone: {timezone}.",
   "birthdayAlreadyOff": "Geburtstagsgrüße sind schon aus.",
-  "birthdayOffDone": "Geburtstagsgrüße und die Rolle sind aus. Gespeicherte Geburtstage bleiben erhalten."
+  "birthdayOffDone": "Geburtstagsgrüße und die Rolle sind aus. Gespeicherte Geburtstage bleiben erhalten.",
+
+  "levelsVoiceDescription": "XP für Zeit in Sprachkanälen ein- oder ausschalten.",
+  "levelsVoiceEnabledOptionDescription": "XP im Sprachkanal (10 pro Minute, mit jemand anderem, nicht taub).",
+  "levelsBoostDescription": "Server-Boostern oder einer Rolle mehr XP geben. 1 entfernt den Bonus.",
+  "levelsMultiplierOptionDescription": "Wie viel mehr XP: 1.5 ist die Hälfte mehr, bis 5.",
+  "levelsBoostRoleOptionDescription": "Die Rolle mit Bonus (Standard: Server-Booster).",
+  "levelsVoiceOn": "🎙️ Sprach-XP ist an: Mitglieder bekommen 10 XP pro Minute im Sprachkanal mit jemand anderem, außer sie sind taub geschaltet oder im AFK-Kanal.",
+  "levelsVoiceOff": "Sprach-XP ist aus.",
+  "levelsBoostBadStep": "Nimm einen Bonus von {min} bis {max} in Schritten von 0.1, z. B. 1.5 oder 2.",
+  "levelsBoostBoosterSet": "💎 Server-Booster bekommen jetzt ×{multiplier} XP.",
+  "levelsBoostBoosterOff": "Server-Booster bekommen wieder normale XP.",
+  "levelsBoostRoleSet": "{role} bekommt jetzt ×{multiplier} XP. Jeder bekommt seinen höchsten Bonus; Boni multiplizieren sich nicht.",
+  "levelsBoostRoleOff": "{role} bekommt wieder normale XP.",
+  "levelsBoostTooMany": "Du kannst höchstens {max} Rollen einen Bonus geben. Entferne zuerst einen (setze ihn auf 1).",
+  "levelsShowExtras": "**Sprach-XP:** {voice}\n**Booster-Bonus:** {booster}\n**Rollen-Boni:** {roles}"
 }
