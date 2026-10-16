@@ -12,6 +12,8 @@ import { ConfigError, loadBotConfig } from "./config.js";
 import { createGiveawayScheduler } from "./giveaways/giveawayScheduler.js";
 import { GiveawayStore } from "./giveaways/giveawayStore.js";
 import { createInteractionHandler } from "./interactionHandler.js";
+import { createLeveling } from "./leveling/leveling.js";
+import { LevelStore } from "./leveling/levelStore.js";
 import { createActionLog } from "./logs/actionLog.js";
 import { createLogChannelPoster } from "./logs/logChannel.js";
 import { RecentIds } from "./logs/recentIds.js";
@@ -85,6 +87,8 @@ async function start() {
   const memberEvents = new MemberEventStore(db);
   // Support tickets opened from the /tickets panel.
   const tickets = new TicketStore(db);
+  // Members' XP for leveling (/rank, /levels).
+  const levels = new LevelStore(db);
   // Pick up settings changed on the web dashboard (another process).
   const settingsReload = setInterval(() => {
     try {
@@ -118,6 +122,7 @@ async function start() {
   // The starboard (/starboard): messages with enough stars are reposted.
   const starboard = createStarboard({ guildSettings, store: new StarboardStore(db), logger, forcedLanguage, botDeletions });
 
+  const leveling = createLeveling({ guildSettings, store: levels, logger, forcedLanguage });
   const commands = createCommands({
     logger,
     guildSettings,
@@ -128,6 +133,8 @@ async function start() {
     reminders,
     giveaways,
     tickets,
+    levels,
+    leveling,
   });
   const handleInteraction = createInteractionHandler({ commands, logger, forcedLanguage, actionLog });
   const guardCountryChannel = createCountryChannelGuard({ guildSettings, logger, actionLog, botDeletions });
@@ -202,6 +209,7 @@ async function start() {
       guardCountryChannel(message).catch((error) => logger.error("Couldn't clean the /country channel", { error }));
     });
     client.on(Events.MessageCreate, safely("automod", (message) => automod.handleMessage(message)));
+    client.on(Events.MessageCreate, safely("leveling", (message) => leveling.handleMessage(message)));
 
     // The server log (/settings server-log-channel).
     client.on(Events.MessageDelete, safely("a deleted message", (message) => serverLog.messageDeleted(message)));

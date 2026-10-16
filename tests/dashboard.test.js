@@ -9,6 +9,8 @@ import { canManage, DiscordApiError } from "../src/dashboard/discordApi.js";
 import { SessionStore } from "../src/dashboard/sessions.js";
 import { checkSettingChanges, InvalidSetting } from "../src/dashboard/settingsRules.js";
 import { defaultAutomod } from "../src/automod/config.js";
+import { DEFAULT_LEVELING } from "../src/leveling/config.js";
+import { LevelStore } from "../src/leveling/levelStore.js";
 import { MemberEvent, MemberEventStore } from "../src/members/memberEventStore.js";
 import { CaseAction, CaseStore } from "../src/moderation/caseStore.js";
 import { GuildSettings, Setting } from "../src/settings/guildSettings.js";
@@ -313,6 +315,77 @@ describe("dashboard", () => {
       automod: { ...wanted, exemptRoleIds: [GUILD_ID] },
     });
     expect(foreign.statusCode).toBe(400);
+  });
+
+  it("shows leveling with its defaults, saves it and refuses roles the bot shouldn't give", async () => {
+    await guildSettings.set(GUILD_ID, Setting.LOGS_CHANNEL, LOGS_ID);
+    const cookies = await login();
+    const guild = await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}`, cookies });
+    expect(guild.json().settings.leveling).toEqual({ ...DEFAULT_LEVELING });
+
+    const wanted = {
+      ...DEFAULT_LEVELING,
+      enabled: true,
+      announce: "channel",
+      announceChannelId: TEXT_ID,
+      message: "  GG {user}, level {level}!  ",
+      rewards: [{ level: 10, roleId: ROLE_ID }],
+      noXpChannelIds: [VOICE_ID],
+    };
+    const saved = await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, { leveling: wanted });
+    expect(saved.statusCode).toBe(200);
+    expect(saved.json().settings.leveling).toMatchObject({ enabled: true, message: "GG {user}, level {level}!", noXpChannelIds: [VOICE_ID] });
+    const [, logged] = discord.postMessage.mock.calls.at(-1);
+    expect(logged.embeds[0].description).toContain(`**Leveling:** off · announce here → on · announce channel · rewards 10: <@&${ROLE_ID}>`);
+
+    // Saving the same thing again changes nothing and logs nothing.
+    const posts = discord.postMessage.mock.calls.length;
+    await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, { leveling: { ...wanted, message: "GG {user}, level {level}!" } });
+    expect(discord.postMessage.mock.calls.length).toBe(posts);
+
+    const refusals = [
+      { ...wanted, announceChannelId: VOICE_ID },
+      { ...wanted, rewards: [{ level: 0, roleId: ROLE_ID }] },
+      { ...wanted, rewards: [{ level: 5, roleId: GUILD_ID }] },
+      { ...wanted, rewards: [{ level: 5, roleId: ROLE_ID }, { level: 6, roleId: ROLE_ID }] },
+      { ...wanted, enabled: "yes" },
+    ];
+    for (const leveling of refusals) {
+      const bad = await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, { leveling });
+      expect(bad.statusCode).toBe(400);
+      expect(bad.json()).toMatchObject({ error: "invalid-setting", setting: "leveling" });
+    }
+    discord.guild.mockImplementation(async (id) => ({
+      id,
+      name: "Rumbleverse Revival",
+      roles: [{ id: ROLE_ID, name: "Admins", position: 5, managed: false, permissions: String(1 << 3) }],
+    }));
+    const admin = await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, { leveling: wanted });
+    expect(admin.statusCode).toBe(400);
+  });
+
+  it("shows the XP leaderboard a page at a time, and a member's level in their history", async () => {
+    const levels = new LevelStore(db);
+    for (let index = 0; index < 30; index += 1) {
+      levels.setXp(GUILD_ID, `3000000000000001${String(index).padStart(2, "0")}`, (index + 1) * 100, `member${index}`);
+    }
+    levels.setXp(GUILD_ID, "300000000000000999", 0, "nobody");
+    const cookies = await login();
+    const first = (await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}/levels`, cookies })).json();
+    expect(first).toMatchObject({ enabled: false, page: 1, pageSize: 25, total: 30 });
+    expect(first.entries).toHaveLength(25);
+    expect(first.entries[0]).toMatchObject({ rank: 1, userId: "300000000000000129", userTag: "member29", xp: 3000, level: 8 });
+    const second = (await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}/levels?page=2`, cookies })).json();
+    expect(second.entries.map((entry) => entry.rank)).toEqual([26, 27, 28, 29, 30]);
+    const silly = (await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}/levels?page=-4`, cookies })).json();
+    expect(silly.page).toBe(1);
+
+    store.createCase({ guildId: GUILD_ID, action: CaseAction.NOTE, userId: "300000000000000100", moderatorId: USER_ID });
+    const history = (await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}/members/300000000000000100`, cookies })).json();
+    expect(history.level).toEqual({ level: 1, current: 0, needed: 155, xp: 100, messages: 0, rank: 30 });
+    store.createCase({ guildId: GUILD_ID, action: CaseAction.NOTE, userId: "300000000000000999", moderatorId: USER_ID });
+    const none = (await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}/members/300000000000000999`, cookies })).json();
+    expect(none.level).toBeNull();
   });
 
   it("saves the community settings and shows the default messages", async () => {

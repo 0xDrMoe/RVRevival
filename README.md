@@ -19,6 +19,7 @@ The Discord bot for the Rumbleverse Revival server. It is built as a set of inde
 | [Giveaways](#giveaways) | `/giveaway` | Manage Server or the mod role (members click Enter) |
 | [Starboard](#starboard) | `/starboard`, or the dashboard's Community page | Manage Server (everyone stars messages) |
 | [Support tickets](#support-tickets) | `/tickets` | Manage Server (`panel`, `off`), ticket staff (the rest); members click Open a ticket |
+| [Leveling](#leveling) | `/rank`, `/leaderboard`, `/levels`, or the dashboard's Leveling page | Everyone (`/rank`, `/leaderboard`), Manage Server (`/levels`) |
 | [Country roles](#country-roles) | `/country`, `/country-staff`, `/country-help` | Everyone (`/country`), the staff role (`/country-staff`), Manage Server (`/country-help`) |
 | [Web dashboard](#web-dashboard) | https://rumbleverse.cedartechsolutions.ca | Manage Server, or a dashboard role |
 
@@ -227,6 +228,20 @@ Members open a private ticket with a button, and only they and the staff can see
 
 `panel` and `off` need **Manage Server**. Closing any ticket, `add`, `remove` and `list` need **Manage Threads**, Manage Server, the panel's staff role or the mod role. The bot needs View Channel, Send Messages, Embed Links, Create Private Threads, Send Messages in Threads and Manage Threads in the ticket channel, and members need **Send Messages in Threads** there (they don't need Send Messages, so the channel can stay read-only apart from the threads).
 
+### Leveling
+
+Members earn XP for chatting and level up; reward roles are given automatically. Leveling is **off** until an admin turns it on with `/levels on` or on the dashboard's **Leveling** page.
+
+- Each message earns 15 to 25 XP, at most once a minute per member, so spamming doesn't pay. Bots, webhooks and the `/country` channel never earn XP.
+- Each level takes a little more XP than the last (100 to reach level 1, then 155, 220, 295…), up to level 500.
+- `/rank [member]` shows a level, XP, progress to the next level and place on the leaderboard. `/leaderboard [page]` shows the top members, 10 per page. Both answer publicly.
+- `/levels announce where:` picks where level-ups are posted: in the channel the member is chatting in (default), in one channel, by DM, or nowhere. `/levels message text:` changes the text (`{user}`, `{username}`, `{level}`, `{server}`); leave it empty for the default.
+- `/levels reward-add level: role:` gives a role at a level (up to 25), `/levels reward-remove level:` takes it off the list. `/levels reward-mode` picks whether members keep every reward role they reached (default) or only the highest. Reward roles are checked again on every level-up, and the bot never gives bot roles or roles with Administrator or Manage Server.
+- `/levels no-xp channel:` or `role:` switches XP off (or back on) in a channel, category or forum, or for members with a role.
+- `/levels set member: level:` moves someone to a level, `/levels reset member:` clears their XP. `/levels show` lists the settings, `/levels off` pauses leveling and keeps everyone's XP.
+
+The dashboard's **Leveling** page has all the same settings plus the full leaderboard, and each member's history page shows their level and rank. `/levels` needs **Manage Server**; the bot needs **Manage Roles** (with its role above the reward roles) to give rewards.
+
 ### Country roles
 
 Members pick the country they live in and get a role named after it. They can only pick once; after that, only staff can change it.
@@ -264,12 +279,13 @@ A website where admins log in with Discord and manage the bot without slash comm
 - **Servers:** every server you can open, with a search box. Servers without the bot get an invite link.
 - **Overview:** member and online counts, total cases, cases in the last 7 and 30 days, running temporary bans, a chart of cases per day for the last 30 days (click the legend to hide actions), cases per action, the latest cases, the busiest moderators (each links to their cases) and the most moderated members (each links to their history), and a setup checklist with links to what isn't set yet.
 - **Cases:** every moderation case, newest first. Search reasons and names, pick one or more actions, and filter by member ID, moderator ID and date range; clicking a name shows only their cases. Active filters show as chips you can remove. **Export CSV** downloads the filtered list (up to 10,000 cases). Reasons can be edited (the mod-log post is updated too) and cases deleted.
-- **Members:** find someone by the start of their username or nickname, or paste a user ID to find someone who left. Each person's page shows when their account was made (flagged if under 7 days old), when they joined, how many times they joined, their roles, a timeout or temporary ban in progress, Discord's ban reason if they're banned, every case as a timeline, their support tickets (with links to the threads), and their recent joins and leaves (the bot keeps the newest 50 per person). Each case in **Cases** has a *History* link to it.
+- **Members:** find someone by the start of their username or nickname, or paste a user ID to find someone who left. Each person's page shows when their account was made (flagged if under 7 days old), when they joined, how many times they joined, their roles, a timeout or temporary ban in progress, Discord's ban reason if they're banned, every case as a timeline, their support tickets (with links to the threads), their level and leaderboard place, and their recent joins and leaves (the bot keeps the newest 50 per person). Each case in **Cases** has a *History* link to it.
 - **Moderation:** staff and mod roles, and the mod-log channel.
 - **Logging:** the logs and server-log channels, a switch for each server-log event, and ignored channels or categories (with a filter).
 - **Automod:** the main switch, each rule with its action and numbers, banned words and allowed websites (one per line), timeout length and escalation, and exempt roles and channels (see [Automod](#automod)).
 - **Community:** the welcome and leave channels and messages (empty boxes show the default), the welcome DM, autoroles, the starboard (channel, stars needed, emoji), and the server's role panels (read-only; change them with `/rolepanel`).
 - **Custom commands:** every saved answer for `/tag`, with its name and text; add, edit or remove them (see [Custom commands](#custom-commands)).
+- **Leveling:** the main switch, where and how level-ups are announced, reward roles, channels and roles that earn no XP, and the leaderboard with each member's level and progress (see [Leveling](#leveling)).
 - **Country:** the `/country` channel.
 - **Roles & access:** the **dashboard roles** (see below), and a table of every role with its color, its strongest permissions and what the bot uses it for, filterable by name or kind.
 
@@ -414,6 +430,7 @@ src/
     giveaway.js          Giveaways: /giveaway and its Enter button
     starboard.js         Starboard: /starboard
     tickets.js           Support tickets: /tickets, the panel's button, the form and the Close button
+    levels.js            Leveling: /rank, /leaderboard, /levels
     commandHelpers.js    Shared start of moderation-style commands (language, permission check)
   countries/             Country roles: country list, name matching and search
   roles/                 Country roles: find, create, assign and remove roles
@@ -421,6 +438,7 @@ src/
   community/             Community: welcome and leave messages, autoroles (welcome.js), role panels (rolePanels.js), custom commands (tags.js), the starboard (starboard.js, starboardStore.js)
   giveaways/             Giveaways: saved in SQLite (giveawayStore.js), drawing winners (giveaways.js), ended on time (giveawayScheduler.js)
   tickets/               Support tickets: saved in SQLite (ticketStore.js), the panel, staff and messages (tickets.js)
+  leveling/              Leveling: settings and level math (config.js), XP in SQLite (levelStore.js), earning XP and rewards (leveling.js)
   members/               Member history: when members joined and left (memberEventStore.js)
   reminders/             Reminders: saved in SQLite (reminderStore.js), sent when due (reminderScheduler.js)
   automod/               Automod: settings (config.js), what each rule matches (rules.js), acting on messages

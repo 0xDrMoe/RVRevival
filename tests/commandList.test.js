@@ -36,6 +36,9 @@ describe("command list", () => {
       "giveaway",
       "starboard",
       "tickets",
+      "rank",
+      "leaderboard",
+      "levels",
     ]);
     for (const command of commands.values()) {
       expect(command.data.name).toBe(command.name);

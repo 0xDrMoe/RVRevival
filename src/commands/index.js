@@ -8,6 +8,7 @@ import { createCountryCommand } from "./country.js";
 import { createCountryHelpCommand } from "./countryHelp.js";
 import { createCountryStaffCommand } from "./countryStaff.js";
 import { createGiveawayCommand } from "./giveaway.js";
+import { createLevelCommands } from "./levels.js";
 import { createMemberToolCommands } from "./memberTools.js";
 import { createModerationCommands } from "./moderation.js";
 import { createPurgeCommand } from "./purge.js";
@@ -27,8 +28,10 @@ import { createWelcomeCommand } from "./welcome.js";
 // `moderation` (moderation/moderationService.js), `modLog` and `botDeletions`
 // are only needed to run the moderation commands, `reminders`
 // (reminders/reminderStore.js) to run /remind, `giveaways`
-// (giveaways/giveawayStore.js) to run /giveaway and `tickets`
-// (tickets/ticketStore.js) to run /tickets, not to register them.
+// (giveaways/giveawayStore.js) to run /giveaway, `tickets`
+// (tickets/ticketStore.js) to run /tickets, and `levels` (leveling/levelStore.js)
+// with `leveling` (leveling/leveling.js) to run /rank, /leaderboard and /levels,
+// not to register them.
 export function createCommands({
   logger,
   guildSettings,
@@ -39,6 +42,8 @@ export function createCommands({
   reminders,
   giveaways,
   tickets,
+  levels,
+  leveling,
 }) {
   // Shared, so /country and /country-staff can't change the same member at the same time.
   const roleService = new CountryRoleService(logger);
@@ -62,6 +67,7 @@ export function createCommands({
     createGiveawayCommand({ giveaways, guildSettings, logger, forcedLanguage }),
     createStarboardCommand({ guildSettings, forcedLanguage }),
     createTicketsCommand({ tickets, guildSettings, logger, forcedLanguage }),
+    ...createLevelCommands({ levels, leveling, guildSettings, forcedLanguage }),
   ];
   return new Map(commands.map((command) => [command.name, command]));
 }

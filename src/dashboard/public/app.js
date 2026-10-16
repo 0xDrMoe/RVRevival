@@ -10,6 +10,7 @@
 //   #/g/<id>/automod       automod rules, punishments and exemptions
 //   #/g/<id>/community     welcome and leave messages, autoroles, role panels
 //   #/g/<id>/tags          custom commands (saved answers for /tag)
+//   #/g/<id>/levels        leveling: XP, level-up messages, reward roles, the leaderboard (?page=)
 //   #/g/<id>/country       the /country channel
 //   #/g/<id>/access        roles: who can open the dashboard, and every role
 //
@@ -36,6 +37,11 @@ const AUTOMOD_NUMBERS = {
   ],
 };
 const MAX_MESSAGE_LENGTH = 1000;
+// Leveling limits, the same as src/leveling/config.js.
+const MAX_LEVEL = 500;
+const MAX_LEVEL_REWARDS = 25;
+const MAX_LEVEL_MESSAGE_LENGTH = 500;
+const LEVEL_ANNOUNCE = ["here", "channel", "dm", "off"];
 const MAX_TAGS = 50;
 const MAX_TAG_LENGTH = 2000;
 const MAX_AUTOROLES = 10;
@@ -63,6 +69,7 @@ const PAGES = [
   { id: "automod", icon: "🤖", tone: "blue", settings: true },
   { id: "community", icon: "👋", tone: "pink", settings: true },
   { id: "tags", icon: "💬", tone: "amber", settings: true },
+  { id: "levels", icon: "🏆", tone: "green", settings: true },
   { id: "country", icon: "🌍", tone: "green", settings: true },
   { id: "access", icon: "🎭", tone: "purple", settings: true },
 ];
@@ -1068,11 +1075,11 @@ async function showAutomod(guildId) {
 // --- Community -------------------------------------------------------------------
 
 // A message box with a character count. Empty means the default (or off, for the DM).
-function messageBox(id, value, placeholder) {
+function messageBox(id, value, placeholder, max = MAX_MESSAGE_LENGTH) {
   const count = h("span", { class: "char-count" });
-  const box = h("textarea", { id, rows: 3, maxLength: MAX_MESSAGE_LENGTH, placeholder: placeholder ?? "" }, value ?? "");
+  const box = h("textarea", { id, rows: 3, maxLength: max, placeholder: placeholder ?? "" }, value ?? "");
   const update = () => {
-    count.textContent = `${box.value.length}/${MAX_MESSAGE_LENGTH}`;
+    count.textContent = `${box.value.length}/${max}`;
   };
   box.addEventListener("input", update);
   update();
@@ -1320,6 +1327,223 @@ async function showTags(guildId) {
       ),
     ],
     fields: { tags: readTags },
+  });
+}
+
+// --- Leveling ------------------------------------------------------------------------
+
+// One reward: a level, a role and a remove button.
+function rewardRow(reward, roles, onRemove) {
+  const row = h(
+    "div",
+    { class: "reward-row" },
+    h("span", { class: "muted" }, t("levelsRewardAt")),
+    h("input", {
+      class: "reward-level",
+      type: "number",
+      min: 1,
+      max: MAX_LEVEL,
+      step: 1,
+      required: true,
+      value: reward.level ?? "",
+      "aria-label": t("levelsRewardLevel"),
+    }),
+    h(
+      "span",
+      { class: "reward-role grow" },
+      picker({ id: undefined, options: roles, value: reward.roleId ?? "", emptyLabel: t("levelsRewardPickRole") }),
+    ),
+    h("button", { class: "ghost small", type: "button", onclick: () => onRemove(row) }, t("tagRemove")),
+  );
+  return row;
+}
+
+// Reads the leveling settings back from the page. Bad rows are sent as typed so the server explains.
+function readLeveling(form, saved) {
+  const announce = form.querySelector("#levelsAnnounce").value;
+  return {
+    ...saved,
+    enabled: form.querySelector("#levelsEnabled").checked,
+    announce,
+    announceChannelId: announce === "channel" ? form.querySelector("#levelsChannel").value || null : null,
+    message: form.querySelector("#levelsMessage").value.replace(/\r\n?/g, "\n").trim() || null,
+    stackRewards: form.querySelector("#levelsStack").checked,
+    rewards: [...form.querySelectorAll(".reward-row")]
+      .map((row) => ({ level: Number(row.querySelector(".reward-level").value), roleId: row.querySelector("select").value }))
+      .filter((reward) => reward.level || reward.roleId)
+      .sort((a, b) => a.level - b.level),
+    noXpChannelIds: [...form.querySelectorAll('input[name="noXpChannel"]:checked')].map((box) => box.value),
+    noXpRoleIds: [...form.querySelectorAll('input[name="noXpRole"]:checked')].map((box) => box.value),
+  };
+}
+
+// The XP leaderboard, a page at a time, below the settings.
+async function leaderboardCard(guildId, page) {
+  const board = await api(`/api/guilds/${guildId}/levels?page=${page}`);
+  const pages = Math.max(1, Math.ceil(board.total / board.pageSize));
+  const go = (next) => `#/g/${guildId}/levels${next > 1 ? `?page=${next}` : ""}`;
+  const medal = (rank) => ["🥇", "🥈", "🥉"][rank - 1] ?? `#${rank}`;
+  const rows =
+    board.entries.length === 0
+      ? h("p", { class: "muted empty" }, t("levelsBoardEmpty"))
+      : h(
+          "ol",
+          { class: "leaderboard" },
+          board.entries.map((entry) =>
+            h(
+              "li",
+              {},
+              h("span", { class: "board-rank" }, medal(entry.rank)),
+              h(
+                "a",
+                { class: "board-name grow", href: memberLink(guildId, entry.userId) },
+                h("strong", {}, entry.userTag ?? entry.userId),
+                h("span", { class: "muted" }, t("levelsBoardSub", { xp: formatNumber(entry.xp), messages: formatNumber(entry.messages) })),
+              ),
+              h("span", { class: "progress board-progress", title: `${formatNumber(entry.current)} / ${formatNumber(entry.needed)} XP` }, fillBar("progress-fill", entry.current / entry.needed)),
+              h("span", { class: "badge badge-green" }, t("levelsLevel", { level: entry.level })),
+            ),
+          ),
+        );
+  return card(
+    t("levelsBoard"),
+    "🏆",
+    "amber",
+    h("p", { class: "help" }, t("levelsBoardHelp", { count: formatNumber(board.total) })),
+    rows,
+    pages > 1
+      ? h(
+          "div",
+          { class: "toolbar pager" },
+          board.page > 1 ? h("a", { class: "button ghost small", href: go(board.page - 1) }, `← ${t("levelsPrev")}`) : null,
+          h("span", { class: "muted grow center" }, t("levelsPageOf", { page: board.page, pages })),
+          board.page < pages ? h("a", { class: "button ghost small", href: go(board.page + 1) }, `${t("levelsNext")} →`) : null,
+        )
+      : null,
+  );
+}
+
+async function showLevels(guildId) {
+  const data = await loadManagedGuild(guildId);
+  if (!data) {
+    return;
+  }
+  const query = new URLSearchParams(location.hash.split("?")[1] ?? "");
+  const page = Math.max(1, Number.parseInt(query.get("page") ?? "1", 10) || 1);
+  const config = data.settings.leveling;
+  const defaults = data.communityDefaults ?? {};
+  // Reward roles: the bot never hands out bot roles or Administrator / Manage Server.
+  const givable = data.roles
+    .filter((role) => !role.managed && (BigInt(role.permissions ?? 0) & AUTOROLE_FORBIDDEN) === 0n)
+    .map((role) => ({ id: role.id, label: `@${role.name}` }));
+  const roles = data.roles.filter((role) => !role.managed).map((role) => ({ id: role.id, label: role.name, dot: roleDot(role) }));
+  const channels = data.channels
+    .filter((channel) => [CHANNEL.TEXT, CHANNEL.ANNOUNCEMENT, CHANNEL.FORUM, CHANNEL.VOICE, CHANNEL.CATEGORY].includes(channel.type))
+    .map((channel) => ({ id: channel.id, label: channelLabel(channel, data.channels) }));
+
+  const channelField = field(
+    "levelsChannel",
+    null,
+    picker({ id: "levelsChannel", options: postableChannels(data), value: config.announceChannelId, emptyLabel: t("levelsPickChannel") }),
+  );
+  const announce = h(
+    "select",
+    { id: "levelsAnnounce" },
+    LEVEL_ANNOUNCE.map((mode) => h("option", { value: mode, selected: mode === config.announce }, t(`levelsAnnounce_${mode}`))),
+  );
+  const showChannel = () => {
+    channelField.hidden = announce.value !== "channel";
+  };
+  announce.addEventListener("change", showChannel);
+  showChannel();
+
+  const list = h("div", { class: "reward-list" });
+  const count = h("span", { class: "count-pill" });
+  const empty = h("p", { class: "muted" }, t("levelsRewardsNone"));
+  const update = () => {
+    const rows = list.querySelectorAll(".reward-row").length;
+    count.textContent = t("tagsCount", { count: rows, max: MAX_LEVEL_REWARDS });
+    empty.hidden = rows > 0;
+    addButton.disabled = rows >= MAX_LEVEL_REWARDS;
+  };
+  const remove = (row) => {
+    row.remove();
+    update();
+    list.dispatchEvent(new Event("change", { bubbles: true }));
+  };
+  const addButton = h(
+    "button",
+    {
+      class: "primary small",
+      type: "button",
+      onclick: () => {
+        const row = rewardRow({}, givable, remove);
+        list.append(row);
+        update();
+        row.querySelector(".reward-level").focus();
+      },
+    },
+    t("levelsRewardAdd"),
+  );
+  config.rewards.forEach((reward) => list.append(rewardRow(reward, givable, remove)));
+  update();
+
+  const toggle = (id, checked, labelKey, helpKey) =>
+    h(
+      "label",
+      { class: "switch-card" },
+      h("span", { class: "switch-text" }, h("strong", {}, t(labelKey)), h("span", { class: "help" }, t(helpKey))),
+      h("span", { class: "switch" }, h("input", { id, type: "checkbox", role: "switch", checked, "aria-label": t(labelKey) })),
+    );
+
+  const board = await leaderboardCard(guildId, page).catch((error) => {
+    failed(error);
+    return null;
+  });
+
+  settingsPage({
+    data,
+    pageId: "levels",
+    intro: t("levelsIntro"),
+    cards: [
+      card(t("levelsMaster"), "🏆", "green", toggle("levelsEnabled", config.enabled, "levelsMaster", "levelsMasterHelp"), h("p", { class: "help" }, t("levelsHowXp"))),
+      card(
+        t("levelsAnnounceTitle"),
+        "🎉",
+        "pink",
+        h("div", { class: "rule-body" }, field("levelsAnnounce", null, announce), channelField),
+        field(
+          "levelsMessage",
+          "levelsMessageHelp",
+          messageBox("levelsMessage", config.message, defaults.levelUpMessage, MAX_LEVEL_MESSAGE_LENGTH),
+        ),
+      ),
+      card(
+        t("levelsRewardsTitle"),
+        "🎁",
+        "amber",
+        h("div", { class: "toolbar" }, h("p", { class: "help grow" }, t("levelsRewardsHelp")), count, addButton),
+        empty,
+        list,
+        toggle("levelsStack", config.stackRewards, "levelsStack", "levelsStackHelp"),
+      ),
+      card(
+        t("levelsNoXpChannels"),
+        "🙈",
+        "gray",
+        h("p", { class: "help" }, t("levelsNoXpChannelsHelp")),
+        checkList({ name: "noXpChannel", items: channels, checked: config.noXpChannelIds, filterKey: "filterChannels" }),
+      ),
+      card(
+        t("levelsNoXpRoles"),
+        "🎟️",
+        "purple",
+        h("p", { class: "help" }, t("levelsNoXpRolesHelp")),
+        checkList({ name: "noXpRole", items: roles, checked: config.noXpRoleIds, filterKey: "filterRoles" }),
+      ),
+    ],
+    fields: { leveling: (form) => readLeveling(form, data.settings.leveling) },
+    after: board,
   });
 }
 
@@ -2191,6 +2415,16 @@ async function showMemberHistory(guildId, userId) {
     ),
     tile("🔁", "amber", formatNumber(history.joins), t("memberTimesJoined"), t("memberTimesJoinedSub")),
     tile("🗂️", "pink", formatNumber(totalCases), t("statCases"), null, totalCases > 0 ? casesLink : undefined),
+    history.level
+      ? tile(
+          "🏆",
+          "purple",
+          t("levelsLevel", { level: history.level.level }),
+          t("memberLevel"),
+          t("memberLevelSub", { rank: formatNumber(history.level.rank), xp: formatNumber(history.level.xp) }),
+          canManageGuild(data) ? `#/g/${guildId}/levels` : undefined,
+        )
+      : null,
   );
 
   const summary = CASE_ACTIONS.filter((action) => history.caseCounts[action]).map((action) =>
@@ -2325,6 +2559,7 @@ const SHOW_PAGE = {
   automod: showAutomod,
   community: showCommunity,
   tags: showTags,
+  levels: showLevels,
   country: showCountry,
   access: showAccess,
 };

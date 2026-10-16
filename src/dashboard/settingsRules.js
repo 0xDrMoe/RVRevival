@@ -8,6 +8,7 @@ import { cleanEmoji } from "../community/rolePanels.js";
 import { MAX_THRESHOLD, MIN_THRESHOLD } from "../community/starboard.js";
 import { cleanTagContent, cleanTagName, MAX_TAG_LENGTH, MAX_TAGS, sortTags } from "../community/tags.js";
 import { MAX_AUTOROLES, MAX_MESSAGE_LENGTH } from "../community/welcome.js";
+import { checkLeveling, InvalidLeveling, normalizeLeveling } from "../leveling/config.js";
 import { LogEvent } from "../logs/serverLog.js";
 import { Setting } from "../settings/guildSettings.js";
 
@@ -20,6 +21,13 @@ export class InvalidSetting extends Error {
 }
 
 const POSTING_CHANNELS = [ChannelType.GuildText, ChannelType.GuildAnnouncement];
+const NO_XP_CHANNELS = [
+  ChannelType.GuildText,
+  ChannelType.GuildAnnouncement,
+  ChannelType.GuildForum,
+  ChannelType.GuildVoice,
+  ChannelType.GuildCategory,
+];
 const IGNORABLE_CHANNELS = [
   ChannelType.GuildText,
   ChannelType.GuildAnnouncement,
@@ -53,6 +61,7 @@ export const SETTING_RULES = Object.freeze({
   [Setting.AUTOROLES]: { kind: "autoroles", label: "Autoroles" },
   [Setting.TAGS]: { kind: "tags", label: "Custom commands" },
   [Setting.STARBOARD]: { kind: "starboard", types: POSTING_CHANNELS, label: "Starboard" },
+  [Setting.LEVELING]: { kind: "leveling", label: "Leveling" },
 });
 
 // Checks one value. Returns what to save: null clears the setting, and empty
@@ -163,6 +172,30 @@ function checkValue(setting, value, { guildId, channels, roles }) {
       }
       return { channelId: value.channelId, threshold: value.threshold, emoji };
     }
+    case "leveling": {
+      // Reward roles: not @everyone, bot roles or roles with Administrator or Manage Server.
+      const isRewardRole = (id) => {
+        const role = roles.find((entry) => entry.id === id);
+        return roleOk(id) && !role.managed && (BigInt(role.permissions ?? 0) & AUTOROLE_FORBIDDEN) === 0n;
+      };
+      try {
+        const leveling = checkLeveling(value, {
+          isRole: roleOk,
+          isRewardRole,
+          isChannel: (id) => typeof id === "string" && channelOk(id, NO_XP_CHANNELS),
+        });
+        // No-XP channels may be categories or voice channels; level-ups need a text channel.
+        if (leveling.announceChannelId && !channelOk(leveling.announceChannelId, POSTING_CHANNELS)) {
+          throw new InvalidLeveling("Pick a text channel for level-up messages.");
+        }
+        return leveling;
+      } catch (error) {
+        if (error instanceof InvalidLeveling) {
+          throw new InvalidSetting(setting, error.message);
+        }
+        throw error;
+      }
+    }
     case "automod":
       try {
         return checkAutomod(value, {
@@ -209,6 +242,11 @@ export function describeValue(setting, value) {
       return `<#${value.channelId}> · ${value.emoji} ${value.threshold}`;
     case "text":
       return `"${value.length > 80 ? `${value.slice(0, 80)}…` : value}"`.replace(/\n/g, " ");
+    case "leveling": {
+      const config = normalizeLeveling(value);
+      const rewards = config.rewards.map((reward) => `${reward.level}: <@&${reward.roleId}>`);
+      return `${config.enabled ? "on" : "off"} · announce ${config.announce}${rewards.length > 0 ? ` · rewards ${rewards.join(", ")}` : ""}`;
+    }
     case "automod": {
       const config = normalizeAutomod(value);
       const rules = activeRules(config).map((rule) => `${RULE_LABELS[rule]} (${config.rules[rule].action})`);

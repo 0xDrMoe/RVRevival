@@ -149,6 +149,19 @@ const MIGRATIONS = [
   CREATE INDEX tickets_open ON tickets (guild_id, user_id) WHERE closed_at IS NULL;
   CREATE INDEX tickets_by_thread ON tickets (thread_id);
   `,
+  // 9: leveling (/rank, /levels): each member's XP. The level is worked out from it.
+  `
+  CREATE TABLE member_xp (
+    guild_id   TEXT    NOT NULL,
+    user_id    TEXT    NOT NULL,
+    user_tag   TEXT,
+    xp         INTEGER NOT NULL DEFAULT 0,
+    messages   INTEGER NOT NULL DEFAULT 0,
+    last_xp_at INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (guild_id, user_id)
+  ) WITHOUT ROWID;
+  CREATE INDEX member_xp_ranking ON member_xp (guild_id, xp DESC);
+  `,
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS.length;
