@@ -210,6 +210,12 @@ export function createDiscordApi({ config, fetch = globalThis.fetch, rest }) {
       return bot.post(Routes.channelMessages(channel.id), { body: { ...payload, allowed_mentions: { parse: [] } } });
     },
 
+    // Deletes a channel the bot made (a stats counter). `reason` goes in the audit log.
+    async deleteChannel(guildId, channelId, reason) {
+      await bot.delete(Routes.channel(channelId), { reason });
+      channels.forget(guildId);
+    },
+
     // The bot's own user ID, for the invite link.
     clientId: config.clientId,
   };

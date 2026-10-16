@@ -28,6 +28,7 @@ The Discord bot for the Rumbleverse Revival server. It is built as a set of inde
 | [Anti-nuke](#anti-nuke) | `/antinuke`, or the dashboard's Anti-nuke page | The server owner (`status`: Administrator) |
 | [Embed builder](#embed-builder) | The dashboard's Embed builder page | Manage Server or a dashboard role that can change settings |
 | [Feeds](#feeds) | `/feed`, or the dashboard's Feeds page | Manage Server or a dashboard role that can change settings |
+| [Server stats](#server-stats) | `/stats`, or the dashboard's Server stats page | Manage Server or a dashboard role that can change settings |
 | [Ban appeals](#ban-appeals) | The dashboard's Ban appeals page | Manage Server or a dashboard role that can change settings (banned members fill in the form) |
 | [Join-to-create voice](#join-to-create-voice) | `/voice` | Manage Server (`setup`, `off`), the channel's owner (`lock`, `unlock`), anyone in the channel (`claim`) |
 | [Leveling](#leveling) | `/rank`, `/leaderboard`, `/levels`, or the dashboard's Leveling page | Everyone (`/rank`, `/leaderboard`), Manage Server (`/levels`) |
@@ -364,6 +365,15 @@ Discord's limits are checked before sending: 2,000 characters of text, 6,000 in 
 
 The bot checks each feed every 10 minutes and posts only items that appear after the feed was added, at most three at a time (oldest first), so a feed never floods a channel. A server can follow up to 10 feeds. Feed links must point to the public internet: addresses on private networks (like the VPS itself) are refused, also after redirects. Needs **Manage Server**. The bot needs View Channel and Send Messages in the channel.
 
+### Server stats
+
+`/stats` (or the dashboard's **Server stats** page) shows live counts as locked voice channels, like "👥 Members: 1,234". Members see them at the top of the channel list but can't join.
+
+- **`/stats add counter [name] [category]`** adds one: members, humans (without bots), bots, boosts, channels or roles. `name` replaces the default name and can use `{members}`, `{humans}`, `{bots}`, `{boosts}`, `{tier}`, `{channels}` and `{roles}`.
+- **`/stats remove channel`** removes a counter and deletes its channel. Deleting the channel in Discord removes the counter too. **`/stats list`** shows them.
+
+A server can have up to 5 counters. Discord lets the bot rename a channel only twice per 10 minutes, so names follow the counts within about 5 minutes. Counters added on the dashboard get their channel within a minute. Needs **Manage Server**. The bot needs **Manage Channels**.
+
 ### Ban appeals
 
 Lets banned members ask to be unbanned without a second account or a DM to a moderator. Turn it on in the dashboard's **Ban appeals** page (off by default), then:
@@ -599,6 +609,7 @@ src/
     tempRole.js          Temporary roles: /temprole
     voice.js             Join-to-create voice: /voice
     feed.js              Feeds: /feed
+    stats.js             Server stats: /stats
     commandHelpers.js    Shared start of moderation-style commands (language, permission check)
   countries/             Country roles: country list, name matching and search
   roles/                 Country roles: find, create, assign and remove roles
@@ -610,6 +621,7 @@ src/
   tempRoles/             Temporary roles: saved in SQLite (tempRoleStore.js), taken away when due (tempRoleScheduler.js)
   messages/              Embed builder: checking messages against Discord's limits (embedMessage.js), messages posted from the dashboard (sentMessageStore.js)
   feeds/                 Feeds: reading RSS and Atom (parseFeed.js), safe fetching and finding YouTube and Reddit feeds (fetchFeed.js), saved in SQLite (feedStore.js), adding feeds and posts (feeds.js), checked on time (feedPoller.js)
+  stats/                 Server stats: counters and counts (statsCounters.js), creating and renaming the channels (statsUpdater.js)
   appeals/               Ban appeals: settings (config.js), saved in SQLite (appealStore.js); the form and decisions live in the dashboard
   voice/                 Join-to-create voice: making and deleting channels (tempVoice.js), saved in SQLite (tempVoiceStore.js)
   leveling/              Leveling: settings and level math (config.js), XP in SQLite (levelStore.js), earning XP and rewards (leveling.js)

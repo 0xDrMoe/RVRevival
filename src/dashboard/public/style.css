@@ -3182,3 +3182,21 @@ dialog textarea {
 .small-text {
   font-size: 0.82rem;
 }
+
+/* Server stats */
+.segmented.wrap {
+  display: flex;
+  flex-wrap: wrap;
+}
+.counter-edit {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.counter-edit input {
+  flex: 1;
+  min-width: 0;
+}
+.counter-row .counter-edit {
+  margin-bottom: 4px;
+}

@@ -54,6 +54,7 @@ export const Setting = Object.freeze({
   ROLE_PERSIST: "rolePersist", // give roles back on rejoin, { enabled, ignoredRoleIds } (see members/rolePersistence.js)
   QUARANTINE_ROLE: "quarantineRoleId", // given to quarantined members (see moderation/quarantine.js)
   ANTI_NUKE: "antiNuke", // anti-nuke limits, punishment and trusted users, an object (see raid/antiNuke.js)
+  STATS_COUNTERS: "statsCounters", // server stats channels, a list of { id, template, channelId, categoryId, error } (see stats/statsCounters.js)
 });
 
 const KNOWN_SETTINGS = new Set(Object.values(Setting));

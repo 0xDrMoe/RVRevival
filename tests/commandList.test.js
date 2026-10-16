@@ -44,6 +44,7 @@ describe("command list", () => {
       "autoresponder",
       "schedule",
       "feed",
+      "stats",
       "birthday",
       "rank",
       "leaderboard",
