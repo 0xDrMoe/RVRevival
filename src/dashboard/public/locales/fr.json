@@ -510,7 +510,7 @@
   "search_tags": "tags commandes personnalisées réponses enregistrées",
   "search_responders": "réponse automatique mot-clé déclencheur",
   "search_scheduled": "programmer répéter annonce publier plus tard",
-  "search_moderation": "staff modérateurs rôles journal",
+  "search_moderation": "staff modérateurs rôles journal quarantaine",
   "search_logging": "logs salon événements journal",
   "search_access": "permissions accès tableau de bord rôles",
   "menu": "Menu",
@@ -542,5 +542,11 @@
   "antinukeAddTrusted": "Ajouter une personne",
   "antinukeUserId": "Identifiant",
   "antinukeOwnerOnly": "Seul le propriétaire du serveur peut modifier l'anti-nuke, car les personnes de confiance peuvent tout faire.",
-  "search_antinuke": "nuke protection suppression massive ban confiance liste blanche"
+  "search_antinuke": "nuke protection suppression massive ban confiance liste blanche",
+  "memberQuarantined": "En quarantaine depuis le {date}",
+  "memberQuarantineInfo": "En quarantaine avec {count} rôle(s) enregistrés. /quarantine release les rend.",
+  "memberQuarantineReason": "Raison : {reason}",
+  "sectionQuarantine": "Quarantaine",
+  "quarantineRole": "Rôle de quarantaine",
+  "quarantineRoleHelp": "Donné aux membres mis en quarantaine avec /quarantine ou par l'anti-nuke, après le retrait de leurs rôles. Choisissez un rôle qui ne voit qu'un salon."
 }

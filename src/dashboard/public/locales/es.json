@@ -510,7 +510,7 @@
   "search_tags": "etiquetas comandos personalizados respuestas guardadas",
   "search_responders": "respuesta automática palabra clave",
   "search_scheduled": "programar repetir anuncio publicar después",
-  "search_moderation": "staff moderadores roles registro",
+  "search_moderation": "staff moderadores roles registro cuarentena",
   "search_logging": "registros canal eventos logs",
   "search_access": "permisos acceso panel roles",
   "menu": "Menú",
@@ -542,5 +542,11 @@
   "antinukeAddTrusted": "Añadir persona",
   "antinukeUserId": "ID de usuario",
   "antinukeOwnerOnly": "Solo el dueño del servidor puede cambiar el anti-nuke, porque las personas de confianza pueden hacer cualquier cosa.",
-  "search_antinuke": "nuke protección borrado masivo ban confianza lista blanca"
+  "search_antinuke": "nuke protección borrado masivo ban confianza lista blanca",
+  "memberQuarantined": "En cuarentena desde {date}",
+  "memberQuarantineInfo": "En cuarentena con {count} rol(es) guardados. /quarantine release se los devuelve.",
+  "memberQuarantineReason": "Motivo: {reason}",
+  "sectionQuarantine": "Cuarentena",
+  "quarantineRole": "Rol de cuarentena",
+  "quarantineRoleHelp": "Se da a los miembros en cuarentena con /quarantine o por el anti-nuke, después de quitarles sus roles. Que sea un rol que solo vea un canal."
 }

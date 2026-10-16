@@ -19,6 +19,7 @@ import { createStarboardCommand } from "./starboard.js";
 import { createTagCommands } from "./tags.js";
 import { createRaidCommand } from "./raid.js";
 import { createAntiNukeCommand } from "./antiNuke.js";
+import { createQuarantineCommand } from "./quarantine.js";
 import { createTicketsCommand } from "./tickets.js";
 import { createVoiceCommand } from "./voice.js";
 import { createAutoResponderCommand } from "./autoResponder.js";
@@ -39,7 +40,8 @@ import { createWelcomeCommand } from "./welcome.js";
 // with `leveling` (leveling/leveling.js) to run /rank, /leaderboard and /levels,
 // `tempVoice` (voice/tempVoiceStore.js) to run /voice, `scheduledMessages`
 // (scheduled/scheduledMessageStore.js) to run /schedule, `birthdays`
-// (birthdays/birthdayStore.js) to run /birthday,
+// (birthdays/birthdayStore.js) to run /birthday, `quarantine`
+// (moderation/quarantine.js) to run /quarantine,
 // not to register them.
 export function createCommands({
   logger,
@@ -56,6 +58,7 @@ export function createCommands({
   tempVoice,
   scheduledMessages,
   birthdays,
+  quarantine,
 }) {
   // Shared, so /country and /country-staff can't change the same member at the same time.
   const roleService = new CountryRoleService(logger);
@@ -81,6 +84,7 @@ export function createCommands({
     createTicketsCommand({ tickets, guildSettings, logger, forcedLanguage, modLog }),
     createRaidCommand({ guildSettings, modLog, forcedLanguage }),
     createAntiNukeCommand({ guildSettings, forcedLanguage }),
+    createQuarantineCommand({ guildSettings, quarantine, forcedLanguage }),
     createVoiceCommand({ guildSettings, store: tempVoice, forcedLanguage }),
     createAutoResponderCommand({ guildSettings, forcedLanguage }),
     createScheduleCommand({ store: scheduledMessages, forcedLanguage }),

@@ -510,7 +510,7 @@
   "search_tags": "tags eigene befehle gespeicherte antworten",
   "search_responders": "auto antwort stichwort auslöser",
   "search_scheduled": "planen wiederholen ankündigung später posten",
-  "search_moderation": "team moderatoren rollen mod-log",
+  "search_moderation": "team moderatoren rollen mod-log quarantäne",
   "search_logging": "logs kanal ereignisse protokoll",
   "search_access": "berechtigungen zugriff dashboard rollen",
   "menu": "Menü",
@@ -542,5 +542,11 @@
   "antinukeAddTrusted": "Person hinzufügen",
   "antinukeUserId": "Nutzer-ID",
   "antinukeOwnerOnly": "Nur der Servereigentümer kann Anti-Nuke ändern, da vertrauenswürdige Personen alles dürfen.",
-  "search_antinuke": "nuke schutz massenlöschung bann vertrauen whitelist"
+  "search_antinuke": "nuke schutz massenlöschung bann vertrauen whitelist",
+  "memberQuarantined": "In Quarantäne seit {date}",
+  "memberQuarantineInfo": "In Quarantäne, {count} Rolle(n) gespeichert. /quarantine release gibt sie zurück.",
+  "memberQuarantineReason": "Grund: {reason}",
+  "sectionQuarantine": "Quarantäne",
+  "quarantineRole": "Quarantänerolle",
+  "quarantineRoleHelp": "Bekommen Mitglieder, die mit /quarantine oder von Anti-Nuke in Quarantäne kommen, nachdem ihre Rollen weg sind. Am besten eine Rolle, die nur einen Kanal sieht."
 }

@@ -13,6 +13,8 @@ import { createGiveawayScheduler } from "./giveaways/giveawayScheduler.js";
 import { GiveawayStore } from "./giveaways/giveawayStore.js";
 import { createInteractionHandler } from "./interactionHandler.js";
 import { createAntiNuke } from "./raid/antiNuke.js";
+import { createQuarantine } from "./moderation/quarantine.js";
+import { SavedRoleStore } from "./members/savedRoleStore.js";
 import { createRaidGuard } from "./raid/raid.js";
 import { createTempVoice } from "./voice/tempVoice.js";
 import { createAutoResponder } from "./community/autoResponders.js";
@@ -139,7 +141,10 @@ async function start() {
     botActions,
     onModeratorAction: (guild, moderatorId, action) => antiNuke?.record(guild, moderatorId, action),
   });
-  antiNuke = createAntiNuke({ guildSettings, moderation, modLog, logger, forcedLanguage });
+  // Quarantined members' roles (/quarantine), saved so they can be given back.
+  const savedRoles = new SavedRoleStore(db);
+  const quarantine = createQuarantine({ guildSettings, store: savedRoles, modLog, logger });
+  antiNuke = createAntiNuke({ guildSettings, moderation, quarantine, modLog, logger, forcedLanguage });
   const externalActions = createExternalActionRecorder({ moderation, botActions, logger });
 
   // Automod (/settings automod): spam, banned words, invites, links, mentions, capitals.
@@ -148,7 +153,12 @@ async function start() {
   const raidGuard = createRaidGuard({ guildSettings, moderation, modLog, logger });
 
   // Welcome and leave messages, the welcome DM and autoroles (/welcome).
-  const welcomer = createWelcomer({ guildSettings, logger, forcedLanguage });
+  const welcomer = createWelcomer({
+    guildSettings,
+    logger,
+    forcedLanguage,
+    skipAutoroles: (member) => quarantine.isQuarantined(member.guild.id, member.id),
+  });
 
   // The starboard (/starboard): messages with enough stars are reposted.
   const starboard = createStarboard({ guildSettings, store: new StarboardStore(db), logger, forcedLanguage, botDeletions });
@@ -164,6 +174,7 @@ async function start() {
     reminders,
     scheduledMessages,
     birthdays: birthdayStore,
+    quarantine,
     giveaways,
     tickets,
     levels,
@@ -298,6 +309,7 @@ async function start() {
     client.on(Events.GuildMemberAdd, safely("a member joining", (member) => serverLog.memberJoined(member)));
     client.on(Events.GuildMemberAdd, safely("welcoming a member", (member) => welcomer.memberJoined(member)));
     client.on(Events.GuildMemberAdd, safely("the join gate", (member) => raidGuard.memberJoined(member)));
+    client.on(Events.GuildMemberAdd, safely("a quarantined member rejoining", (member) => quarantine.memberJoined(member)));
     client.on(Events.GuildMemberRemove, safely("a leave message", (member) => welcomer.memberLeft(member)));
     client.on(Events.GuildMemberRemove, safely("forgetting a birthday", (member) => birthdayStore.remove(member.guild.id, member.id)));
     client.on(Events.GuildMemberUpdate, safely("autoroles after screening", (before, after) => welcomer.memberUpdated(before, after)));
@@ -363,7 +375,7 @@ async function start() {
 
     // Forget a deleted staff, mod or dashboard role, so settings never point at a role that is gone.
     client.on(Events.GuildRoleDelete, (role) => {
-      for (const setting of [Setting.STAFF_ROLE, Setting.MOD_ROLE]) {
+      for (const setting of [Setting.STAFF_ROLE, Setting.MOD_ROLE, Setting.QUARANTINE_ROLE]) {
         if (guildSettings.get(role.guild.id, setting) === role.id) {
           guildSettings
             .clear(role.guild.id, setting)

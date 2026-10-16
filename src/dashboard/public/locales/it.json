@@ -510,7 +510,7 @@
   "search_tags": "tag comandi personalizzati risposte salvate",
   "search_responders": "risposta automatica parola chiave",
   "search_scheduled": "programma ripeti annuncio pubblica dopo",
-  "search_moderation": "staff moderatori ruoli registro",
+  "search_moderation": "staff moderatori ruoli registro quarantena",
   "search_logging": "log canale eventi registro",
   "search_access": "permessi accesso dashboard ruoli",
   "menu": "Menu",
@@ -542,5 +542,11 @@
   "antinukeAddTrusted": "Aggiungi persona",
   "antinukeUserId": "ID utente",
   "antinukeOwnerOnly": "Solo il proprietario del server può modificare l'anti-nuke, perché le persone fidate possono fare qualsiasi cosa.",
-  "search_antinuke": "nuke protezione eliminazione di massa ban fidati whitelist"
+  "search_antinuke": "nuke protezione eliminazione di massa ban fidati whitelist",
+  "memberQuarantined": "In quarantena dal {date}",
+  "memberQuarantineInfo": "In quarantena con {count} ruolo/i salvati. /quarantine release li restituisce.",
+  "memberQuarantineReason": "Motivo: {reason}",
+  "sectionQuarantine": "Quarantena",
+  "quarantineRole": "Ruolo di quarantena",
+  "quarantineRoleHelp": "Dato ai membri messi in quarantena con /quarantine o dall'anti-nuke, dopo aver tolto i loro ruoli. Usa un ruolo che vede un solo canale."
 }

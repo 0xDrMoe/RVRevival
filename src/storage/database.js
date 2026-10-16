@@ -225,6 +225,22 @@ const MIGRATIONS = [
   );
   CREATE INDEX dashboard_activity_by_guild ON dashboard_activity (guild_id, id);
   `,
+  // 15: roles the bot took away and should give back: kind "quarantine"
+  // (/quarantine, anti-nuke) or "left" (roles members had when they left, for
+  // role persistence). role_ids is a JSON array.
+  `
+  CREATE TABLE saved_roles (
+    guild_id      TEXT    NOT NULL,
+    user_id       TEXT    NOT NULL,
+    kind          TEXT    NOT NULL,
+    role_ids      TEXT    NOT NULL,
+    reason        TEXT,
+    moderator_id  TEXT,
+    saved_at      INTEGER NOT NULL,
+    PRIMARY KEY (guild_id, user_id, kind)
+  ) WITHOUT ROWID;
+  CREATE INDEX saved_roles_by_kind ON saved_roles (kind, saved_at);
+  `,
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS.length;

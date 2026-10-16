@@ -920,5 +920,26 @@
   "antinukeResult_kicked": "La personne a été expulsée.",
   "antinukeResult_banned": "La personne a été bannie.",
   "antinukeResult_left": "La personne n'est plus sur le serveur.",
-  "antinukeResult_failed": "Le bot n'a rien pu faire : son rôle le plus haut est au-dessus de celui du bot."
+  "antinukeResult_failed": "Le bot n'a rien pu faire : son rôle le plus haut est au-dessus de celui du bot.",
+
+  "quarantineCommandDescription": "Retire les rôles d'un membre pendant que le staff vérifie, et les rend ensuite",
+  "quarantineAddDescription": "Mettre un membre en quarantaine : ses rôles sont enregistrés et retirés",
+  "quarantineReleaseDescription": "Libérer un membre et lui rendre tous ses rôles",
+  "quarantineListDescription": "Lister les membres en quarantaine",
+  "quarantineRoleDescription": "Choisir le rôle donné aux membres en quarantaine (vide = aucun)",
+  "quarantineRoleOptionDescription": "Par exemple, un rôle qui ne voit qu'un salon",
+  "quarantineDone": "{user} est en quarantaine : {count} rôle(s) enregistrés et retirés, rôle de quarantaine donné. Utilisez `/quarantine release` pour les rendre.",
+  "quarantineDoneNoRole": "{user} est en quarantaine : {count} rôle(s) enregistrés et retirés. Astuce : choisissez un rôle de quarantaine avec `/quarantine role` pour qu'il ne voie qu'un salon.",
+  "quarantineAlready": "{user} est déjà en quarantaine.",
+  "quarantineBotMissingPermission": "Je n'ai pas pu modifier les rôles de {user}. Donnez-moi **Gérer les rôles** et placez mon rôle au-dessus du sien.",
+  "quarantineNotQuarantined": "{user} n'est pas en quarantaine.",
+  "quarantineForgotten": "{user} a quitté le serveur, sa quarantaine a donc été effacée.",
+  "quarantineReleased": "{user} est libéré : {count} rôle(s) rendus.",
+  "quarantineReleasedMissing": "{user} est libéré : {count} rôle(s) rendus. {missing} n'ont pas pu l'être (supprimés ou maintenant au-dessus de mon rôle).",
+  "quarantineListEmpty": "Personne n'est en quarantaine.",
+  "quarantineList": "**En quarantaine ({count}) :**\n{list}",
+  "quarantineListMore": "…et {count} de plus.",
+  "quarantineRoleCleared": "Les membres en quarantaine ne recevront aucun rôle ; leurs rôles sont seulement retirés.",
+  "quarantineRoleUnusable": "Je ne peux pas donner {role} : c'est un rôle de bot ou de booster, ou il est au-dessus du mien.",
+  "quarantineRoleSet": "Les membres en quarantaine recevront {role}. Vérifiez qu'il ne voit que les bons salons."
 }
