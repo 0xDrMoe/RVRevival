@@ -20,6 +20,7 @@ The Discord bot for the Rumbleverse Revival server. It is built as a set of inde
 | [Starboard](#starboard) | `/starboard`, or the dashboard's Community page | Manage Server (everyone stars messages) |
 | [Support tickets](#support-tickets) | `/tickets` | Manage Server (`panel`, `off`), ticket staff (the rest); members click Open a ticket |
 | [Raid protection](#raid-protection) | `/raid`, or the dashboard's Moderation page | Manage Channels or the mod role (`lockdown`, `end`, `status`), Manage Server (`gate`, `gate-off`, `alert`) |
+| [Join-to-create voice](#join-to-create-voice) | `/voice` | Manage Server (`setup`, `off`), the channel's owner (`lock`, `unlock`), anyone in the channel (`claim`) |
 | [Leveling](#leveling) | `/rank`, `/leaderboard`, `/levels`, or the dashboard's Leveling page | Everyone (`/rank`, `/leaderboard`), Manage Server (`/levels`) |
 | [Country roles](#country-roles) | `/country`, `/country-staff`, `/country-help` | Everyone (`/country`), the staff role (`/country-staff`), Manage Server (`/country-help`) |
 | [Web dashboard](#web-dashboard) | https://rumbleverse.cedartechsolutions.ca | Manage Server, or a dashboard role |
@@ -242,6 +243,17 @@ For when a server is flooded by bots or a coordinated group. Discord's own tools
 
 The bot needs **Manage Channels** and **Manage Roles** in the channels it locks (and its role above the member roles), and **Kick Members** for the gate. A short notice is posted in the server's system channel when a lockdown starts and ends.
 
+### Join-to-create voice
+
+Discord has no built-in way to give each group its own voice channel, so the bot makes them.
+
+- `/voice setup hub:<voice channel> [category] [name] [limit]` turns it on. Joining the hub (for example "➕ Create a channel") makes a voice channel for that member, moves them into it, and deletes it as soon as it's empty. New channels go in `category` (default: the hub's category) and copy its permissions. `name` is the channel name, where `{name}` is the member's display name and `{username}` their username (default `🔊 {name}`); `limit` is the user limit (0 = none). `/voice off` turns it off; channels already made are still deleted once empty.
+- The owner gets **Manage Channels** and **Move Members** on their channel, so they rename it, change the limit and disconnect people with Discord's own channel menus.
+- `/voice lock` lets only the people inside (and staff) join; `/voice unlock` opens it again. `/voice claim` takes over a channel whose owner left.
+- Someone who already has a channel and joins the hub again is moved back into theirs. At most 50 channels per server. Empty channels left over from a restart are deleted when the bot starts.
+
+The bot needs **View Channel**, **Manage Channels**, **Manage Roles**, **Move Members** and **Connect** in the category. It uses the Guild Voice States intent, which isn't privileged.
+
 ### Leveling
 
 Members earn XP for chatting and level up; reward roles are given automatically. Leveling is **off** until an admin turns it on with `/levels on` or on the dashboard's **Leveling** page.
@@ -370,10 +382,10 @@ After that, updates are the usual `git pull && npm ci`, then `pm2 restart rv-bot
 2. **Invite it.** Replace `YOUR_CLIENT_ID` and open:
 
    ```
-   https://discord.com/oauth2/authorize?client_id=YOUR_CLIENT_ID&scope=bot+applications.commands&permissions=1460691659926
+   https://discord.com/oauth2/authorize?client_id=YOUR_CLIENT_ID&scope=bot+applications.commands&permissions=1460709485718
    ```
 
-   `permissions=1460691659926` is **Kick Members**, **Ban Members**, **Timeout Members**, **View Audit Log**, **Manage Roles**, **Manage Channels**, **Manage Nicknames**, **Manage Messages**, **Read Message History**, **View Channels**, **Send Messages**, **Send Messages in Threads**, **Create Private Threads**, **Manage Threads**, **Embed Links** and **Attach Files**, which is what the current features need. If the bot was invited with fewer, either re-invite it with this link or give its role the missing permissions (for moderation: Kick Members, Ban Members, Timeout Members and View Audit Log server-wide, Read Message History for `/purge`, Create Private Threads and Manage Threads for tickets). If a new feature needs more, update this number and re-invite the bot.
+   `permissions=1460709485718` is **Kick Members**, **Ban Members**, **Timeout Members**, **View Audit Log**, **Manage Roles**, **Manage Channels**, **Manage Nicknames**, **Manage Messages**, **Read Message History**, **View Channels**, **Send Messages**, **Send Messages in Threads**, **Create Private Threads**, **Manage Threads**, **Move Members**, **Connect**, **Embed Links** and **Attach Files**, which is what the current features need. If the bot was invited with fewer, either re-invite it with this link or give its role the missing permissions (for moderation: Kick Members, Ban Members, Timeout Members and View Audit Log server-wide, Read Message History for `/purge`, Create Private Threads and Manage Threads for tickets, Move Members and Connect for join-to-create voice). If a new feature needs more, update this number and re-invite the bot.
 
 3. **Fix the role hierarchy.** In *Server Settings > Roles*, drag the bot's role above any roles it manages (existing country roles; new ones are created below it automatically) and above every member it should be able to ban, kick or time out. Keep it below your admin roles so moderators can't use it on admins.
 
@@ -447,6 +459,7 @@ src/
     tickets.js           Support tickets: /tickets, the panel's button, the form and the Close button
     levels.js            Leveling: /rank, /leaderboard, /levels
     raid.js              Raid protection: /raid
+    voice.js             Join-to-create voice: /voice
     commandHelpers.js    Shared start of moderation-style commands (language, permission check)
   countries/             Country roles: country list, name matching and search
   roles/                 Country roles: find, create, assign and remove roles
@@ -455,6 +468,7 @@ src/
   giveaways/             Giveaways: saved in SQLite (giveawayStore.js), drawing winners (giveaways.js), ended on time (giveawayScheduler.js)
   tickets/               Support tickets: saved in SQLite (ticketStore.js), the panel, staff and messages (tickets.js), transcripts (transcript.js)
   raid/                  Raid protection: lockdown planning and restoring, the new-account gate and join alerts (raid.js)
+  voice/                 Join-to-create voice: making and deleting channels (tempVoice.js), saved in SQLite (tempVoiceStore.js)
   leveling/              Leveling: settings and level math (config.js), XP in SQLite (levelStore.js), earning XP and rewards (leveling.js)
   members/               Member history: when members joined and left (memberEventStore.js)
   reminders/             Reminders: saved in SQLite (reminderStore.js), sent when due (reminderScheduler.js)
@@ -523,5 +537,5 @@ Set `LOG_LEVEL=debug` for more detail.
 - Secrets come only from environment variables. `.env` is git-ignored; `.env.example` has placeholders only.
 - Logs redact anything that looks like a Discord token, plus the configured token, client secret and session secret.
 - Users only see fixed, friendly messages; errors and stack traces stay in the log.
-- The bot uses the Guilds, Guild Messages, Guild Moderation and Guild Message Reactions (the starboard) intents, plus the privileged Message Content intent (to show what edited and deleted messages said in the logs) and Server Members intent (joins, leaves and member changes). Message text is only ever copied into log channels. It uses only the permissions its features need (see the invite link in [Setup](#setup)). Roles it creates have zero permissions.
+- The bot uses the Guilds, Guild Messages, Guild Moderation, Guild Message Reactions (the starboard) and Guild Voice States (join-to-create voice) intents, plus the privileged Message Content intent (to show what edited and deleted messages said in the logs) and Server Members intent (joins, leaves and member changes). Message text is only ever copied into log channels. It uses only the permissions its features need (see the invite link in [Setup](#setup)). Roles it creates have zero permissions.
 - The dashboard listens only on `127.0.0.1` and is reached through nginx or Caddy over HTTPS. It stores a hash of each login's session token, never the token itself, and the Discord access token encrypted with `DASHBOARD_SESSION_SECRET`. Every page sets a strict Content Security Policy, changes must come from the dashboard's own address, and requests are rate-limited. Members with a dashboard role only get the overview and cases; settings always need Manage Server. CSV exports prefix cells that start with `=`, `+`, `-` or `@` with `'` so spreadsheets don't run them as formulas.

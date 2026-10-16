@@ -13,6 +13,8 @@ import { createGiveawayScheduler } from "./giveaways/giveawayScheduler.js";
 import { GiveawayStore } from "./giveaways/giveawayStore.js";
 import { createInteractionHandler } from "./interactionHandler.js";
 import { createRaidGuard } from "./raid/raid.js";
+import { createTempVoice } from "./voice/tempVoice.js";
+import { TempVoiceStore } from "./voice/tempVoiceStore.js";
 import { createLeveling } from "./leveling/leveling.js";
 import { LevelStore } from "./leveling/levelStore.js";
 import { createActionLog } from "./logs/actionLog.js";
@@ -55,6 +57,7 @@ const BASE_INTENTS = [
   GatewayIntentBits.GuildMessages,
   GatewayIntentBits.GuildModeration,
   GatewayIntentBits.GuildMessageReactions,
+  GatewayIntentBits.GuildVoiceStates,
 ];
 const PRIVILEGED_INTENT_SETS = [
   [GatewayIntentBits.GuildMembers, GatewayIntentBits.MessageContent],
@@ -90,6 +93,9 @@ async function start() {
   const tickets = new TicketStore(db);
   // Members' XP for leveling (/rank, /levels).
   const levels = new LevelStore(db);
+  // Join-to-create voice channels (/voice).
+  const tempVoiceChannels = new TempVoiceStore(db);
+  const tempVoice = createTempVoice({ guildSettings, store: tempVoiceChannels, logger });
   // Pick up settings changed on the web dashboard (another process).
   const settingsReload = setInterval(() => {
     try {
@@ -138,6 +144,7 @@ async function start() {
     tickets,
     levels,
     leveling,
+    tempVoice: tempVoiceChannels,
   });
   const handleInteraction = createInteractionHandler({ commands, logger, forcedLanguage, actionLog });
   const guardCountryChannel = createCountryChannelGuard({ guildSettings, logger, actionLog, botDeletions });
@@ -200,6 +207,7 @@ async function start() {
       reminderScheduler.start();
       giveawayScheduler?.stop();
       giveawayScheduler = createGiveawayScheduler({ client: readyClient, store: giveaways, logger, forcedLanguage });
+      tempVoice.sweep(readyClient).catch((error) => logger.error("Couldn't clean up join-to-create channels", { error }));
       giveawayScheduler.start();
     });
 
@@ -271,6 +279,7 @@ async function start() {
     client.on(Events.GuildBanRemove, safely("an unban", (ban) => externalActions.onUnban(ban)));
 
     client.on(Events.ThreadDelete, safely("a deleted thread", (thread) => commands.get("tickets").threadDeleted(thread)));
+    client.on(Events.VoiceStateUpdate, safely("join-to-create voice", (before, after) => tempVoice.voiceStateUpdate(before, after)));
 
     client.on(Events.ChannelDelete, (channel) => {
       // A deleted channel no longer needs ignoring in the server log.
@@ -280,6 +289,13 @@ async function start() {
           .catch((error) => logger.error("Couldn't forget a deleted ignored channel", { error }));
       }
       forgetAutomodExemption(channel.guildId, "exemptChannelIds", channel.id);
+      tempVoice.channelDeleted(channel);
+      if (channel.guildId && guildSettings.get(channel.guildId, Setting.TEMP_VOICE)?.hubChannelId === channel.id) {
+        guildSettings
+          .clear(channel.guildId, Setting.TEMP_VOICE)
+          .then(() => logger.info("The join-to-create hub was deleted; set a new one with /voice setup", { guildId: channel.guildId }))
+          .catch((error) => logger.error("Couldn't turn off join-to-create after its hub was deleted", { error }));
+      }
       if (channel.guildId && guildSettings.get(channel.guildId, Setting.TICKETS)?.channelId === channel.id) {
         guildSettings
           .clear(channel.guildId, Setting.TICKETS)
