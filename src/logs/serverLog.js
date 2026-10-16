@@ -4,7 +4,9 @@
 // channel is set. Entries are in English, like the other logs.
 //
 // Messages from bots and messages the bot deleted itself (the /country channel
-// and /purge, already logged elsewhere) are skipped. Showing message text needs
+// and /purge, already logged elsewhere) are skipped. Admins can switch each kind
+// of event off (/settings log-event) and stop logging messages from chosen
+// channels (/settings log-ignore). Showing message text needs
 // the Message Content intent; joins, leaves and member changes need the Server
 // Members intent.
 
@@ -14,6 +16,17 @@ import { authorOf, canReadContent, codeBlock, formatBytes, quote } from "./actio
 import { buildTranscript } from "./transcript.js";
 
 export const SERVER_LOG_SETTINGS = [Setting.SERVER_LOG_CHANNEL];
+
+// The kinds of events the server log posts, each of which can be switched off.
+// The values are stored in the settings, so never rename one.
+export const LogEvent = Object.freeze({
+  MESSAGE_EDIT: "messageEdit",
+  MESSAGE_DELETE: "messageDelete",
+  BULK_DELETE: "bulkDelete",
+  MEMBER_JOIN: "memberJoin",
+  MEMBER_LEAVE: "memberLeave",
+  MEMBER_UPDATE: "memberUpdate",
+});
 
 const COLOR = {
   deleted: 0xed4245,
@@ -150,16 +163,33 @@ export function buildMemberChangedEmbed(oldMember, newMember) {
 }
 
 // Options:
-//   poster         posts in log channels (see logChannel.js)
-//   botDeletions   messages the bot deleted itself (RecentIds)
-export function createServerLog({ poster, botDeletions }) {
+//   poster          posts in log channels (see logChannel.js)
+//   botDeletions    messages the bot deleted itself (RecentIds)
+//   guildSettings   which events are switched off and which channels are ignored
+export function createServerLog({ poster, botDeletions, guildSettings }) {
   const post = (guild, build) => poster.post(guild, SERVER_LOG_SETTINGS, build);
-  const enabled = (guild) => poster.isEnabled(guild, SERVER_LOG_SETTINGS);
+
+  // Whether to log `event` in this server, and (for message events) in this
+  // channel. Threads follow their parent channel, and channels their category.
+  function wants(guild, event, channel) {
+    if (!guild || !poster.isEnabled(guild, SERVER_LOG_SETTINGS)) {
+      return false;
+    }
+    if (guildSettings?.getList(guild.id, Setting.DISABLED_LOG_EVENTS).includes(event)) {
+      return false;
+    }
+    const ignored = guildSettings?.getList(guild.id, Setting.LOG_IGNORED_CHANNELS) ?? [];
+    if (!channel || ignored.length === 0) {
+      return true;
+    }
+    return ![channel.id, channel.parentId, channel.parent?.parentId].some((id) => id && ignored.includes(id));
+  }
+  const channelOf = (message) => message.channel ?? { id: message.channelId };
   const isFromBot = (message) => Boolean(message.author?.bot || message.webhookId);
 
   return {
     async messageDeleted(message) {
-      if (!message.guild || !enabled(message.guild) || botDeletions?.has(message.id) || isFromBot(message)) {
+      if (!wants(message.guild, LogEvent.MESSAGE_DELETE, channelOf(message)) || botDeletions?.has(message.id) || isFromBot(message)) {
         return;
       }
       await post(message.guild, () => ({ embed: buildMessageDeletedEmbed(message) }));
@@ -169,7 +199,7 @@ export function createServerLog({ poster, botDeletions }) {
       const guild = channel.guild;
       const all = [...messages.values()];
       const others = all.filter((message) => !botDeletions?.has(message.id));
-      if (!guild || !enabled(guild) || others.length === 0) {
+      if (!wants(guild, LogEvent.BULK_DELETE, channel) || others.length === 0) {
         return;
       }
       const known = others.filter((message) => !message.partial);
@@ -183,7 +213,7 @@ export function createServerLog({ poster, botDeletions }) {
     },
 
     async messageEdited(oldMessage, newMessage) {
-      if (!newMessage.guild || !enabled(newMessage.guild) || newMessage.partial || isFromBot(newMessage)) {
+      if (!wants(newMessage.guild, LogEvent.MESSAGE_EDIT, channelOf(newMessage)) || newMessage.partial || isFromBot(newMessage)) {
         return;
       }
       // Discord also sends an "edit" when a link preview loads: the text is the
@@ -195,20 +225,20 @@ export function createServerLog({ poster, botDeletions }) {
     },
 
     async memberJoined(member) {
-      if (enabled(member.guild)) {
+      if (wants(member.guild, LogEvent.MEMBER_JOIN)) {
         await post(member.guild, () => ({ embed: buildMemberJoinedEmbed(member) }));
       }
     },
 
     async memberLeft(member) {
-      if (member.user && enabled(member.guild)) {
+      if (member.user && wants(member.guild, LogEvent.MEMBER_LEAVE)) {
         await post(member.guild, () => ({ embed: buildMemberLeftEmbed(member) }));
       }
     },
 
     async memberUpdated(oldMember, newMember) {
       // Without the old version there's nothing to compare.
-      if (oldMember.partial || !enabled(newMember.guild)) {
+      if (oldMember.partial || !wants(newMember.guild, LogEvent.MEMBER_UPDATE)) {
         return;
       }
       const embed = buildMemberChangedEmbed(oldMember, newMember);

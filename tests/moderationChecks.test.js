@@ -23,6 +23,15 @@ describe("isModerator", () => {
     expect(isModerator(interaction([], [STAFF_ROLE_ID]), PermissionFlagsBits.BanMembers, settings)).toBe(true);
     expect(isModerator(interaction([], []), PermissionFlagsBits.BanMembers, settings)).toBe(false);
   });
+
+  it("uses the mod role instead of the staff role once one is set", async () => {
+    const MOD_ROLE_ID = "700000000000000002";
+    const settings = new GuildSettings();
+    await settings.set(GUILD_ID, Setting.STAFF_ROLE, STAFF_ROLE_ID);
+    await settings.set(GUILD_ID, Setting.MOD_ROLE, MOD_ROLE_ID);
+    expect(isModerator(interaction([], [MOD_ROLE_ID]), PermissionFlagsBits.BanMembers, settings)).toBe(true);
+    expect(isModerator(interaction([], [STAFF_ROLE_ID]), PermissionFlagsBits.BanMembers, settings)).toBe(false);
+  });
 });
 
 describe("hierarchyProblem", () => {

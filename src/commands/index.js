@@ -2,10 +2,12 @@
 // country.js and add it to the list below.
 
 import { CountryRoleService } from "../roles/countryRoles.js";
-import { createCaseCommand, createModlogsCommand } from "./cases.js";
+import { createCaseCommand, createClearWarnsCommand, createModlogsCommand } from "./cases.js";
+import { createChannelToolCommands } from "./channelTools.js";
 import { createCountryCommand } from "./country.js";
 import { createCountryHelpCommand } from "./countryHelp.js";
 import { createCountryStaffCommand } from "./countryStaff.js";
+import { createMemberToolCommands } from "./memberTools.js";
 import { createModerationCommands } from "./moderation.js";
 import { createPurgeCommand } from "./purge.js";
 import { createSettingsCommand } from "./settings.js";
@@ -36,6 +38,9 @@ export function createCommands({
     createPurgeCommand({ guildSettings, forcedLanguage, modLog, botDeletions }),
     createCaseCommand(moderationOptions),
     createModlogsCommand(moderationOptions),
+    createClearWarnsCommand({ moderation, modLog, forcedLanguage }),
+    ...createChannelToolCommands({ guildSettings, modLog, forcedLanguage }),
+    ...createMemberToolCommands({ guildSettings, modLog, forcedLanguage }),
   ];
   return new Map(commands.map((command) => [command.name, command]));
 }

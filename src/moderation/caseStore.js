@@ -1,58 +1,20 @@
-// Stores moderation cases in SQLite (data/bot.db), using Node's built-in
-// node:sqlite module, so there's no database server or native package to
-// install. Every server numbers its cases 1, 2, 3… and a number is never
-// reused, even after a case is deleted.
-//
-// Without a file path (tests, `npm run register`) the database lives in memory.
+// Stores moderation cases in the bot's SQLite database (see storage/database.js).
+// Every server numbers its cases 1, 2, 3… and a number is never reused, even
+// after a case is deleted.
 
-import { mkdirSync } from "node:fs";
-import { dirname } from "node:path";
-import { DatabaseSync } from "node:sqlite";
-import { fileURLToPath } from "node:url";
-
-export const DEFAULT_DATABASE_FILE = fileURLToPath(new URL("../../data/bot.db", import.meta.url));
+import { closeDatabase, inTransaction, openDatabase } from "../storage/database.js";
 
 // What a case records.
 export const CaseAction = Object.freeze({
   BAN: "ban",
+  SOFTBAN: "softban",
   UNBAN: "unban",
   KICK: "kick",
   TIMEOUT: "timeout",
   UNTIMEOUT: "untimeout",
   WARN: "warn",
+  NOTE: "note",
 });
-
-// Each entry upgrades the database by one version. Never edit a released
-// migration; add a new one instead.
-const MIGRATIONS = [
-  `
-  CREATE TABLE guild_counters (
-    guild_id  TEXT PRIMARY KEY,
-    last_case INTEGER NOT NULL
-  );
-  CREATE TABLE cases (
-    guild_id       TEXT    NOT NULL,
-    case_number    INTEGER NOT NULL,
-    action         TEXT    NOT NULL,
-    user_id        TEXT    NOT NULL,
-    user_tag       TEXT,
-    moderator_id   TEXT    NOT NULL,
-    moderator_tag  TEXT,
-    reason         TEXT,
-    duration_ms    INTEGER,
-    expires_at     INTEGER,
-    pending_unban  INTEGER NOT NULL DEFAULT 0,
-    dm_sent        INTEGER,
-    log_channel_id TEXT,
-    log_message_id TEXT,
-    created_at     INTEGER NOT NULL,
-    updated_at     INTEGER,
-    PRIMARY KEY (guild_id, case_number)
-  );
-  CREATE INDEX cases_by_user ON cases (guild_id, user_id, case_number);
-  CREATE INDEX cases_pending_unban ON cases (expires_at) WHERE pending_unban = 1;
-  `,
-];
 
 function toCase(row) {
   if (!row) {
@@ -82,27 +44,15 @@ const orNull = (value) => (value === undefined ? null : value);
 
 export class CaseStore {
   #db;
+  #ownsDatabase;
   #statements;
 
-  constructor(file = ":memory:") {
-    if (file !== ":memory:") {
-      mkdirSync(dirname(file), { recursive: true });
-    }
-    this.#db = new DatabaseSync(file);
-    // WAL lets another process (the future dashboard) read while the bot writes.
-    this.#db.exec("PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000; PRAGMA foreign_keys = ON;");
-    this.#migrate();
+  // `database` is an open database (shared with the settings), or a file path
+  // to open. Without one, cases live in memory (tests).
+  constructor(database = ":memory:") {
+    this.#ownsDatabase = typeof database === "string";
+    this.#db = this.#ownsDatabase ? openDatabase(database) : database;
     this.#statements = this.#prepare();
-  }
-
-  #migrate() {
-    const { user_version: version } = this.#db.prepare("PRAGMA user_version").get();
-    for (let next = version; next < MIGRATIONS.length; next += 1) {
-      this.#transaction(() => {
-        this.#db.exec(MIGRATIONS[next]);
-        this.#db.exec(`PRAGMA user_version = ${next + 1}`);
-      });
-    }
   }
 
   #prepare() {
@@ -123,6 +73,7 @@ export class CaseStore {
       countForUser: db.prepare(
         "SELECT action, COUNT(*) AS total FROM cases WHERE guild_id = ? AND user_id = ? GROUP BY action",
       ),
+      deleteForUser: db.prepare("DELETE FROM cases WHERE guild_id = ? AND user_id = ? AND action = ?"),
       updateReason: db.prepare(
         "UPDATE cases SET reason = ?, updated_at = ? WHERE guild_id = ? AND case_number = ?",
       ),
@@ -138,18 +89,6 @@ export class CaseStore {
         "UPDATE cases SET pending_unban = 0 WHERE guild_id = ? AND user_id = ? AND pending_unban = 1",
       ),
     };
-  }
-
-  #transaction(work) {
-    this.#db.exec("BEGIN IMMEDIATE");
-    try {
-      const value = work();
-      this.#db.exec("COMMIT");
-      return value;
-    } catch (error) {
-      this.#db.exec("ROLLBACK");
-      throw error;
-    }
   }
 
   // Records a case and returns it with its new number.
@@ -170,7 +109,7 @@ export class CaseStore {
     if (!Object.values(CaseAction).includes(action)) {
       throw new Error(`Unknown case action "${action}"`);
     }
-    const number = this.#transaction(() => {
+    const number = inTransaction(this.#db, () => {
       const { last_case: next } = this.#statements.nextNumber.get(guildId);
       this.#statements.insert.run(
         guildId,
@@ -226,6 +165,11 @@ export class CaseStore {
     return this.#statements.delete.run(guildId, number).changes > 0;
   }
 
+  // Deletes all of a member's cases of one kind (/clearwarns). Returns how many.
+  deleteCasesOfUser(guildId, userId, action) {
+    return Number(this.#statements.deleteForUser.run(guildId, userId, action).changes);
+  }
+
   // Temporary bans whose time is up, oldest first.
   dueUnbans(now = Date.now(), limit = 50) {
     return this.#statements.dueUnbans.all(now, limit).map(toCase);
@@ -236,11 +180,10 @@ export class CaseStore {
     return this.#statements.clearPendingUnbans.run(guildId, userId).changes;
   }
 
+  // Closes the database if this store opened it.
   close() {
-    try {
-      this.#db.close();
-    } catch {
-      // Already closed.
+    if (this.#ownsDatabase) {
+      closeDatabase(this.#db);
     }
   }
 }

@@ -1,6 +1,6 @@
 import { PermissionFlagsBits } from "discord.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createCaseCommand, createModlogsCommand } from "../src/commands/cases.js";
+import { createCaseCommand, createClearWarnsCommand, createModlogsCommand } from "../src/commands/cases.js";
 import { Status } from "../src/logs/actionLog.js";
 import { CaseAction, CaseStore } from "../src/moderation/caseStore.js";
 import { createModerationService } from "../src/moderation/moderationService.js";
@@ -100,5 +100,40 @@ describe("/case and /modlogs", () => {
   it("says when a member has no cases", async () => {
     const interaction = fakeInteraction({ user: fakeUser("300000000000000055") });
     expect(await modlogsCommand.execute(interaction)).toMatchObject({ key: "modlogsNone" });
+  });
+});
+
+describe("/clearwarns", () => {
+  let store;
+  let modLog;
+  let command;
+
+  beforeEach(() => {
+    store = new CaseStore();
+    modLog = { post: vi.fn(async () => {}) };
+    command = createClearWarnsCommand({ moderation: createModerationService({ store, logger: fakeLogger() }), modLog });
+    for (const action of [CaseAction.WARN, CaseAction.WARN, CaseAction.BAN]) {
+      store.createCase({ guildId: GUILD_ID, action, userId: TARGET_ID, moderatorId: MOD_ID });
+    }
+  });
+
+  afterEach(() => store.close());
+
+  const admin = [PermissionFlagsBits.ManageGuild];
+
+  it("deletes only the member's warnings and posts it in the mod log", async () => {
+    const interaction = fakeInteraction({ user: fakeUser(TARGET_ID), permissions: admin });
+    expect(await command.execute(interaction)).toMatchObject({ status: Status.SUCCESS, key: "clearwarnsDone", values: { count: 2 } });
+    expect(store.listCases(GUILD_ID, TARGET_ID).map((entry) => entry.action)).toEqual([CaseAction.BAN]);
+    expect(modLog.post).toHaveBeenCalledTimes(1);
+
+    const again = fakeInteraction({ user: fakeUser(TARGET_ID), permissions: admin });
+    expect(await command.execute(again)).toMatchObject({ status: Status.REFUSED, key: "clearwarnsNone" });
+  });
+
+  it("is only for Manage Server", async () => {
+    const interaction = fakeInteraction({ user: fakeUser(TARGET_ID) });
+    expect(await command.execute(interaction)).toMatchObject({ status: Status.REFUSED, key: "caseDeleteNoPermission" });
+    expect(store.listCases(GUILD_ID, TARGET_ID)).toHaveLength(3);
   });
 });

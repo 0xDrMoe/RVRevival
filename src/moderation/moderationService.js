@@ -15,6 +15,7 @@ const MAX_AUDIT_REASON = 512;
 // bot, so they can't be DMed.
 const DM_MESSAGES = {
   [CaseAction.BAN]: "dmBan",
+  [CaseAction.SOFTBAN]: "dmSoftban",
   [CaseAction.KICK]: "dmKick",
   [CaseAction.TIMEOUT]: "dmTimeout",
   [CaseAction.UNTIMEOUT]: "dmUntimeout",
@@ -122,6 +123,17 @@ export function createModerationService({ store, modLog = noModLog, logger, forc
       return recordCase({ guild, action: CaseAction.UNBAN, user, moderator, reason });
     },
 
+    // Bans and immediately unbans, to delete a member's recent messages. They
+    // can rejoin with an invite, like after a kick.
+    async softban({ guild, member, moderator, reason, deleteMessageSeconds }) {
+      const dmSent = await notify(member.user, guild, CaseAction.SOFTBAN, { reason });
+      markOwnAction(guild, member.id, CaseAction.BAN);
+      markOwnAction(guild, member.id, CaseAction.UNBAN);
+      await guild.members.ban(member.id, { reason: auditReason(moderator, reason), deleteMessageSeconds });
+      await guild.members.unban(member.id, auditReason(moderator, `Softban: ${reason || "No reason given"}`));
+      return recordCase({ guild, action: CaseAction.SOFTBAN, user: member.user, moderator, reason, dmSent });
+    },
+
     async kick({ guild, member, moderator, reason }) {
       const dmSent = await notify(member.user, guild, CaseAction.KICK, { reason });
       markOwnAction(guild, member.id, CaseAction.KICK);
@@ -151,6 +163,11 @@ export function createModerationService({ store, modLog = noModLog, logger, forc
       await member.timeout(null, auditReason(moderator, reason));
       const dmSent = await notify(member.user, guild, CaseAction.UNTIMEOUT, { reason });
       return recordCase({ guild, action: CaseAction.UNTIMEOUT, user: member.user, moderator, reason, dmSent });
+    },
+
+    // A private note for moderators: recorded, never sent to the member.
+    async note({ guild, user, moderator, reason }) {
+      return recordCase({ guild, action: CaseAction.NOTE, user, moderator, reason });
     },
 
     async warn({ guild, member, moderator, reason }) {

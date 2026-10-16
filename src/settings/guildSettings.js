@@ -1,27 +1,34 @@
-// Per-server settings that admins choose with /settings. They're saved to a
-// JSON file so they survive restarts:
+// Per-server settings that admins choose with /settings. They're saved in the
+// bot's SQLite database (data/bot.db, table guild_settings), one row per
+// setting, so they survive restarts and a future dashboard can read them.
 //
-//   { "<server id>": { "countryChannelId": "<channel id>", "staffRoleId": "<role id>", "logsChannelId": "<channel id>",
-//                      "modLogChannelId": "<channel id>", "serverLogChannelId": "<channel id>" }, ... }
+// Older versions saved settings in data/settings.json (and before that, only the
+// /country channel in data/country-channels.json). The first time this version
+// starts, those are copied into the database and the JSON file is renamed to
+// settings.json.migrated as a backup.
 //
-// Without a file path (as in tests and `npm run register`) nothing is saved.
+// Settings are also kept in memory, so reading one never touches the disk.
+// Without a database (as in tests and `npm run register`) nothing is saved.
 
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
-import { dirname } from "node:path";
+import { readFile, rename } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
+import { inTransaction } from "../storage/database.js";
 
 export const DEFAULT_SETTINGS_FILE = fileURLToPath(new URL("../../data/settings.json", import.meta.url));
 
 // Older versions only stored the /country channel, as { "<server id>": "<channel id>" }.
 export const LEGACY_CHANNELS_FILE = fileURLToPath(new URL("../../data/country-channels.json", import.meta.url));
 
-// The settings a server can have.
+// The settings a server can have. Most hold one ID; the comments say otherwise.
 export const Setting = Object.freeze({
   COUNTRY_CHANNEL: "countryChannelId",
   STAFF_ROLE: "staffRoleId",
+  MOD_ROLE: "modRoleId",
   LOGS_CHANNEL: "logsChannelId",
   MOD_LOG_CHANNEL: "modLogChannelId",
   SERVER_LOG_CHANNEL: "serverLogChannelId",
+  DISABLED_LOG_EVENTS: "disabledLogEvents", // server-log events switched off, a list of names
+  LOG_IGNORED_CHANNELS: "logIgnoredChannels", // channels the server log skips, a list of IDs
 });
 
 const KNOWN_SETTINGS = new Set(Object.values(Setting));
@@ -42,29 +49,57 @@ async function readJson(file) {
 }
 
 export class GuildSettings {
-  #file;
-  #guilds;
+  #db;
+  #statements;
+  // server ID -> { setting: value }
+  #guilds = new Map();
 
-  constructor(file = undefined, guilds = {}) {
-    this.#file = file;
-    this.#guilds = new Map(Object.entries(guilds).map(([guildId, values]) => [guildId, { ...values }]));
+  // `db` is an open database (see storage/database.js), or undefined to keep
+  // settings in memory only.
+  constructor(db = undefined) {
+    this.#db = db;
+    if (db) {
+      this.#statements = {
+        all: db.prepare("SELECT guild_id, key, value FROM guild_settings"),
+        upsert: db.prepare(`
+          INSERT INTO guild_settings (guild_id, key, value) VALUES (?, ?, ?)
+          ON CONFLICT (guild_id, key) DO UPDATE SET value = excluded.value`),
+        delete: db.prepare("DELETE FROM guild_settings WHERE guild_id = ? AND key = ?"),
+        count: db.prepare("SELECT COUNT(*) AS total FROM guild_settings"),
+      };
+      for (const row of this.#statements.all.all()) {
+        this.#remember(row.guild_id, row.key, JSON.parse(row.value));
+      }
+    }
   }
 
-  // Reads the saved settings. A missing file just means nothing is set yet. If
-  // only the older country-channels file exists, its channels are carried over.
-  static async load(file = DEFAULT_SETTINGS_FILE, legacyFile = LEGACY_CHANNELS_FILE) {
-    const saved = await readJson(file);
-    if (saved !== undefined) {
-      return new GuildSettings(file, saved);
+  // Reads the saved settings, first copying in any from older versions' JSON files.
+  static async load(db, { jsonFile = DEFAULT_SETTINGS_FILE, legacyFile = LEGACY_CHANNELS_FILE } = {}) {
+    const settings = new GuildSettings(db);
+    if (!db || settings.#statements.count.get().total > 0) {
+      return settings;
     }
 
-    const settings = new GuildSettings(file);
-    const legacy = legacyFile ? await readJson(legacyFile) : undefined;
-    if (legacy) {
-      for (const [guildId, channelId] of Object.entries(legacy)) {
-        settings.#guilds.set(guildId, { [Setting.COUNTRY_CHANNEL]: channelId });
-      }
-      await settings.#save();
+    const saved = jsonFile ? await readJson(jsonFile) : undefined;
+    const legacy = saved === undefined && legacyFile ? await readJson(legacyFile) : undefined;
+    const imported = saved ?? Object.fromEntries(
+      Object.entries(legacy ?? {}).map(([guildId, channelId]) => [guildId, { [Setting.COUNTRY_CHANNEL]: channelId }]),
+    );
+    const rows = Object.entries(imported).flatMap(([guildId, values]) =>
+      Object.entries(values)
+        .filter(([key]) => KNOWN_SETTINGS.has(key))
+        .map(([key, value]) => [guildId, key, value]),
+    );
+    if (rows.length > 0) {
+      inTransaction(db, () => {
+        for (const [guildId, key, value] of rows) {
+          settings.#write(guildId, key, value);
+        }
+      });
+    }
+    if (saved !== undefined) {
+      // Keep the old file as a backup, but stop reading it.
+      await rename(jsonFile, `${jsonFile}.migrated`);
     }
     return settings;
   }
@@ -74,12 +109,30 @@ export class GuildSettings {
     return this.#guilds.get(guildId)?.[setting];
   }
 
+  // A list setting (such as LOG_IGNORED_CHANNELS); empty if it isn't set.
+  getList(guildId, setting) {
+    return this.get(guildId, setting) ?? [];
+  }
+
   async set(guildId, setting, value) {
     if (!KNOWN_SETTINGS.has(setting)) {
       throw new Error(`Unknown setting "${setting}"`);
     }
-    this.#guilds.set(guildId, { ...this.#guilds.get(guildId), [setting]: value });
-    await this.#save();
+    this.#write(guildId, setting, value);
+  }
+
+  // Adds `item` to a list setting, or removes it if it's already there.
+  // Returns true if it was added.
+  async toggleInList(guildId, setting, item) {
+    const list = this.getList(guildId, setting);
+    const added = !list.includes(item);
+    const next = added ? [...list, item] : list.filter((entry) => entry !== item);
+    if (next.length > 0) {
+      await this.set(guildId, setting, next);
+    } else {
+      await this.clear(guildId, setting);
+    }
+    return added;
   }
 
   async clear(guildId, setting) {
@@ -87,23 +140,21 @@ export class GuildSettings {
     if (!values || !(setting in values)) {
       return;
     }
+    this.#statements?.delete.run(guildId, setting);
     const { [setting]: _removed, ...rest } = values;
     if (Object.keys(rest).length > 0) {
       this.#guilds.set(guildId, rest);
     } else {
       this.#guilds.delete(guildId);
     }
-    await this.#save();
   }
 
-  async #save() {
-    if (!this.#file) {
-      return;
-    }
-    // Write a temporary file first, so a crash mid-write can't corrupt the settings.
-    const temporary = `${this.#file}.tmp`;
-    await mkdir(dirname(this.#file), { recursive: true });
-    await writeFile(temporary, JSON.stringify(Object.fromEntries(this.#guilds), null, 2) + "\n");
-    await rename(temporary, this.#file);
+  #write(guildId, setting, value) {
+    this.#statements?.upsert.run(guildId, setting, JSON.stringify(value));
+    this.#remember(guildId, setting, value);
+  }
+
+  #remember(guildId, setting, value) {
+    this.#guilds.set(guildId, { ...this.#guilds.get(guildId), [setting]: value });
   }
 }

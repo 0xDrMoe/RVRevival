@@ -16,10 +16,18 @@ describe("command list", () => {
       "kick",
       "timeout",
       "untimeout",
+      "softban",
+      "note",
       "warn",
       "purge",
       "case",
       "modlogs",
+      "clearwarns",
+      "lock",
+      "unlock",
+      "slowmode",
+      "role",
+      "nick",
     ]);
     for (const command of commands.values()) {
       expect(command.data.name).toBe(command.name);

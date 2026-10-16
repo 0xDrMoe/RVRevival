@@ -6,9 +6,11 @@
 //   /timeout member:@someone duration:1h [reason]                 Discord's timeout, up to 28 days
 //   /untimeout member:@someone [reason]
 //   /warn member:@someone reason
+//   /softban member:@someone [reason] [delete-messages]           ban and unban at once, to clear their messages
+//   /note user:@someone note                                      a private note, never sent to the member
 //
 // Who can use them: members with the matching Discord permission, or with the
-// staff role from /settings. Discord hides each command from members without
+// mod role from /settings (the staff role if no mod role is set). Discord hides each command from members without
 // the permission; to show it to the staff role as well, add the role in
 // Server Settings > Integrations, or give it the permission.
 //
@@ -68,6 +70,15 @@ const memberOption = (option) =>
 
 const userOption = (key) => (option) => withDescription(option.setName("user"), key).setRequired(true);
 
+const deleteMessagesOption = (option) =>
+  withDescription(option.setName("delete-messages"), "banDeleteOptionDescription").addChoices(
+    ...DELETE_MESSAGE_CHOICES.map(({ key, value }) => ({
+      name: translate("en", key),
+      name_localizations: discordLocalizations(key),
+      value,
+    })),
+  );
+
 const durationOption = (required, key) => (option) =>
   withDescription(option.setName("duration"), key).setRequired(required).setMaxLength(20);
 
@@ -87,15 +98,7 @@ const COMMANDS = [
         .addUserOption(userOption("banUserOptionDescription"))
         .addStringOption(reasonOption(false))
         .addStringOption(durationOption(false, "banDurationOptionDescription"))
-        .addIntegerOption((option) =>
-          withDescription(option.setName("delete-messages"), "banDeleteOptionDescription").addChoices(
-            ...DELETE_MESSAGE_CHOICES.map(({ key, value }) => ({
-              name: translate("en", key),
-              name_localizations: discordLocalizations(key),
-              value,
-            })),
-          ),
-        ),
+        .addIntegerOption(deleteMessagesOption),
     async prepare({ interaction, user }) {
       const text = interaction.options.getString("duration");
       const durationMs = text ? parseDuration(text) : undefined;
@@ -173,6 +176,36 @@ const COMMANDS = [
     },
     async run(moderation, { guild, member, moderator, reason }) {
       return { moderationCase: await moderation.untimeout({ guild, member, moderator, reason }), key: "modUntimedOut" };
+    },
+  },
+  {
+    name: "softban",
+    permission: PermissionFlagsBits.BanMembers,
+    descriptionKey: "softbanCommandDescription",
+    build: (command) =>
+      command.addUserOption(memberOption).addStringOption(reasonOption(false)).addIntegerOption(deleteMessagesOption),
+    prepare({ interaction }) {
+      // Clearing messages is the point of a softban, so default to the last day.
+      return { deleteMessageSeconds: interaction.options.getInteger("delete-messages") ?? 24 * 60 * 60 };
+    },
+    async run(moderation, { guild, member, moderator, reason, deleteMessageSeconds }) {
+      const moderationCase = await moderation.softban({ guild, member, moderator, reason, deleteMessageSeconds });
+      return { moderationCase, key: "modSoftbanned" };
+    },
+  },
+  {
+    name: "note",
+    permission: PermissionFlagsBits.ModerateMembers,
+    descriptionKey: "noteCommandDescription",
+    targetsOutsiders: true,
+    skipBotHierarchy: true,
+    reasonOption: "note",
+    build: (command) =>
+      command.addUserOption(userOption("noteUserOptionDescription")).addStringOption((option) =>
+        withDescription(option.setName("note"), "noteOptionDescription").setRequired(true).setMaxLength(MAX_REASON_LENGTH),
+      ),
+    async run(moderation, { guild, user, moderator, reason }) {
+      return { moderationCase: await moderation.note({ guild, user, moderator, reason }), key: "modNoted" };
     },
   },
   {
@@ -269,7 +302,7 @@ function createModerationCommand(spec, { guildSettings, moderation, forcedLangua
       outcome = await spec.run(moderation, {
         ...context,
         ...prepared,
-        reason: interaction.options.getString("reason")?.trim() || undefined,
+        reason: interaction.options.getString(spec.reasonOption ?? "reason")?.trim() || undefined,
       });
     } catch (error) {
       if (!isPermissionError(error)) {

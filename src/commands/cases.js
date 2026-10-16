@@ -4,8 +4,9 @@
 //   /case reason number:12 reason:…      change its reason (the mod-log post is updated too)
 //   /case delete number:12               delete it (Manage Server only)
 //   /modlogs user:@someone               a member's case history, newest first
+//   /clearwarns user:@someone            delete all their warnings (Manage Server only)
 //
-// Usable by members with Moderate Members or the staff role from /settings.
+// Usable by members with Moderate Members or the mod role from /settings.
 
 import {
   EmbedBuilder,
@@ -20,7 +21,8 @@ import {
 import { pickLanguage, translate } from "../i18n/i18n.js";
 import { result, Status } from "../logs/actionLog.js";
 import { isModerator } from "../moderation/checks.js";
-import { actionName, buildCaseEmbed } from "../moderation/modLog.js";
+import { CaseAction } from "../moderation/caseStore.js";
+import { actionName, buildActionLogEmbed, buildCaseEmbed, noModLog } from "../moderation/modLog.js";
 import { withDescription } from "./moderation.js";
 
 const MAX_REASON_LENGTH = 512;
@@ -173,4 +175,52 @@ export function createModlogsCommand({ guildSettings, moderation, forcedLanguage
   }
 
   return { name: "modlogs", data: buildModlogsCommandData(), execute };
+}
+
+export function buildClearWarnsCommandData() {
+  const command = new SlashCommandBuilder()
+    .setName("clearwarns")
+    .setContexts(InteractionContextType.Guild)
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild);
+  return withDescription(command, "clearwarnsCommandDescription")
+    .addUserOption((option) => withDescription(option.setName("user"), "modlogsUserOptionDescription").setRequired(true))
+    .toJSON();
+}
+
+// /clearwarns user:@someone deletes all of a member's warnings (Manage Server
+// only, since it erases history). Other cases are kept.
+export function createClearWarnsCommand({ moderation, modLog = noModLog, forcedLanguage }) {
+  async function execute(interaction) {
+    const language = pickLanguage(interaction.locale, forcedLanguage);
+    const answer = async (status, key, values = {}) => {
+      await interaction.reply({
+        content: translate(language, key, values),
+        flags: MessageFlags.Ephemeral,
+        allowedMentions: { parse: [] },
+      });
+      return result(status, key, values);
+    };
+    if (!interaction.inCachedGuild()) {
+      return answer(Status.REFUSED, "guildOnly");
+    }
+    if (!interaction.memberPermissions.has(PermissionFlagsBits.ManageGuild)) {
+      return answer(Status.REFUSED, "caseDeleteNoPermission");
+    }
+    const user = interaction.options.getUser("user", true);
+    const values = { user: `<@${user.id}>` };
+    const count = moderation.store.deleteCasesOfUser(interaction.guildId, user.id, CaseAction.WARN);
+    if (count === 0) {
+      return answer(Status.REFUSED, "clearwarnsNone", values);
+    }
+    await modLog.post(interaction.guild, () => ({
+      embed: buildActionLogEmbed({
+        moderator: interaction.user,
+        summary: `**Warnings cleared** · ${count} for <@${user.id}>`,
+        color: 0x99aab5,
+      }),
+    }));
+    return answer(Status.SUCCESS, "clearwarnsDone", { ...values, count });
+  }
+
+  return { name: "clearwarns", data: buildClearWarnsCommandData(), execute };
 }

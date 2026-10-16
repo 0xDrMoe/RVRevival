@@ -81,8 +81,8 @@ describe("moderation commands", () => {
 
   afterEach(() => store.close());
 
-  it("defines ban, unban, kick, timeout, untimeout and warn, hidden behind their permission", () => {
-    expect([...commands.keys()]).toEqual(["ban", "unban", "kick", "timeout", "untimeout", "warn"]);
+  it("defines ban, unban, kick, timeout, untimeout, softban, note and warn, hidden behind their permission", () => {
+    expect([...commands.keys()]).toEqual(["ban", "unban", "kick", "timeout", "untimeout", "softban", "note", "warn"]);
     expect(commands.get("ban").data.default_member_permissions).toBe(PermissionFlagsBits.BanMembers.toString());
     expect(commands.get("kick").data.default_member_permissions).toBe(PermissionFlagsBits.KickMembers.toString());
     expect(commands.get("warn").data.options.find((option) => option.name === "reason").required).toBe(true);
@@ -119,14 +119,14 @@ describe("moderation commands", () => {
     expect(guild.members.ban).not.toHaveBeenCalled();
   });
 
-  it("refuses members without the permission or the staff role", async () => {
+  it("refuses members without the permission or the mod role", async () => {
     const target = fakeMember(TARGET_ID);
     const interaction = fakeInteraction("kick", guild, { target, permissions: [] });
     const outcome = await commands.get("kick").execute(interaction);
     expect(outcome).toMatchObject({ status: Status.REFUSED, key: "modNoPermission" });
     expect(interaction.reply).toHaveBeenCalledWith(
       expect.objectContaining({
-        content: "You need the **Kick Members** permission or the staff role to use this command.",
+        content: "You need the **Kick Members** permission or the mod role to use this command.",
         flags: MessageFlags.Ephemeral,
       }),
     );
@@ -201,6 +201,32 @@ describe("moderation commands", () => {
     const interaction = fakeInteraction("kick", guild, { target });
     expect(await commands.get("kick").execute(interaction)).toMatchObject({ status: Status.FAILED, key: "modBotMissingPermission" });
     expect(store.getCase(GUILD_ID, 1)).toBeUndefined();
+  });
+
+  it("softbans: bans, unbans straight away and deletes a day of messages by default", async () => {
+    const target = fakeMember(TARGET_ID, { position: 2 });
+    const interaction = fakeInteraction("softban", guild, { target, options: { reason: "spam" } });
+
+    const outcome = await commands.get("softban").execute(interaction);
+
+    expect(outcome).toMatchObject({ status: Status.SUCCESS, key: "modSoftbanned" });
+    expect(guild.members.ban).toHaveBeenCalledWith(TARGET_ID, { reason: "spam (by user-10)", deleteMessageSeconds: 86400 });
+    expect(guild.members.unban).toHaveBeenCalledTimes(1);
+    expect(guild.banned.has(TARGET_ID)).toBe(false);
+    expect(store.getCase(GUILD_ID, 1)).toMatchObject({ action: "softban", reason: "spam" });
+    expect(target.user.send).toHaveBeenCalledTimes(1);
+  });
+
+  it("adds a note without telling the member, even if they left", async () => {
+    const user = fakeUser(TARGET_ID);
+    const interaction = fakeInteraction("note", guild, { targetUser: user, options: { note: "  watch for alts " } });
+
+    const outcome = await commands.get("note").execute(interaction);
+
+    expect(outcome).toMatchObject({ status: Status.SUCCESS, key: "modNoted" });
+    expect(store.getCase(GUILD_ID, 1)).toMatchObject({ action: "note", reason: "watch for alts" });
+    expect(user.send).not.toHaveBeenCalled();
+    expect(commands.get("note").data.options.find((option) => option.name === "note").required).toBe(true);
   });
 
   it("replies in the moderator's language", async () => {
