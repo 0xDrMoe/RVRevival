@@ -66,7 +66,7 @@ export function createCommands({
     createRemindCommand({ reminders, forcedLanguage }),
     createGiveawayCommand({ giveaways, guildSettings, logger, forcedLanguage }),
     createStarboardCommand({ guildSettings, forcedLanguage }),
-    createTicketsCommand({ tickets, guildSettings, logger, forcedLanguage }),
+    createTicketsCommand({ tickets, guildSettings, logger, forcedLanguage, modLog }),
     ...createLevelCommands({ levels, leveling, guildSettings, forcedLanguage }),
   ];
   return new Map(commands.map((command) => [command.name, command]));

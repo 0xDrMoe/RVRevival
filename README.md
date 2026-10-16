@@ -225,8 +225,9 @@ Members open a private ticket with a button, and only they and the staff can see
 - The member or staff close it with the button or `/tickets close [reason]`. The thread is locked and archived, so staff can still read it afterwards.
 - `/tickets add member:@x` and `/tickets remove member:@x` bring someone in or take them out (never the person who opened it). `/tickets list` shows the open tickets. `/tickets off` removes the button; open tickets stay open.
 - One open ticket per member and 50 per server. A ticket whose thread was deleted or archived counts as closed. Each member's tickets show on their dashboard **Members** page.
+- **Transcripts:** closing a ticket saves the whole conversation (up to the newest 1,000 messages, with embeds and file links) and posts it as a `.txt` file in the mod-log channel (or the logs channel). The dashboard's **Tickets** page shows every ticket with its transcript. Tickets closed by deleting their thread have no transcript, since the messages are gone.
 
-`panel` and `off` need **Manage Server**. Closing any ticket, `add`, `remove` and `list` need **Manage Threads**, Manage Server, the panel's staff role or the mod role. The bot needs View Channel, Send Messages, Embed Links, Create Private Threads, Send Messages in Threads and Manage Threads in the ticket channel, and members need **Send Messages in Threads** there (they don't need Send Messages, so the channel can stay read-only apart from the threads).
+`panel` and `off` need **Manage Server**. Closing any ticket, `add`, `remove` and `list` need **Manage Threads**, Manage Server, the panel's staff role or the mod role. The bot needs View Channel, Send Messages, Embed Links, Create Private Threads, Send Messages in Threads and Manage Threads in the ticket channel (plus Read Message History and Attach Files in the mod-log channel and ticket channel for transcripts), and members need **Send Messages in Threads** there (they don't need Send Messages, so the channel can stay read-only apart from the threads).
 
 ### Leveling
 
@@ -280,6 +281,7 @@ A website where admins log in with Discord and manage the bot without slash comm
 - **Overview:** member and online counts, total cases, cases in the last 7 and 30 days, running temporary bans, a chart of cases per day for the last 30 days (click the legend to hide actions), cases per action, the latest cases, the busiest moderators (each links to their cases) and the most moderated members (each links to their history), and a setup checklist with links to what isn't set yet.
 - **Cases:** every moderation case, newest first. Search reasons and names, pick one or more actions, and filter by member ID, moderator ID and date range; clicking a name shows only their cases. Active filters show as chips you can remove. **Export CSV** downloads the filtered list (up to 10,000 cases). Reasons can be edited (the mod-log post is updated too) and cases deleted.
 - **Members:** find someone by the start of their username or nickname, or paste a user ID to find someone who left. Each person's page shows when their account was made (flagged if under 7 days old), when they joined, how many times they joined, their roles, a timeout or temporary ban in progress, Discord's ban reason if they're banned, every case as a timeline, their support tickets (with links to the threads), their level and leaderboard place, and their recent joins and leaves (the bot keeps the newest 50 per person). Each case in **Cases** has a *History* link to it.
+- **Tickets:** every support ticket, newest first, filtered by open or closed and by member ID. Each ticket shows who opened and closed it, the reason, a link to its thread, and its transcript (also as a `.txt` download).
 - **Moderation:** staff and mod roles, and the mod-log channel.
 - **Logging:** the logs and server-log channels, a switch for each server-log event, and ignored channels or categories (with a filter).
 - **Automod:** the main switch, each rule with its action and numbers, banned words and allowed websites (one per line), timeout length and escalation, and exempt roles and channels (see [Automod](#automod)).
@@ -437,7 +439,7 @@ src/
   channels/              Country roles: keeps the /country channel clean
   community/             Community: welcome and leave messages, autoroles (welcome.js), role panels (rolePanels.js), custom commands (tags.js), the starboard (starboard.js, starboardStore.js)
   giveaways/             Giveaways: saved in SQLite (giveawayStore.js), drawing winners (giveaways.js), ended on time (giveawayScheduler.js)
-  tickets/               Support tickets: saved in SQLite (ticketStore.js), the panel, staff and messages (tickets.js)
+  tickets/               Support tickets: saved in SQLite (ticketStore.js), the panel, staff and messages (tickets.js), transcripts (transcript.js)
   leveling/              Leveling: settings and level math (config.js), XP in SQLite (levelStore.js), earning XP and rewards (leveling.js)
   members/               Member history: when members joined and left (memberEventStore.js)
   reminders/             Reminders: saved in SQLite (reminderStore.js), sent when due (reminderScheduler.js)

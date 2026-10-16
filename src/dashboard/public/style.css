@@ -91,6 +91,7 @@
 .tone-amber { --tone: #f59e0b; --tone-2: #ef4444; }
 .tone-green { --tone: #10b981; --tone-2: #06b6d4; }
 .tone-purple { --tone: #8b5cf6; --tone-2: #ec4899; }
+.tone-cyan { --tone: #06b6d4; --tone-2: #3b82f6; }
 .tone-gray { --tone: #64748b; --tone-2: #334155; }
 .tone-accent { --tone: var(--accent); --tone-2: var(--accent-2); }
 
@@ -2045,4 +2046,95 @@ dialog textarea {
 .leaderboard .badge {
   min-width: 5.5em;
   text-align: center;
+}
+
+/* --- Tickets ---------------------------------------------------------------------- */
+
+.ticket-filters {
+  flex-wrap: wrap;
+}
+
+.ticket-filters input[type="search"] {
+  min-width: 12em;
+}
+
+.ticket-list {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.ticket-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  color: inherit;
+  text-decoration: none;
+  min-width: 0;
+}
+
+.ticket-row:hover {
+  background: var(--surface-2);
+}
+
+.ticket-number {
+  width: 3.5em;
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.ticket-main {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+
+.ticket-subject,
+.ticket-main .muted {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ticket-title {
+  margin: 0;
+  font-size: 1.4rem;
+}
+
+.ticket-subject-full {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 6px 16px;
+  margin: 0 0 12px;
+}
+
+.facts dt {
+  color: var(--muted);
+}
+
+.facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.transcript {
+  margin: 0;
+  padding: 12px;
+  max-height: 70vh;
+  overflow: auto;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font: 12.5px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }

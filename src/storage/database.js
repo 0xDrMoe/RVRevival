@@ -162,6 +162,12 @@ const MIGRATIONS = [
   ) WITHOUT ROWID;
   CREATE INDEX member_xp_ranking ON member_xp (guild_id, xp DESC);
   `,
+  // 10: ticket transcripts: the conversation, saved when a ticket is closed.
+  `
+  ALTER TABLE tickets ADD COLUMN transcript TEXT;
+  ALTER TABLE tickets ADD COLUMN message_count INTEGER;
+  CREATE INDEX tickets_by_number ON tickets (guild_id, number DESC);
+  `,
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS.length;

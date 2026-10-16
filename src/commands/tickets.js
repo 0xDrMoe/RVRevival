@@ -12,8 +12,10 @@
 // member and the staff role in it, and a Close button that the member or staff
 // can press. Panel and off need Manage Server; the rest needs ticket staff
 // (see tickets/tickets.js). Tickets are saved in data/bot.db (tickets/ticketStore.js).
+// Closing a ticket saves its transcript and posts it in the mod log.
 
 import {
+  AttachmentBuilder,
   ChannelType,
   InteractionContextType,
   LabelBuilder,
@@ -31,6 +33,7 @@ import { Setting } from "../settings/guildSettings.js";
 import {
   addStaff,
   buildPanelMessage,
+  buildTicketLogEmbed,
   buildTicketWelcome,
   CLOSE_BUTTON,
   FORM_ID,
@@ -48,6 +51,8 @@ import {
   ticketSettings,
   ticketStaffRoleId,
 } from "../tickets/tickets.js";
+import { buildTicketTranscript, fetchThreadMessages } from "../tickets/transcript.js";
+import { noModLog } from "../moderation/modLog.js";
 import { isPermissionError } from "../utils/discordErrors.js";
 
 const COMMAND_NAME = "tickets";
@@ -108,8 +113,9 @@ function buildTicketForm(language) {
 
 // Options:
 //   tickets    the TicketStore (only needed to run the command, not to register it)
+//   modLog     where transcripts are posted (moderation/modLog.js)
 //   guildSettings, logger, forcedLanguage, now
-export function createTicketsCommand({ tickets, guildSettings, logger, forcedLanguage, now = Date.now }) {
+export function createTicketsCommand({ tickets, guildSettings, logger, forcedLanguage, modLog = noModLog, now = Date.now }) {
   // Replies privately (or edits the deferred reply) and returns the log outcome.
   function answerer(interaction) {
     const language = pickLanguage(interaction.locale, forcedLanguage);
@@ -148,8 +154,34 @@ export function createTicketsCommand({ tickets, guildSettings, logger, forcedLan
     return undefined;
   }
 
-  // Marks the ticket closed, says so in the thread, then locks and archives it
-  // so only staff can read it afterwards.
+  // Saves the conversation and posts it in the mod log. Never throws: a ticket
+  // whose history can't be read still closes.
+  async function saveTranscript(thread, ticket, guild) {
+    try {
+      const messages = await fetchThreadMessages(thread);
+      const names = {};
+      for (const message of messages) {
+        names[message.author.id] ??= message.author.tag ?? message.author.username;
+      }
+      for (const id of [ticket.userId, ticket.closedBy]) {
+        const member = id && guild.members.cache.get(id);
+        names[id] ??= member?.user?.tag ?? member?.user?.username;
+      }
+      const transcript = buildTicketTranscript({ ticket, guildName: guild.name, messages, names });
+      tickets.setTranscript(ticket.id, transcript, messages.length);
+      await modLog.post(guild, ({ canAttach }) => ({
+        embed: buildTicketLogEmbed({ ticket, closedBy: ticket.closedBy, messageCount: messages.length }),
+        files: canAttach
+          ? [new AttachmentBuilder(Buffer.from(transcript, "utf8"), { name: `ticket-${String(ticket.number).padStart(4, "0")}.txt` })]
+          : [],
+      }));
+    } catch (error) {
+      logger.warn("Couldn't save a ticket's transcript", { guildId: guild.id, ticket: ticket.number, error });
+    }
+  }
+
+  // Marks the ticket closed, says so in the thread, saves the transcript, then
+  // locks and archives it so only staff can read it afterwards.
   async function closeTicket(interaction, ticket, reason) {
     const { answer } = answerer(interaction);
     const closed = tickets.close(ticket.id, { closedBy: interaction.user.id, reason, closedAt: now() });
@@ -162,6 +194,7 @@ export function createTicketsCommand({ tickets, guildSettings, logger, forcedLan
       content: translate(language, reason ? "ticketClosedReason" : "ticketClosedMessage", values),
       allowedMentions: { parse: [] },
     });
+    await saveTranscript(interaction.channel, closed, interaction.guild);
     await interaction.channel
       .edit({ locked: true, archived: true, reason: `Ticket #${ticket.number} closed by ${interaction.user.id}` })
       .catch((error) => logger.warn("Couldn't lock and archive a closed ticket", { guildId: ticket.guildId, ticket: ticket.number, error }));

@@ -116,3 +116,24 @@ export async function addStaff({ thread, guild, staffRoleId, logger }) {
   }
   return { pinged: false };
 }
+
+// The mod-log entry for a closed ticket, in English like every log entry.
+export function buildTicketLogEmbed({ ticket, closedBy, messageCount }) {
+  const embed = new EmbedBuilder()
+    .setColor(TICKET_COLOR)
+    .setTitle(`🎫 Ticket #${ticket.number} closed`)
+    .addFields(
+      { name: "Opened by", value: `<@${ticket.userId}>`, inline: true },
+      { name: "Closed by", value: closedBy ? `<@${closedBy}>` : "—", inline: true },
+      { name: "Messages", value: String(messageCount ?? "—"), inline: true },
+      { name: "Subject", value: ticket.subject.slice(0, 1024) },
+    )
+    .setTimestamp(ticket.closedAt ?? Date.now());
+  if (ticket.threadId) {
+    embed.setDescription(`<#${ticket.threadId}>`);
+  }
+  if (ticket.closeReason) {
+    embed.addFields({ name: "Reason", value: ticket.closeReason.slice(0, 1024) });
+  }
+  return embed;
+}

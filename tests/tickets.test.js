@@ -5,6 +5,7 @@ import { Status } from "../src/logs/actionLog.js";
 import { GuildSettings, Setting } from "../src/settings/guildSettings.js";
 import { CLOSE_BUTTON, FORM_ID, MAX_OPEN_TICKETS, OPEN_BUTTON, threadName } from "../src/tickets/tickets.js";
 import { TicketStore } from "../src/tickets/ticketStore.js";
+import { buildTicketTranscript, fetchThreadMessages, MAX_TRANSCRIPT_MESSAGES } from "../src/tickets/transcript.js";
 
 const GUILD_ID = "900000000000000001";
 const CHANNEL_ID = "800000000000000001";
@@ -17,7 +18,30 @@ const MOD_ROLE_ID = "700000000000000002";
 
 const logger = { info: vi.fn(), warn: vi.fn(), debug: vi.fn(), error: vi.fn() };
 
-function setup({ canPost = true, mentionable = true, staffMembers = [] } = {}) {
+// Fake thread messages, newest first like Discord returns them.
+function fakeMessages(count, { start = 0 } = {}) {
+  return Array.from({ length: count }, (_, index) => {
+    const n = start + count - index;
+    return {
+      id: String(500000000000000000n + BigInt(n)),
+      createdTimestamp: 1_700_000_000_000 + n * 1000,
+      author: { id: n % 2 ? MEMBER_ID : STRANGER_ID, tag: n % 2 ? "rumbler" : "kaz" },
+      content: `message ${n}`,
+      embeds: [],
+      attachments: new Map(),
+    };
+  });
+}
+
+// thread.messages.fetch over `all` (newest first), honouring limit and before.
+function fakeFetch(all) {
+  return vi.fn(async ({ limit, before }) => {
+    const from = before ? all.findIndex((message) => message.id === before) + 1 : 0;
+    return new Map(all.slice(from, from + limit).map((message) => [message.id, message]));
+  });
+}
+
+function setup({ canPost = true, mentionable = true, staffMembers = [], threadMessages = fakeMessages(3), canAttach = true } = {}) {
   let threadCount = 0;
   const threads = [];
   const guild = {
@@ -29,7 +53,8 @@ function setup({ canPost = true, mentionable = true, staffMembers = [] } = {}) {
         [STAFF_ROLE_ID, { id: STAFF_ROLE_ID, mentionable, members: new Map(staffMembers.map((id) => [id, { id, user: { bot: false } }])) }],
       ]),
     },
-    members: { me: { permissions: { has: () => false } } },
+    name: "Rumbleverse Revival",
+    members: { me: { permissions: { has: () => false } }, cache: new Map() },
   };
   const channel = {
     id: CHANNEL_ID,
@@ -47,6 +72,7 @@ function setup({ canPost = true, mentionable = true, staffMembers = [] } = {}) {
           members: { add: vi.fn(async () => {}), remove: vi.fn(async () => {}) },
           send: vi.fn(async () => ({})),
           edit: vi.fn(async (changes) => Object.assign(thread, changes)),
+          messages: { fetch: fakeFetch(threadMessages) },
         };
         threads.push(thread);
         guild.channels.cache.set(thread.id, thread);
@@ -60,7 +86,9 @@ function setup({ canPost = true, mentionable = true, staffMembers = [] } = {}) {
   let clock = 1_000_000;
   const guildSettings = new GuildSettings();
   const tickets = new TicketStore();
-  const command = createTicketsCommand({ tickets, guildSettings, logger, forcedLanguage: undefined, now: () => clock });
+  const modLogPosts = [];
+  const modLog = { post: vi.fn(async (_guild, build) => modLogPosts.push(build({ canAttach }))) };
+  const command = createTicketsCommand({ tickets, guildSettings, logger, forcedLanguage: undefined, modLog, now: () => clock });
 
   function interaction({
     subcommand,
@@ -131,6 +159,7 @@ function setup({ canPost = true, mentionable = true, staffMembers = [] } = {}) {
     guildSettings,
     tickets,
     command,
+    modLogPosts,
     interaction,
     lastText,
     postPanel,
@@ -275,6 +304,46 @@ describe("tickets", () => {
     expect((await t.command.components[CLOSE_BUTTON].handle(twice)).key).toBe("ticketAlreadyClosed");
   });
 
+  it("saves the transcript when a ticket closes and posts it in the mod log", async () => {
+    const t = setup();
+    await t.postPanel({ "staff-role": { id: STAFF_ROLE_ID } });
+    await t.openTicket();
+    const [thread] = t.threads;
+    const close = t.interaction({ subcommand: "close", userId: STRANGER_ID, roleIds: [STAFF_ROLE_ID], channelId: thread.id, options: { reason: "Fixed" } });
+    await t.command.execute(close);
+
+    const saved = t.tickets.byNumber(GUILD_ID, 1);
+    expect(saved).toMatchObject({ hasTranscript: true, messageCount: 3 });
+    const transcript = t.tickets.transcript(GUILD_ID, 1);
+    expect(transcript).toContain("Ticket #1 · Rumbleverse Revival");
+    expect(transcript).toContain("Subject: My game crashes on start");
+    expect(transcript).toContain(`Closed by kaz (${STRANGER_ID})`);
+    expect(transcript).toContain("Reason: Fixed");
+    // Oldest first.
+    expect(transcript.indexOf("message 1")).toBeLessThan(transcript.indexOf("message 3"));
+
+    const [post] = t.modLogPosts;
+    expect(post.embed.data.title).toBe("🎫 Ticket #1 closed");
+    expect(post.files[0].name).toBe("ticket-0001.txt");
+    // Saved before the thread is archived.
+    expect(thread.edit).toHaveBeenCalledWith(expect.objectContaining({ archived: true }));
+  });
+
+  it("still closes a ticket whose history can't be read", async () => {
+    const t = setup();
+    await t.postPanel({ "staff-role": { id: STAFF_ROLE_ID } });
+    await t.openTicket();
+    const [thread] = t.threads;
+    thread.messages.fetch = vi.fn(async () => {
+      throw Object.assign(new Error("Missing Access"), { code: 50001 });
+    });
+    const owner = t.interaction({ customId: CLOSE_BUTTON, userId: MEMBER_ID, channelId: thread.id });
+    expect(await t.command.components[CLOSE_BUTTON].handle(owner)).toMatchObject({ key: "ticketClosedLog" });
+    expect(t.tickets.byNumber(GUILD_ID, 1)).toMatchObject({ hasTranscript: false });
+    expect(thread.edit).toHaveBeenCalledWith(expect.objectContaining({ locked: true, archived: true }));
+    expect(t.modLogPosts).toEqual([]);
+  });
+
   it("closes with a reason from the command, for staff", async () => {
     const t = setup();
     await t.postPanel({ "staff-role": { id: STAFF_ROLE_ID } });
@@ -352,5 +421,57 @@ describe("ticket store", () => {
     const store = new TicketStore();
     expect(store.open({ guildId: GUILD_ID, userId: MEMBER_ID, subject: "a" })).toBeDefined();
     expect(store.open({ guildId: GUILD_ID, userId: MEMBER_ID, subject: "b" })).toBeUndefined();
+  });
+
+  it("finds tickets by number and searches by status and member, a page at a time", () => {
+    const store = new TicketStore();
+    for (let index = 0; index < 5; index += 1) {
+      const ticket = store.open({ guildId: GUILD_ID, userId: index % 2 ? MEMBER_ID : STRANGER_ID, subject: `t${index}`, createdAt: index });
+      if (index < 3) {
+        store.close(ticket.id, { closedAt: 10 + index });
+      }
+    }
+    expect(store.byNumber(GUILD_ID, 2)).toMatchObject({ subject: "t1", hasTranscript: false, messageCount: null });
+    expect(store.search(GUILD_ID).map((ticket) => ticket.number)).toEqual([5, 4, 3, 2, 1]);
+    expect(store.search(GUILD_ID, { status: "open" }).map((ticket) => ticket.number)).toEqual([5, 4]);
+    expect(store.search(GUILD_ID, { status: "closed", userId: MEMBER_ID }).map((ticket) => ticket.number)).toEqual([2]);
+    expect(store.search(GUILD_ID, { before: 4, limit: 2 }).map((ticket) => ticket.number)).toEqual([3, 2]);
+    store.setTranscript(store.byNumber(GUILD_ID, 1).id, "hello", 1);
+    expect(store.transcript(GUILD_ID, 1)).toBe("hello");
+    expect(store.transcript(GUILD_ID, 2)).toBeUndefined();
+  });
+});
+
+describe("ticket transcripts", () => {
+  it("reads a long thread a page at a time, up to the limit", async () => {
+    const all = fakeMessages(250);
+    const thread = { messages: { fetch: fakeFetch(all) } };
+    const messages = await fetchThreadMessages(thread);
+    expect(messages).toHaveLength(250);
+    expect(thread.messages.fetch).toHaveBeenCalledTimes(3);
+    const capped = await fetchThreadMessages({ messages: { fetch: fakeFetch(fakeMessages(MAX_TRANSCRIPT_MESSAGES + 50)) } });
+    expect(capped).toHaveLength(MAX_TRANSCRIPT_MESSAGES);
+  });
+
+  it("writes embeds and files, and the header", () => {
+    const text = buildTicketTranscript({
+      ticket: { number: 7, userId: MEMBER_ID, subject: "Help", createdAt: 0, closedAt: null },
+      guildName: "RV",
+      names: { [MEMBER_ID]: "rumbler" },
+      messages: [
+        {
+          createdTimestamp: 1000,
+          author: { id: "1", tag: "Bot" },
+          content: "",
+          embeds: [{ title: "Subject", description: "Help" }],
+          attachments: new Map([["a", { name: "clip.mp4", url: "https://cdn.example/clip.mp4" }]]),
+        },
+      ],
+    });
+    expect(text).toContain(`Opened by rumbler (${MEMBER_ID})`);
+    expect(text).toContain("1 message");
+    expect(text).toContain("[embed] Subject: Help");
+    expect(text).toContain("[file: clip.mp4 https://cdn.example/clip.mp4]");
+    expect(text).not.toContain("Closed by");
   });
 });

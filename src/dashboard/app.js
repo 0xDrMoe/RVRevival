@@ -14,11 +14,13 @@
 //   GET  /api/guilds/:id/members          find members by name, or a user by ID (?q=)
 //   GET  /api/guilds/:id/members/:user    one person's history: cases, tickets, joins, leaves, roles, level
 //   GET  /api/guilds/:id/levels           the XP leaderboard (?page=)
+//   GET  /api/guilds/:id/tickets          support tickets (?status=open|closed|all&user=&before=)
+//   GET  /api/guilds/:id/tickets/:number  one ticket and its transcript (?download=1 for a .txt file)
 //
 // Two levels of access to a server the bot is in:
 //   - "manage": Manage Server, Administrator or the owner. Everything.
 //   - "cases": anyone with one of the server's dashboard roles (a setting). The
-//     overview, the cases and member history, but not the settings.
+//     overview, the cases, member history and tickets, but not the settings.
 // That is checked on every request: permissions against their Discord server
 // list (re-read at most every few minutes), roles against the bot's view of
 // the member (re-read at most every 30 seconds).
@@ -52,6 +54,8 @@ const MAX_REASON_LENGTH = 512;
 const CASES_PAGE = 50;
 const EXPORT_LIMIT = 10_000;
 const LEADERBOARD_PAGE = 25;
+const TICKETS_PAGE = 25;
+const TICKET_STATUSES = ["open", "closed", "all"];
 const MAX_LEADERBOARD_PAGE = 400;
 const MAX_SEARCH_LENGTH = 100;
 const STATS_DAYS = 30;
@@ -701,9 +705,93 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
         createdAt: ticket.createdAt,
         closedAt: ticket.closedAt,
         closeReason: ticket.closeReason,
+        hasTranscript: ticket.hasTranscript,
       })),
       level: levelJson(guildId, userId),
     };
+  });
+
+  // --- Tickets -------------------------------------------------------------
+
+  // Names for the people on a page of tickets, from Discord (cached).
+  async function peopleNames(guildId, userIds) {
+    const entries = await Promise.all(
+      [...new Set(userIds.filter(Boolean))].map(async (userId) => {
+        const member = await discord.member(guildId, userId).catch(() => null);
+        const user = member?.user ?? (await discord.user(userId).catch(() => null));
+        return [userId, member?.nick ?? user?.global_name ?? user?.username ?? null];
+      }),
+    );
+    return Object.fromEntries(entries);
+  }
+
+  const ticketJson = (ticket, names = {}) => ({
+    number: ticket.number,
+    userId: ticket.userId,
+    userName: names[ticket.userId] ?? null,
+    subject: ticket.subject,
+    threadId: ticket.threadId,
+    createdAt: ticket.createdAt,
+    closedAt: ticket.closedAt,
+    closedBy: ticket.closedBy,
+    closedByName: names[ticket.closedBy] ?? null,
+    closeReason: ticket.closeReason,
+    hasTranscript: ticket.hasTranscript,
+    messageCount: ticket.messageCount,
+  });
+
+  app.get("/api/guilds/:id/tickets", async (request, reply) => {
+    const access = await requireGuild(request, reply);
+    if (!access) {
+      return reply;
+    }
+    const { guildId } = access;
+    const query = request.query ?? {};
+    const status = TICKET_STATUSES.includes(query.status) ? query.status : "all";
+    const userId = typeof query.user === "string" && query.user !== "" ? query.user : null;
+    if (userId !== null && !DISCORD_ID.test(userId)) {
+      return reply.code(400).send({ error: "bad-user", message: "Use a Discord user ID." });
+    }
+    const before = Number.parseInt(query.before ?? "", 10);
+    const found = tickets.search(guildId, {
+      status,
+      userId,
+      before: Number.isInteger(before) && before > 0 ? before : null,
+      limit: TICKETS_PAGE + 1,
+    });
+    const page = found.slice(0, TICKETS_PAGE);
+    const names = await peopleNames(guildId, page.flatMap((ticket) => [ticket.userId, ticket.closedBy]));
+    return {
+      tickets: page.map((ticket) => ticketJson(ticket, names)),
+      next: found.length > TICKETS_PAGE ? page.at(-1).number : null,
+      openCount: tickets.countOpen(guildId),
+      panel: Boolean(guildSettings.get(guildId, Setting.TICKETS)?.channelId),
+    };
+  });
+
+  app.get("/api/guilds/:id/tickets/:number", async (request, reply) => {
+    const access = await requireGuild(request, reply);
+    const number = access && caseNumber(request, reply);
+    if (!number) {
+      return reply;
+    }
+    const { guildId } = access;
+    const ticket = tickets.byNumber(guildId, number);
+    if (!ticket) {
+      return reply.code(404).send({ error: "not-found" });
+    }
+    const transcript = tickets.transcript(guildId, number) ?? null;
+    if (request.query?.download === "1") {
+      if (transcript === null) {
+        return reply.code(404).send({ error: "no-transcript" });
+      }
+      return reply
+        .header("Content-Type", "text/plain; charset=utf-8")
+        .header("Content-Disposition", `attachment; filename="ticket-${String(number).padStart(4, "0")}.txt"`)
+        .send(transcript);
+    }
+    const names = await peopleNames(guildId, [ticket.userId, ticket.closedBy]);
+    return { ticket: ticketJson(ticket, names), transcript };
   });
 
   // --- Leveling ------------------------------------------------------------
