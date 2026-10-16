@@ -12,7 +12,7 @@ The Discord bot for the Rumbleverse Revival server. It is built as a set of inde
 | [Channel and member tools](#channel-and-member-tools) | `/lock`, `/unlock`, `/slowmode`, `/role`, `/nick` | The matching Discord permission, or the mod role |
 | [Server log](#server-log) | `/settings server-log-channel`, `/settings log-event`, `/settings log-ignore` | Manage Server |
 | [Country roles](#country-roles) | `/country`, `/country-staff`, `/country-help` | Everyone (`/country`), the staff role (`/country-staff`), Manage Server (`/country-help`) |
-| [Web dashboard](#web-dashboard) | https://rumbleverse.cedartechsolutions.ca | Manage Server |
+| [Web dashboard](#web-dashboard) | https://rumbleverse.cedartechsolutions.ca | Manage Server, or a dashboard role |
 
 Every reply is translated into English, Spanish, German, French, Portuguese, Italian or Arabic (see [Languages](#languages)).
 
@@ -134,15 +134,25 @@ Country names are the English ISO names, with a few shortened (for example *Unit
 
 ### Web dashboard
 
-A website where admins log in with Discord and manage the bot without slash commands:
+A website where admins log in with Discord and manage the bot without slash commands. Each server has a sidebar with these pages:
 
-- **Servers:** every server where you have **Manage Server** (or Administrator, or own it). Servers without the bot get an invite link.
-- **Settings:** every `/settings` option on one page: staff and mod roles, the `/country`, logs, mod-log and server-log channels, which server-log events are logged, and ignored channels or categories.
-- **Cases:** every moderation case, newest first, filtered by member ID or action. Reasons can be edited (the mod-log post is updated too) and cases deleted.
+- **Servers:** every server you can open, with a search box. Servers without the bot get an invite link.
+- **Overview:** member and online counts, total cases, cases in the last 7 and 30 days, running temporary bans, a chart of cases per day for the last 30 days (click the legend to hide actions), cases per action, the latest cases, the busiest moderators and the most moderated members (each links to their cases), and a setup checklist with links to what isn't set yet.
+- **Cases:** every moderation case, newest first. Search reasons and names, pick one or more actions, and filter by member ID, moderator ID and date range; clicking a name shows only their cases. Active filters show as chips you can remove. **Export CSV** downloads the filtered list (up to 10,000 cases). Reasons can be edited (the mod-log post is updated too) and cases deleted.
+- **Moderation:** staff and mod roles, and the mod-log channel.
+- **Logging:** the logs and server-log channels, a switch for each server-log event, and ignored channels or categories (with a filter).
+- **Country:** the `/country` channel.
+- **Roles & access:** the **dashboard roles** (see below), and a table of every role with its color, its strongest permissions and what the bot uses it for, filterable by name or kind.
+
+Settings pages show a save bar when something changed, and ask before you leave with unsaved changes.
+
+**Dashboard roles.** Members with one of the roles ticked under *Roles & access* can open the server's Overview and Cases (view, edit reasons, delete, export) without Manage Server. Only people with Manage Server can see or change settings. Roles are checked against Discord on every request (at most 30 seconds old), so removing someone's role takes their access away right away.
+
+**Appearance.** The 🎨 button picks a theme (match the device, light or dark), one of 8 accent colors and comfortable or compact spacing. It's remembered per browser.
 
 Every change made on the dashboard is posted in the server's logs channel with who made it, like commands are. The bot picks up dashboard changes within 5 seconds. The dashboard is in the same 7 languages as the bot (picked from the browser, or the menu at the top).
 
-**How it works.** It's a second process (`npm run dashboard`, pm2 app `rv-dashboard`) that shares `data/bot.db` with the bot. It only listens on `127.0.0.1:3080`; Caddy puts it on the internet with HTTPS. Logging in uses Discord OAuth2 with the `identify` and `guilds` scopes only, so it can see your name, avatar and server list, nothing else. Permissions are re-checked against Discord on every request (your server list is re-read at most every 5 minutes, or when you press *Refresh list*). Logins last 7 days. The session cookie is HTTP-only and Secure, and changes are only accepted from the dashboard's own address.
+**How it works.** It's a second process (`npm run dashboard`, pm2 app `rv-dashboard`) that shares `data/bot.db` with the bot. It only listens on `127.0.0.1:3080`; nginx (or Caddy) puts it on the internet with HTTPS. Logging in uses Discord OAuth2 with the `identify` and `guilds` scopes only, so it can see your name, avatar and server list, nothing else. Permissions are re-checked against Discord on every request (your server list is re-read at most every 5 minutes, or when you press *Refresh list*). Logins last 7 days. The session cookie is HTTP-only and Secure, and changes are only accepted from the dashboard's own address.
 
 **Setting it up on the VPS** (once):
 
@@ -159,14 +169,31 @@ Every change made on the dashboard is posted in the server's logs channel with w
    pm2 start npm --name rv-dashboard -- run dashboard
    pm2 save
    ```
-5. **HTTPS with Caddy.** Install Caddy (Ubuntu/Debian: see https://caddyserver.com/docs/install#debian-ubuntu-raspbian), then put this in `/etc/caddy/Caddyfile` and run `sudo systemctl reload caddy`:
-   ```
-   rumbleverse.cedartechsolutions.ca {
-       encode gzip
-       reverse_proxy 127.0.0.1:3080
-   }
-   ```
-   Caddy gets and renews the HTTPS certificate by itself. Ports 80 and 443 must be open (`sudo ufw allow 80,443/tcp` if ufw is on). If the VPS already runs nginx or Apache on those ports, add a proxy to `127.0.0.1:3080` there instead.
+5. **HTTPS.** Ports 80 and 443 must be open (`sudo ufw allow 80,443/tcp` if ufw is on).
+   - **With nginx** (what the VPS uses): put this in `/etc/nginx/sites-available/rumbleverse`, run `sudo ln -s /etc/nginx/sites-available/rumbleverse /etc/nginx/sites-enabled/ && sudo nginx -t && sudo systemctl reload nginx`, then get the certificate with `sudo apt install -y certbot python3-certbot-nginx && sudo certbot --nginx -d rumbleverse.cedartechsolutions.ca`:
+     ```
+     server {
+         listen 80;
+         listen [::]:80;
+         server_name rumbleverse.cedartechsolutions.ca;
+
+         location / {
+             proxy_pass http://127.0.0.1:3080;
+             proxy_http_version 1.1;
+             proxy_set_header Host $host;
+             proxy_set_header X-Real-IP $remote_addr;
+             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+             proxy_set_header X-Forwarded-Proto $scheme;
+         }
+     }
+     ```
+   - **With Caddy** (if nothing else uses ports 80 and 443): install it (see https://caddyserver.com/docs/install#debian-ubuntu-raspbian), put this in `/etc/caddy/Caddyfile` and run `sudo systemctl reload caddy`. Caddy gets and renews the certificate by itself.
+     ```
+     rumbleverse.cedartechsolutions.ca {
+         encode gzip
+         reverse_proxy 127.0.0.1:3080
+     }
+     ```
 6. Open https://rumbleverse.cedartechsolutions.ca and log in.
 
 After that, updates are the usual `git pull && npm ci`, then `pm2 restart rv-bot rv-dashboard`.
@@ -319,4 +346,4 @@ Set `LOG_LEVEL=debug` for more detail.
 - Logs redact anything that looks like a Discord token, plus the configured token, client secret and session secret.
 - Users only see fixed, friendly messages; errors and stack traces stay in the log.
 - The bot uses the Guilds, Guild Messages and Guild Moderation intents, plus the privileged Message Content intent (to show what edited and deleted messages said in the logs) and Server Members intent (joins, leaves and member changes). Message text is only ever copied into log channels. It uses only the permissions its features need (see the invite link in [Setup](#setup)). Roles it creates have zero permissions.
-- The dashboard listens only on `127.0.0.1` and is reached through Caddy over HTTPS. It stores a hash of each login's session token, never the token itself, and the Discord access token encrypted with `DASHBOARD_SESSION_SECRET`. Every page sets a strict Content Security Policy, changes must come from the dashboard's own address, and requests are rate-limited.
+- The dashboard listens only on `127.0.0.1` and is reached through nginx or Caddy over HTTPS. It stores a hash of each login's session token, never the token itself, and the Discord access token encrypted with `DASHBOARD_SESSION_SECRET`. Every page sets a strict Content Security Policy, changes must come from the dashboard's own address, and requests are rate-limited. Members with a dashboard role only get the overview and cases; settings always need Manage Server. CSV exports prefix cells that start with `=`, `+`, `-` or `@` with `'` so spreadsheets don't run them as formulas.

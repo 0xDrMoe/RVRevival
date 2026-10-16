@@ -16,6 +16,30 @@ export const CaseAction = Object.freeze({
   NOTE: "note",
 });
 
+// The WHERE conditions shared by searchCases and countCases.
+const SEARCH_FILTERS = `
+  (:userId IS NULL OR user_id = :userId)
+  AND (:moderatorId IS NULL OR moderator_id = :moderatorId)
+  AND (:actions IS NULL OR action IN (SELECT value FROM json_each(:actions)))
+  AND (:from IS NULL OR created_at >= :from)
+  AND (:to IS NULL OR created_at < :to)
+  AND (:text IS NULL OR reason LIKE :text ESCAPE '\\' OR user_tag LIKE :text ESCAPE '\\'
+       OR moderator_tag LIKE :text ESCAPE '\\')`;
+
+// "50%_off" -> "%50\%\_off%", for LIKE.
+const containsPattern = (text) => `%${text.replace(/[\\%_]/g, (character) => `\\${character}`)}%`;
+
+// Named parameters for SEARCH_FILTERS. Every filter is optional.
+const searchParameters = (guildId, { userId, moderatorId, actions, from, to, text } = {}) => ({
+  guildId,
+  userId: userId ?? null,
+  moderatorId: moderatorId ?? null,
+  actions: actions?.length ? JSON.stringify(actions) : null,
+  from: from ?? null,
+  to: to ?? null,
+  text: text ? containsPattern(text) : null,
+});
+
 function toCase(row) {
   if (!row) {
     return undefined;
@@ -70,15 +94,30 @@ export class CaseStore {
       listForUser: db.prepare(
         "SELECT * FROM cases WHERE guild_id = ? AND user_id = ? ORDER BY case_number DESC LIMIT ?",
       ),
-      // For the dashboard: newest first, optionally one member or one action,
-      // starting below case `before`. NULL filters match everything.
+      // For the dashboard: newest first, starting below case `before`. NULL
+      // filters match everything. :actions is a JSON list; :text a LIKE pattern
+      // matched against the reason and both names.
       search: db.prepare(`
         SELECT * FROM cases
-        WHERE guild_id = :guildId
-          AND (:userId IS NULL OR user_id = :userId)
-          AND (:action IS NULL OR action = :action)
-          AND case_number < :before
+        WHERE guild_id = :guildId AND ${SEARCH_FILTERS} AND case_number < :before
         ORDER BY case_number DESC LIMIT :limit`),
+      countMatching: db.prepare(`SELECT COUNT(*) AS total FROM cases WHERE guild_id = :guildId AND ${SEARCH_FILTERS}`),
+      // Dashboard overview: cases per day (counted from :offset, so days follow
+      // the viewer's time zone) and action since :since, the busiest moderators
+      // and members, and how many temporary bans are still running.
+      perDay: db.prepare(`
+        SELECT (created_at - CAST(:offset AS INTEGER)) / 86400000 AS day, action, COUNT(*) AS total FROM cases
+        WHERE guild_id = :guildId AND created_at >= :since
+        GROUP BY day, action`),
+      topModerators: db.prepare(`
+        SELECT moderator_id AS id, MAX(moderator_tag) AS tag, COUNT(*) AS total FROM cases
+        WHERE guild_id = :guildId AND created_at >= :since AND moderator_id != '0'
+        GROUP BY moderator_id ORDER BY total DESC, id LIMIT 5`),
+      topMembers: db.prepare(`
+        SELECT user_id AS id, MAX(user_tag) AS tag, COUNT(*) AS total FROM cases
+        WHERE guild_id = :guildId AND created_at >= :since
+        GROUP BY user_id ORDER BY total DESC, id LIMIT 5`),
+      runningTempBans: db.prepare("SELECT COUNT(*) AS total FROM cases WHERE guild_id = ? AND pending_unban = 1"),
       countForGuild: db.prepare("SELECT action, COUNT(*) AS total FROM cases WHERE guild_id = ? GROUP BY action"),
       countForUser: db.prepare(
         "SELECT action, COUNT(*) AS total FROM cases WHERE guild_id = ? AND user_id = ? GROUP BY action",
@@ -156,17 +195,34 @@ export class CaseStore {
   }
 
   // A page of a server's cases, newest first. `before` is the lowest case
-  // number of the previous page.
-  searchCases(guildId, { userId, action, before, limit = 50 } = {}) {
+  // number of the previous page. Filters (all optional): userId, moderatorId,
+  // actions (a list), from and to (times in ms, `to` excluded), text (found in
+  // the reason or either name).
+  searchCases(guildId, { before, limit = 50, ...filters } = {}) {
     return this.#statements.search
-      .all({
-        guildId,
-        userId: userId ?? null,
-        action: action ?? null,
-        before: before ?? Number.MAX_SAFE_INTEGER,
-        limit,
-      })
+      .all({ ...searchParameters(guildId, filters), before: before ?? Number.MAX_SAFE_INTEGER, limit })
       .map(toCase);
+  }
+
+  // How many cases match the same filters as searchCases.
+  countMatchingCases(guildId, filters = {}) {
+    return Number(this.#statements.countMatching.get(searchParameters(guildId, filters)).total);
+  }
+
+  // For the dashboard overview. `since` is when the period starts (ms) and
+  // `dayOffsetMs` shifts day boundaries to the viewer's time zone. Days are
+  // numbered as (time - dayOffsetMs) / one day, rounded down.
+  caseStats(guildId, { since, dayOffsetMs = 0 }) {
+    const period = { guildId, since };
+    const people = (rows) => rows.map(({ id, tag, total }) => ({ id, tag: tag ?? undefined, total: Number(total) }));
+    return {
+      perDay: this.#statements.perDay
+        .all({ ...period, offset: dayOffsetMs })
+        .map(({ day, action, total }) => ({ day: Number(day), action, total: Number(total) })),
+      topModerators: people(this.#statements.topModerators.all(period)),
+      topMembers: people(this.#statements.topMembers.all(period)),
+      runningTempBans: Number(this.#statements.runningTempBans.get(guildId).total),
+    };
   }
 
   // { ban: 4, warn: 12, … } for the whole server.

@@ -61,6 +61,7 @@ function fakeDiscord() {
       { id: LOGS_ID, name: "bot-logs", type: ChannelType.GuildText, position: 2 },
       { id: VOICE_ID, name: "Voice", type: ChannelType.GuildVoice, position: 3 },
     ]),
+    member: vi.fn(async () => null),
     postMessage: vi.fn(async () => ({})),
     editMessage: vi.fn(async () => ({})),
   };
@@ -120,8 +121,8 @@ describe("dashboard", () => {
     expect(me.statusCode).toBe(200);
     expect(me.json().user).toMatchObject({ id: USER_ID, username: "Moe" });
     expect(me.json().guilds).toEqual([
-      { id: GUILD_ID, name: "Rumbleverse Revival", icon: null, botPresent: true },
-      { id: NO_BOT_GUILD_ID, name: "My own server", icon: "abc", botPresent: false },
+      { id: GUILD_ID, name: "Rumbleverse Revival", icon: null, botPresent: true, access: "manage" },
+      { id: NO_BOT_GUILD_ID, name: "My own server", icon: "abc", botPresent: false, access: "manage" },
     ]);
     expect(me.headers["cache-control"]).toBe("no-store");
   });
@@ -149,7 +150,10 @@ describe("dashboard", () => {
     const cookies = await login();
     const ok = await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}`, cookies });
     expect(ok.statusCode).toBe(200);
-    expect(ok.json().roles.map((role) => role.id)).toEqual([ROLE_ID]);
+    expect(ok.json().access).toBe("manage");
+    expect(ok.json().roles).toEqual([
+      { id: ROLE_ID, name: "Mods", color: 0, position: 3, managed: false, hoist: false, mentionable: false, permissions: "0", emoji: null },
+    ]);
     expect(ok.json().channels.map((channel) => channel.id)).toEqual([TEXT_ID, LOGS_ID, VOICE_ID]);
 
     expect((await app.inject({ method: "GET", url: `/api/guilds/${OTHER_GUILD_ID}`, cookies })).statusCode).toBe(403);
@@ -242,6 +246,95 @@ describe("dashboard", () => {
     expect((await write(cookies, "DELETE", `/api/guilds/${GUILD_ID}/cases/2`)).statusCode).toBe(200);
     expect(store.getCase(GUILD_ID, 2)).toBeUndefined();
     expect((await write(cookies, "DELETE", `/api/guilds/${GUILD_ID}/cases/2`)).statusCode).toBe(404);
+  });
+
+  it("lets members with a dashboard role see the cases but not the settings", async () => {
+    const cookies = await login();
+    await guildSettings.set(OTHER_GUILD_ID, Setting.DASHBOARD_ROLES, [ROLE_ID]);
+    discord.member.mockResolvedValue({ roles: [ROLE_ID] });
+
+    const me = (await app.inject({ method: "GET", url: "/api/me", cookies })).json();
+    expect(me.guilds.find((guild) => guild.id === OTHER_GUILD_ID)).toMatchObject({ access: "cases", botPresent: true });
+    expect(discord.member).toHaveBeenCalledWith(OTHER_GUILD_ID, USER_ID);
+
+    const guild = await app.inject({ method: "GET", url: `/api/guilds/${OTHER_GUILD_ID}`, cookies });
+    expect(guild.json()).toMatchObject({ access: "cases", settings: null, channels: [], roles: [] });
+    expect((await app.inject({ method: "GET", url: `/api/guilds/${OTHER_GUILD_ID}/cases`, cookies })).statusCode).toBe(200);
+    expect((await app.inject({ method: "GET", url: `/api/guilds/${OTHER_GUILD_ID}/stats`, cookies })).statusCode).toBe(200);
+    const settings = await write(cookies, "PUT", `/api/guilds/${OTHER_GUILD_ID}/settings`, { modRoleId: ROLE_ID });
+    expect(settings.statusCode).toBe(403);
+
+    // Losing the role (or the setting) closes the door again.
+    discord.member.mockResolvedValue({ roles: [] });
+    expect((await app.inject({ method: "GET", url: `/api/guilds/${OTHER_GUILD_ID}/cases`, cookies })).statusCode).toBe(403);
+    discord.member.mockResolvedValue(null);
+    const after = (await app.inject({ method: "GET", url: "/api/me", cookies })).json();
+    expect(after.guilds.map((entry) => entry.id)).not.toContain(OTHER_GUILD_ID);
+  });
+
+  it("saves dashboard roles", async () => {
+    const cookies = await login();
+    const saved = await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, { dashboardRoleIds: [ROLE_ID, ROLE_ID] });
+    expect(saved.json().settings.dashboardRoleIds).toEqual([ROLE_ID]);
+    const everyone = await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, { dashboardRoleIds: [GUILD_ID] });
+    expect(everyone.statusCode).toBe(400);
+  });
+
+  it("filters cases by moderator, actions, dates and text", async () => {
+    const cookies = await login();
+    const moderator = "300000000000000009";
+    const add = (action, fields) =>
+      store.createCase({ guildId: GUILD_ID, action, userId: USER_ID, moderatorId: "2", ...fields });
+    add(CaseAction.WARN, { reason: "spam links", createdAt: 1_000 });
+    add(CaseAction.BAN, { moderatorId: moderator, reason: "raid", createdAt: 2_000 });
+    add(CaseAction.KICK, { userTag: "spammer#1", createdAt: 3_000 });
+    add(CaseAction.NOTE, { reason: "100% sure", createdAt: 4_000 });
+
+    const search = async (query) =>
+      (await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}/cases?${query}`, cookies })).json();
+    expect((await search(`moderator=${moderator}`)).cases.map((entry) => entry.number)).toEqual([2]);
+    expect((await search("action=ban,kick")).cases.map((entry) => entry.number)).toEqual([3, 2]);
+    expect((await search("from=2000&to=4000")).cases.map((entry) => entry.number)).toEqual([3, 2]);
+    expect((await search("q=SPAM")).cases.map((entry) => entry.number)).toEqual([3, 1]);
+    expect((await search("q=100%25")).cases.map((entry) => entry.number)).toEqual([4]);
+    expect((await search("q=%25")).cases.map((entry) => entry.number)).toEqual([4]);
+    expect((await search("action=warn")).total).toBe(1);
+
+    for (const bad of ["action=ban,everything", "from=yesterday", "moderator=me", `q=${"x".repeat(101)}`]) {
+      const response = await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}/cases?${bad}`, cookies });
+      expect(response.statusCode, bad).toBe(400);
+    }
+  });
+
+  it("exports cases as CSV that spreadsheets won't run", async () => {
+    const cookies = await login();
+    store.createCase({ guildId: GUILD_ID, action: CaseAction.WARN, userId: USER_ID, moderatorId: "2", reason: '=HYPERLINK("x")' });
+    store.createCase({ guildId: GUILD_ID, action: CaseAction.BAN, userId: USER_ID, moderatorId: "2", reason: "line\nbreak, comma", durationMs: 3_600_000 });
+    const response = await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}/cases/export?action=warn,ban`, cookies });
+    expect(response.statusCode).toBe(200);
+    expect(response.headers["content-type"]).toContain("text/csv");
+    expect(response.headers["content-disposition"]).toBe(`attachment; filename="cases-${GUILD_ID}.csv"`);
+    const lines = response.body.replace(/^\uFEFF/, "").split("\r\n");
+    expect(lines[0]).toMatch(/^Case,Action,Member ID/);
+    expect(lines[1]).toContain('"line\nbreak, comma",60,');
+    expect(lines[2]).toContain(`'=HYPERLINK(""x"")`);
+  });
+
+  it("counts cases per day in the viewer's time zone", async () => {
+    const cookies = await login();
+    const now = Date.now();
+    store.createCase({ guildId: GUILD_ID, action: CaseAction.BAN, userId: USER_ID, moderatorId: "2", moderatorTag: "mod", createdAt: now });
+    store.createCase({ guildId: GUILD_ID, action: CaseAction.WARN, userId: USER_ID, moderatorId: "2", createdAt: now - 40 * 86_400_000 });
+    const stats = (await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}/stats?tz=240`, cookies })).json();
+    expect(stats.days).toBe(30);
+    expect(stats.dayStarts).toHaveLength(30);
+    expect(stats.perDay).toEqual([{ day: 29, action: "ban", total: 1 }]);
+    expect(stats.dayStarts[29]).toBeLessThanOrEqual(now);
+    expect(stats.dayStarts[29] + 86_400_000).toBeGreaterThan(now);
+    expect(stats.topModerators).toEqual([{ id: "2", tag: "mod", total: 1 }]);
+    expect(stats.caseCounts).toEqual({ ban: 1, warn: 1 });
+    expect(stats.recent.map((entry) => entry.number)).toEqual([2, 1]);
+    expect((await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}/stats?tz=9999`, cookies })).statusCode).toBe(400);
   });
 
   it("pages through cases", async () => {

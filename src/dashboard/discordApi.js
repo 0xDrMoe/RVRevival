@@ -1,7 +1,8 @@
 // Everything the dashboard asks Discord. Two kinds of calls:
 //
 //   - as the person logged in (OAuth2): who they are and which servers they're in;
-//   - as the bot (its token): the servers it's in, their channels and roles, and
+//   - as the bot (its token): the servers it's in, their channels and roles, a
+//     member's roles (for role-based dashboard access), and
 //     posting in or editing messages of the log channels.
 //
 // Bot calls go through discord.js's REST client, which waits and retries when
@@ -86,8 +87,21 @@ export function createDiscordApi({ config, fetch = globalThis.fetch, rest }) {
     }
   });
 
-  // A server's name, icon and roles (GET /guilds/:id includes the roles).
-  const guilds = cached((guildId) => bot.get(Routes.guild(guildId)));
+  // A server's name, icon, roles and rough member counts (GET /guilds/:id
+  // includes the roles).
+  const guilds = cached((guildId) => bot.get(Routes.guild(guildId), { query: new URLSearchParams({ with_counts: "true" }) }));
+  // A member's roles in a server, or null if they aren't in it. Keyed "guild:user".
+  const members = cached(async (key) => {
+    const [guildId, userId] = key.split(":");
+    try {
+      return await bot.get(Routes.guildMember(guildId, userId));
+    } catch (error) {
+      if (error.status === 404) {
+        return null;
+      }
+      throw error;
+    }
+  });
   const channels = cached((guildId) => bot.get(Routes.guildChannels(guildId)));
 
   return {
@@ -142,6 +156,7 @@ export function createDiscordApi({ config, fetch = globalThis.fetch, rest }) {
     botGuildIds: () => botGuilds.get("all"),
     guild: (guildId) => guilds.get(guildId),
     channels: (guildId) => channels.get(guildId),
+    member: (guildId, userId) => members.get(`${guildId}:${userId}`),
 
     // Posts a message as the bot. Mentions never ping.
     postMessage: (channelId, payload) =>
