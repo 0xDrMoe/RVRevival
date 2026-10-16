@@ -9,6 +9,7 @@ import { MAX_THRESHOLD, MIN_THRESHOLD } from "../community/starboard.js";
 import { cleanTagContent, cleanTagName, MAX_TAG_LENGTH, MAX_TAGS, sortTags } from "../community/tags.js";
 import { MAX_AUTOROLES, MAX_MESSAGE_LENGTH } from "../community/welcome.js";
 import { checkLeveling, InvalidLeveling, normalizeLeveling } from "../leveling/config.js";
+import { checkJoinGate, InvalidJoinGate } from "../raid/raid.js";
 import { LogEvent } from "../logs/serverLog.js";
 import { Setting } from "../settings/guildSettings.js";
 
@@ -62,6 +63,7 @@ export const SETTING_RULES = Object.freeze({
   [Setting.TAGS]: { kind: "tags", label: "Custom commands" },
   [Setting.STARBOARD]: { kind: "starboard", types: POSTING_CHANNELS, label: "Starboard" },
   [Setting.LEVELING]: { kind: "leveling", label: "Leveling" },
+  [Setting.JOIN_GATE]: { kind: "joinGate", label: "Raid protection" },
 });
 
 // Checks one value. Returns what to save: null clears the setting, and empty
@@ -172,6 +174,15 @@ function checkValue(setting, value, { guildId, channels, roles }) {
       }
       return { channelId: value.channelId, threshold: value.threshold, emoji };
     }
+    case "joinGate":
+      try {
+        return checkJoinGate(value);
+      } catch (error) {
+        if (error instanceof InvalidJoinGate) {
+          throw new InvalidSetting(setting, error.message);
+        }
+        throw error;
+      }
     case "leveling": {
       // Reward roles: not @everyone, bot roles or roles with Administrator or Manage Server.
       const isRewardRole = (id) => {
@@ -240,6 +251,11 @@ export function describeValue(setting, value) {
       return value.map((tag) => `\`${tag.name}\``).join(", ");
     case "starboard":
       return `<#${value.channelId}> · ${value.emoji} ${value.threshold}`;
+    case "joinGate":
+      return [
+        value.minAgeDays ? `${value.action} accounts under ${value.minAgeDays} days` : "no account-age gate",
+        value.alertJoins ? `alert at ${value.alertJoins} joins a minute` : "no join alerts",
+      ].join(" · ");
     case "text":
       return `"${value.length > 80 ? `${value.slice(0, 80)}…` : value}"`.replace(/\n/g, " ");
     case "leveling": {

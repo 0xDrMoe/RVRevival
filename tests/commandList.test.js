@@ -36,6 +36,7 @@ describe("command list", () => {
       "giveaway",
       "starboard",
       "tickets",
+      "raid",
       "rank",
       "leaderboard",
       "levels",

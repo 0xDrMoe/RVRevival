@@ -775,11 +775,27 @@ const checkedList = (name) => (form) => {
   return ids.length > 0 ? ids : null;
 };
 
+// The raid settings on the Moderation page, or null when both are off.
+function readJoinGate(form) {
+  const number = (id) => {
+    const text = form.querySelector(`#${id}`).value.trim();
+    return text === "" ? null : Number(text);
+  };
+  const minAgeDays = number("gateMinAge");
+  const alertJoins = number("gateAlertJoins");
+  if (minAgeDays === null && alertJoins === null) {
+    return null;
+  }
+  return { minAgeDays, action: form.querySelector("#gateAction").value, alertJoins };
+}
+
 async function showModeration(guildId) {
   const data = await loadManagedGuild(guildId);
   if (!data) {
     return;
   }
+  const gate = data.settings.joinGate ?? {};
+  const lockdown = data.settings.lockdown;
   const roles = roleOptions(data);
   const rolePicker = (key) => picker({ id: key, options: roles, value: data.settings[key], emptyLabel: t("notSet") });
   settingsPage({
@@ -809,11 +825,36 @@ async function showModeration(guildId) {
           }),
         ),
       ),
+      card(
+        t("sectionRaid"),
+        "🚨",
+        "amber",
+        lockdown
+          ? h("p", { class: "tip danger" }, t("raidLockdownActive", { date: formatDate(lockdown.startedAt), count: lockdown.channels?.length ?? 0 }))
+          : null,
+        h("p", { class: "help" }, t("raidHelp")),
+        h(
+          "div",
+          { class: "rule-body" },
+          field("gateMinAge", "gateMinAgeHelp", h("input", { id: "gateMinAge", type: "number", min: 1, max: 365, step: 1, placeholder: t("off"), value: gate.minAgeDays ?? "" })),
+          field(
+            "gateAction",
+            null,
+            h(
+              "select",
+              { id: "gateAction" },
+              ["kick", "alert"].map((action) => h("option", { value: action, selected: (gate.action ?? "kick") === action }, t(`gateAction_${action}`))),
+            ),
+          ),
+          field("gateAlertJoins", "gateAlertJoinsHelp", h("input", { id: "gateAlertJoins", type: "number", min: 3, max: 100, step: 1, placeholder: t("off"), value: gate.alertJoins ?? "" })),
+        ),
+      ),
     ],
     fields: {
       staffRoleId: selectValue("staffRoleId"),
       modRoleId: selectValue("modRoleId"),
       modLogChannelId: selectValue("modLogChannelId"),
+      joinGate: readJoinGate,
     },
   });
 }

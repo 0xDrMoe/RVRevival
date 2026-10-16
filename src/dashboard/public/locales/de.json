@@ -387,5 +387,16 @@
   "ticketsDownload": ".txt herunterladen",
   "ticketsTranscript": "Protokoll",
   "ticketsNoTranscript": "Für dieses Ticket wurde kein Protokoll gespeichert. Es wurde geschlossen, bevor es Protokolle gab, oder sein Thread wurde gelöscht.",
-  "ticketsTranscriptLater": "Das Protokoll wird beim Schließen des Tickets gespeichert."
+  "ticketsTranscriptLater": "Das Protokoll wird beim Schließen des Tickets gespeichert.",
+  "off": "Aus",
+  "sectionRaid": "Raid-Schutz",
+  "raidHelp": "Brandneue Konten beim Beitritt kicken oder melden, und eine Warnung im Mod-Log, wenn viele auf einmal beitreten. Bei einem Raid sperrt /raid lockdown alle öffentlichen Kanäle und /raid end stellt sie wieder her. Discords Verifizierungsstufe und Raid-Warnungen (Servereinstellungen → Sicherheitseinrichtung) wirken zusätzlich.",
+  "raidLockdownActive": "Seit {date} läuft eine Sperre ({count} Kanäle gesperrt). Beende sie mit /raid end in Discord.",
+  "gateMinAge": "Mindestalter des Kontos (Tage)",
+  "gateMinAgeHelp": "Leer heißt aus.",
+  "gateAction": "Jüngere Konten",
+  "gateAction_kick": "Kicken (Grund per DM)",
+  "gateAction_alert": "Nur im Mod-Log melden",
+  "gateAlertJoins": "Warnen bei so vielen Beitritten pro Minute",
+  "gateAlertJoinsHelp": "3 bis 100. Leer heißt aus."
 }

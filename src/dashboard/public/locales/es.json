@@ -387,5 +387,16 @@
   "ticketsDownload": "Descargar .txt",
   "ticketsTranscript": "Transcripción",
   "ticketsNoTranscript": "No se guardó transcripción de este ticket. Se cerró antes de que existieran o su hilo se eliminó.",
-  "ticketsTranscriptLater": "La transcripción se guarda al cerrar el ticket."
+  "ticketsTranscriptLater": "La transcripción se guarda al cerrar el ticket.",
+  "off": "Desactivado",
+  "sectionRaid": "Protección contra raids",
+  "raidHelp": "Expulsa o marca las cuentas recién creadas al entrar, y recibe un aviso en el registro de moderación cuando entra mucha gente a la vez. Durante un raid, /raid lockdown bloquea todos los canales públicos y /raid end los restaura. El nivel de verificación y las alertas de raid de Discord (Ajustes del servidor → Configuración de seguridad) funcionan junto a esto.",
+  "raidLockdownActive": "Hay un bloqueo activo desde {date} ({count} canales bloqueados). Termínalo con /raid end en Discord.",
+  "gateMinAge": "Antigüedad mínima de la cuenta (días)",
+  "gateMinAgeHelp": "Vacío significa desactivado.",
+  "gateAction": "Cuentas más nuevas",
+  "gateAction_kick": "Expulsarlas (se les explica por MD)",
+  "gateAction_alert": "Solo avisar en el registro de moderación",
+  "gateAlertJoins": "Avisar cuando entren tantos en un minuto",
+  "gateAlertJoinsHelp": "De 3 a 100. Vacío significa desactivado."
 }

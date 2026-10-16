@@ -387,5 +387,16 @@
   "ticketsDownload": "Download .txt",
   "ticketsTranscript": "Transcript",
   "ticketsNoTranscript": "No transcript was saved for this ticket. It was closed before transcripts existed, or its thread was deleted.",
-  "ticketsTranscriptLater": "The transcript is saved when the ticket is closed."
+  "ticketsTranscriptLater": "The transcript is saved when the ticket is closed.",
+  "off": "Off",
+  "sectionRaid": "Raid protection",
+  "raidHelp": "Kick or flag brand-new accounts when they join, and get an alert in the mod log when many people join at once. During a raid, /raid lockdown locks every public channel and /raid end puts them back. Discord's verification level and raid alerts (Server Settings → Safety Setup) work alongside these.",
+  "raidLockdownActive": "A lockdown is running since {date} ({count} channels locked). End it with /raid end in Discord.",
+  "gateMinAge": "Minimum account age (days)",
+  "gateMinAgeHelp": "Empty means off.",
+  "gateAction": "Younger accounts",
+  "gateAction_kick": "Kick them (told why by DM)",
+  "gateAction_alert": "Only alert the mod log",
+  "gateAlertJoins": "Alert when this many join in a minute",
+  "gateAlertJoinsHelp": "3 to 100. Empty means off."
 }
