@@ -45,6 +45,8 @@ import { TempRoleStore } from "../tempRoles/tempRoleStore.js";
 import { AppealStatus, APPEAL_STATUSES, AppealStore } from "../appeals/appealStore.js";
 import { appealQuestions, MAX_ANSWER_LENGTH, normalizeAppeals } from "../appeals/config.js";
 import { normalizeCategories } from "../tickets/categories.js";
+import { checkMessage, editableMessage, InvalidMessage, messageSummary, parseMessageLink } from "../messages/embedMessage.js";
+import { SentMessageStore } from "../messages/sentMessageStore.js";
 import { buildPanelButtons, buildPanelMessage } from "../tickets/tickets.js";
 import { ScheduledMessageStore } from "../scheduled/scheduledMessageStore.js";
 import { MAX_DELAY_MS, MAX_INTERVAL_MS, MAX_SCHEDULED, MAX_SCHEDULED_LENGTH, MIN_INTERVAL_MS } from "../scheduled/scheduler.js";
@@ -184,6 +186,7 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
   const savedRoles = new SavedRoleStore(db);
   const tempRoles = new TempRoleStore(db);
   const appeals = new AppealStore(db);
+  const sentMessages = new SentMessageStore(db);
   const secureCookies = config.url.startsWith("https://");
   const cookieOptions = { path: "/", httpOnly: true, secure: secureCookies, sameSite: "lax" };
 
@@ -196,7 +199,7 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
   app.addHook("onSend", async (request, reply, payload) => {
     reply.header(
       "Content-Security-Policy",
-      "default-src 'self'; img-src 'self' https://cdn.discordapp.com data:; style-src 'self'; script-src 'self'; " +
+      "default-src 'self'; img-src 'self' https: data:; style-src 'self'; script-src 'self'; " +
         "connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
     );
     reply.header("X-Content-Type-Options", "nosniff");
@@ -1234,6 +1237,142 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     await logAction(guildId, session, `**Ban appeal #${number} ${decision === "accept" ? "accepted" : "denied"}** for <@${appeal.userId}>`, reason ? [reason] : []);
     const names = await peopleNames(guildId, [decided.userId, decided.decidedBy]);
     return { appeal: appealJson(decided, names) };
+  });
+
+  // --- Embed builder ------------------------------------------------------------
+
+  // Posts and edits the bot's own messages: some text and one embed.
+  const POSTABLE = new Set([0, 5]); // text and announcement channels
+
+  // The checked message body, or undefined after replying 400.
+  function messageBody(request, reply) {
+    try {
+      return checkMessage(request.body?.message);
+    } catch (error) {
+      if (error instanceof InvalidMessage) {
+        reply.code(400).send({ error: "invalid-message", message: error.message });
+        return undefined;
+      }
+      throw error;
+    }
+  }
+
+  // Discord's refusals, in words.
+  function discordRefused(reply, error) {
+    if (error.status === 403) {
+      return reply.code(403).send({ error: "bot-forbidden", message: "The bot can't post there. It needs View Channel, Send Messages and Embed Links in that channel." });
+    }
+    if (error.status === 404) {
+      return reply.code(404).send({ error: "not-found", message: "That message or channel is gone." });
+    }
+    if (error.status === 400) {
+      return reply.code(400).send({ error: "discord-refused", message: "Discord refused the message. Check the image and icon links." });
+    }
+    throw error;
+  }
+
+  const sentJson = (entry, names = {}) => ({ ...entry, sentByName: names[entry.sentBy] ?? null, editedByName: names[entry.editedBy] ?? null });
+
+  app.get("/api/guilds/:id/messages", async (request, reply) => {
+    const access = await requireGuild(request, reply, { manage: true });
+    if (!access) {
+      return reply;
+    }
+    const list = sentMessages.list(access.guildId, 25);
+    const names = await peopleNames(access.guildId, list.flatMap((entry) => [entry.sentBy, entry.editedBy]));
+    return { messages: list.map((entry) => sentJson(entry, names)) };
+  });
+
+  app.post("/api/guilds/:id/messages", async (request, reply) => {
+    const access = await requireGuild(request, reply, { manage: true });
+    if (!access) {
+      return reply;
+    }
+    const { guildId, session } = access;
+    const channelId = request.body?.channelId;
+    const channels = await discord.channels(guildId);
+    if (!channels.some((channel) => channel.id === channelId && POSTABLE.has(channel.type))) {
+      return reply.code(400).send({ error: "bad-channel", message: "Pick a text or announcement channel." });
+    }
+    const body = messageBody(request, reply);
+    if (!body) {
+      return reply;
+    }
+    let posted;
+    try {
+      posted = await discord.postMessage(channelId, body);
+    } catch (error) {
+      return discordRefused(reply, error);
+    }
+    const entry = sentMessages.add({ guildId, channelId, messageId: posted.id, summary: messageSummary(body), sentBy: session.userId });
+    await logAction(guildId, session, `**Message posted** in <#${channelId}>`, [entry.summary]);
+    return { message: sentJson(entry, { [session.userId]: session.username }) };
+  });
+
+  // Finds a bot message by its link, to edit it.
+  app.get("/api/guilds/:id/messages/lookup", async (request, reply) => {
+    const access = await requireGuild(request, reply, { manage: true });
+    if (!access) {
+      return reply;
+    }
+    const link = parseMessageLink(request.query?.link);
+    if (!link || link.guildId !== access.guildId) {
+      return reply.code(400).send({ error: "bad-link", message: "Paste a message link from this server (right-click the message → Copy Message Link)." });
+    }
+    const channels = await discord.channels(access.guildId);
+    if (!channels.some((channel) => channel.id === link.channelId)) {
+      return reply.code(404).send({ error: "not-found", message: "That message or channel is gone." });
+    }
+    let message;
+    try {
+      message = await discord.message(link.channelId, link.messageId);
+    } catch (error) {
+      return discordRefused(reply, error);
+    }
+    if (!message) {
+      return reply.code(404).send({ error: "not-found", message: "That message or channel is gone." });
+    }
+    if (message.author?.id !== discord.clientId) {
+      return reply.code(400).send({ error: "not-bot-message", message: "The bot can only edit its own messages." });
+    }
+    return { channelId: link.channelId, messageId: link.messageId, message: editableMessage(message) };
+  });
+
+  app.put("/api/guilds/:id/messages/:channelId/:messageId", async (request, reply) => {
+    const access = await requireGuild(request, reply, { manage: true });
+    if (!access) {
+      return reply;
+    }
+    const { guildId, session } = access;
+    const { channelId, messageId } = request.params;
+    if (!DISCORD_ID.test(channelId) || !DISCORD_ID.test(messageId)) {
+      return reply.code(400).send({ error: "bad-id" });
+    }
+    const channels = await discord.channels(guildId);
+    if (!channels.some((channel) => channel.id === channelId)) {
+      return reply.code(404).send({ error: "not-found", message: "That message or channel is gone." });
+    }
+    const body = messageBody(request, reply);
+    if (!body) {
+      return reply;
+    }
+    try {
+      const current = await discord.message(channelId, messageId);
+      if (!current) {
+        sentMessages.delete(guildId, messageId);
+        return reply.code(404).send({ error: "not-found", message: "That message or channel is gone." });
+      }
+      if (current.author?.id !== discord.clientId) {
+        return reply.code(400).send({ error: "not-bot-message", message: "The bot can only edit its own messages." });
+      }
+      await discord.editMessage(channelId, messageId, body);
+    } catch (error) {
+      return discordRefused(reply, error);
+    }
+    const summary = messageSummary(body);
+    sentMessages.edited(guildId, messageId, { summary, editedBy: session.userId });
+    await logAction(guildId, session, `**Message edited** in <#${channelId}>`, [summary, `https://discord.com/channels/${guildId}/${channelId}/${messageId}`]);
+    return { ok: true };
   });
 
   // --- Activity -------------------------------------------------------------
