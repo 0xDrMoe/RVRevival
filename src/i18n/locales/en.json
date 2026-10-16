@@ -1,4 +1,6 @@
 {
+  "languageName": "English",
+
   "commandDescription": "Select or enter the country where you currently reside.",
   "countryOptionDescription": "Select or enter the country where you currently reside.",
 
@@ -74,6 +76,8 @@
   "helpNotes": "- Only you can see the bot's reply.\n- Common short names like USA or UK work too.\n- You can only pick one country. Picked the wrong one? Ask a staff member to change it.\n- If something goes wrong, the bot will tell you. If it keeps happening, contact a server admin.",
   "helpFallbackNote": "- Prefer commands? `/country` works too.",
   "helpChannelNote": "- This channel is only for picking your country. Any other message posted here is deleted automatically.",
+  "translateButtonLabel": "Translate this message",
+  "translatePlaceholder": "Show this message in another language",
 
   "pickButtonLabel": "Type my country",
   "pickTryAgainLabel": "Try again",

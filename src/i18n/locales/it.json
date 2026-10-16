@@ -1,4 +1,6 @@
 {
+  "languageName": "Italiano",
+
   "commandDescription": "Seleziona o inserisci il paese in cui risiedi attualmente.",
   "countryOptionDescription": "Seleziona o inserisci il paese in cui risiedi attualmente.",
 
@@ -74,6 +76,8 @@
   "helpNotes": "- Solo tu vedi la risposta del bot.\n- Funzionano anche nomi brevi comuni come USA o UK.\n- Puoi scegliere un solo paese. Hai sbagliato? Chiedi a un membro dello staff di cambiarlo.\n- Se qualcosa va storto, il bot te lo dirà. Se continua a succedere, contatta un admin del server.",
   "helpFallbackNote": "- Preferisci i comandi? Funziona anche `/country`.",
   "helpChannelNote": "- Questo canale serve solo a scegliere il tuo paese. Qualsiasi altro messaggio inviato qui viene eliminato automaticamente.",
+  "translateButtonLabel": "Traduci questo messaggio",
+  "translatePlaceholder": "Mostra questo messaggio in un'altra lingua",
 
   "pickButtonLabel": "Scrivi il mio paese",
   "pickTryAgainLabel": "Riprova",

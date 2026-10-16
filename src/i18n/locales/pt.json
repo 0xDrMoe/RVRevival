@@ -1,4 +1,6 @@
 {
+  "languageName": "Português",
+
   "commandDescription": "Selecione ou digite o país onde você mora atualmente.",
   "countryOptionDescription": "Selecione ou digite o país onde você mora atualmente.",
 
@@ -74,6 +76,8 @@
   "helpNotes": "- Só você vê a resposta do bot.\n- Nomes curtos comuns como USA ou UK também funcionam.\n- Você só pode escolher um país. Escolheu errado? Peça a alguém da staff para mudar.\n- Se algo der errado, o bot vai avisar. Se continuar acontecendo, fale com um admin do servidor.",
   "helpFallbackNote": "- Prefere comandos? `/country` também funciona.",
   "helpChannelNote": "- Este canal é só para escolher seu país. Qualquer outra mensagem enviada aqui é apagada automaticamente.",
+  "translateButtonLabel": "Traduzir esta mensagem",
+  "translatePlaceholder": "Mostrar esta mensagem em outro idioma",
 
   "pickButtonLabel": "Digitar meu país",
   "pickTryAgainLabel": "Tentar de novo",
