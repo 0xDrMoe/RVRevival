@@ -50,6 +50,7 @@ import { SentMessageStore } from "../messages/sentMessageStore.js";
 import { addFeed, FeedDuplicate, FeedError, FeedLimit } from "../feeds/feeds.js";
 import { FEED_KINDS } from "../feeds/fetchFeed.js";
 import { FeedStore, MAX_FEEDS } from "../feeds/feedStore.js";
+import { MAX_STICKIES, MAX_STICKY_LENGTH, StickyStore } from "../sticky/stickyStore.js";
 import { checkTemplate, COUNTER_PRESETS, InvalidCounter, MAX_COUNTERS, newCounterId, normalizeCounters } from "../stats/statsCounters.js";
 import { buildPanelButtons, buildPanelMessage } from "../tickets/tickets.js";
 import { ScheduledMessageStore } from "../scheduled/scheduledMessageStore.js";
@@ -193,6 +194,7 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
   const appeals = new AppealStore(db);
   const sentMessages = new SentMessageStore(db);
   const feeds = new FeedStore(db);
+  const stickies = new StickyStore(db);
   const secureCookies = config.url.startsWith("https://");
   const cookieOptions = { path: "/", httpOnly: true, secure: secureCookies, sameSite: "lax" };
 
@@ -1566,6 +1568,72 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     }
     await logAction(guildId, session, `**Stats counter removed:** ${counter.template}`, []);
     return { ok: true, channelDeleted };
+  });
+
+  // --- Sticky messages ------------------------------------------------------
+  // Saving posts the sticky right away; the bot keeps it at the bottom after that.
+
+  const stickyJson = (sticky) => ({ channelId: sticky.channelId, content: sticky.content, createdBy: sticky.createdBy, updatedAt: sticky.updatedAt, posted: Boolean(sticky.messageId) });
+
+  app.get("/api/guilds/:id/stickies", async (request, reply) => {
+    const access = await requireGuild(request, reply, { manage: true });
+    if (!access) {
+      return reply;
+    }
+    return { stickies: stickies.list(access.guildId).map(stickyJson), max: MAX_STICKIES, maxLength: MAX_STICKY_LENGTH };
+  });
+
+  app.put("/api/guilds/:id/stickies/:channelId", async (request, reply) => {
+    const access = await requireGuild(request, reply, { manage: true });
+    if (!access) {
+      return reply;
+    }
+    const { guildId, session } = access;
+    const { channelId } = request.params;
+    const content = typeof request.body?.content === "string" ? request.body.content.trim() : "";
+    if (!content || content.length > MAX_STICKY_LENGTH) {
+      return reply.code(400).send({ error: "bad-content", message: `A sticky message is 1 to ${MAX_STICKY_LENGTH} characters.` });
+    }
+    const channels = await discord.channels(guildId);
+    if (!channels.some((channel) => channel.id === channelId && POSTABLE.has(channel.type))) {
+      return reply.code(400).send({ error: "bad-channel", message: "Pick a text or announcement channel." });
+    }
+    const existing = stickies.get(channelId);
+    if (existing && existing.guildId !== guildId) {
+      return reply.code(400).send({ error: "bad-channel", message: "Pick a text or announcement channel." });
+    }
+    if (!existing && stickies.count(guildId) >= MAX_STICKIES) {
+      return reply.code(409).send({ error: "stickies-full", message: `A server can have up to ${MAX_STICKIES} sticky messages.` });
+    }
+    let posted;
+    try {
+      posted = await discord.postMessage(channelId, { content });
+    } catch (error) {
+      return discordRefused(reply, error);
+    }
+    if (existing?.messageId) {
+      await discord.deleteMessage(channelId, existing.messageId).catch(() => {});
+    }
+    const sticky = stickies.set({ channelId, guildId, content, messageId: posted.id, createdBy: session.userId });
+    await logAction(guildId, session, `**Sticky message ${existing ? "changed" : "added"}** in <#${channelId}>`, [content.replace(/\s+/g, " ").slice(0, 200)]);
+    return { sticky: stickyJson(sticky) };
+  });
+
+  app.delete("/api/guilds/:id/stickies/:channelId", async (request, reply) => {
+    const access = await requireGuild(request, reply, { manage: true });
+    if (!access) {
+      return reply;
+    }
+    const sticky = stickies.get(request.params.channelId);
+    if (!sticky || sticky.guildId !== access.guildId) {
+      return reply.code(404).send({ error: "not-found" });
+    }
+    stickies.delete(sticky.channelId);
+    if (sticky.messageId) {
+      await discord.deleteMessage(sticky.channelId, sticky.messageId).catch(() => {});
+    }
+    await logAction(access.guildId, access.session, `**Sticky message removed** from <#${sticky.channelId}>`, []);
+    return { ok: true };
   });
 
   // --- Activity -------------------------------------------------------------

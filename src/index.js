@@ -23,6 +23,8 @@ import { createFeedPoller } from "./feeds/feedPoller.js";
 import { createStatsUpdater } from "./stats/statsUpdater.js";
 import { createAfk } from "./afk/afk.js";
 import { AfkStore } from "./afk/afkStore.js";
+import { createStickies } from "./sticky/stickies.js";
+import { StickyStore } from "./sticky/stickyStore.js";
 import { createTempRoleScheduler } from "./tempRoles/tempRoleScheduler.js";
 import { createRaidGuard } from "./raid/raid.js";
 import { createTempVoice } from "./voice/tempVoice.js";
@@ -166,6 +168,9 @@ async function start() {
   const statsUpdater = createStatsUpdater({ guildSettings, logger });
   // Members who are away (/afk).
   const afk = createAfk({ store: new AfkStore(db), logger, forcedLanguage });
+  // Sticky messages (/sticky), kept at the bottom of their channel.
+  const stickyStore = new StickyStore(db);
+  const stickies = createStickies({ store: stickyStore, logger });
   // Gives members their roles back when they rejoin (/welcome persist).
   const rolePersistence = createRolePersistence({
     guildSettings,
@@ -208,6 +213,8 @@ async function start() {
     feeds,
     statsUpdater,
     afk,
+    stickyStore,
+    stickies,
     giveaways,
     tickets,
     levels,
@@ -316,6 +323,7 @@ async function start() {
     );
     client.on(Events.MessageCreate, safely("leveling", (message) => leveling.handleMessage(message)));
     client.on(Events.MessageCreate, safely("AFK", (message) => afk.messageCreated(message)));
+    client.on(Events.MessageCreate, safely("sticky messages", (message) => stickies.messageCreated(message)));
 
     // The server log (/settings server-log-channel).
     client.on(Events.MessageDelete, safely("a deleted message", (message) => serverLog.messageDeleted(message)));
@@ -391,6 +399,7 @@ async function start() {
       }
       forgetAutomodExemption(channel.guildId, "exemptChannelIds", channel.id);
       tempVoice.channelDeleted(channel);
+      stickies.channelDeleted(channel);
       statsUpdater.channelDeleted(channel).catch((error) => logger.error("Couldn't forget a deleted stats channel", { error }));
       if (channel.guildId && guildSettings.get(channel.guildId, Setting.TEMP_VOICE)?.hubChannelId === channel.id) {
         guildSettings

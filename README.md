@@ -29,6 +29,7 @@ The Discord bot for the Rumbleverse Revival server. It is built as a set of inde
 | [Embed builder](#embed-builder) | The dashboard's Embed builder page | Manage Server or a dashboard role that can change settings |
 | [Feeds](#feeds) | `/feed`, or the dashboard's Feeds page | Manage Server or a dashboard role that can change settings |
 | [Server stats](#server-stats) | `/stats`, or the dashboard's Server stats page | Manage Server or a dashboard role that can change settings |
+| [Sticky messages](#sticky-messages) | `/sticky`, or the dashboard's Sticky messages page | Manage Messages (dashboard: Manage Server or a dashboard role that can change settings) |
 | [AFK](#afk) | `/afk` | Everyone |
 | [Ban appeals](#ban-appeals) | The dashboard's Ban appeals page | Manage Server or a dashboard role that can change settings (banned members fill in the form) |
 | [Join-to-create voice](#join-to-create-voice) | `/voice` | Manage Server (`setup`, `off`), the channel's owner (`lock`, `unlock`), anyone in the channel (`claim`) |
@@ -375,6 +376,15 @@ The bot checks each feed every 10 minutes and posts only items that appear after
 
 A server can have up to 5 counters. Discord lets the bot rename a channel only twice per 10 minutes, so names follow the counts within about 5 minutes. Counters added on the dashboard get their channel within a minute. Needs **Manage Server**. The bot needs **Manage Channels**.
 
+### Sticky messages
+
+`/sticky` (or the dashboard's **Sticky messages** page) keeps a message at the bottom of a channel, like the rules or how to get help.
+
+- **`/sticky set message [channel]`** sets or changes it (in this channel if you leave `channel` out). Type `\n` for a new line, or write it on the dashboard.
+- **`/sticky remove [channel]`** removes it. **`/sticky list`** shows every sticky on the server.
+
+When people talk, the bot waits a few seconds, deletes its last copy and posts the message again, at most once every 15 seconds per channel. Up to 10 per server, one per channel. Mentions never ping anyone. Needs **Manage Messages**. The bot needs View Channel and Send Messages.
+
 ### AFK
 
 **`/afk [message]`** says you're away. When someone mentions you or replies to you, the bot answers with your message and how long you've been away (once a minute per channel, and the notice deletes itself after 15 seconds). Your next message in the server marks you back.
@@ -618,6 +628,7 @@ src/
     feed.js              Feeds: /feed
     stats.js             Server stats: /stats
     afk.js               AFK: /afk
+    sticky.js            Sticky messages: /sticky
     commandHelpers.js    Shared start of moderation-style commands (language, permission check)
   countries/             Country roles: country list, name matching and search
   roles/                 Country roles: find, create, assign and remove roles
@@ -630,6 +641,7 @@ src/
   messages/              Embed builder: checking messages against Discord's limits (embedMessage.js), messages posted from the dashboard (sentMessageStore.js)
   feeds/                 Feeds: reading RSS and Atom (parseFeed.js), safe fetching and finding YouTube and Reddit feeds (fetchFeed.js), saved in SQLite (feedStore.js), adding feeds and posts (feeds.js), checked on time (feedPoller.js)
   stats/                 Server stats: counters and counts (statsCounters.js), creating and renaming the channels (statsUpdater.js)
+  sticky/                Sticky messages: saved in SQLite (stickyStore.js), reposting (stickies.js)
   afk/                   AFK: saved in SQLite (afkStore.js), notices and welcome-backs (afk.js)
   appeals/               Ban appeals: settings (config.js), saved in SQLite (appealStore.js); the form and decisions live in the dashboard
   voice/                 Join-to-create voice: making and deleting channels (tempVoice.js), saved in SQLite (tempVoiceStore.js)

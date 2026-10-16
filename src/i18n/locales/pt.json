@@ -1033,5 +1033,22 @@
   "afkSetNoMessage": "Você está AFK. Envie qualquer mensagem aqui para voltar.",
   "afkBack": "Bem-vindo de volta {user}! Você estava AFK desde {since}.",
   "afkNotice": "💤 {user} está AFK ({since}): {message}",
-  "afkNoticeNoMessage": "💤 {user} está AFK ({since})."
+  "afkNoticeNoMessage": "💤 {user} está AFK ({since}).",
+
+  "stickyCommandDescription": "Mantenha uma mensagem no fim de um canal",
+  "stickySetDescription": "Defina ou mude a mensagem fixa de um canal",
+  "stickyMessageOptionDescription": "A mensagem; digite \\n para uma nova linha",
+  "stickyChannelOptionDescription": "O canal (este se você não escolher outro)",
+  "stickyRemoveDescription": "Remova a mensagem fixa de um canal",
+  "stickyListDescription": "Todas as mensagens fixas deste servidor",
+  "stickyBadChannel": "Mensagens fixas funcionam em canais de texto e de anúncios.",
+  "stickyCannotPost": "Não consigo postar em {channel}. Me dê Ver canal e Enviar mensagens lá.",
+  "stickyFull": "Este servidor já tem {max} mensagens fixas. Remova uma com `/sticky remove` primeiro.",
+  "stickyEmpty": "Digite uma mensagem para manter no fim.",
+  "stickySet": "{channel} agora tem uma mensagem fixa. Ela volta para o fim alguns segundos depois que as pessoas falam.",
+  "stickyChanged": "Mensagem fixa de {channel} alterada.",
+  "stickyNone": "{channel} não tem mensagem fixa.",
+  "stickyRemoved": "Mensagem fixa removida de {channel}.",
+  "stickyListEmpty": "Ainda não há mensagens fixas. Adicione uma com `/sticky set`.",
+  "stickyList": "**Mensagens fixas ({count}/{max})**\n{list}"
 }

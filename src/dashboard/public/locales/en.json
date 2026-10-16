@@ -740,5 +740,22 @@
   "countersSaved": "Saved. The channel is renamed within a few minutes.",
   "countersRemoveConfirm": "Remove this counter and delete its channel?",
   "countersRemoved": "Counter removed and its channel deleted.",
-  "countersRemovedKeptChannel": "Counter removed. The bot couldn't delete its channel, so delete it in Discord."
+  "countersRemovedKeptChannel": "Counter removed. The bot couldn't delete its channel, so delete it in Discord.",
+  "page_sticky": "Sticky messages",
+  "stickyIntro": "Keep a message at the bottom of a channel, like rules or how to get help. When people talk, the bot posts it again below them after a few seconds.",
+  "search_sticky": "sticky pinned bottom message rules",
+  "stickyNew": "Set a sticky message",
+  "stickyChannel": "Channel",
+  "stickyChannelHelp": "Picking a channel that already has one replaces it.",
+  "stickyContent": "Message",
+  "stickyContentHelp": "Mentions never ping anyone.",
+  "stickyPlaceholder": "📌 Read the rules in #rules before posting.",
+  "stickySave": "Save and post",
+  "stickyAdded": "Sticky message posted.",
+  "stickyChanged": "Sticky message changed.",
+  "stickyRemoved": "Sticky message removed.",
+  "stickyRemoveConfirm": "Remove this sticky message? Its last copy is deleted too.",
+  "stickyNone": "No sticky messages yet.",
+  "stickyListHelp": "Up to 10 per server, one per channel.",
+  "stickyUpdated": "Updated {date}"
 }

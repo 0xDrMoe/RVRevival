@@ -740,5 +740,22 @@
   "countersSaved": "Gespeichert. Der Kanal wird in ein paar Minuten umbenannt.",
   "countersRemoveConfirm": "Diesen Zähler entfernen und seinen Kanal löschen?",
   "countersRemoved": "Zähler entfernt und sein Kanal gelöscht.",
-  "countersRemovedKeptChannel": "Zähler entfernt. Der Bot konnte den Kanal nicht löschen, lösche ihn bitte in Discord."
+  "countersRemovedKeptChannel": "Zähler entfernt. Der Bot konnte den Kanal nicht löschen, lösche ihn bitte in Discord.",
+  "page_sticky": "Sticky-Nachrichten",
+  "stickyIntro": "Halte eine Nachricht unten in einem Kanal, etwa die Regeln oder wie man Hilfe bekommt. Wenn jemand schreibt, postet der Bot sie nach ein paar Sekunden erneut darunter.",
+  "search_sticky": "sticky angeheftet unten nachricht regeln",
+  "stickyNew": "Sticky-Nachricht festlegen",
+  "stickyChannel": "Kanal",
+  "stickyChannelHelp": "Hat der Kanal schon eine, wird sie ersetzt.",
+  "stickyContent": "Nachricht",
+  "stickyContentHelp": "Erwähnungen pingen nie jemanden.",
+  "stickyPlaceholder": "📌 Lies die Regeln in #regeln, bevor du postest.",
+  "stickySave": "Speichern und posten",
+  "stickyAdded": "Sticky-Nachricht gepostet.",
+  "stickyChanged": "Sticky-Nachricht geändert.",
+  "stickyRemoved": "Sticky-Nachricht entfernt.",
+  "stickyRemoveConfirm": "Diese Sticky-Nachricht entfernen? Ihre letzte Kopie wird auch gelöscht.",
+  "stickyNone": "Noch keine Sticky-Nachrichten.",
+  "stickyListHelp": "Bis zu 10 pro Server, eine pro Kanal.",
+  "stickyUpdated": "Aktualisiert {date}"
 }

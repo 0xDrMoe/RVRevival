@@ -740,5 +740,22 @@
   "countersSaved": "Guardado. El canal se renombra en unos minutos.",
   "countersRemoveConfirm": "¿Quitar este contador y borrar su canal?",
   "countersRemoved": "Contador quitado y su canal borrado.",
-  "countersRemovedKeptChannel": "Contador quitado. El bot no pudo borrar su canal, así que bórralo en Discord."
+  "countersRemovedKeptChannel": "Contador quitado. El bot no pudo borrar su canal, así que bórralo en Discord.",
+  "page_sticky": "Mensajes fijos",
+  "stickyIntro": "Mantén un mensaje al final de un canal, como las reglas o cómo pedir ayuda. Cuando la gente habla, el bot lo vuelve a publicar debajo tras unos segundos.",
+  "search_sticky": "fijo anclado final mensaje reglas",
+  "stickyNew": "Poner un mensaje fijo",
+  "stickyChannel": "Canal",
+  "stickyChannelHelp": "Si el canal ya tiene uno, se reemplaza.",
+  "stickyContent": "Mensaje",
+  "stickyContentHelp": "Las menciones nunca notifican a nadie.",
+  "stickyPlaceholder": "📌 Lee las reglas en #reglas antes de publicar.",
+  "stickySave": "Guardar y publicar",
+  "stickyAdded": "Mensaje fijo publicado.",
+  "stickyChanged": "Mensaje fijo cambiado.",
+  "stickyRemoved": "Mensaje fijo quitado.",
+  "stickyRemoveConfirm": "¿Quitar este mensaje fijo? Su última copia también se borra.",
+  "stickyNone": "Aún no hay mensajes fijos.",
+  "stickyListHelp": "Hasta 10 por servidor, uno por canal.",
+  "stickyUpdated": "Actualizado {date}"
 }

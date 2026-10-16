@@ -1033,5 +1033,22 @@
   "afkSetNoMessage": "أنت الآن AFK. أرسل أي رسالة هنا لتعود.",
   "afkBack": "أهلًا بعودتك {user}! كنت AFK منذ {since}.",
   "afkNotice": "💤 {user} غائب ({since}): {message}",
-  "afkNoticeNoMessage": "💤 {user} غائب ({since})."
+  "afkNoticeNoMessage": "💤 {user} غائب ({since}).",
+
+  "stickyCommandDescription": "أبقِ رسالة في أسفل قناة",
+  "stickySetDescription": "عيّن أو غيّر الرسالة المثبتة في أسفل قناة",
+  "stickyMessageOptionDescription": "الرسالة؛ اكتب \\n لسطر جديد",
+  "stickyChannelOptionDescription": "القناة (هذه القناة إن لم تختر غيرها)",
+  "stickyRemoveDescription": "أزل الرسالة المثبتة من قناة",
+  "stickyListDescription": "كل الرسائل المثبتة في هذا الخادم",
+  "stickyBadChannel": "الرسائل المثبتة تعمل في القنوات النصية وقنوات الإعلانات.",
+  "stickyCannotPost": "لا أستطيع النشر في {channel}. امنحني عرض القناة وإرسال الرسائل هناك.",
+  "stickyFull": "لدى هذا الخادم {max} رسائل مثبتة بالفعل. أزل واحدة بـ `/sticky remove` أولًا.",
+  "stickyEmpty": "اكتب رسالة لإبقائها في الأسفل.",
+  "stickySet": "لدى {channel} الآن رسالة مثبتة. تعود إلى الأسفل بعد ثوانٍ من حديث الأعضاء.",
+  "stickyChanged": "تم تغيير الرسالة المثبتة في {channel}.",
+  "stickyNone": "لا توجد رسالة مثبتة في {channel}.",
+  "stickyRemoved": "أُزيلت الرسالة المثبتة من {channel}.",
+  "stickyListEmpty": "لا توجد رسائل مثبتة بعد. أضف واحدة بـ `/sticky set`.",
+  "stickyList": "**الرسائل المثبتة ({count}/{max})**\n{list}"
 }

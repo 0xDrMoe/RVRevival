@@ -1033,5 +1033,22 @@
   "afkSetNoMessage": "Du bist AFK. Schreib hier eine Nachricht, um zurückzukommen.",
   "afkBack": "Willkommen zurück {user}! Du warst AFK seit {since}.",
   "afkNotice": "💤 {user} ist AFK ({since}): {message}",
-  "afkNoticeNoMessage": "💤 {user} ist AFK ({since})."
+  "afkNoticeNoMessage": "💤 {user} ist AFK ({since}).",
+
+  "stickyCommandDescription": "Halte eine Nachricht unten in einem Kanal",
+  "stickySetDescription": "Die Sticky-Nachricht eines Kanals setzen oder ändern",
+  "stickyMessageOptionDescription": "Die Nachricht; tippe \\n für eine neue Zeile",
+  "stickyChannelOptionDescription": "Der Kanal (dieser, wenn du keinen wählst)",
+  "stickyRemoveDescription": "Die Sticky-Nachricht eines Kanals entfernen",
+  "stickyListDescription": "Alle Sticky-Nachrichten auf diesem Server",
+  "stickyBadChannel": "Sticky-Nachrichten gehen in Text- und Ankündigungskanälen.",
+  "stickyCannotPost": "Ich kann in {channel} nicht posten. Gib mir dort Kanal ansehen und Nachrichten senden.",
+  "stickyFull": "Dieser Server hat schon {max} Sticky-Nachrichten. Entferne zuerst eine mit `/sticky remove`.",
+  "stickyEmpty": "Tippe eine Nachricht, die unten bleiben soll.",
+  "stickySet": "{channel} hat jetzt eine Sticky-Nachricht. Sie rutscht ein paar Sekunden, nachdem jemand schreibt, wieder nach unten.",
+  "stickyChanged": "Sticky-Nachricht in {channel} geändert.",
+  "stickyNone": "{channel} hat keine Sticky-Nachricht.",
+  "stickyRemoved": "Sticky-Nachricht aus {channel} entfernt.",
+  "stickyListEmpty": "Noch keine Sticky-Nachrichten. Füge eine mit `/sticky set` hinzu.",
+  "stickyList": "**Sticky-Nachrichten ({count}/{max})**\n{list}"
 }

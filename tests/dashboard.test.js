@@ -982,6 +982,24 @@ describe("dashboard", () => {
     expect(guildSettings.get(GUILD_ID, Setting.STATS_COUNTERS)).toEqual([]);
   });
 
+  it("posts, replaces and removes sticky messages", async () => {
+    let next = 0;
+    discord.postMessage = vi.fn(async () => ({ id: `81000000000000010${next++}` }));
+    discord.deleteMessage = vi.fn(async () => {});
+    const cookies = await login();
+    const url = `/api/guilds/${GUILD_ID}/stickies`;
+    expect((await write(cookies, "PUT", `${url}/${VOICE_ID}`, { content: "Hi" })).statusCode).toBe(400);
+    expect((await write(cookies, "PUT", `${url}/${TEXT_ID}`, { content: "  " })).statusCode).toBe(400);
+    expect((await write(cookies, "PUT", `${url}/${TEXT_ID}`, { content: "Read the rules" })).json().sticky).toMatchObject({ channelId: TEXT_ID, content: "Read the rules", posted: true });
+    expect(discord.postMessage).toHaveBeenCalledWith(TEXT_ID, { content: "Read the rules" });
+    await write(cookies, "PUT", `${url}/${TEXT_ID}`, { content: "Read the rules, please" });
+    expect(discord.deleteMessage).toHaveBeenCalledWith(TEXT_ID, "810000000000000100");
+    expect((await app.inject({ method: "GET", url, cookies })).json()).toMatchObject({ max: 10, stickies: [{ channelId: TEXT_ID, content: "Read the rules, please" }] });
+    expect((await write(cookies, "DELETE", `${url}/${TEXT_ID}`)).statusCode).toBe(200);
+    expect(discord.deleteMessage).toHaveBeenLastCalledWith(TEXT_ID, "810000000000000101");
+    expect((await write(cookies, "DELETE", `${url}/${TEXT_ID}`)).statusCode).toBe(404);
+  });
+
   it("logs out and forgets the session", async () => {
     const cookies = await login();
     expect((await write(cookies, "POST", "/auth/logout")).statusCode).toBe(200);

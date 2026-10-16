@@ -138,6 +138,7 @@ const NAV = [
       { id: "scheduled", icon: "calendar", tone: "blue", manage: true },
       { id: "embeds", icon: "edit", tone: "purple", manage: true },
       { id: "feeds", icon: "rss", tone: "amber", manage: true },
+      { id: "sticky", icon: "pin", tone: "pink", manage: true },
     ],
   },
   {
@@ -4660,6 +4661,117 @@ async function showFeeds(guildId) {
   await load();
 }
 
+// --- Sticky messages ---------------------------------------------------------------
+
+function stickyRow(sticky, data, onEdit, onRemove) {
+  const channel = data.channels.find((item) => item.id === sticky.channelId);
+  return h(
+    "li",
+    { class: "sent-row" },
+    iconChip("pin", "pink", "sm"),
+    h(
+      "span",
+      { class: "ticket-main" },
+      h("span", { class: "ticket-subject" }, h("strong", {}, channel ? `#${channel.name}` : t("unknownOption", { id: sticky.channelId }))),
+      h("span", { class: "muted sticky-preview" }, sticky.content),
+      h("span", { class: "muted small-text" }, t("stickyUpdated", { date: formatAgo(sticky.updatedAt) })),
+    ),
+    h("span", { class: "row-actions" }, h("button", { class: "ghost small", type: "button", onclick: onEdit }, t("embedEdit")), h("button", { class: "ghost small", type: "button", onclick: onRemove }, t("tagRemove"))),
+  );
+}
+
+async function showStickies(guildId) {
+  const data = await loadManagedGuild(guildId);
+  if (!data) {
+    return;
+  }
+  const list = h("ul", { class: "ticket-list" });
+  const empty = h("p", { class: "muted empty" }, t("stickyNone"));
+  const countPill = h("span", { class: "count-pill" });
+  const save = h("button", { class: "primary", type: "submit" }, icon("pin", "icon small"), t("stickySave"));
+  const content = h("textarea", { id: "stickyContent", rows: 4, maxLength: 1500, required: true, placeholder: t("stickyPlaceholder") });
+  const counter = h("span", { class: "muted small-text" });
+  const showCount = () => {
+    counter.textContent = `${content.value.length}/1500`;
+  };
+  content.addEventListener("input", showCount);
+  let current = [];
+  let max = 10;
+
+  async function load() {
+    const result = await api(`/api/guilds/${guildId}/stickies`);
+    current = result.stickies;
+    max = result.max;
+    list.replaceChildren(
+      ...current.map((sticky) =>
+        stickyRow(
+          sticky,
+          data,
+          () => {
+            form.querySelector("#stickyChannel").value = sticky.channelId;
+            content.value = sticky.content;
+            showCount();
+            content.focus();
+          },
+          async () => {
+            if (!confirm(t("stickyRemoveConfirm"))) {
+              return;
+            }
+            try {
+              await api(`/api/guilds/${guildId}/stickies/${sticky.channelId}`, { method: "DELETE" });
+              toast(t("stickyRemoved"));
+              await load();
+            } catch (error) {
+              failed(error);
+            }
+          },
+        ),
+      ),
+    );
+    empty.hidden = current.length > 0;
+    countPill.textContent = t("tagsCount", { count: current.length, max });
+  }
+
+  const form = h(
+    "form",
+    {
+      onsubmit: async (event) => {
+        event.preventDefault();
+        const channelId = form.querySelector("#stickyChannel").value;
+        save.disabled = true;
+        try {
+          const replacing = current.some((sticky) => sticky.channelId === channelId);
+          await api(`/api/guilds/${guildId}/stickies/${channelId}`, { method: "PUT", body: { content: content.value } });
+          toast(t(replacing ? "stickyChanged" : "stickyAdded"));
+          content.value = "";
+          showCount();
+          await load();
+        } catch (error) {
+          failed(error);
+        } finally {
+          save.disabled = false;
+        }
+      },
+    },
+    field("stickyChannel", "stickyChannelHelp", picker({ id: "stickyChannel", options: postableChannels(data), value: null, emptyLabel: t("embedPickChannel") })),
+    field("stickyContent", "stickyContentHelp", content),
+    h("div", { class: "toolbar" }, counter, h("span", { class: "grow" }), save),
+  );
+  form.querySelector("#stickyChannel").required = true;
+  showCount();
+
+  show(
+    guildLayout(
+      data,
+      "sticky",
+      pageHero("sticky", t("stickyIntro"), data),
+      card(t("stickyNew"), "pin", "pink", form),
+      card(t("page_sticky"), "list", "blue", h("div", { class: "toolbar" }, h("p", { class: "help grow" }, t("stickyListHelp")), countPill), empty, list),
+    ),
+  );
+  await load();
+}
+
 // --- Server stats ------------------------------------------------------------------
 
 const COUNTER_PRESET_NAMES = ["members", "humans", "bots", "boosts", "channels", "roles"];
@@ -4900,6 +5012,7 @@ const SHOW_PAGE = {
   embeds: showEmbeds,
   feeds: showFeeds,
   counters: showCounters,
+  sticky: showStickies,
   moderation: showModeration,
   logging: showLogging,
   access: showAccess,

@@ -1033,5 +1033,22 @@
   "afkSetNoMessage": "Sei AFK. Invia un messaggio qui per tornare.",
   "afkBack": "Bentornato {user}! Eri AFK da {since}.",
   "afkNotice": "💤 {user} è AFK ({since}): {message}",
-  "afkNoticeNoMessage": "💤 {user} è AFK ({since})."
+  "afkNoticeNoMessage": "💤 {user} è AFK ({since}).",
+
+  "stickyCommandDescription": "Tieni un messaggio in fondo a un canale",
+  "stickySetDescription": "Imposta o cambia il messaggio fisso di un canale",
+  "stickyMessageOptionDescription": "Il messaggio; scrivi \\n per andare a capo",
+  "stickyChannelOptionDescription": "Il canale (questo se non ne scegli un altro)",
+  "stickyRemoveDescription": "Rimuovi il messaggio fisso di un canale",
+  "stickyListDescription": "Tutti i messaggi fissi di questo server",
+  "stickyBadChannel": "I messaggi fissi funzionano nei canali testuali e di annunci.",
+  "stickyCannotPost": "Non posso scrivere in {channel}. Dammi Visualizzare il canale e Inviare messaggi lì.",
+  "stickyFull": "Questo server ha già {max} messaggi fissi. Rimuovine uno con `/sticky remove` prima.",
+  "stickyEmpty": "Scrivi un messaggio da tenere in fondo.",
+  "stickySet": "{channel} ora ha un messaggio fisso. Torna in fondo pochi secondi dopo che le persone scrivono.",
+  "stickyChanged": "Messaggio fisso di {channel} cambiato.",
+  "stickyNone": "{channel} non ha un messaggio fisso.",
+  "stickyRemoved": "Messaggio fisso rimosso da {channel}.",
+  "stickyListEmpty": "Ancora nessun messaggio fisso. Aggiungine uno con `/sticky set`.",
+  "stickyList": "**Messaggi fissi ({count}/{max})**\n{list}"
 }

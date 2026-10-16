@@ -46,6 +46,7 @@ describe("command list", () => {
       "feed",
       "stats",
       "afk",
+      "sticky",
       "birthday",
       "rank",
       "leaderboard",
