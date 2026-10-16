@@ -16,6 +16,7 @@ The Discord bot for the Rumbleverse Revival server. It is built as a set of inde
 | [Role panels](#role-panels) | `/rolepanel` | Manage Roles (members click the buttons) |
 | [Custom commands](#custom-commands) | `/tag`, `/tags`, or the dashboard's Custom commands page | Everyone (`/tag`), Manage Messages or the mod role (`/tags`) |
 | [Auto-responders](#auto-responders) | `/autoresponder`, or the dashboard's Custom commands page | Manage Server |
+| [Scheduled messages](#scheduled-messages) | `/schedule`, or the dashboard's Scheduled page | Manage Server |
 | [Reminders](#reminders) | `/remind` | Everyone |
 | [Giveaways](#giveaways) | `/giveaway` | Manage Server or the mod role (members click Enter) |
 | [Starboard](#starboard) | `/starboard`, or the dashboard's Community page | Manage Server (everyone stars messages) |
@@ -199,6 +200,17 @@ The bot answers messages that match a trigger, like "how do I download" or "serv
 
 Needs **Manage Server**. Up to 25 per server. Each answers at most once every 30 seconds per channel, never answers bots, and skips messages automod acted on. Reading messages needs the **Message Content** intent. They're also on the dashboard's **Custom commands** page.
 
+### Scheduled messages
+
+Messages the bot posts later, once or on repeat: event reminders, a weekly update, a rules refresher. Discord can schedule events, but not messages.
+
+- `/schedule add channel:<channel> in:<duration> [every:<duration>]` opens a form for the message (several lines, up to 2000 characters). `in` is when it's first posted (1 minute to 1 year, like `30m`, `2h`, `1d12h`, `1w`); `every` repeats it (at least `1h`, at most a year). Without `every` it's posted once.
+- `/schedule list` shows each message's number, channel, next post and repeat. `/schedule remove message:<number>` deletes one.
+- Mentions in the message (`@everyone`, roles, members) only ping if whoever scheduled it has **Mention Everyone**; otherwise they show without pinging.
+- Repeating messages keep their rhythm: runs missed while the bot was offline are skipped, not posted all at once. A message whose channel was deleted is deleted too; one the bot can't post (missing permissions) is logged in the console and tried again next time.
+
+Needs **Manage Server**. Up to 25 per server. The bot needs View Channel and Send Messages in the channel. The dashboard's **Scheduled** page does the same, with the time picked in your own time zone.
+
 ### Reminders
 
 Anyone can ask the bot to remind them about something later: a tournament check-in, a stream, an event.
@@ -325,6 +337,7 @@ A website where admins log in with Discord and manage the bot without slash comm
 - **Automod:** the main switch, each rule with its action and numbers, banned words and allowed websites (one per line), timeout length and escalation, and exempt roles and channels (see [Automod](#automod)).
 - **Community:** the welcome and leave channels and messages (empty boxes show the default), the welcome DM, autoroles, the starboard (channel, stars needed, emoji), and the server's role panels (read-only; change them with `/rolepanel`).
 - **Custom commands:** every saved answer for `/tag`, with its name and text, and the auto-responders with their trigger, match, channel and reply; add, edit or remove them (see [Custom commands](#custom-commands) and [Auto-responders](#auto-responders)).
+- **Scheduled:** schedule a message (channel, first post in your own time zone, repeat), and see or delete the upcoming ones (see [Scheduled messages](#scheduled-messages)).
 - **Leveling:** the main switch, where and how level-ups are announced, reward roles, channels and roles that earn no XP, and the leaderboard with each member's level and progress (see [Leveling](#leveling)).
 - **Country:** the `/country` channel.
 - **Roles & access:** the **dashboard roles** (see below), and a table of every role with its color, its strongest permissions and what the bot uses it for, filterable by name or kind.
@@ -468,6 +481,7 @@ src/
     tags.js              Custom commands: /tag, /tags and the form
     autoResponder.js     Auto-responders: /autoresponder and the reply form
     remind.js            Reminders: /remind
+    schedule.js          Scheduled messages: /schedule and the message form
     giveaway.js          Giveaways: /giveaway and its Enter button
     starboard.js         Starboard: /starboard
     tickets.js           Support tickets: /tickets, the panel's button, the form and the Close button
@@ -485,6 +499,7 @@ src/
   voice/                 Join-to-create voice: making and deleting channels (tempVoice.js), saved in SQLite (tempVoiceStore.js)
   leveling/              Leveling: settings and level math (config.js), XP in SQLite (levelStore.js), earning XP and rewards (leveling.js)
   members/               Member history: when members joined and left (memberEventStore.js)
+  scheduled/             Scheduled messages: saved in SQLite (scheduledMessageStore.js), posted when due (scheduler.js)
   reminders/             Reminders: saved in SQLite (reminderStore.js), sent when due (reminderScheduler.js)
   automod/               Automod: settings (config.js), what each rule matches (rules.js), acting on messages
   logs/                  Logs channel, server log, and posting to log channels

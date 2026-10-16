@@ -30,6 +30,8 @@ import { createModerationService } from "./moderation/moderationService.js";
 import { createTempBanScheduler } from "./moderation/tempBans.js";
 import { ReminderStore } from "./reminders/reminderStore.js";
 import { createReminderScheduler } from "./reminders/reminderScheduler.js";
+import { createScheduledMessageScheduler } from "./scheduled/scheduler.js";
+import { ScheduledMessageStore } from "./scheduled/scheduledMessageStore.js";
 import { GuildSettings, Setting } from "./settings/guildSettings.js";
 import { TicketStore } from "./tickets/ticketStore.js";
 import { closeDatabase, DEFAULT_DATABASE_FILE, openDatabase } from "./storage/database.js";
@@ -88,6 +90,8 @@ async function start() {
   const reminders = new ReminderStore(db);
   // Giveaways started with /giveaway, and who entered them.
   const giveaways = new GiveawayStore(db);
+  // Scheduled and repeating messages (/schedule).
+  const scheduledMessages = new ScheduledMessageStore(db);
   // When members joined and left, for the dashboard's member history.
   const memberEvents = new MemberEventStore(db);
   // Support tickets opened from the /tickets panel.
@@ -143,6 +147,7 @@ async function start() {
     modLog,
     botDeletions,
     reminders,
+    scheduledMessages,
     giveaways,
     tickets,
     levels,
@@ -188,6 +193,7 @@ async function start() {
   let tempBans;
   let reminderScheduler;
   let giveawayScheduler;
+  let scheduledMessageScheduler;
 
   function connect(intents) {
     client = new Client({ intents, partials: PARTIALS });
@@ -212,6 +218,9 @@ async function start() {
       giveawayScheduler = createGiveawayScheduler({ client: readyClient, store: giveaways, logger, forcedLanguage });
       tempVoice.sweep(readyClient).catch((error) => logger.error("Couldn't clean up join-to-create channels", { error }));
       giveawayScheduler.start();
+      scheduledMessageScheduler?.stop();
+      scheduledMessageScheduler = createScheduledMessageScheduler({ client: readyClient, store: scheduledMessages, logger });
+      scheduledMessageScheduler.start();
     });
 
     client.on(Events.InteractionCreate, (interaction) => {
@@ -372,6 +381,7 @@ async function start() {
       tempBans?.stop();
       reminderScheduler?.stop();
       giveawayScheduler?.stop();
+      scheduledMessageScheduler?.stop();
       automod.stop();
       await client?.destroy().catch(() => {});
       closeDatabase(db);

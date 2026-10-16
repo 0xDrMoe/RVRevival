@@ -50,6 +50,18 @@ const MAX_AUTOROLES = 10;
 const MAX_RESPONDERS = 25;
 const MAX_TRIGGER_LENGTH = 60;
 const RESPONDER_MATCHES = ["contains", "word", "exact", "starts"];
+// Scheduled messages (scheduled/scheduler.js). The repeat choices on the page.
+const MAX_SCHEDULED_LENGTH = 2000;
+const HOUR_MS = 60 * 60 * 1000;
+const REPEATS = [
+  { key: "scheduledRepeat_none", ms: null },
+  { key: "scheduledRepeat_hour", ms: HOUR_MS },
+  { key: "scheduledRepeat_6h", ms: 6 * HOUR_MS },
+  { key: "scheduledRepeat_day", ms: 24 * HOUR_MS },
+  { key: "scheduledRepeat_week", ms: 7 * 24 * HOUR_MS },
+  { key: "scheduledRepeat_2weeks", ms: 14 * 24 * HOUR_MS },
+  { key: "scheduledRepeat_30days", ms: 30 * 24 * HOUR_MS },
+];
 // The starboard's limits and defaults (community/starboard.js).
 const STARBOARD_DEFAULTS = { threshold: 3, emoji: "⭐" };
 const MAX_STARBOARD_THRESHOLD = 50;
@@ -75,6 +87,7 @@ const PAGES = [
   { id: "automod", icon: "🤖", tone: "blue", settings: true },
   { id: "community", icon: "👋", tone: "pink", settings: true },
   { id: "tags", icon: "💬", tone: "amber", settings: true },
+  { id: "scheduled", icon: "🗓️", tone: "blue", settings: true },
   { id: "levels", icon: "🏆", tone: "green", settings: true },
   { id: "country", icon: "🌍", tone: "green", settings: true },
   { id: "access", icon: "🎭", tone: "purple", settings: true },
@@ -1456,6 +1469,141 @@ async function showTags(guildId) {
   });
 }
 
+// --- Scheduled messages -------------------------------------------------------------
+
+// "Every day", or "Every 3 days" for an interval set with /schedule.
+function repeatLabel(ms) {
+  const preset = REPEATS.find((repeat) => repeat.ms === ms);
+  return preset ? t(preset.key) : t("scheduledEvery", { every: formatDuration(ms) });
+}
+
+// A <input type="datetime-local"> value, in the browser's time zone.
+function localDateTime(ms) {
+  const date = new Date(ms - new Date(ms).getTimezoneOffset() * 60_000);
+  return date.toISOString().slice(0, 16);
+}
+
+function scheduledRow(guildId, message, channels, onDeleted) {
+  const channel = channels.find((entry) => entry.id === message.channelId);
+  const remove = h("button", { class: "ghost small", type: "button" }, t("scheduledDelete"));
+  remove.addEventListener("click", async () => {
+    if (!confirm(t("scheduledDeleteConfirm", { number: message.id }))) {
+      return;
+    }
+    remove.disabled = true;
+    try {
+      await api(`/api/guilds/${guildId}/scheduled/${message.id}`, { method: "DELETE" });
+      toast(t("scheduledDeleted"));
+      onDeleted();
+    } catch (error) {
+      remove.disabled = false;
+      failed(error);
+    }
+  });
+  return h(
+    "li",
+    { class: "scheduled-row" },
+    h(
+      "div",
+      { class: "toolbar" },
+      h("strong", {}, `#${message.id}`),
+      h("span", { class: "pill" }, channel ? channelLabel(channel, channels) : t("unknownOption", { id: message.channelId })),
+      h("span", { class: "muted grow" }, `${formatDate(message.nextAt)}${message.intervalMs ? ` · ${repeatLabel(message.intervalMs)}` : ""}`),
+      remove,
+    ),
+    h("p", { class: "scheduled-content" }, message.content),
+    h(
+      "p",
+      { class: "help" },
+      t(message.allowMentions ? "scheduledByPings" : "scheduledBy", { name: message.createdByName ?? message.createdBy }),
+    ),
+  );
+}
+
+async function showScheduled(guildId) {
+  const data = await loadManagedGuild(guildId);
+  if (!data) {
+    return;
+  }
+  const channels = postableChannels(data);
+  const list = h("ul", { class: "scheduled-list" });
+  const count = h("span", { class: "count-pill" });
+  const empty = h("p", { class: "muted" }, t("scheduledNone"));
+  const channel = picker({ id: "scheduledChannel", options: channels, value: "", emptyLabel: t("scheduledPickChannel") });
+  channel.required = true;
+  const when = h("input", { id: "scheduledAt", type: "datetime-local", required: true, value: localDateTime(Date.now() + HOUR_MS) });
+  const repeat = h(
+    "select",
+    { id: "scheduledRepeat" },
+    REPEATS.map((entry, index) => h("option", { value: String(index) }, t(entry.key))),
+  );
+  const content = h("textarea", {
+    id: "scheduledContent",
+    rows: 4,
+    required: true,
+    maxLength: MAX_SCHEDULED_LENGTH,
+    placeholder: t("scheduledContentPlaceholder"),
+  });
+  const submit = h("button", { class: "primary", type: "submit" }, t("scheduledAdd"));
+
+  const load = async () => {
+    const result = await api(`/api/guilds/${guildId}/scheduled`);
+    list.replaceChildren(...result.messages.map((message) => scheduledRow(guildId, message, data.channels, () => load().catch(failed))));
+    count.textContent = t("tagsCount", { count: result.messages.length, max: result.max });
+    empty.hidden = result.messages.length > 0;
+    submit.disabled = result.messages.length >= result.max;
+  };
+
+  const form = h(
+    "form",
+    {
+      class: "scheduled-form",
+      onsubmit: async (event) => {
+        event.preventDefault();
+        const at = new Date(when.value).getTime();
+        if (!Number.isFinite(at) || at <= Date.now()) {
+          toast(t("scheduledPast"));
+          return;
+        }
+        submit.disabled = true;
+        try {
+          await api(`/api/guilds/${guildId}/scheduled`, {
+            method: "POST",
+            body: { channelId: channel.value, content: content.value, at, intervalMs: REPEATS[Number(repeat.value)].ms },
+          });
+          content.value = "";
+          toast(t("scheduledAdded"));
+          await load();
+        } catch (error) {
+          failed(error);
+        } finally {
+          submit.disabled = false;
+        }
+      },
+    },
+    h(
+      "div",
+      { class: "grid-2" },
+      field("scheduledChannel", null, channel),
+      field("scheduledWhen", "scheduledWhenHelp", when),
+      field("scheduledRepeat", null, repeat),
+    ),
+    field("scheduledContent", "scheduledContentHelp", content),
+    h("div", { class: "toolbar scheduled-actions" }, submit),
+  );
+
+  show(
+    guildLayout(
+      data,
+      "scheduled",
+      hero(t("page_scheduled"), t("scheduledIntro"), "blue"),
+      card(t("scheduledNew"), "✍️", "blue", form),
+      card(t("scheduledUpcoming"), "🗓️", "blue", h("div", { class: "toolbar" }, h("p", { class: "help grow" }, t("scheduledHelp")), count), empty, list),
+    ),
+  );
+  await load();
+}
+
 // --- Leveling ------------------------------------------------------------------------
 
 // One reward: a level, a role and a remove button.
@@ -2835,6 +2983,7 @@ const SHOW_PAGE = {
   automod: showAutomod,
   community: showCommunity,
   tags: showTags,
+  scheduled: showScheduled,
   levels: showLevels,
   country: showCountry,
   access: showAccess,

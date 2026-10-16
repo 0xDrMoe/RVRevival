@@ -1764,6 +1764,44 @@ dialog textarea {
   }
 }
 
+/* --- Scheduled messages ----------------------------------------------------------- */
+
+.scheduled-form .grid-2 {
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  align-items: start;
+  margin-bottom: 12px;
+}
+
+.scheduled-form textarea {
+  width: 100%;
+}
+
+.scheduled-actions {
+  justify-content: flex-end;
+}
+
+.scheduled-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.scheduled-row {
+  min-width: 0;
+  padding: 10px 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.scheduled-content {
+  margin: 8px 0 4px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 /* --- Members ---------------------------------------------------------------------- */
 
 .tip.danger {
