@@ -1,6 +1,7 @@
 // The bot's SQLite database (data/bot.db), using Node's built-in node:sqlite
 // module, so there's no database server or native package to install. It holds
-// moderation cases and per-server settings.
+// moderation cases, per-server settings and dashboard logins. The bot and the
+// dashboard each open it; WAL mode lets them read and write at the same time.
 //
 // The schema is upgraded in place on startup: each entry in MIGRATIONS moves
 // the database up one version (stored in PRAGMA user_version). Never edit a
@@ -50,6 +51,22 @@ const MIGRATIONS = [
     value    TEXT NOT NULL,
     PRIMARY KEY (guild_id, key)
   );
+  `,
+  // 3: dashboard logins. The session ID is stored hashed and the Discord
+  // access token encrypted, so a copy of the database can't be used to log in.
+  `
+  CREATE TABLE dashboard_sessions (
+    id_hash          TEXT    PRIMARY KEY,
+    user_id          TEXT    NOT NULL,
+    username         TEXT    NOT NULL,
+    avatar           TEXT,
+    access_token     TEXT    NOT NULL,
+    guilds           TEXT,
+    guilds_loaded_at INTEGER,
+    created_at       INTEGER NOT NULL,
+    expires_at       INTEGER NOT NULL
+  );
+  CREATE INDEX dashboard_sessions_expiry ON dashboard_sessions (expires_at);
   `,
 ];
 

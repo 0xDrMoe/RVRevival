@@ -12,6 +12,7 @@ The Discord bot for the Rumbleverse Revival server. It is built as a set of inde
 | [Channel and member tools](#channel-and-member-tools) | `/lock`, `/unlock`, `/slowmode`, `/role`, `/nick` | The matching Discord permission, or the mod role |
 | [Server log](#server-log) | `/settings server-log-channel`, `/settings log-event`, `/settings log-ignore` | Manage Server |
 | [Country roles](#country-roles) | `/country`, `/country-staff`, `/country-help` | Everyone (`/country`), the staff role (`/country-staff`), Manage Server (`/country-help`) |
+| [Web dashboard](#web-dashboard) | https://rumbleverse.cedartechsolutions.ca | Manage Server |
 
 Every reply is translated into English, Spanish, German, French, Portuguese, Italian or Arabic (see [Languages](#languages)).
 
@@ -131,6 +132,45 @@ Needs: the **Manage Roles** permission, and the bot's role above every country r
 
 Country names are the English ISO names, with a few shortened (for example *United States*, *Russia*, *Taiwan*). These live in `NAME_OVERRIDES` in `src/countries/countries.js`. Renaming one after roles exist makes the bot create a new role, so rename the Discord role too.
 
+### Web dashboard
+
+A website where admins log in with Discord and manage the bot without slash commands:
+
+- **Servers:** every server where you have **Manage Server** (or Administrator, or own it). Servers without the bot get an invite link.
+- **Settings:** every `/settings` option on one page: staff and mod roles, the `/country`, logs, mod-log and server-log channels, which server-log events are logged, and ignored channels or categories.
+- **Cases:** every moderation case, newest first, filtered by member ID or action. Reasons can be edited (the mod-log post is updated too) and cases deleted.
+
+Every change made on the dashboard is posted in the server's logs channel with who made it, like commands are. The bot picks up dashboard changes within 5 seconds. The dashboard is in the same 7 languages as the bot (picked from the browser, or the menu at the top).
+
+**How it works.** It's a second process (`npm run dashboard`, pm2 app `rv-dashboard`) that shares `data/bot.db` with the bot. It only listens on `127.0.0.1:3080`; Caddy puts it on the internet with HTTPS. Logging in uses Discord OAuth2 with the `identify` and `guilds` scopes only, so it can see your name, avatar and server list, nothing else. Permissions are re-checked against Discord on every request (your server list is re-read at most every 5 minutes, or when you press *Refresh list*). Logins last 7 days. The session cookie is HTTP-only and Secure, and changes are only accepted from the dashboard's own address.
+
+**Setting it up on the VPS** (once):
+
+1. **DNS.** At the DNS provider for `cedartechsolutions.ca`, add an `A` record: name `rumbleverse`, value the VPS's public IP address. (Add an `AAAA` record too if the VPS has IPv6.)
+2. **Discord.** In the [Developer Portal](https://discord.com/developers/applications) > your application > **OAuth2**: copy the **Client Secret** (Reset Secret if you don't have it), and under **Redirects** add `https://rumbleverse.cedartechsolutions.ca/auth/callback`, then save.
+3. **`.env`.** Add these lines to the bot's `.env` on the VPS:
+   ```
+   DISCORD_CLIENT_SECRET=<the client secret>
+   DASHBOARD_URL=https://rumbleverse.cedartechsolutions.ca
+   DASHBOARD_SESSION_SECRET=<output of: openssl rand -hex 32>
+   ```
+4. **Start it** next to the bot:
+   ```
+   pm2 start npm --name rv-dashboard -- run dashboard
+   pm2 save
+   ```
+5. **HTTPS with Caddy.** Install Caddy (Ubuntu/Debian: see https://caddyserver.com/docs/install#debian-ubuntu-raspbian), then put this in `/etc/caddy/Caddyfile` and run `sudo systemctl reload caddy`:
+   ```
+   rumbleverse.cedartechsolutions.ca {
+       encode gzip
+       reverse_proxy 127.0.0.1:3080
+   }
+   ```
+   Caddy gets and renews the HTTPS certificate by itself. Ports 80 and 443 must be open (`sudo ufw allow 80,443/tcp` if ufw is on). If the VPS already runs nginx or Apache on those ports, add a proxy to `127.0.0.1:3080` there instead.
+6. Open https://rumbleverse.cedartechsolutions.ca and log in.
+
+After that, updates are the usual `git pull && npm ci`, then `pm2 restart rv-bot rv-dashboard`.
+
 ## Requirements
 
 - Node.js 24 LTS (22.13 or newer works; moderation cases use the built-in `node:sqlite`)
@@ -185,6 +225,7 @@ Country names are the English ISO names, with a few shortened (for example *Unit
 | `npm run register -- --global` | Register commands globally (can take up to an hour). |
 | `npm run register -- --clear-guild` | Remove this bot's commands from `DISCORD_GUILD_ID`. |
 | `npm run register -- --clear-global` | Remove this bot's global commands. |
+| `npm run dashboard` | Run the web dashboard (see [Web dashboard](#web-dashboard)). |
 | `npm test` | Run the unit tests (no Discord connection needed). |
 
 If a command shows up twice, you have both guild and global copies; clear one of them.
@@ -217,6 +258,8 @@ src/
   moderation/            Moderation: cases (SQLite), checks, actions, mod log, temporary bans
   settings/              Per-server settings (saved in data/bot.db)
   storage/               The SQLite database: opening it and schema migrations
+  dashboard/             Web dashboard: server.js (start), app.js (routes), Discord login, sessions
+    public/              The dashboard page (plain HTML, CSS and JavaScript, no build step) and its locales
   i18n/                  Language selection and locales/*.json (all features)
   utils/                 Shared: logger with token redaction, keyed lock, Discord error codes
 tests/                   Unit tests using in-memory Discord fakes
@@ -257,6 +300,10 @@ Replies use each user's Discord language when it's supported, otherwise English.
 | Bans or kicks from Discord's menu show "Unknown" moderator | Give the bot **View Audit Log**. |
 | No joins, leaves or role changes in the server log | Turn on **Server Members Intent** in the Developer Portal (*Bot* tab), then restart the bot. |
 | Temporary bans aren't lifted | The bot needs **Ban Members**; it keeps retrying and warns once in the console. |
+| Dashboard login says "Invalid OAuth2 redirect_uri" | Add `<DASHBOARD_URL>/auth/callback` exactly under OAuth2 > Redirects in the Developer Portal. |
+| Dashboard login loops back to the login page | `DASHBOARD_URL` must match the address in the browser exactly (https, no trailing slash). |
+| The dashboard site doesn't load | Check `pm2 logs rv-dashboard`, that the DNS record points at the VPS (`dig rumbleverse.cedartechsolutions.ca`), and `sudo journalctl -u caddy` for certificate errors. |
+| A server is missing from the dashboard | You need Manage Server there; press *Refresh list* after getting it. |
 
 Set `LOG_LEVEL=debug` for more detail.
 
@@ -269,6 +316,7 @@ Set `LOG_LEVEL=debug` for more detail.
 ## Security
 
 - Secrets come only from environment variables. `.env` is git-ignored; `.env.example` has placeholders only.
-- Logs redact anything that looks like a Discord token, plus the configured token.
+- Logs redact anything that looks like a Discord token, plus the configured token, client secret and session secret.
 - Users only see fixed, friendly messages; errors and stack traces stay in the log.
 - The bot uses the Guilds, Guild Messages and Guild Moderation intents, plus the privileged Message Content intent (to show what edited and deleted messages said in the logs) and Server Members intent (joins, leaves and member changes). Message text is only ever copied into log channels. It uses only the permissions its features need (see the invite link in [Setup](#setup)). Roles it creates have zero permissions.
+- The dashboard listens only on `127.0.0.1` and is reached through Caddy over HTTPS. It stores a hash of each login's session token, never the token itself, and the Discord access token encrypted with `DASHBOARD_SESSION_SECRET`. Every page sets a strict Content Security Policy, changes must come from the dashboard's own address, and requests are rate-limited.
