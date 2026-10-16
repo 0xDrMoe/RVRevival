@@ -17,6 +17,7 @@ The Discord bot for the Rumbleverse Revival server. It is built as a set of inde
 | [Custom commands](#custom-commands) | `/tag`, `/tags`, or the dashboard's Custom commands page | Everyone (`/tag`), Manage Messages or the mod role (`/tags`) |
 | [Reminders](#reminders) | `/remind` | Everyone |
 | [Giveaways](#giveaways) | `/giveaway` | Manage Server or the mod role (members click Enter) |
+| [Starboard](#starboard) | `/starboard`, or the dashboard's Community page | Manage Server (everyone stars messages) |
 | [Country roles](#country-roles) | `/country`, `/country-staff`, `/country-help` | Everyone (`/country`), the staff role (`/country-staff`), Manage Server (`/country-help`) |
 | [Web dashboard](#web-dashboard) | https://rumbleverse.cedartechsolutions.ca | Manage Server, or a dashboard role |
 
@@ -202,6 +203,17 @@ Staff post a giveaway, members click **🎉 Enter**, and the bot picks random wi
 
 Needs **Manage Server** or the mod role. Up to 10 running per server. Giveaways are saved in `data/bot.db`, so they survive restarts; one that ended while the bot was offline is drawn as soon as it's back. Ended giveaways can be rerolled for 30 days. Entering isn't posted in the logs channel, so a big giveaway doesn't flood it.
 
+### Starboard
+
+When a message gets enough ⭐ reactions, the bot reposts it in a starboard channel with the author, text, first image and a **Jump to message** button, and keeps the star count up to date.
+
+- `/starboard set channel:#starboard` turns it on. Optional: `threshold` (stars needed, 1 to 50, default 3) and `emoji` (default ⭐; a custom emoji from the server works too). Running it again changes those.
+- `/starboard show` shows the settings and `/starboard off` turns it off (posts already on the board stay). The same settings are on the dashboard's **Community** page.
+- The author's own star and bots don't count. If the stars drop below the threshold, the starboard post is deleted, and if the original message is deleted, so is its post. If staff delete a starboard post, that message never goes back on the board.
+- Messages from channels @everyone can't see never go on a starboard @everyone can see, and messages from age-restricted channels only go on an age-restricted starboard. Messages in the starboard channel itself can't be starred onto it.
+
+Needs **Manage Server**. The bot needs View Channel, Send Messages and Embed Links in the starboard channel, and Read Message History in the channels people star in. Message text needs the **Message Content** intent.
+
 ### Country roles
 
 Members pick the country they live in and get a role named after it. They can only pick once; after that, only staff can change it.
@@ -242,7 +254,7 @@ A website where admins log in with Discord and manage the bot without slash comm
 - **Moderation:** staff and mod roles, and the mod-log channel.
 - **Logging:** the logs and server-log channels, a switch for each server-log event, and ignored channels or categories (with a filter).
 - **Automod:** the main switch, each rule with its action and numbers, banned words and allowed websites (one per line), timeout length and escalation, and exempt roles and channels (see [Automod](#automod)).
-- **Community:** the welcome and leave channels and messages (empty boxes show the default), the welcome DM, autoroles, and the server's role panels (read-only; change them with `/rolepanel`).
+- **Community:** the welcome and leave channels and messages (empty boxes show the default), the welcome DM, autoroles, the starboard (channel, stars needed, emoji), and the server's role panels (read-only; change them with `/rolepanel`).
 - **Custom commands:** every saved answer for `/tag`, with its name and text; add, edit or remove them (see [Custom commands](#custom-commands)).
 - **Country:** the `/country` channel.
 - **Roles & access:** the **dashboard roles** (see below), and a table of every role with its color, its strongest permissions and what the bot uses it for, filterable by name or kind.
@@ -386,11 +398,12 @@ src/
     tags.js              Custom commands: /tag, /tags and the form
     remind.js            Reminders: /remind
     giveaway.js          Giveaways: /giveaway and its Enter button
+    starboard.js         Starboard: /starboard
     commandHelpers.js    Shared start of moderation-style commands (language, permission check)
   countries/             Country roles: country list, name matching and search
   roles/                 Country roles: find, create, assign and remove roles
   channels/              Country roles: keeps the /country channel clean
-  community/             Community: welcome and leave messages, autoroles (welcome.js), role panels (rolePanels.js), custom commands (tags.js)
+  community/             Community: welcome and leave messages, autoroles (welcome.js), role panels (rolePanels.js), custom commands (tags.js), the starboard (starboard.js, starboardStore.js)
   giveaways/             Giveaways: saved in SQLite (giveawayStore.js), drawing winners (giveaways.js), ended on time (giveawayScheduler.js)
   reminders/             Reminders: saved in SQLite (reminderStore.js), sent when due (reminderScheduler.js)
   automod/               Automod: settings (config.js), what each rule matches (rules.js), acting on messages
@@ -458,5 +471,5 @@ Set `LOG_LEVEL=debug` for more detail.
 - Secrets come only from environment variables. `.env` is git-ignored; `.env.example` has placeholders only.
 - Logs redact anything that looks like a Discord token, plus the configured token, client secret and session secret.
 - Users only see fixed, friendly messages; errors and stack traces stay in the log.
-- The bot uses the Guilds, Guild Messages and Guild Moderation intents, plus the privileged Message Content intent (to show what edited and deleted messages said in the logs) and Server Members intent (joins, leaves and member changes). Message text is only ever copied into log channels. It uses only the permissions its features need (see the invite link in [Setup](#setup)). Roles it creates have zero permissions.
+- The bot uses the Guilds, Guild Messages, Guild Moderation and Guild Message Reactions (the starboard) intents, plus the privileged Message Content intent (to show what edited and deleted messages said in the logs) and Server Members intent (joins, leaves and member changes). Message text is only ever copied into log channels. It uses only the permissions its features need (see the invite link in [Setup](#setup)). Roles it creates have zero permissions.
 - The dashboard listens only on `127.0.0.1` and is reached through nginx or Caddy over HTTPS. It stores a hash of each login's session token, never the token itself, and the Discord access token encrypted with `DASHBOARD_SESSION_SECRET`. Every page sets a strict Content Security Policy, changes must come from the dashboard's own address, and requests are rate-limited. Members with a dashboard role only get the overview and cases; settings always need Manage Server. CSV exports prefix cells that start with `=`, `+`, `-` or `@` with `'` so spreadsheets don't run them as formulas.

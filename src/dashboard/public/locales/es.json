@@ -282,5 +282,13 @@
   "tagName": "Nombre",
   "tagNamePlaceholder": "descarga",
   "tagContent": "Texto",
-  "tagContentPlaceholder": "Lo que publica /tag (hasta 2000 caracteres)"
+  "tagContentPlaceholder": "Lo que publica /tag (hasta 2000 caracteres)",
+  "sectionStarboard": "Starboard",
+  "starboardHelp": "Cuando un mensaje recibe suficientes estrellas, el bot lo republica en el canal del starboard con un enlace al original. La estrella del propio autor y los bots no cuentan.",
+  "starboardChannel": "Canal del starboard",
+  "starboardChannelHelp": "Desactivado apaga el starboard. Los mensajes de canales que no todos pueden ver nunca van a un starboard público.",
+  "starboardThreshold": "Estrellas necesarias",
+  "starboardThresholdHelp": "De 1 a 50.",
+  "starboardEmoji": "Emoji de estrella",
+  "starboardEmojiHelp": "⭐ por defecto. Un emoji personalizado se ve así: <:nombre:123…>."
 }

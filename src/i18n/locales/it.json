@@ -579,5 +579,21 @@
   "giveawayEndedButton": "Terminato",
   "giveawayWon": "🎉 Congratulazioni {winners}! Hai vinto **{prize}**.",
   "giveawayNoEntries": "Il giveaway per **{prize}** è terminato, ma non è stato possibile estrarre nessun vincitore.",
-  "giveawayRerollWon": "🎉 Nuovo/i vincitore/i per **{prize}**: {winners}. Congratulazioni!"
+  "giveawayRerollWon": "🎉 Nuovo/i vincitore/i per **{prize}**: {winners}. Congratulazioni!",
+
+  "starboardCommandDescription": "Configura la starboard: i messaggi con abbastanza stelle vengono ripubblicati in un canale.",
+  "starboardSetDescription": "Attiva la starboard, o cambiane canale, numero di stelle o emoji.",
+  "starboardChannelOptionDescription": "Dove vengono ripubblicati i messaggi con le stelle.",
+  "starboardThresholdOptionDescription": "Quante stelle servono a un messaggio (3 di default).",
+  "starboardEmojiOptionDescription": "L'emoji che conta come stella (⭐ di default).",
+  "starboardOffDescription": "Disattiva la starboard.",
+  "starboardShowDescription": "Vedi le impostazioni della starboard.",
+  "starboardSet": "La starboard è attiva: i messaggi con {threshold} {emoji} vanno in {channel}. La stella dell'autore stesso e i bot non contano.",
+  "starboardOff": "La starboard è disattivata. I post già presenti restano.",
+  "starboardShow": "Starboard: {channel}, servono {threshold} {emoji}.",
+  "starboardShowOff": "La starboard è disattivata. Attivala con `/starboard set`.",
+  "starboardBadEmoji": "Non posso usare quell'emoji. Usa un solo emoji, come ⭐ o un emoji personalizzato di questo server.",
+  "starboardCannotPost": "Non posso scrivere in {channel}. Mi servono Visualizza canale, Invia messaggi e Incorpora link.",
+  "starboardJump": "Vai al messaggio",
+  "starboardAttachments": "Allegati"
 }

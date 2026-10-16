@@ -579,5 +579,21 @@
   "giveawayEndedButton": "انتهى",
   "giveawayWon": "🎉 تهانينا {winners}! لقد فزت بـ **{prize}**.",
   "giveawayNoEntries": "انتهى السحب على **{prize}**، لكن لم يمكن اختيار أي فائز.",
-  "giveawayRerollWon": "🎉 فائز(ون) جدد في **{prize}**: {winners}. تهانينا!"
+  "giveawayRerollWon": "🎉 فائز(ون) جدد في **{prize}**: {winners}. تهانينا!",
+
+  "starboardCommandDescription": "إعداد لوحة النجوم: تُعاد الرسائل التي تنال نجومًا كافية في قناة.",
+  "starboardSetDescription": "شغّل لوحة النجوم، أو غيّر قناتها أو عدد النجوم أو الرمز التعبيري.",
+  "starboardChannelOptionDescription": "مكان إعادة نشر الرسائل المميزة بالنجوم.",
+  "starboardThresholdOptionDescription": "عدد النجوم التي تحتاجها الرسالة (3 افتراضيًا).",
+  "starboardEmojiOptionDescription": "الرمز التعبيري الذي يُحسب نجمة (⭐ افتراضيًا).",
+  "starboardOffDescription": "أوقف لوحة النجوم.",
+  "starboardShowDescription": "اعرض إعدادات لوحة النجوم.",
+  "starboardSet": "لوحة النجوم تعمل: الرسائل التي تنال {threshold} {emoji} تذهب إلى {channel}. لا تُحسب نجمة صاحب الرسالة ولا البوتات.",
+  "starboardOff": "لوحة النجوم متوقفة. تبقى المنشورات الموجودة عليها.",
+  "starboardShow": "لوحة النجوم: {channel}، المطلوب {threshold} {emoji}.",
+  "starboardShowOff": "لوحة النجوم متوقفة. شغّلها عبر `/starboard set`.",
+  "starboardBadEmoji": "لا يمكنني استخدام هذا الرمز. استخدم رمزًا تعبيريًا واحدًا مثل ⭐ أو رمزًا مخصصًا من هذا الخادم.",
+  "starboardCannotPost": "لا يمكنني النشر في {channel}. أحتاج هناك إلى صلاحيات عرض القناة وإرسال الرسائل وتضمين الروابط.",
+  "starboardJump": "الانتقال إلى الرسالة",
+  "starboardAttachments": "المرفقات"
 }

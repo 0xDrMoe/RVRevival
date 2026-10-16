@@ -282,5 +282,13 @@
   "tagName": "Nom",
   "tagNamePlaceholder": "telechargement",
   "tagContent": "Texte",
-  "tagContentPlaceholder": "Ce que /tag publie (jusqu'à 2000 caractères)"
+  "tagContentPlaceholder": "Ce que /tag publie (jusqu'à 2000 caractères)",
+  "sectionStarboard": "Starboard",
+  "starboardHelp": "Quand un message reçoit assez d'étoiles, le bot le republie dans le salon du starboard avec un lien vers l'original. L'étoile de l'auteur et celles des bots ne comptent pas.",
+  "starboardChannel": "Salon du starboard",
+  "starboardChannelHelp": "Désactivé éteint le starboard. Les messages des salons que tout le monde ne voit pas ne vont jamais sur un starboard public.",
+  "starboardThreshold": "Étoiles nécessaires",
+  "starboardThresholdHelp": "De 1 à 50.",
+  "starboardEmoji": "Emoji étoile",
+  "starboardEmojiHelp": "⭐ par défaut. Un emoji personnalisé ressemble à <:nom:123…>."
 }

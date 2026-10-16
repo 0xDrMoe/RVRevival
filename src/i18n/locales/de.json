@@ -579,5 +579,21 @@
   "giveawayEndedButton": "Beendet",
   "giveawayWon": "🎉 Glückwunsch {winners}! Du hast **{prize}** gewonnen.",
   "giveawayNoEntries": "Das Gewinnspiel für **{prize}** ist beendet, aber niemand konnte als Gewinner ausgelost werden.",
-  "giveawayRerollWon": "🎉 Neue(r) Gewinner für **{prize}**: {winners}. Glückwunsch!"
+  "giveawayRerollWon": "🎉 Neue(r) Gewinner für **{prize}**: {winners}. Glückwunsch!",
+
+  "starboardCommandDescription": "Starboard einrichten: Nachrichten mit genug Sternen werden in einem Kanal erneut gepostet.",
+  "starboardSetDescription": "Starboard einschalten oder Kanal, Sternanzahl oder Emoji ändern.",
+  "starboardChannelOptionDescription": "Wo markierte Nachrichten erneut gepostet werden.",
+  "starboardThresholdOptionDescription": "Wie viele Sterne eine Nachricht braucht (standardmäßig 3).",
+  "starboardEmojiOptionDescription": "Das Emoji, das als Stern zählt (standardmäßig ⭐).",
+  "starboardOffDescription": "Starboard ausschalten.",
+  "starboardShowDescription": "Die Starboard-Einstellungen ansehen.",
+  "starboardSet": "Das Starboard ist an: Nachrichten mit {threshold} {emoji} kommen nach {channel}. Der eigene Stern des Autors und Bots zählen nicht.",
+  "starboardOff": "Das Starboard ist aus. Beiträge, die schon dort sind, bleiben.",
+  "starboardShow": "Starboard: {channel}, {threshold} {emoji} nötig.",
+  "starboardShowOff": "Das Starboard ist aus. Schalte es mit `/starboard set` ein.",
+  "starboardBadEmoji": "Dieses Emoji kann ich nicht verwenden. Nimm ein Emoji, zum Beispiel ⭐ oder ein eigenes Emoji dieses Servers.",
+  "starboardCannotPost": "Ich kann in {channel} nicht posten. Ich brauche dort Kanal ansehen, Nachrichten senden und Links einbetten.",
+  "starboardJump": "Zur Nachricht",
+  "starboardAttachments": "Anhänge"
 }

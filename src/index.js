@@ -5,6 +5,8 @@ import { createAutomod } from "./automod/automod.js";
 import { normalizeAutomod } from "./automod/config.js";
 import { createCountryChannelGuard } from "./channels/countryChannelGuard.js";
 import { createCommands } from "./commands/index.js";
+import { createStarboard } from "./community/starboard.js";
+import { StarboardStore } from "./community/starboardStore.js";
 import { createWelcomer } from "./community/welcome.js";
 import { ConfigError, loadBotConfig } from "./config.js";
 import { createGiveawayScheduler } from "./giveaways/giveawayScheduler.js";
@@ -37,13 +39,18 @@ process.on("uncaughtException", (error) => {
 // Guilds keeps servers, roles, channels and the bot's own member info up to
 // date. GuildMessages lets the bot see new, edited and deleted messages (the
 // /country channel, the server log). GuildModeration reports bans, including
-// ones done outside the bot.
+// ones done outside the bot. GuildMessageReactions is for the starboard.
 //
 // Two are privileged and must be switched on in the Developer Portal (Bot >
 // Privileged Gateway Intents): MessageContent shows what edited and deleted
 // messages said; GuildMembers reports joins, leaves, nickname, role and timeout
 // changes. If one is off, the bot starts without it instead of staying offline.
-const BASE_INTENTS = [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.GuildModeration];
+const BASE_INTENTS = [
+  GatewayIntentBits.Guilds,
+  GatewayIntentBits.GuildMessages,
+  GatewayIntentBits.GuildModeration,
+  GatewayIntentBits.GuildMessageReactions,
+];
 const PRIVILEGED_INTENT_SETS = [
   [GatewayIntentBits.GuildMembers, GatewayIntentBits.MessageContent],
   [GatewayIntentBits.GuildMembers],
@@ -56,8 +63,9 @@ const INTENT_NAMES = {
 };
 
 // Partials let the bot hear about messages and members it hadn't cached, such
-// as a message deleted that was posted before the bot started.
-const PARTIALS = [Partials.Message, Partials.Channel, Partials.GuildMember, Partials.User];
+// as a message deleted that was posted before the bot started, or a reaction
+// on an old message (the starboard).
+const PARTIALS = [Partials.Message, Partials.Channel, Partials.GuildMember, Partials.User, Partials.Reaction];
 
 async function start() {
   const config = loadBotConfig();
@@ -100,6 +108,9 @@ async function start() {
 
   // Welcome and leave messages, the welcome DM and autoroles (/welcome).
   const welcomer = createWelcomer({ guildSettings, logger, forcedLanguage });
+
+  // The starboard (/starboard): messages with enough stars are reposted.
+  const starboard = createStarboard({ guildSettings, store: new StarboardStore(db), logger, forcedLanguage, botDeletions });
 
   const commands = createCommands({
     logger,
@@ -187,6 +198,22 @@ async function start() {
 
     // The server log (/settings server-log-channel).
     client.on(Events.MessageDelete, safely("a deleted message", (message) => serverLog.messageDeleted(message)));
+    client.on(Events.MessageDelete, safely("the starboard on a deletion", (message) => starboard.messageDeleted(message)));
+    client.on(
+      Events.MessageBulkDelete,
+      safely("the starboard on a bulk delete", async (messages) => {
+        for (const message of messages.values()) {
+          await starboard.messageDeleted(message);
+        }
+      }),
+    );
+    client.on(Events.MessageReactionAdd, safely("a reaction", (reaction) => starboard.reactionChanged(reaction)));
+    client.on(Events.MessageReactionRemove, safely("a removed reaction", (reaction) => starboard.reactionChanged(reaction)));
+    client.on(Events.MessageReactionRemoveAll, safely("cleared reactions", (message) => starboard.reactionsCleared(message)));
+    client.on(
+      Events.MessageReactionRemoveEmoji,
+      safely("a cleared emoji", (reaction) => starboard.reactionsCleared(reaction.message)),
+    );
     client.on(
       Events.MessageBulkDelete,
       safely("a bulk delete", (messages, channel) => serverLog.messagesBulkDeleted(messages, channel)),
@@ -224,6 +251,12 @@ async function start() {
           .catch((error) => logger.error("Couldn't forget a deleted ignored channel", { error }));
       }
       forgetAutomodExemption(channel.guildId, "exemptChannelIds", channel.id);
+      if (channel.guildId && guildSettings.get(channel.guildId, Setting.STARBOARD)?.channelId === channel.id) {
+        guildSettings
+          .clear(channel.guildId, Setting.STARBOARD)
+          .then(() => logger.info("The starboard channel was deleted; set a new one with /starboard set", { guildId: channel.guildId }))
+          .catch((error) => logger.error("Couldn't turn off the starboard after its channel was deleted", { error }));
+      }
       for (const [setting, message] of CHANNEL_SETTINGS) {
         if (channel.guildId && guildSettings.get(channel.guildId, setting) === channel.id) {
           guildSettings

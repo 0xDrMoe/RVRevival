@@ -38,6 +38,9 @@ const MAX_MESSAGE_LENGTH = 1000;
 const MAX_TAGS = 50;
 const MAX_TAG_LENGTH = 2000;
 const MAX_AUTOROLES = 10;
+// The starboard's limits and defaults (community/starboard.js).
+const STARBOARD_DEFAULTS = { threshold: 3, emoji: "⭐" };
+const MAX_STARBOARD_THRESHOLD = 50;
 // Administrator and Manage Server: roles the bot won't give new members.
 const AUTOROLE_FORBIDDEN = (1n << 3n) | (1n << 5n);
 const CHANNEL = { TEXT: 0, VOICE: 2, CATEGORY: 4, ANNOUNCEMENT: 5, FORUM: 15 };
@@ -1101,6 +1104,19 @@ function rolePanelList(data) {
   );
 }
 
+// The starboard settings on the Community page, or null when no channel is picked (off).
+function readStarboard(form) {
+  const channelId = form.querySelector("#starboardChannelId").value;
+  if (!channelId) {
+    return null;
+  }
+  return {
+    channelId,
+    threshold: Number(form.querySelector("#starboardThreshold").value),
+    emoji: form.querySelector("#starboardEmoji").value.trim(),
+  };
+}
+
 async function showCommunity(guildId) {
   const data = await loadManagedGuild(guildId);
   if (!data) {
@@ -1109,7 +1125,8 @@ async function showCommunity(guildId) {
   const { settings } = data;
   const defaults = data.communityDefaults ?? {};
   const postable = postableChannels(data);
-  const channelPicker = (key) => picker({ id: key, options: postable, value: settings[key], emptyLabel: t("communityOff") });
+  const channelPicker = (key) =>
+    picker({ id: key, options: postable, value: key === "starboardChannelId" ? settings.starboard?.channelId : settings[key], emptyLabel: t("communityOff") });
   const givable = data.roles
     .filter((role) => !role.managed && (BigInt(role.permissions ?? 0) & AUTOROLE_FORBIDDEN) === 0n)
     .map((role) => ({ id: role.id, label: `@${role.name}`, dot: roleDot(role) }));
@@ -1142,6 +1159,34 @@ async function showCommunity(guildId) {
         data.guild.community ? h("p", { class: "tip" }, t("onboardingTip")) : null,
         checkList({ name: "autorole", items: givable, checked: settings.autoroleIds ?? [], filterKey: "filterRoles" }),
       ),
+      card(
+        t("sectionStarboard"),
+        "⭐",
+        "amber",
+        h("p", { class: "help" }, t("starboardHelp")),
+        field("starboardChannel", "starboardChannelHelp", channelPicker("starboardChannelId")),
+        h(
+          "div",
+          { class: "rule-body" },
+          field(
+            "starboardThreshold",
+            "starboardThresholdHelp",
+            h("input", {
+              id: "starboardThreshold",
+              type: "number",
+              min: 1,
+              max: MAX_STARBOARD_THRESHOLD,
+              step: 1,
+              value: settings.starboard?.threshold ?? STARBOARD_DEFAULTS.threshold,
+            }),
+          ),
+          field(
+            "starboardEmoji",
+            "starboardEmojiHelp",
+            h("input", { id: "starboardEmoji", maxLength: 64, value: settings.starboard?.emoji ?? STARBOARD_DEFAULTS.emoji }),
+          ),
+        ),
+      ),
     ],
     fields: {
       welcomeChannelId: selectValue("welcomeChannelId"),
@@ -1150,6 +1195,7 @@ async function showCommunity(guildId) {
       leaveChannelId: selectValue("leaveChannelId"),
       leaveMessage: textValue("leaveMessage"),
       autoroleIds: checkedList("autorole"),
+      starboard: readStarboard,
     },
     after: card(
       t("sectionRolePanels"),

@@ -579,5 +579,21 @@
   "giveawayEndedButton": "Ended",
   "giveawayWon": "🎉 Congratulations {winners}! You won **{prize}**.",
   "giveawayNoEntries": "The giveaway for **{prize}** has ended, but no one could be picked as a winner.",
-  "giveawayRerollWon": "🎉 New winner(s) for **{prize}**: {winners}. Congratulations!"
+  "giveawayRerollWon": "🎉 New winner(s) for **{prize}**: {winners}. Congratulations!",
+
+  "starboardCommandDescription": "Set up the starboard: messages with enough stars are reposted in a channel.",
+  "starboardSetDescription": "Turn on the starboard, or change its channel, star count or emoji.",
+  "starboardChannelOptionDescription": "Where starred messages are reposted.",
+  "starboardThresholdOptionDescription": "How many stars a message needs (3 by default).",
+  "starboardEmojiOptionDescription": "The emoji that counts as a star (⭐ by default).",
+  "starboardOffDescription": "Turn off the starboard.",
+  "starboardShowDescription": "See the starboard settings.",
+  "starboardSet": "The starboard is on: messages with {threshold} {emoji} go to {channel}. The author's own star and bots don't count.",
+  "starboardOff": "The starboard is off. Posts already on it stay.",
+  "starboardShow": "Starboard: {channel}, {threshold} {emoji} needed.",
+  "starboardShowOff": "The starboard is off. Turn it on with `/starboard set`.",
+  "starboardBadEmoji": "That isn't an emoji I can use. Use one emoji, like ⭐ or a custom emoji from this server.",
+  "starboardCannotPost": "I can't post in {channel}. I need View Channel, Send Messages and Embed Links there.",
+  "starboardJump": "Jump to message",
+  "starboardAttachments": "Attachments"
 }

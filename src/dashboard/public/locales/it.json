@@ -282,5 +282,13 @@
   "tagName": "Nome",
   "tagNamePlaceholder": "download",
   "tagContent": "Testo",
-  "tagContentPlaceholder": "Cosa pubblica /tag (fino a 2000 caratteri)"
+  "tagContentPlaceholder": "Cosa pubblica /tag (fino a 2000 caratteri)",
+  "sectionStarboard": "Starboard",
+  "starboardHelp": "Quando un messaggio riceve abbastanza stelle, il bot lo ripubblica nel canale della starboard con un link all'originale. La stella dell'autore stesso e i bot non contano.",
+  "starboardChannel": "Canale della starboard",
+  "starboardChannelHelp": "Disattivato spegne la starboard. I messaggi dei canali che non tutti vedono non finiscono mai su una starboard pubblica.",
+  "starboardThreshold": "Stelle necessarie",
+  "starboardThresholdHelp": "Da 1 a 50.",
+  "starboardEmoji": "Emoji stella",
+  "starboardEmojiHelp": "⭐ di default. Un emoji personalizzato è così: <:nome:123…>."
 }
