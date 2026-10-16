@@ -23,7 +23,8 @@ const IGNORED_ERRORS = new Set([
 //   guildSettings   where the /country channel is stored (GuildSettings)
 //   logger
 //   actionLog       records each deletion in the logs channel (see logs/actionLog.js)
-export function createCountryChannelGuard({ guildSettings, logger, actionLog = noActionLog }) {
+//   botDeletions    remembers what the bot deleted, so the server log skips it (RecentIds)
+export function createCountryChannelGuard({ guildSettings, logger, actionLog = noActionLog, botDeletions }) {
   // Servers already warned about missing permissions, so a busy channel can't
   // flood the log. A server is warned again once a delete has worked.
   const warnedGuilds = new Set();
@@ -41,6 +42,7 @@ export function createCountryChannelGuard({ guildSettings, logger, actionLog = n
 
     // Start saving attachments before deleting: their links stop working after.
     const saving = actionLog.saveAttachments(message);
+    botDeletions?.add(message.id);
     try {
       await message.delete();
     } catch (error) {

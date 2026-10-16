@@ -1,11 +1,19 @@
 // Starts the bot. Slash commands are registered separately with `npm run register`.
 
-import { Client, Events, GatewayCloseCodes, GatewayIntentBits } from "discord.js";
+import { Client, Events, GatewayCloseCodes, GatewayIntentBits, Partials } from "discord.js";
 import { createCountryChannelGuard } from "./channels/countryChannelGuard.js";
 import { createCommands } from "./commands/index.js";
 import { ConfigError, loadBotConfig } from "./config.js";
 import { createInteractionHandler } from "./interactionHandler.js";
 import { createActionLog } from "./logs/actionLog.js";
+import { createLogChannelPoster } from "./logs/logChannel.js";
+import { RecentIds } from "./logs/recentIds.js";
+import { createServerLog } from "./logs/serverLog.js";
+import { CaseStore, DEFAULT_DATABASE_FILE } from "./moderation/caseStore.js";
+import { createExternalActionRecorder } from "./moderation/externalActions.js";
+import { createModLog } from "./moderation/modLog.js";
+import { createModerationService } from "./moderation/moderationService.js";
+import { createTempBanScheduler } from "./moderation/tempBans.js";
 import { GuildSettings, Setting } from "./settings/guildSettings.js";
 import { logger, registerSecret } from "./utils/logger.js";
 
@@ -19,35 +27,79 @@ process.on("uncaughtException", (error) => {
 });
 
 // Guilds keeps servers, roles, channels and the bot's own member info up to
-// date. GuildMessages lets the bot see new messages, so it can keep the
-// /country channel clean. MessageContent (privileged, switched on in the
-// Developer Portal) lets the logs channel show what deleted messages said.
-const BASE_INTENTS = [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages];
-const ALL_INTENTS = [...BASE_INTENTS, GatewayIntentBits.MessageContent];
+// date. GuildMessages lets the bot see new, edited and deleted messages (the
+// /country channel, the server log). GuildModeration reports bans, including
+// ones done outside the bot.
+//
+// Two are privileged and must be switched on in the Developer Portal (Bot >
+// Privileged Gateway Intents): MessageContent shows what edited and deleted
+// messages said; GuildMembers reports joins, leaves, nickname, role and timeout
+// changes. If one is off, the bot starts without it instead of staying offline.
+const BASE_INTENTS = [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.GuildModeration];
+const PRIVILEGED_INTENT_SETS = [
+  [GatewayIntentBits.GuildMembers, GatewayIntentBits.MessageContent],
+  [GatewayIntentBits.GuildMembers],
+  [GatewayIntentBits.MessageContent],
+  [],
+];
+const INTENT_NAMES = {
+  [GatewayIntentBits.GuildMembers]: "Server Members Intent",
+  [GatewayIntentBits.MessageContent]: "Message Content Intent",
+};
+
+// Partials let the bot hear about messages and members it hadn't cached, such
+// as a message deleted that was posted before the bot started.
+const PARTIALS = [Partials.Message, Partials.Channel, Partials.GuildMember, Partials.User];
 
 async function start() {
   const config = loadBotConfig();
   registerSecret(config.token);
 
   const guildSettings = await GuildSettings.load();
-  const commands = createCommands({ logger, guildSettings, forcedLanguage: config.forcedLanguage });
+  // Moderation cases live in data/bot.db (SQLite).
+  const store = new CaseStore(DEFAULT_DATABASE_FILE);
+  const forcedLanguage = config.forcedLanguage;
+
+  // What the bot did itself, so the events Discord sends back aren't logged twice.
+  const botDeletions = new RecentIds();
+  const botActions = new RecentIds();
+
+  const poster = createLogChannelPoster({ guildSettings, logger });
   // Posts what members do with the bot in each server's logs channel (/settings logs-channel).
-  const actionLog = createActionLog({ guildSettings, logger });
-  const handleInteraction = createInteractionHandler({ commands, logger, forcedLanguage: config.forcedLanguage, actionLog });
-  const guardCountryChannel = createCountryChannelGuard({ guildSettings, logger, actionLog });
+  const actionLog = createActionLog({ guildSettings, logger, poster });
+  // Posts cases in the mod-log channel, and server events in the server-log channel.
+  const modLog = createModLog({ poster, store });
+  const serverLog = createServerLog({ poster, botDeletions });
+  const moderation = createModerationService({ store, modLog, logger, forcedLanguage, botActions });
+  const externalActions = createExternalActionRecorder({ moderation, botActions, logger });
+
+  const commands = createCommands({ logger, guildSettings, forcedLanguage, moderation, modLog, botDeletions });
+  const handleInteraction = createInteractionHandler({ commands, logger, forcedLanguage, actionLog });
+  const guardCountryChannel = createCountryChannelGuard({ guildSettings, logger, actionLog, botDeletions });
 
   // If the /country channel is deleted, allow any channel again instead of
-  // leaving the command unusable. If the logs channel is deleted, stop logging.
+  // leaving the command unusable. If a log channel is deleted, stop posting there.
   const CHANNEL_SETTINGS = [
     [Setting.COUNTRY_CHANNEL, "The /country channel was deleted; /country now works in any channel"],
     [Setting.LOGS_CHANNEL, "The logs channel was deleted; set a new one with /settings logs-channel"],
+    [Setting.MOD_LOG_CHANNEL, "The mod-log channel was deleted; cases go to the logs channel until a new one is set"],
+    [Setting.SERVER_LOG_CHANNEL, "The server-log channel was deleted; set a new one with /settings server-log-channel"],
   ];
 
+  // Runs an event handler, logging instead of crashing if it fails.
+  const safely = (what, handler) => (...args) => {
+    Promise.resolve()
+      .then(() => handler(...args))
+      .catch((error) => logger.error(`Couldn't handle ${what}`, { error }));
+  };
+
   let client;
+  let tempBans;
 
   function connect(intents) {
-    client = new Client({ intents });
+    client = new Client({ intents, partials: PARTIALS });
     const readsContent = intents.includes(GatewayIntentBits.MessageContent);
+    const seesMembers = intents.includes(GatewayIntentBits.GuildMembers);
 
     client.once(Events.ClientReady, (readyClient) => {
       logger.info("Bot is online", {
@@ -55,7 +107,11 @@ async function start() {
         servers: readyClient.guilds.cache.size,
         language: config.forcedLanguage ?? "each user's Discord language",
         messageContentInLogs: readsContent,
+        memberEventsInLogs: seesMembers,
       });
+      tempBans?.stop();
+      tempBans = createTempBanScheduler({ client: readyClient, moderation, botActions, logger });
+      tempBans.start();
     });
 
     client.on(Events.InteractionCreate, (interaction) => {
@@ -66,6 +122,33 @@ async function start() {
     client.on(Events.MessageCreate, (message) => {
       guardCountryChannel(message).catch((error) => logger.error("Couldn't clean the /country channel", { error }));
     });
+
+    // The server log (/settings server-log-channel).
+    client.on(Events.MessageDelete, safely("a deleted message", (message) => serverLog.messageDeleted(message)));
+    client.on(
+      Events.MessageBulkDelete,
+      safely("a bulk delete", (messages, channel) => serverLog.messagesBulkDeleted(messages, channel)),
+    );
+    client.on(Events.MessageUpdate, safely("an edited message", (before, after) => serverLog.messageEdited(before, after)));
+    client.on(Events.GuildMemberAdd, safely("a member joining", (member) => serverLog.memberJoined(member)));
+    client.on(
+      Events.GuildMemberRemove,
+      safely("a member leaving", async (member) => {
+        await serverLog.memberLeft(member);
+        await externalActions.onMemberRemove(member);
+      }),
+    );
+    client.on(
+      Events.GuildMemberUpdate,
+      safely("a member update", async (before, after) => {
+        await serverLog.memberUpdated(before, after);
+        await externalActions.onMemberUpdate(before, after);
+      }),
+    );
+
+    // Bans and unbans done outside the bot still get a case.
+    client.on(Events.GuildBanAdd, safely("a ban", (ban) => externalActions.onBan(ban)));
+    client.on(Events.GuildBanRemove, safely("an unban", (ban) => externalActions.onUnban(ban)));
 
     client.on(Events.ChannelDelete, (channel) => {
       for (const [setting, message] of CHANNEL_SETTINGS) {
@@ -105,25 +188,33 @@ async function start() {
   for (const signal of ["SIGINT", "SIGTERM"]) {
     process.once(signal, async () => {
       logger.info("Shutting down");
+      tempBans?.stop();
       await client?.destroy().catch(() => {});
+      store.close();
       process.exit(0);
     });
   }
 
-  try {
-    await connect(ALL_INTENTS).login(config.token);
-  } catch (error) {
-    if (!isDisallowedIntentsError(error)) {
-      throw error;
+  // Try with both privileged intents first, then without whichever is switched off.
+  for (const [index, privileged] of PRIVILEGED_INTENT_SETS.entries()) {
+    try {
+      await connect([...BASE_INTENTS, ...privileged]).login(config.token);
+      const missing = PRIVILEGED_INTENT_SETS[0].filter((intent) => !privileged.includes(intent));
+      if (missing.length > 0) {
+        logger.warn(
+          `Running without: ${missing.map((intent) => INTENT_NAMES[intent]).join(", ")}. ` +
+            "Without Message Content, logs can't show what edited or deleted messages said; without Server Members, " +
+            "joins, leaves, role, nickname and timeout changes aren't logged. Turn them on in the Developer Portal " +
+            "(Bot > Privileged Gateway Intents) and restart the bot.",
+        );
+      }
+      return;
+    } catch (error) {
+      await client.destroy().catch(() => {});
+      if (!isDisallowedIntentsError(error) || index === PRIVILEGED_INTENT_SETS.length - 1) {
+        throw error;
+      }
     }
-    // Message Content isn't switched on in the Developer Portal. Run without it
-    // instead of staying offline; deleted messages are then logged without their text.
-    logger.warn(
-      "Message Content intent is off, so the logs channel can't show what deleted messages said. " +
-        "Turn it on in the Developer Portal (Bot > Privileged Gateway Intents > Message Content Intent) and restart the bot.",
-    );
-    await client.destroy().catch(() => {});
-    await connect(BASE_INTENTS).login(config.token);
   }
 }
 

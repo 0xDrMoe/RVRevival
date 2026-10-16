@@ -3,7 +3,9 @@
 //   /settings staff-role role:@Staff             members with this role can use /country-staff
 //   /settings country-channel channel:#roles     only allow /country in #roles; other messages there are deleted
 //   /settings logs-channel channel:#bot-logs     log everything members do with the bot in #bot-logs
-//   /settings clear setting:<staff role | /country channel | logs channel>
+//   /settings mod-log-channel channel:#mod-log   post moderation cases in #mod-log (otherwise the logs channel)
+//   /settings server-log-channel channel:#server-log   log edits, deletions, joins, leaves and role changes
+//   /settings clear setting:<staff role | /country channel | logs channel | mod-log channel | server-log channel>
 //   /settings show                               list the current settings
 //
 // Only members with the Manage Server permission can see or use it.
@@ -23,6 +25,12 @@ const CLEARABLE = [
   { value: Setting.STAFF_ROLE, nameKey: "settingsStaffRoleName", clearedKey: "settingsStaffRoleCleared" },
   { value: Setting.COUNTRY_CHANNEL, nameKey: "settingsCountryChannelName", clearedKey: "settingsCountryChannelCleared" },
   { value: Setting.LOGS_CHANNEL, nameKey: "settingsLogsChannelName", clearedKey: "settingsLogsChannelCleared" },
+  { value: Setting.MOD_LOG_CHANNEL, nameKey: "settingsModLogChannelName", clearedKey: "settingsModLogChannelCleared" },
+  {
+    value: Setting.SERVER_LOG_CHANNEL,
+    nameKey: "settingsServerLogChannelName",
+    clearedKey: "settingsServerLogChannelCleared",
+  },
 ];
 
 // Whether the bot has every permission in `wanted` in `channel`.
@@ -71,6 +79,16 @@ export function buildSettingsCommandData() {
     .addSubcommand((sub) =>
       withDescription(sub.setName("logs-channel"), "settingsLogsChannelDescription").addChannelOption((option) =>
         channelOption(option, "settingsLogsChannelOptionDescription"),
+      ),
+    )
+    .addSubcommand((sub) =>
+      withDescription(sub.setName("mod-log-channel"), "settingsModLogChannelDescription").addChannelOption((option) =>
+        channelOption(option, "settingsModLogChannelOptionDescription"),
+      ),
+    )
+    .addSubcommand((sub) =>
+      withDescription(sub.setName("server-log-channel"), "settingsServerLogChannelDescription").addChannelOption(
+        (option) => channelOption(option, "settingsServerLogChannelOptionDescription"),
       ),
     )
     .addSubcommand((sub) =>
@@ -149,6 +167,15 @@ export function createSettingsCommand({ guildSettings, forcedLanguage }) {
         );
       case "logs-channel":
         return setChannel(Setting.LOGS_CHANNEL, "settingsLogsChannelSet", POST_LOGS, "settingsLogsChannelNeedsPermissions");
+      case "mod-log-channel":
+        return setChannel(Setting.MOD_LOG_CHANNEL, "settingsModLogChannelSet", POST_LOGS, "settingsLogsChannelNeedsPermissions");
+      case "server-log-channel":
+        return setChannel(
+          Setting.SERVER_LOG_CHANNEL,
+          "settingsServerLogChannelSet",
+          POST_LOGS,
+          "settingsLogsChannelNeedsPermissions",
+        );
       case "clear": {
         const choice = CLEARABLE.find(({ value }) => value === interaction.options.getString(SETTING_OPTION, true));
         if (!choice) {
@@ -161,10 +188,18 @@ export function createSettingsCommand({ guildSettings, forcedLanguage }) {
         const staffRoleId = guildSettings.get(guildId, Setting.STAFF_ROLE);
         const channelId = guildSettings.get(guildId, Setting.COUNTRY_CHANNEL);
         const logsChannelId = guildSettings.get(guildId, Setting.LOGS_CHANNEL);
+        const modLogChannelId = guildSettings.get(guildId, Setting.MOD_LOG_CHANNEL);
+        const serverLogChannelId = guildSettings.get(guildId, Setting.SERVER_LOG_CHANNEL);
         const lines = [
           staffRoleId ? text("settingsShowStaffRole", { role: `<@&${staffRoleId}>` }) : text("settingsShowNoStaffRole"),
           channelId ? text("settingsShowCountryChannel", { channel: `<#${channelId}>` }) : text("settingsShowNoCountryChannel"),
           logsChannelId ? text("settingsShowLogsChannel", { channel: `<#${logsChannelId}>` }) : text("settingsShowNoLogsChannel"),
+          modLogChannelId
+            ? text("settingsShowModLogChannel", { channel: `<#${modLogChannelId}>` })
+            : text("settingsShowNoModLogChannel"),
+          serverLogChannelId
+            ? text("settingsShowServerLogChannel", { channel: `<#${serverLogChannelId}>` })
+            : text("settingsShowNoServerLogChannel"),
         ];
         // Mentions in an ephemeral reply never ping, but say so explicitly anyway.
         await interaction.reply({ content: lines.join("\n"), flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] } });

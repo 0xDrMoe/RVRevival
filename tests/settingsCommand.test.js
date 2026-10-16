@@ -56,11 +56,13 @@ describe("/settings definition", () => {
     expect(data.default_member_permissions).toBe(PermissionFlagsBits.ManageGuild.toString());
   });
 
-  it("has staff-role, country-channel, logs-channel, clear and show subcommands", () => {
+  it("has a subcommand per setting, plus clear and show", () => {
     expect(data.options.map((option) => option.name)).toEqual([
       "staff-role",
       "country-channel",
       "logs-channel",
+      "mod-log-channel",
+      "server-log-channel",
       "clear",
       "show",
     ]);
@@ -76,11 +78,13 @@ describe("/settings definition", () => {
     expect(logsChannelOption).toMatchObject({ name: "channel", type: ApplicationCommandOptionType.Channel, required: true });
     expect(logsChannelOption.channel_types).toEqual([ChannelType.GuildText, ChannelType.GuildAnnouncement]);
 
-    const [settingOption] = data.options[3].options;
+    const [settingOption] = data.options[5].options;
     expect(settingOption.choices.map((choice) => choice.value)).toEqual([
       Setting.STAFF_ROLE,
       Setting.COUNTRY_CHANNEL,
       Setting.LOGS_CHANNEL,
+      Setting.MOD_LOG_CHANNEL,
+      Setting.SERVER_LOG_CHANNEL,
     ]);
     expect(settingOption.choices[0].name_localizations.de).toBe(translate("de", "settingsStaffRoleName"));
   });
@@ -161,13 +165,29 @@ describe("/settings", () => {
   });
 
   it.each([
+    ["mod-log-channel", Setting.MOD_LOG_CHANNEL, "Moderation cases will now be posted in"],
+    ["server-log-channel", Setting.SERVER_LOG_CHANNEL, "Edited and deleted messages, joins, leaves"],
+  ])("sets the %s", async (subcommand, setting, start) => {
+    const interaction = fakeInteraction(subcommand);
+    const outcome = await command.execute(interaction);
+
+    expect(guildSettings.get(GUILD_ID, setting)).toBe(CHANNEL_ID);
+    expect(interaction.reply.mock.calls[0][0].content.startsWith(start)).toBe(true);
+    expect(outcome.status).toBe(Status.SUCCESS);
+  });
+
+  it.each([
     [Setting.STAFF_ROLE, "settingsStaffRoleCleared"],
     [Setting.COUNTRY_CHANNEL, "settingsCountryChannelCleared"],
     [Setting.LOGS_CHANNEL, "settingsLogsChannelCleared"],
+    [Setting.MOD_LOG_CHANNEL, "settingsModLogChannelCleared"],
+    [Setting.SERVER_LOG_CHANNEL, "settingsServerLogChannelCleared"],
   ])("clears %s", async (setting, messageKey) => {
     await guildSettings.set(GUILD_ID, Setting.STAFF_ROLE, ROLE_ID);
     await guildSettings.set(GUILD_ID, Setting.COUNTRY_CHANNEL, CHANNEL_ID);
     await guildSettings.set(GUILD_ID, Setting.LOGS_CHANNEL, CHANNEL_ID);
+    await guildSettings.set(GUILD_ID, Setting.MOD_LOG_CHANNEL, CHANNEL_ID);
+    await guildSettings.set(GUILD_ID, Setting.SERVER_LOG_CHANNEL, CHANNEL_ID);
     const interaction = fakeInteraction("clear", { setting });
 
     await command.execute(interaction);
@@ -180,16 +200,24 @@ describe("/settings", () => {
     const before = fakeInteraction("show");
     await command.execute(before);
     expect(before.reply).toHaveBeenCalledWith(
-      expect.objectContaining({ content: "Staff role: not set\n/country channel: any channel\nLogs channel: not set" }),
+      expect.objectContaining({
+        content:
+          "Staff role: not set\n/country channel: any channel\nLogs channel: not set\n" +
+          "Mod-log channel: not set (cases go to the logs channel)\nServer-log channel: not set",
+      }),
     );
 
     await guildSettings.set(GUILD_ID, Setting.STAFF_ROLE, ROLE_ID);
     await guildSettings.set(GUILD_ID, Setting.COUNTRY_CHANNEL, CHANNEL_ID);
     await guildSettings.set(GUILD_ID, Setting.LOGS_CHANNEL, CHANNEL_ID);
+    await guildSettings.set(GUILD_ID, Setting.MOD_LOG_CHANNEL, CHANNEL_ID);
+    await guildSettings.set(GUILD_ID, Setting.SERVER_LOG_CHANNEL, CHANNEL_ID);
     const after = fakeInteraction("show");
     await command.execute(after);
     expect(after.reply).toHaveBeenCalledWith({
-      content: `Staff role: <@&${ROLE_ID}>\n/country channel: <#${CHANNEL_ID}>\nLogs channel: <#${CHANNEL_ID}>`,
+      content:
+        `Staff role: <@&${ROLE_ID}>\n/country channel: <#${CHANNEL_ID}>\nLogs channel: <#${CHANNEL_ID}>\n` +
+        `Mod-log channel: <#${CHANNEL_ID}>\nServer-log channel: <#${CHANNEL_ID}>`,
       flags: MessageFlags.Ephemeral,
       allowedMentions: { parse: [] },
     });
