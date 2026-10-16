@@ -70,6 +70,16 @@ export class CaseStore {
       listForUser: db.prepare(
         "SELECT * FROM cases WHERE guild_id = ? AND user_id = ? ORDER BY case_number DESC LIMIT ?",
       ),
+      // For the dashboard: newest first, optionally one member or one action,
+      // starting below case `before`. NULL filters match everything.
+      search: db.prepare(`
+        SELECT * FROM cases
+        WHERE guild_id = :guildId
+          AND (:userId IS NULL OR user_id = :userId)
+          AND (:action IS NULL OR action = :action)
+          AND case_number < :before
+        ORDER BY case_number DESC LIMIT :limit`),
+      countForGuild: db.prepare("SELECT action, COUNT(*) AS total FROM cases WHERE guild_id = ? GROUP BY action"),
       countForUser: db.prepare(
         "SELECT action, COUNT(*) AS total FROM cases WHERE guild_id = ? AND user_id = ? GROUP BY action",
       ),
@@ -143,6 +153,25 @@ export class CaseStore {
   // { ban: 1, warn: 3, … } for one member.
   countCases(guildId, userId) {
     return Object.fromEntries(this.#statements.countForUser.all(guildId, userId).map((row) => [row.action, row.total]));
+  }
+
+  // A page of a server's cases, newest first. `before` is the lowest case
+  // number of the previous page.
+  searchCases(guildId, { userId, action, before, limit = 50 } = {}) {
+    return this.#statements.search
+      .all({
+        guildId,
+        userId: userId ?? null,
+        action: action ?? null,
+        before: before ?? Number.MAX_SAFE_INTEGER,
+        limit,
+      })
+      .map(toCase);
+  }
+
+  // { ban: 4, warn: 12, … } for the whole server.
+  countGuildCases(guildId) {
+    return Object.fromEntries(this.#statements.countForGuild.all(guildId).map((row) => [row.action, row.total]));
   }
 
   // The updated case, or undefined if it doesn't exist.

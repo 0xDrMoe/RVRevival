@@ -7,8 +7,10 @@
 // starts, those are copied into the database and the JSON file is renamed to
 // settings.json.migrated as a backup.
 //
-// Settings are also kept in memory, so reading one never touches the disk.
-// Without a database (as in tests and `npm run register`) nothing is saved.
+// Settings are also kept in memory, so reading one never touches the disk. The
+// dashboard changes them from another process, so call reloadIfChanged() now
+// and then to pick those changes up. Without a database (as in tests and
+// `npm run register`) nothing is saved.
 
 import { readFile, rename } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
@@ -51,6 +53,8 @@ async function readJson(file) {
 export class GuildSettings {
   #db;
   #statements;
+  // PRAGMA data_version when the settings were last read.
+  #dataVersion;
   // server ID -> { setting: value }
   #guilds = new Map();
 
@@ -66,11 +70,34 @@ export class GuildSettings {
           ON CONFLICT (guild_id, key) DO UPDATE SET value = excluded.value`),
         delete: db.prepare("DELETE FROM guild_settings WHERE guild_id = ? AND key = ?"),
         count: db.prepare("SELECT COUNT(*) AS total FROM guild_settings"),
+        // Changes whenever another connection (the dashboard) writes to the database.
+        dataVersion: db.prepare("PRAGMA data_version"),
       };
-      for (const row of this.#statements.all.all()) {
-        this.#remember(row.guild_id, row.key, JSON.parse(row.value));
-      }
+      this.#readAll();
     }
+  }
+
+  #readAll() {
+    this.#dataVersion = this.#statements.dataVersion.get().data_version;
+    this.#guilds.clear();
+    for (const row of this.#statements.all.all()) {
+      this.#remember(row.guild_id, row.key, JSON.parse(row.value));
+    }
+  }
+
+  // Re-reads the settings if another process changed the database since the
+  // last read. Cheap enough to call before every request. Returns whether it re-read.
+  reloadIfChanged() {
+    if (!this.#statements || this.#statements.dataVersion.get().data_version === this.#dataVersion) {
+      return false;
+    }
+    this.#readAll();
+    return true;
+  }
+
+  // Every setting of one server, as { setting: value }.
+  all(guildId) {
+    return { ...this.#guilds.get(guildId) };
   }
 
   // Reads the saved settings, first copying in any from older versions' JSON files.

@@ -60,6 +60,15 @@ async function start() {
   const db = openDatabase(DEFAULT_DATABASE_FILE);
   const guildSettings = await GuildSettings.load(db);
   const store = new CaseStore(db);
+  // Pick up settings changed on the web dashboard (another process).
+  const settingsReload = setInterval(() => {
+    try {
+      guildSettings.reloadIfChanged();
+    } catch (error) {
+      logger.error("Couldn't re-read the settings", { error });
+    }
+  }, 5_000);
+  settingsReload.unref();
   const forcedLanguage = config.forcedLanguage;
 
   // What the bot did itself, so the events Discord sends back aren't logged twice.
