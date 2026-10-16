@@ -2254,6 +2254,34 @@ async function showMemberHistory(guildId, userId) {
           ),
         );
 
+  const ticketList =
+    history.tickets.length === 0
+      ? h("p", { class: "muted empty" }, t("memberNoTickets"))
+      : h(
+          "ul",
+          { class: "recent" },
+          history.tickets.map((ticket) =>
+            h(
+              "li",
+              {},
+              h("span", { class: `badge ${ticket.closedAt ? "" : "badge-cyan"}` }, t(ticket.closedAt ? "memberTicketClosed" : "memberTicketOpen")),
+              h(
+                "span",
+                { class: "recent-text" },
+                ticket.threadId
+                  ? h(
+                      "a",
+                      { href: `https://discord.com/channels/${guildId}/${ticket.threadId}`, target: "_blank", rel: "noopener" },
+                      `#${ticket.number}`,
+                    )
+                  : h("strong", {}, `#${ticket.number}`),
+                h("span", { class: "muted" }, ticket.subject),
+              ),
+              h("span", { class: "muted recent-date" }, formatDay(ticket.createdAt)),
+            ),
+          ),
+        );
+
   show(
     guildLayout(
       data,
@@ -2278,6 +2306,7 @@ async function showMemberHistory(guildId, userId) {
           "div",
           { class: "stack" },
           card(t("memberRoles"), "🎭", "purple", roles),
+          card(t("memberTickets"), "🎫", "blue", ticketList),
           card(t("memberJoinsLeaves"), "🚪", "green", events, h("p", { class: "help" }, t("memberJoinsLeavesHelp"))),
         ),
       ),

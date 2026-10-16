@@ -42,6 +42,7 @@ export const Setting = Object.freeze({
   ROLE_PANELS: "rolePanels", // button role panels, a list of objects (see community/rolePanels.js)
   TAGS: "tags", // custom commands for /tag, a list of { name, content } (see community/tags.js)
   STARBOARD: "starboard", // the starboard, { channelId, threshold, emoji } (see community/starboard.js)
+  TICKETS: "tickets", // the ticket panel, { channelId, messageId, staffRoleId } (see tickets/tickets.js)
 });
 
 const KNOWN_SETTINGS = new Set(Object.values(Setting));

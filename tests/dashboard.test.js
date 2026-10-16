@@ -521,6 +521,7 @@ describe("dashboard", () => {
       { kind: "join", at: 1000 },
     ]);
     expect(history.joins).toBe(2);
+    expect(history.tickets).toEqual([]);
     expect(history.banned).toBeNull();
     expect(discord.ban).not.toHaveBeenCalled();
   });

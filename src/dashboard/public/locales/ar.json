@@ -323,5 +323,9 @@
   "memberRoles": "الأدوار",
   "memberJoinsLeaves": "الانضمام والمغادرة",
   "memberJoinsLeavesHelp": "تُحفظ أحدث 50 لكل شخص.",
-  "memberHistory": "السجل"
+  "memberHistory": "السجل",
+  "memberTickets": "التذاكر",
+  "memberNoTickets": "لا توجد تذاكر.",
+  "memberTicketOpen": "مفتوحة",
+  "memberTicketClosed": "مغلقة"
 }
