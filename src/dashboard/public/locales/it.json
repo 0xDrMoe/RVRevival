@@ -268,5 +268,7 @@
   "rolePanelsEmpty": "Ancora nessun ruolo in questo pannello",
   "rolePanelMode_toggle": "Più ruoli",
   "rolePanelMode_unique": "Un solo ruolo",
-  "setupWelcome": "Accogli i nuovi membri"
+  "setupWelcome": "Accogli i nuovi membri",
+  "onboardingTip": "Questo è un server community, quindi consigliamo l'Onboarding di Discord (Impostazioni server → Onboarding) per dare ruoli ai nuovi membri. Usa i ruoli automatici solo se non usi l'Onboarding.",
+  "rolePanelsOnboardingTip": "Questo è un server community, quindi consigliamo l'Onboarding di Discord (Impostazioni server → Onboarding) per far scegliere i ruoli ai membri. I pannelli dei ruoli sono ideali per i server che non usano l'Onboarding."
 }

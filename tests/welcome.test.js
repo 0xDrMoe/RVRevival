@@ -18,7 +18,7 @@ function fakeChannel(id) {
   return { id, isTextBased: () => true, send: vi.fn(async () => ({})) };
 }
 
-function fakeGuild({ canManageRoles = true } = {}) {
+function fakeGuild({ canManageRoles = true, features = [] } = {}) {
   const channels = new Map([
     [WELCOME_CHANNEL_ID, fakeChannel(WELCOME_CHANNEL_ID)],
     [LEAVE_CHANNEL_ID, fakeChannel(LEAVE_CHANNEL_ID)],
@@ -30,6 +30,7 @@ function fakeGuild({ canManageRoles = true } = {}) {
   return {
     id: GUILD_ID,
     name: "Rumbleverse *Revival*",
+    features,
     memberCount: 1234,
     preferredLocale: "en-US",
     channels: { cache: channels },
@@ -166,8 +167,8 @@ describe("welcomer", () => {
 });
 
 describe("/welcome", () => {
-  function fakeInteraction(subcommand, { text, role, what, canPost = true, manageGuild = true } = {}) {
-    const guild = fakeGuild();
+  function fakeInteraction(subcommand, { text, role, what, canPost = true, manageGuild = true, features } = {}) {
+    const guild = fakeGuild({ features });
     const member = fakeMember(guild);
     return {
       locale: "en-US",
@@ -240,6 +241,15 @@ describe("/welcome", () => {
     expect((await run(guildSettings, "autorole", { role: admin })).outcome.key).toBe("welcomeAutoroleDangerous");
     expect((await run(guildSettings, "autorole", { role: { ...role, managed: true } })).outcome.key).toBe("welcomeAutoroleInvalid");
     expect((await run(guildSettings, "autorole", { role: { ...role, id: GUILD_ID } })).outcome.key).toBe("welcomeAutoroleInvalid");
+  });
+
+  it("recommends Onboarding over autoroles on Community servers", async () => {
+    const role = { id: MEMBER_ROLE_ID, position: 5, managed: false, permissions: { has: () => false } };
+    const tip = translate("en", "welcomeOnboardingTip");
+    expect((await run(new GuildSettings(), "autorole", { role })).content).not.toContain(tip);
+    const guildSettings = new GuildSettings();
+    expect((await run(guildSettings, "autorole", { role, features: ["COMMUNITY"] })).content).toContain(tip);
+    expect((await run(guildSettings, "show", { features: ["COMMUNITY"] })).content).toContain(tip);
   });
 
   it("switches things off", async () => {

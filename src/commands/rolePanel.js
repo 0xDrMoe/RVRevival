@@ -107,8 +107,10 @@ export function createRolePanelCommand({ guildSettings, logger, forcedLanguage }
   async function execute(interaction) {
     const language = pickLanguage(interaction.locale, forcedLanguage);
     const text = (key, values) => translate(language, key, values);
-    const answer = async (status, key, values = {}) => {
-      const payload = { content: text(key, values), allowedMentions: { parse: [] } };
+    // `tipKey` adds a second line to the reply (not to the log entry).
+    const answer = async (status, key, values = {}, tipKey = null) => {
+      const content = tipKey ? `${text(key, values)}\n${text(tipKey)}` : text(key, values);
+      const payload = { content, allowedMentions: { parse: [] } };
       if (interaction.deferred || interaction.replied) {
         await interaction.editReply(payload);
       } else {
@@ -180,7 +182,9 @@ export function createRolePanelCommand({ guildSettings, logger, forcedLanguage }
           return answer(Status.FAILED, "rolePanelCannotPost", { channel: `<#${channel.id}>` });
         }
         await save(guildId, [...panels, posted]);
-        return answer(Status.SUCCESS, "rolePanelCreated", { id: posted.id, channel: `<#${channel.id}>` });
+        // Community servers have Discord's own Onboarding, which we recommend over role panels.
+        const tip = guild.features?.includes("COMMUNITY") ? "rolePanelOnboardingTip" : null;
+        return answer(Status.SUCCESS, "rolePanelCreated", { id: posted.id, channel: `<#${channel.id}>` }, tip);
       }
 
       const panelId = interaction.options.getInteger("panel", true);

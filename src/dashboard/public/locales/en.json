@@ -268,5 +268,7 @@
   "rolePanelsEmpty": "No roles on this panel yet",
   "rolePanelMode_toggle": "Any number of roles",
   "rolePanelMode_unique": "Only one role",
-  "setupWelcome": "Welcome new members"
+  "setupWelcome": "Welcome new members",
+  "onboardingTip": "This is a Community server, so we recommend Discord's own Onboarding (Server Settings → Onboarding) for giving new members roles. Use autoroles only if you don't use Onboarding.",
+  "rolePanelsOnboardingTip": "This is a Community server, so we recommend Discord's own Onboarding (Server Settings → Onboarding) for letting members pick roles. Role panels are best for servers that don't use Onboarding."
 }

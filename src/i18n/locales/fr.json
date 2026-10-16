@@ -478,5 +478,9 @@
   "rolePanelButtonBroken": "Je ne peux pas te donner ce rôle pour l'instant. Préviens un membre du staff.",
   "rolePanelYouGot": "Tu as maintenant {role}.",
   "rolePanelYouLost": "{role} retiré.",
-  "rolePanelYouSwapped": "Tu as maintenant {role} à la place de {old}."
+  "rolePanelYouSwapped": "Tu as maintenant {role} à la place de {old}.",
+
+  "welcomeOnboardingTip": "Astuce : c'est un serveur communautaire, donc l'**Accueil** de Discord (Paramètres du serveur → Accueil) est le meilleur moyen de donner des rôles aux nouveaux membres. N'utilisez les rôles automatiques que si vous n'utilisez pas l'Accueil.",
+
+  "rolePanelOnboardingTip": "Astuce : c'est un serveur communautaire, donc l'**Accueil** de Discord (Paramètres du serveur → Accueil) permet aux membres de choisir leurs rôles sans panneau. Les panneaux de rôles conviennent surtout aux serveurs qui n'utilisent pas l'Accueil."
 }

@@ -268,5 +268,7 @@
   "rolePanelsEmpty": "Este panel aún no tiene roles",
   "rolePanelMode_toggle": "Varios roles",
   "rolePanelMode_unique": "Un solo rol",
-  "setupWelcome": "Da la bienvenida a nuevos miembros"
+  "setupWelcome": "Da la bienvenida a nuevos miembros",
+  "onboardingTip": "Este es un servidor de comunidad, así que recomendamos la Incorporación de Discord (Ajustes del servidor → Incorporación) para dar roles a los nuevos miembros. Usa roles automáticos solo si no usas la Incorporación.",
+  "rolePanelsOnboardingTip": "Este es un servidor de comunidad, así que recomendamos la Incorporación de Discord (Ajustes del servidor → Incorporación) para que los miembros elijan roles. Los paneles de roles son mejores para servidores que no usan la Incorporación."
 }

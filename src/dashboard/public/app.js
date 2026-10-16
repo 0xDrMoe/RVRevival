@@ -1135,6 +1135,7 @@ async function showCommunity(guildId) {
         "🎁",
         "green",
         h("p", { class: "help" }, t("autorolesHelp", { max: MAX_AUTOROLES })),
+        data.guild.community ? h("p", { class: "tip" }, t("onboardingTip")) : null,
         checkList({ name: "autorole", items: givable, checked: settings.autoroleIds ?? [], filterKey: "filterRoles" }),
       ),
     ],
@@ -1146,7 +1147,14 @@ async function showCommunity(guildId) {
       leaveMessage: textValue("leaveMessage"),
       autoroleIds: checkedList("autorole"),
     },
-    after: card(t("sectionRolePanels"), "🔘", "blue", h("p", { class: "help" }, t("rolePanelsHelp")), rolePanelList(data)),
+    after: card(
+      t("sectionRolePanels"),
+      "🔘",
+      "blue",
+      h("p", { class: "help" }, t("rolePanelsHelp")),
+      data.guild.community ? h("p", { class: "tip" }, t("rolePanelsOnboardingTip")) : null,
+      rolePanelList(data),
+    ),
   });
 }
 

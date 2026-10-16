@@ -478,5 +478,9 @@
   "rolePanelButtonBroken": "Não consigo te dar esse cargo agora. Avise alguém da staff.",
   "rolePanelYouGot": "Agora você tem {role}.",
   "rolePanelYouLost": "{role} removido.",
-  "rolePanelYouSwapped": "Agora você tem {role} no lugar de {old}."
+  "rolePanelYouSwapped": "Agora você tem {role} no lugar de {old}.",
+
+  "welcomeOnboardingTip": "Dica: este é um servidor da comunidade, então a **Integração** do próprio Discord (Configurações do servidor → Integração) é a melhor forma de dar cargos a novos membros. Use cargos automáticos só se não usar a Integração.",
+
+  "rolePanelOnboardingTip": "Dica: este é um servidor da comunidade, então a **Integração** do próprio Discord (Configurações do servidor → Integração) permite que os membros escolham cargos sem um painel. Painéis de cargos são melhores para servidores que não usam a Integração."
 }
