@@ -289,6 +289,16 @@ describe("dashboard", () => {
     expect(everyone.statusCode).toBe(400);
   });
 
+  it("saves skipped setup steps in order and refuses unknown ones", async () => {
+    const cookies = await login();
+    const saved = await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, { setupSkipped: ["welcome", "country", "welcome"] });
+    expect(saved.json().settings.setupSkipped).toEqual(["country", "welcome"]);
+    const unknown = await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, { setupSkipped: ["everything"] });
+    expect(unknown.statusCode).toBe(400);
+    const cleared = await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, { setupSkipped: [] });
+    expect(cleared.json().settings.setupSkipped).toBeUndefined();
+  });
+
   it("shows automod with its defaults, and saves a valid configuration", async () => {
     await guildSettings.set(GUILD_ID, Setting.LOGS_CHANNEL, LOGS_ID);
     const cookies = await login();

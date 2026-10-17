@@ -1521,8 +1521,25 @@ a.stat:hover {
   border-color: var(--ok);
 }
 
-.steps li.done > .grow {
+.steps li.done > .grow,
+.steps li.skipped > .grow {
   color: var(--muted);
+}
+
+.steps li.skipped > .grow {
+  text-decoration: line-through;
+}
+
+.step-actions {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.setup.folded .toolbar {
+  margin-bottom: 0;
 }
 
 /* --- Activity --------------------------------------------------------------------- */

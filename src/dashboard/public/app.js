@@ -2981,49 +2981,96 @@ function featuresCard(data) {
   );
 }
 
-// What's set up and what isn't, with links to fix it. Hidden once everything is done.
-function setupCard(data) {
+// What's set up and what isn't, with links to fix it. Steps a server doesn't
+// want can be skipped (saved for everyone as setupSkipped). Hidden once every
+// step is done; folded to one line once the rest are skipped.
+function setupCard(data, { open = false } = {}) {
   const { settings, guild } = data;
   const steps = [
-    { key: "setupLogs", done: Boolean(settings.logsChannelId), page: "logging" },
-    { key: "setupServerLog", done: Boolean(settings.serverLogChannelId), page: "logging" },
-    { key: "setupModLog", done: Boolean(settings.modLogChannelId || settings.logsChannelId), page: "moderation" },
-    { key: "setupModRole", done: Boolean(settings.modRoleId), page: "moderation" },
-    { key: "setupCountry", done: Boolean(settings.countryChannelId), page: "country" },
-    { key: "setupDashboard", done: (settings.dashboardRoleIds ?? []).length > 0, page: "access" },
-    { key: "setupAutomod", done: Boolean(settings.automod?.enabled), page: "automod" },
-    { key: "setupWelcome", done: Boolean(settings.welcomeChannelId), page: "welcome" },
+    { id: "logs", key: "setupLogs", done: Boolean(settings.logsChannelId), page: "logging" },
+    { id: "serverLog", key: "setupServerLog", done: Boolean(settings.serverLogChannelId), page: "logging" },
+    { id: "modLog", key: "setupModLog", done: Boolean(settings.modLogChannelId || settings.logsChannelId), page: "moderation" },
+    { id: "modRole", key: "setupModRole", done: Boolean(settings.modRoleId), page: "moderation" },
+    { id: "country", key: "setupCountry", done: Boolean(settings.countryChannelId), page: "country" },
+    { id: "dashboard", key: "setupDashboard", done: (settings.dashboardRoleIds ?? []).length > 0, page: "access" },
+    { id: "automod", key: "setupAutomod", done: Boolean(settings.automod?.enabled), page: "automod" },
+    { id: "welcome", key: "setupWelcome", done: Boolean(settings.welcomeChannelId), page: "welcome" },
   ];
+  const skipped = new Set(settings.setupSkipped ?? []);
+  steps.forEach((step) => (step.skipped = !step.done && skipped.has(step.id)));
   const done = steps.filter((step) => step.done).length;
+  const skippedCount = steps.filter((step) => step.skipped).length;
+  const todo = steps.filter((step) => !step.done && !step.skipped);
   if (done === steps.length) {
     return null;
   }
-  return h(
+
+  let section;
+  const redraw = (options) => section.replaceWith(setupCard(data, options));
+  const saveSkipped = async (ids, button) => {
+    button.disabled = true;
+    try {
+      const result = await api(`/api/guilds/${guild.id}/settings`, { method: "PUT", body: { setupSkipped: ids } });
+      data.settings = result.settings;
+      state.cache = { guildId: guild.id, data, at: Date.now() };
+      redraw({ open: open || todo.length > 0 });
+    } catch (error) {
+      failed(error);
+      button.disabled = false;
+    }
+  };
+  const currentSkips = steps.filter((step) => step.skipped).map((step) => step.id);
+  const skip = (ids) => (event) => saveSkipped([...currentSkips, ...ids], event.currentTarget);
+  const unskip = (id) => (event) => saveSkipped(currentSkips.filter((skippedId) => skippedId !== id), event.currentTarget);
+
+  const progress = skippedCount > 0 ? t("setupProgressSkipped", { done, total: steps.length, skipped: skippedCount }) : t("setupProgress", { done, total: steps.length });
+  const folded = todo.length === 0 && !open;
+  section = h(
     "section",
-    { class: "card setup" },
+    { class: `card setup${folded ? " folded" : ""}` },
     h(
       "div",
       { class: "toolbar" },
       h("h2", { class: "card-title grow" }, iconChip("check", "green"), t("setupTitle")),
-      h("span", { class: "count-pill" }, t("setupProgress", { done, total: steps.length })),
+      h("span", { class: "count-pill" }, progress),
+      folded
+        ? h("button", { type: "button", class: "button ghost small", onclick: () => redraw({ open: true }) }, t("setupShow"))
+        : todo.length > 1
+          ? h("button", { type: "button", class: "button ghost small", onclick: skip(todo.map((step) => step.id)) }, t("setupSkipAll"))
+          : null,
     ),
-    h("div", { class: "progress" }, fillBar("progress-fill", done / steps.length)),
-    h(
-      "ul",
-      { class: "steps" },
-      steps.map((step) =>
-        h(
-          "li",
-          { class: step.done ? "done" : "" },
-          h("span", { class: "step-mark", "aria-hidden": "true" }, step.done ? icon("check", "icon tiny") : null),
-          h("span", { class: "grow" }, t(step.key)),
-          step.done
-            ? h("span", { class: "muted" }, t("setupDone"))
-            : h("a", { class: "button ghost small", href: `#/g/${guild.id}/${step.page}` }, t("setupFix")),
+    folded ? null : h("div", { class: "progress" }, fillBar("progress-fill", (done + skippedCount) / steps.length)),
+    folded
+      ? null
+      : h(
+          "ul",
+          { class: "steps" },
+          steps.map((step) =>
+            h(
+              "li",
+              { class: step.done ? "done" : step.skipped ? "skipped" : "" },
+              h("span", { class: "step-mark", "aria-hidden": "true" }, step.done ? icon("check", "icon tiny") : step.skipped ? icon("x", "icon tiny") : null),
+              h("span", { class: "grow" }, t(step.key)),
+              step.done
+                ? h("span", { class: "muted" }, t("setupDone"))
+                : step.skipped
+                  ? h(
+                      "span",
+                      { class: "step-actions" },
+                      h("span", { class: "muted" }, t("setupSkipped")),
+                      h("button", { type: "button", class: "button ghost small", onclick: unskip(step.id) }, t("setupUndo")),
+                    )
+                  : h(
+                      "span",
+                      { class: "step-actions" },
+                      h("button", { type: "button", class: "button ghost small", title: t("setupSkipHelp"), onclick: skip([step.id]) }, t("setupSkip")),
+                      h("a", { class: "button ghost small", href: `#/g/${guild.id}/${step.page}` }, t("setupFix")),
+                    ),
+            ),
+          ),
         ),
-      ),
-    ),
   );
+  return section;
 }
 
 // --- Cases -------------------------------------------------------------------
