@@ -1,17 +1,23 @@
-// The dashboard's Guide page: how to use the bot and every feature, in
-// English. Shown by showGuide in app.js; tests/dashboardGuide.test.js checks
+// The dashboard's Guide: how to use the bot and every feature, in English.
+// Shown by showGuide in app.js as a page of parts, a page per part and a page
+// per topic; tests/dashboardGuide.test.js checks
 // that every slash command and subcommand is mentioned somewhere.
 //
 // Text can use `code`, **bold** and *italic*, nothing else; it's turned into elements,
 // never HTML. A section's `page` is the dashboard page it's set up on.
 //
+// Part fields: id, part (its name), icon, tone, about, sections.
 // Section fields: id, title, icon, tone, page, summary, who, native (the
 // Discord feature to try first), steps, commands ([usage, what it does]),
 // table ({ head, rows }), legend (a second table), example (lines), tips.
 
 export const GUIDE = [
   {
+    id: "start",
     part: "Getting started",
+    icon: "sparkles",
+    tone: "blue",
+    about: "Set the bot up, see who can use what, and find your way around this dashboard.",
     sections: [
       {
         id: "setup",
@@ -114,7 +120,11 @@ export const GUIDE = [
     ],
   },
   {
+    id: "moderation",
     part: "Moderation",
+    icon: "gavel",
+    tone: "red",
+    about: "Warnings, timeouts and bans, cases, member tools, tickets and ban appeals.",
     sections: [
       {
         id: "moderation",
@@ -275,7 +285,11 @@ export const GUIDE = [
     ],
   },
   {
+    id: "protection",
     part: "Protection",
+    icon: "shield",
+    tone: "purple",
+    about: "Automod, media-only channels, raid protection, anti-nuke and the log channels.",
     sections: [
       {
         id: "automod",
@@ -433,7 +447,11 @@ export const GUIDE = [
     ],
   },
   {
+    id: "community",
     part: "Community",
+    icon: "users",
+    tone: "green",
+    about: "Country roles, welcomes, role panels, levels, birthdays, giveaways and more.",
     sections: [
       {
         id: "country",
@@ -684,7 +702,11 @@ export const GUIDE = [
     ],
   },
   {
+    id: "messages",
     part: "Messages",
+    icon: "message",
+    tone: "amber",
+    about: "Custom commands, auto-responders, scheduled posts, embeds, feeds and stickies.",
     sections: [
       {
         id: "tags",
@@ -796,7 +818,11 @@ export const GUIDE = [
     ],
   },
   {
+    id: "settings",
     part: "Settings",
+    icon: "sliders",
+    tone: "cyan",
+    about: "Staff roles, permissions and dashboard access, and backups.",
     sections: [
       {
         id: "settings",
@@ -868,7 +894,11 @@ export const GUIDE = [
     ],
   },
   {
+    id: "reference",
     part: "Reference",
+    icon: "book",
+    tone: "pink",
+    about: "Do's and don'ts for the team, and what to do when something doesn't work.",
     sections: [
       {
         id: "rules",

@@ -3,7 +3,7 @@
 //
 //   #/                     your servers
 //   #/g/<id>/overview      a server's numbers at a glance, and which features are on
-//   #/g/<id>/guide         how to use the bot and every feature (?topic=)
+//   #/g/<id>/guide         how to use the bot and every feature (?part=, or ?topic=)
 //   #/g/<id>/activity      every change made on the dashboard (?before=)
 //   #/g/<id>/cases         moderation cases (?q=&action=&user=&moderator=&from=&to=)
 //   #/g/<id>/members       find a member (?q=), or one member's history (?user=)
@@ -991,6 +991,17 @@ function searchItems() {
         sub: t(`navGroup_${page.group}`),
         text: searchable(`${t(`page_${page.id}`)} ${t(`navGroup_${page.group}`)} ${intro === `${page.id}Intro` ? "" : intro} ${t(`search_${page.id}`)}`),
         href: `#/g/${data.guild.id}/${page.id}`,
+      });
+    }
+    for (const part of GUIDE) {
+      items.push({
+        kind: "page",
+        icon: part.icon,
+        tone: part.tone,
+        title: part.part,
+        sub: t("page_guide"),
+        text: searchable(`${part.part} ${t("page_guide")} ${part.about}`),
+        href: guidePartLink(data.guild.id, part.id),
       });
     }
     for (const topic of GUIDE_TOPICS) {
@@ -5961,9 +5972,10 @@ async function showActivity(guildId) {
 
 // --- Guide -------------------------------------------------------------------
 
-// Every topic in guide.js, with the part it's in.
-const GUIDE_TOPICS = GUIDE.flatMap(({ part, sections }) => sections.map((section) => ({ ...section, part })));
+// Every topic in guide.js, in order, with the part it's in.
+const GUIDE_TOPICS = GUIDE.flatMap(({ id, part, sections }) => sections.map((section) => ({ ...section, part, partId: id })));
 const guideLink = (guildId, topicId) => `#/g/${guildId}/guide${topicId ? `?topic=${topicId}` : ""}`;
+const guidePartLink = (guildId, partId) => `#/g/${guildId}/guide?part=${partId}`;
 
 // Guide text: `code`, **bold** and *italic* become elements, everything else stays text.
 function guideText(text) {
@@ -6000,6 +6012,58 @@ const guideSearchText = (topic) =>
       .join(" "),
   );
 
+// Guide text is English, so it keeps reading left to right in Arabic.
+const guideEnglish = (tag, attributes, ...children) => h(tag, { ...attributes, lang: "en", dir: "ltr" }, ...children);
+
+const guideEnglishNote = () => (state.language === "en" ? null : h("p", { class: "tip" }, icon("globe"), h("span", {}, t("guideEnglishNote"))));
+
+// Guide › part › topic, above a part or topic page.
+function guideCrumbs(guildId, part, topic) {
+  const crumbs = [h("a", { href: guideLink(guildId) }, t("page_guide"))];
+  if (part) {
+    crumbs.push(topic ? guideEnglish("a", { href: guidePartLink(guildId, part.id) }, part.part) : guideEnglish("span", { "aria-current": "page" }, part.part));
+  }
+  if (topic) {
+    crumbs.push(guideEnglish("span", { "aria-current": "page" }, topic.title));
+  }
+  return h(
+    "nav",
+    { class: "guide-crumbs", "aria-label": t("page_guide") },
+    crumbs.flatMap((crumb, index) => (index === 0 ? [crumb] : [icon("chevronRight", "icon small"), crumb])),
+  );
+}
+
+// A topic as a row that opens its page.
+function guideTopicRow(guildId, topic, withPart = false) {
+  return guideEnglish(
+    "a",
+    { class: "card guide-row", href: guideLink(guildId, topic.id) },
+    iconChip(topic.icon, topic.tone),
+    h(
+      "span",
+      { class: "grow" },
+      h("strong", {}, topic.title),
+      h("span", { class: "muted" }, guideText(topic.summary)),
+      withPart ? h("span", { class: "guide-row-part" }, topic.part) : null,
+    ),
+    icon("chevronRight", "icon small"),
+  );
+}
+
+// Previous and next, at the bottom of a part or topic page.
+function guidePager(previous, next) {
+  const link = (entry, labelKey, iconName, className) =>
+    entry
+      ? h(
+          "a",
+          { class: `card guide-pager-link ${className}`, href: entry.href },
+          h("span", { class: "muted" }, className === "next" ? null : icon(iconName, "icon small"), t(labelKey), className === "next" ? icon(iconName, "icon small") : null),
+          guideEnglish("strong", {}, entry.title),
+        )
+      : h("span");
+  return h("nav", { class: "guide-pager" }, link(previous, "guidePrevious", "chevronLeft", "previous"), link(next, "guideNext", "chevronRight", "next"));
+}
+
 function guideTable({ head, rows }) {
   return h(
     "div",
@@ -6013,9 +6077,8 @@ function guideTable({ head, rows }) {
   );
 }
 
-// One topic, folded up until it's opened, picked or matched by the filter.
-function guideTopic(topic, data) {
-  const page = topic.page && visiblePages(data).find((entry) => entry.id === topic.page);
+// Everything one topic says, as a card.
+function guideTopicBody(topic) {
   const commands = topic.commands?.length
     ? h(
         "div",
@@ -6028,109 +6091,108 @@ function guideTopic(topic, data) {
         ),
       )
     : null;
-  return h(
-    "details",
-    { class: "card guide-topic", id: `guide-${topic.id}`, "data-topic": topic.id },
-    h(
-      "summary",
-      {},
-      iconChip(topic.icon, topic.tone),
-      h("span", { class: "grow" }, h("strong", { class: "guide-title" }, topic.title), h("span", { class: "muted guide-summary" }, guideText(topic.summary))),
-      icon("chevronDown", "icon small guide-chevron"),
-    ),
-    h(
-      "div",
-      { class: "guide-body" },
-      topic.who ? h("p", { class: "guide-who" }, h("strong", {}, t("guideWho")), " ", guideText(topic.who)) : null,
-      topic.native ? h("p", { class: "tip" }, icon("sparkles"), h("span", {}, h("strong", {}, t("guideNative")), " ", guideText(topic.native))) : null,
-      topic.steps?.length ? h("ol", { class: "guide-steps" }, topic.steps.map((step) => h("li", {}, guideText(step)))) : null,
-      topic.table ? guideTable(topic.table) : null,
-      commands,
-      topic.legend ? guideTable(topic.legend) : null,
-      topic.example?.length ? h("div", { class: "guide-example" }, h("span", { class: "field-label" }, t("guideExample")), h("pre", {}, h("code", {}, topic.example.join("\n")))) : null,
-      topic.tips?.length
-        ? h("div", {}, h("span", { class: "field-label" }, t("guideGoodToKnow")), h("ul", { class: "guide-tips" }, topic.tips.map((tip) => h("li", {}, guideText(tip)))))
-        : null,
-      page ? h("p", {}, h("a", { class: "button ghost small", href: `#/g/${data.guild.id}/${page.id}` }, icon(page.icon, "icon small"), t("guideOpenPage", { page: t(`page_${page.id}`) }))) : null,
-    ),
+  return guideEnglish(
+    "section",
+    { class: "card guide-body" },
+    topic.who ? h("p", { class: "guide-who" }, h("strong", {}, t("guideWho")), " ", guideText(topic.who)) : null,
+    topic.native ? h("p", { class: "tip" }, icon("sparkles"), h("span", {}, h("strong", {}, t("guideNative")), " ", guideText(topic.native))) : null,
+    topic.steps?.length ? h("ol", { class: "guide-steps" }, topic.steps.map((step) => h("li", {}, guideText(step)))) : null,
+    topic.table ? guideTable(topic.table) : null,
+    commands,
+    topic.legend ? guideTable(topic.legend) : null,
+    topic.example?.length ? h("div", { class: "guide-example" }, h("span", { class: "field-label" }, t("guideExample")), h("pre", {}, h("code", {}, topic.example.join("\n")))) : null,
+    topic.tips?.length
+      ? h("div", {}, h("span", { class: "field-label" }, t("guideGoodToKnow")), h("ul", { class: "guide-tips" }, topic.tips.map((tip) => h("li", {}, guideText(tip)))))
+      : null,
   );
 }
 
-async function showGuide(guildId) {
-  const data = await loadGuild(guildId);
-  const query = new URLSearchParams(location.hash.split("?")[1] ?? "");
-  const picked = GUIDE_TOPICS.find((topic) => topic.id === query.get("topic"));
-  const topics = GUIDE_TOPICS.map((topic) => ({ topic, element: guideTopic(topic, data), text: guideSearchText(topic) }));
-  const parts = GUIDE.map(({ part }) => {
-    const inPart = topics.filter((entry) => entry.topic.part === part);
-    return { part, inPart, element: h("section", { class: "guide-part", lang: "en", dir: "ltr" }, h("h2", { class: "guide-part-title" }, part), inPart.map((entry) => entry.element)) };
-  });
-  const open = (topicId, behavior = "smooth") => {
-    const entry = topics.find((item) => item.topic.id === topicId);
-    if (!entry) {
-      return;
-    }
-    entry.element.open = true;
-    entry.element.scrollIntoView({ behavior, block: "start" });
-    history.replaceState(null, "", guideLink(guildId, topicId));
-    state.lastHash = location.hash;
-  };
-  const contents = h(
-    "nav",
-    { class: "card guide-contents", "aria-label": t("guideContents"), lang: "en", dir: "ltr" },
-    GUIDE.map(({ part, sections }) =>
+// The guide's first page: one card per part, and a search over every topic.
+function guideHome(data) {
+  const guildId = data.guild.id;
+  const searchTexts = GUIDE_TOPICS.map((topic) => ({ topic, text: guideSearchText(topic) }));
+  const parts = h(
+    "div",
+    { class: "guide-parts" },
+    GUIDE.map((part) =>
       h(
-        "div",
-        { class: "guide-contents-part" },
-        h("span", { class: "nav-heading" }, part),
-        h("ul", {}, sections.map((section) => h("li", {}, h("button", { type: "button", class: "link-button", onclick: () => open(section.id) }, section.title)))),
+        "a",
+        { class: "card guide-part-card", href: guidePartLink(guildId, part.id) },
+        iconChip(part.icon, part.tone, "lg"),
+        guideEnglish("strong", {}, part.part),
+        guideEnglish("span", { class: "muted" }, part.about),
+        h("span", { class: "guide-count" }, t("guideTopicCount", { count: part.sections.length })),
       ),
     ),
   );
+  const results = h("div", { class: "guide-list", hidden: true });
   const empty = h("p", { class: "muted empty", hidden: true }, t("guideNoMatch"));
   const input = h("input", { type: "search", class: "grow", placeholder: t("guideFilter"), "aria-label": t("guideFilter"), autocomplete: "off" });
   const filter = () => {
     const words = searchWords(input.value);
-    let shown = 0;
-    for (const entry of topics) {
-      const match = matchesWords(entry.text, words);
-      entry.element.hidden = !match;
-      if (words.length > 0) {
-        entry.element.open = match;
-      }
-      shown += match ? 1 : 0;
-    }
-    for (const part of parts) {
-      part.element.hidden = part.inPart.every((entry) => entry.element.hidden);
-    }
-    contents.hidden = words.length > 0;
-    empty.hidden = shown > 0;
+    const found = words.length > 0 ? searchTexts.filter((entry) => matchesWords(entry.text, words)) : [];
+    results.replaceChildren(...found.map((entry) => guideTopicRow(guildId, entry.topic, true)));
+    parts.hidden = words.length > 0;
+    results.hidden = found.length === 0;
+    empty.hidden = words.length === 0 || found.length > 0;
   };
   input.addEventListener("input", filter);
   filterKeys(input, filter);
-  const setAll = (value) => () => topics.forEach((entry) => (entry.element.open = value && !entry.element.hidden));
-  const toolbar = h(
-    "div",
-    { class: "guide-toolbar" },
-    input,
-    h("button", { class: "ghost small", type: "button", onclick: setAll(true) }, t("guideExpandAll")),
-    h("button", { class: "ghost small", type: "button", onclick: setAll(false) }, t("guideCollapseAll")),
-  );
-  show(
-    guildLayout(
-      data,
-      "guide",
-      pageHero("guide", t("guideIntro"), data),
-      state.language === "en" ? null : h("p", { class: "tip" }, icon("globe"), h("span", {}, t("guideEnglishNote"))),
-      toolbar,
-      contents,
-      empty,
-      parts.map((part) => part.element),
+  return [pageHero("guide", t("guideIntro"), data), guideEnglishNote(), h("div", { class: "guide-toolbar" }, input), parts, results, empty];
+}
+
+// One part: its topics, one row each.
+function guidePart(data, part) {
+  const guildId = data.guild.id;
+  const index = GUIDE.indexOf(part);
+  const pagerEntry = (entry) => entry && { href: guidePartLink(guildId, entry.id), title: entry.part };
+  return [
+    guideCrumbs(guildId, part),
+    guideEnglish("div", {}, hero(part.part, part.about, part.tone, { iconName: part.icon })),
+    guideEnglishNote(),
+    h(
+      "div",
+      { class: "guide-list" },
+      part.sections.map((section) => guideTopicRow(guildId, GUIDE_TOPICS.find((topic) => topic.id === section.id))),
     ),
-  );
-  if (picked) {
-    open(picked.id, "auto");
-  }
+    guidePager(pagerEntry(GUIDE[index - 1]), pagerEntry(GUIDE[index + 1])),
+  ];
+}
+
+// One topic: the other topics in its part, what it says, and the topics before and after it.
+function guideTopicPage(data, topic) {
+  const guildId = data.guild.id;
+  const part = GUIDE.find((entry) => entry.id === topic.partId);
+  const index = GUIDE_TOPICS.indexOf(topic);
+  const page = topic.page && visiblePages(data).find((entry) => entry.id === topic.page);
+  const openPage = page ? h("a", { class: "button ghost small", href: `#/g/${guildId}/${page.id}` }, icon(page.icon, "icon small"), t("guideOpenPage", { page: t(`page_${page.id}`) })) : null;
+  const pagerEntry = (entry) => entry && { href: guideLink(guildId, entry.id), title: entry.title };
+  return [
+    guideCrumbs(guildId, part, topic),
+    guideEnglish("div", {}, hero(topic.title, guideText(topic.summary), topic.tone, { iconName: topic.icon, extra: openPage })),
+    guideEnglishNote(),
+    part.sections.length > 1
+      ? guideEnglish(
+          "nav",
+          { class: "guide-siblings", "aria-label": part.part },
+          part.sections.map((section) =>
+            h("a", { class: "guide-sibling", href: guideLink(guildId, section.id), "aria-current": section.id === topic.id ? "page" : undefined }, section.title),
+          ),
+        )
+      : null,
+    guideTopicBody(topic),
+    guidePager(pagerEntry(GUIDE_TOPICS[index - 1]), pagerEntry(GUIDE_TOPICS[index + 1])),
+  ];
+}
+
+// The guide: #/g/<id>/guide, ?part=<id> for one part, ?topic=<id> for one topic.
+async function showGuide(guildId) {
+  const data = await loadGuild(guildId);
+  const query = new URLSearchParams(location.hash.split("?")[1] ?? "");
+  const topic = GUIDE_TOPICS.find((entry) => entry.id === query.get("topic"));
+  const part = !topic && GUIDE.find((entry) => entry.id === query.get("part"));
+  const content = topic ? guideTopicPage(data, topic) : part ? guidePart(data, part) : guideHome(data);
+  show(guildLayout(data, "guide", content));
 }
 
 // --- Routing -----------------------------------------------------------------

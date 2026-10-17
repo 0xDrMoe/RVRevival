@@ -3495,80 +3495,143 @@ dialog textarea {
   margin-bottom: var(--gap);
 }
 
-.guide-contents {
+.guide-parts {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(200px, 100%), 1fr));
-  gap: 16px;
-  margin-bottom: 24px;
+  grid-template-columns: repeat(auto-fill, minmax(min(240px, 100%), 1fr));
+  gap: var(--gap);
 }
 
-.guide-contents ul {
-  margin: 6px 0 0;
-  padding: 0;
-  list-style: none;
+.guide-part-card {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  color: inherit;
+  text-decoration: none;
+  transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
 }
 
-.guide-contents .link-button {
-  padding-inline: 0;
-  text-align: start;
-  white-space: normal;
+.guide-part-card .chip-icon {
+  margin-bottom: 6px;
 }
 
-.guide-part {
-  margin-bottom: 24px;
+.guide-part-card strong {
+  font-size: 1.05rem;
 }
 
-.guide-part-title {
-  margin: 0 0 10px;
+.guide-part-card .muted {
+  font-size: 0.88rem;
+}
+
+.guide-count {
+  margin-top: 4px;
+  color: var(--accent);
   font-size: 0.8rem;
-  font-weight: 800;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--muted);
+  font-weight: 700;
 }
 
-.guide-topic {
-  margin-bottom: 10px;
-  padding: 0;
-  scroll-margin-top: calc(var(--topbar) + 12px);
+.guide-part-card:hover,
+.guide-row:hover,
+.guide-pager-link:hover {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  box-shadow: var(--shadow-lift);
 }
 
-.guide-topic > summary {
+.guide-part-card:hover {
+  transform: translateY(-2px);
+}
+
+.guide-list {
+  display: grid;
+  gap: 10px;
+}
+
+.guide-row {
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 14px var(--pad);
-  cursor: pointer;
-  list-style: none;
+  color: inherit;
+  text-decoration: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
 
-.guide-topic > summary::-webkit-details-marker {
-  display: none;
-}
-
-.guide-topic > summary > .grow {
+.guide-row > .grow {
   display: grid;
   gap: 2px;
   min-width: 0;
 }
 
-.guide-summary {
+.guide-row .muted {
   font-size: 0.88rem;
 }
 
-.guide-chevron {
-  transition: transform 0.15s;
+.guide-row-part {
+  color: var(--accent);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
-.guide-topic[open] .guide-chevron {
-  transform: rotate(180deg);
+.guide-crumbs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 12px;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.guide-crumbs a {
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.guide-crumbs [aria-current] {
+  color: var(--text);
+  font-weight: 600;
+}
+
+[dir="rtl"] .guide-crumbs .icon,
+[dir="rtl"] .guide-pager .icon {
+  transform: scaleX(-1);
+}
+
+.guide-siblings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: var(--gap);
+}
+
+.guide-sibling {
+  padding: 4px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.guide-sibling:hover {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+}
+
+.guide-sibling[aria-current] {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent);
 }
 
 .guide-body {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 14px;
-  padding: 0 var(--pad) var(--pad);
+  gap: 16px;
 }
 
 .guide-body > p,
@@ -3596,8 +3659,8 @@ dialog textarea {
 .guide-table td code,
 .guide-body li code,
 .guide-body p code,
-.guide-summary code {
-  overflow-wrap: anywhere;
+.guide-row code,
+.hero p code {
   padding: 1px 5px;
   border-radius: 5px;
   background: var(--surface-2);
@@ -3607,17 +3670,46 @@ dialog textarea {
 .guide-example pre {
   margin: 6px 0 0;
   padding: 10px 12px;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
+  overflow-x: auto;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--surface-2);
   font: 0.85rem/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
+.guide-pager {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--gap);
+}
+
+.guide-pager-link {
+  display: grid;
+  gap: 4px;
+  padding: 14px var(--pad);
+  color: inherit;
+  text-decoration: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.guide-pager-link .muted {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.8rem;
+}
+
+.guide-pager-link.next {
+  text-align: end;
+}
+
+.guide-pager-link.next .muted {
+  justify-content: flex-end;
+}
+
 @media (max-width: 640px) {
-  .guide-toolbar {
-    flex-wrap: wrap;
+  .guide-pager {
+    grid-template-columns: 1fr;
   }
 
   /* Each row of a guide table becomes a small block: the command, then what it does. */
@@ -3647,38 +3739,4 @@ dialog textarea {
   .guide-table td:last-child {
     padding-top: 2px;
   }
-
-/* Country guide: the fixed buttons under the preview */
-.discord-buttons {
-  display: grid;
-  gap: 8px;
-  margin-top: 8px;
-}
-.discord-button-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-.discord-button {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 32px;
-  padding: 4px 14px;
-  border-radius: 8px;
-  background: #4e5058;
-  color: #fff;
-  font-size: 0.875rem;
-  font-weight: 500;
-  cursor: not-allowed;
-}
-.discord-button.primary {
-  background: #5865f2;
-}
-
-/* Text boxes that grow with their text, so nothing is hidden behind a scrollbar. */
-textarea.autosize {
-  field-sizing: content;
-  min-height: 4.5em;
-  max-height: 24em;
 }
