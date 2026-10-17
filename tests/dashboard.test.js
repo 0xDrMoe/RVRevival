@@ -143,6 +143,38 @@ describe("dashboard", () => {
     expect(image.headers["content-type"]).toBe("image/jpeg");
   });
 
+  it("serves the Terms of Service and Privacy Policy without logging in", async () => {
+    for (const [url, title] of [["/terms", "Terms of Service"], ["/privacy", "Privacy Policy"]]) {
+      const page = await app.inject({ method: "GET", url });
+      expect(page.statusCode).toBe(200);
+      expect(page.headers["content-type"]).toContain("text/html");
+      expect(page.headers["content-security-policy"]).toContain("script-src 'self'");
+      expect(page.body).toContain(`<h1>${title}</h1>`);
+      expect(page.body).toContain(`<link rel="canonical" href="${URL_ORIGIN}${url}" />`);
+      expect(page.body).not.toMatch(/%[A-Z_]+%/);
+      expect(page.body).toContain("add LEGAL_CONTACT");
+    }
+    const script = await app.inject({ method: "GET", url: "/legal.js" });
+    expect(script.statusCode).toBe(200);
+  });
+
+  it("shows the contact from LEGAL_CONTACT on the Terms and Privacy pages, safely", async () => {
+    const pageWith = async (legalContact, url = "/privacy") => {
+      const other = await buildDashboard({ config: { ...config, legalContact }, db, discord, guildSettings, store, logger: fakeLogger() });
+      try {
+        return (await other.inject({ method: "GET", url })).body;
+      } finally {
+        await other.close();
+      }
+    };
+    expect(await pageWith("team@example.com")).toContain('<a href="mailto:team@example.com">team@example.com</a>');
+    expect(await pageWith("https://discord.gg/abc", "/terms")).toContain('<a href="https://discord.gg/abc" rel="noopener">https://discord.gg/abc</a>');
+    const plain = await pageWith("<script>alert(1)</script> on Discord");
+    expect(plain).toContain("&#60;script&#62;alert(1)&#60;/script&#62; on Discord");
+    expect(plain).not.toContain("<script>alert");
+    expect(plain).not.toContain("add LEGAL_CONTACT");
+  });
+
   it("shares only bot-wide totals on the public stats, without a login, and reuses them", async () => {
     store.createCase({ guildId: GUILD_ID, action: CaseAction.WARN, userId: USER_ID, moderatorId: "2", reason: "secret reason" });
     const stats = new BotStatsStore(db);
@@ -1318,6 +1350,8 @@ describe("dashboard helpers", () => {
       DASHBOARD_SESSION_SECRET: SECRET,
     };
     expect(loadDashboardConfig(env)).toMatchObject({ url: "https://rumbleverse.example.com", port: 3080 });
+    expect(loadDashboardConfig(env).legalContact).toBeUndefined();
+    expect(loadDashboardConfig({ ...env, LEGAL_CONTACT: "  team@example.com " }).legalContact).toBe("team@example.com");
     expect(() => loadDashboardConfig({ ...env, DASHBOARD_URL: "http://rumbleverse.example.com" })).toThrow(/https/);
     expect(() => loadDashboardConfig({ ...env, DASHBOARD_SESSION_SECRET: "short" })).toThrow(/32/);
   });

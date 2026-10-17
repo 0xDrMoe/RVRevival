@@ -1,0 +1,225 @@
+<!doctype html>
+<!--
+  The Privacy Policy, served at /privacy. The dashboard fills in %BASE_URL% and
+  %CONTACT% (LEGAL_CONTACT in .env). Written from what the code actually stores;
+  update it when a feature starts keeping something new. A template, not legal
+  advice: have it checked before relying on it.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#5865f2" />
+    <title>Privacy Policy · Rumbleverse Revival</title>
+    <meta name="description" content="What the Rumbleverse Revival Discord bot and dashboard store, why, and how to have it deleted." />
+    <link rel="canonical" href="%BASE_URL%/privacy" />
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="style.css" />
+    <script src="legal.js"></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="/">
+        <img src="favicon.svg" alt="" width="28" height="28" />
+        <span>Rumbleverse Revival</span>
+      </a>
+    </header>
+    <main class="main">
+      <article class="legal">
+        <h1>Privacy Policy</h1>
+        <p class="legal-updated">Last updated: 17 October 2026</p>
+
+        <p>
+          This policy explains what the Rumbleverse Revival Discord bot (“the bot”) and its web dashboard at
+          <a href="%BASE_URL%/">%BASE_URL%</a> (“the dashboard”) store, why, and how you can have it removed. They
+          are run by the Rumbleverse Revival team (“we”, “us”). The short version: we keep only what the bot’s
+          features need to work, we don’t sell or share it, and we don’t use ads, trackers or analytics.
+        </p>
+
+        <nav class="legal-toc" aria-label="On this page">
+          <a href="#collect">What we store</a>
+          <a href="#messages">Messages</a>
+          <a href="#use">How we use it</a>
+          <a href="#sharing">Who can see it</a>
+          <a href="#cookies">Cookies</a>
+          <a href="#retention">How long we keep it</a>
+          <a href="#choices">Your choices</a>
+          <a href="#security">Security</a>
+          <a href="#contact">Contact</a>
+        </nav>
+
+        <h2 id="collect">1. What we store</h2>
+        <p>
+          Discord identifies people, servers, channels and messages by numeric IDs. Most of what we store is those IDs,
+          plus the things below, and only when the feature that needs them is used.
+        </p>
+        <h3>Server settings</h3>
+        <p>
+          The settings a server’s staff choose with <code>/settings</code> and the other setup commands or on the
+          dashboard: channels, roles, automod rules, welcome messages, tags, auto-responses, role panels, followed
+          feeds, sticky and scheduled messages, and similar. These belong to the server, not to individual members.
+        </p>
+        <h3>Moderation</h3>
+        <ul>
+          <li>
+            <strong>Cases</strong> (warnings, timeouts, kicks, bans, notes): the member’s ID and username at the time,
+            the moderator’s ID and username, the reason, any duration and the time.
+          </li>
+          <li>
+            <strong>Ban appeals</strong> sent from the dashboard: your answers, the ban reason, and the staff decision.
+          </li>
+          <li>
+            <strong>Saved roles</strong>: the roles taken away by a quarantine, or the roles you had when you left a server
+            that uses role persistence, so they can be given back. Temporary roles and when they end.
+          </li>
+          <li><strong>Join and leave times</strong> for each member, shown in their history to staff.</li>
+        </ul>
+        <h3>Tickets</h3>
+        <p>
+          For each support ticket: who opened it, its subject and category, who closed it and why, and a transcript of the
+          messages in the ticket, saved when it is closed.
+        </p>
+        <h3>Community features</h3>
+        <ul>
+          <li><strong>Leveling</strong> (if a server turns it on): your XP, message count and username, and XP per day for the weekly and monthly boards.</li>
+          <li><strong>Birthdays</strong>: month and day only, never the year.</li>
+          <li><strong>Reminders</strong>: the text you asked to be reminded of, and when.</li>
+          <li><strong>AFK</strong>: your away message and since when.</li>
+          <li><strong>Highlights</strong>: the words you asked to be notified about.</li>
+          <li><strong>Giveaways</strong>: who entered and who won.</li>
+          <li>
+            <strong>Other features</strong> keep only IDs: starboard posts, join-to-create voice channels and their owners,
+            and messages posted from the dashboard (with a short summary and who posted them).
+          </li>
+        </ul>
+        <h3>The dashboard</h3>
+        <ul>
+          <li>
+            When you log in with Discord we receive your user ID, username, avatar and the list of servers you are in
+            (with your permissions there), which we use to show the servers you can manage. We keep your Discord
+            access token, encrypted, for the length of your login. We never see your Discord password or email address.
+          </li>
+          <li>Changes made on the dashboard are recorded with who made them, so each server’s staff can see its activity history.</li>
+        </ul>
+        <h3>Bot-wide totals</h3>
+        <p>
+          How many servers the bot is in, how many members those servers have in total, and how many commands have been
+          run. These are totals only and are shown on the public home page.
+        </p>
+        <h3>Error logs</h3>
+        <p>
+          When something goes wrong, the bot writes an error log on our server. These lines can include server, channel
+          or user IDs. They are used only to fix problems.
+        </p>
+
+        <h2 id="messages">2. Messages</h2>
+        <p>
+          The bot reads messages in the channels it can see so that its features can work: automod, leveling,
+          auto-responses, highlights, AFK replies, the starboard and the server log. It does this as messages arrive
+          and does <strong>not</strong> save message content, except in these cases:
+        </p>
+        <ul>
+          <li>Ticket transcripts, as above.</li>
+          <li>Text you give the bot yourself: reminders, AFK messages, appeal answers, case reasons.</li>
+          <li>
+            If a server turns on its server log, the bot posts edited and deleted messages to that server’s own log
+            channel in Discord. Those posts are kept by Discord, in that server, under the control of its staff.
+          </li>
+        </ul>
+
+        <h2 id="use">3. How we use it</h2>
+        <p>
+          Only to run the bot and the dashboard: carrying out commands, applying a server’s settings, showing staff their
+          server’s records, and fixing problems. We do not sell your data, use it for advertising, build profiles, or
+          use it to train AI models.
+        </p>
+
+        <h2 id="sharing">4. Who can see it</h2>
+        <ul>
+          <li>
+            <strong>The server’s staff.</strong> Records from a server (cases, appeals, tickets and transcripts, member
+            history, dashboard activity) are shown to that server’s staff on Discord and the dashboard. Leaderboards,
+            birthdays and giveaways are shown to the server’s members, as those features are meant to.
+          </li>
+          <li><strong>Discord</strong>, which carries everything the bot does. Discord’s own Privacy Policy applies to your use of Discord.</li>
+          <li><strong>Our hosting provider</strong>, which runs the server the bot and its database are on.</li>
+          <li>Anyone else only if the law requires it.</li>
+        </ul>
+        <p>
+          Followed feeds (YouTube, Reddit, RSS) are fetched by our server from public addresses. No member information is
+          sent to those sites.
+        </p>
+
+        <h2 id="cookies">5. Cookies and browser storage</h2>
+        <ul>
+          <li><code>rv_session</code>: keeps you logged in to the dashboard, for up to 7 days.</li>
+          <li><code>rv_oauth_state</code>: protects the Discord login step, for 10 minutes.</li>
+          <li>Your browser’s local storage remembers the dashboard language and look you pick. It never leaves your browser.</li>
+        </ul>
+        <p>There are no advertising, analytics or third-party cookies.</p>
+
+        <h2 id="retention">6. How long we keep it</h2>
+        <div class="legal-table">
+          <table>
+            <thead>
+              <tr><th>What</th><th>Kept for</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Dashboard logins</td><td>Up to 7 days, or until you log out</td></tr>
+              <tr><td>Daily XP (weekly and monthly boards)</td><td>35 days</td></tr>
+              <tr><td>Ended giveaways and their entries</td><td>30 days, so they can be rerolled</td></tr>
+              <tr><td>Reminders</td><td>Until they are sent or cancelled</td></tr>
+              <tr><td>Dashboard activity</td><td>The newest 500 changes per server</td></tr>
+              <tr><td>Everything else</td><td>Until staff or you remove it, or until you ask us to delete it</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          If the bot is removed from a server, that server’s data stays stored so nothing is lost if it is added back.
+          The server’s owner can ask us to delete it.
+        </p>
+
+        <h2 id="choices">7. Your choices</h2>
+        <ul>
+          <li>Remove your own data with <code>/birthday remove</code>, <code>/highlight clear</code> and <code>/remind cancel</code>. Sending a message ends your AFK status.</li>
+          <li>Log out of the dashboard at any time; this deletes your login.</li>
+          <li>Server staff can delete cases, reset levels and clear settings for their server.</li>
+          <li>
+            You can ask us for a copy of what we hold about you, or to delete it, using the contact below. We will do
+            this unless a record has to be kept for a server’s safety (for example the case behind a ban), in which
+            case we will tell you why.
+          </li>
+          <li>If you leave a server or stop using the bot, it no longer collects anything new about you there.</li>
+        </ul>
+
+        <h2 id="security">8. Security</h2>
+        <p>
+          The dashboard only works over HTTPS. Login sessions are stored hashed and Discord access tokens are encrypted,
+          so a copy of the database can’t be used to log in. The dashboard checks your Discord permissions before
+          showing or changing anything for a server. No system is perfectly secure, but we take reasonable care.
+        </p>
+
+        <h2 id="children">9. Children</h2>
+        <p>
+          The bot is for Discord users, who must be at least 13 (or older where local law requires). We don’t knowingly
+          collect information about anyone younger. If you think we have, contact us and we will delete it.
+        </p>
+
+        <h2 id="changes">10. Changes</h2>
+        <p>
+          If what the bot stores changes, we will update this page and the date at the top. Continuing to use the bot
+          after a change means you accept the updated policy.
+        </p>
+
+        <h2 id="contact">11. Contact</h2>
+        <p>Questions, copies or deletion requests: %CONTACT%</p>
+      </article>
+    </main>
+    <footer class="legal-footer">
+      <a href="/">Home</a>
+      <a href="/terms">Terms of Service</a>
+      <a href="/privacy" aria-current="page">Privacy Policy</a>
+    </footer>
+  </body>
+</html>

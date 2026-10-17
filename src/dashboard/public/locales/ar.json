@@ -1021,6 +1021,8 @@
   "landingFaqPermissions_q": "ما الصلاحيات التي يحتاجها البوت؟",
   "landingFaqPermissions_a": "الصلاحيات التي يطلبها عند إضافته. لا يستطيع منح أو سحب إلا الرتب التي تحت رتبته، فاسحب رتبته فوق الرتب التي سيديرها.",
   "landingFooterNav": "أقسام الصفحة",
+  "landingTerms": "الشروط",
+  "landingPrivacy": "الخصوصية",
   "landingNavFeatures": "الميزات",
   "landingNavSteps": "طريقة العمل",
   "landingNavDashboard": "لوحة التحكم",

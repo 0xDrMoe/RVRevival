@@ -1025,6 +1025,8 @@ function showLanding(failedLogin = false) {
           landingJump("dashboard", t("landingNavDashboard")),
           landingJump("faq", t("landingNavFaq")),
           h("a", { href: "/auth/login" }, t("landingDashboard")),
+          h("a", { href: "/terms" }, t("landingTerms")),
+          h("a", { href: "/privacy" }, t("landingPrivacy")),
         ),
       ),
     ),

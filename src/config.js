@@ -117,5 +117,7 @@ export function loadDashboardConfig(env = process.env) {
     sessionSecret: sessionSecret(env),
     // The language of the default welcome and leave messages shown on the Community page.
     forcedLanguage: botLanguage(env),
+    // How to reach the bot's team, shown on the Terms and Privacy pages.
+    legalContact: env.LEGAL_CONTACT?.trim() || undefined,
   };
 }

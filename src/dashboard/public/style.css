@@ -4570,6 +4570,117 @@ dialog textarea {
   color: var(--accent);
 }
 
+/* --- Terms and Privacy pages (src/dashboard/legal) --------------------------- */
+
+.legal {
+  max-width: 76ch;
+  margin: 0 auto;
+  line-height: 1.65;
+}
+
+.legal h1 {
+  margin: 0;
+  font-size: clamp(1.8rem, 4vw, 2.4rem);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.legal h2 {
+  margin: 40px 0 8px;
+  font-size: 1.3rem;
+  font-weight: 750;
+  scroll-margin-top: 80px;
+}
+
+.legal h3 {
+  margin: 24px 0 4px;
+  font-size: 1.02rem;
+  font-weight: 700;
+}
+
+.legal p,
+.legal ul {
+  margin: 8px 0;
+}
+
+.legal li + li {
+  margin-top: 4px;
+}
+
+.legal a {
+  color: var(--accent);
+}
+
+.legal code {
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: var(--surface-2);
+  font-size: 0.9em;
+}
+
+.legal-updated {
+  color: var(--muted);
+}
+
+.legal-toc {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin: 24px 0;
+  padding: 14px 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  font-size: 0.92rem;
+}
+
+.legal-toc a {
+  text-decoration: none;
+  font-weight: 550;
+}
+
+.legal-table {
+  overflow-x: auto;
+}
+
+.legal table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+
+.legal :is(th, td) {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  text-align: start;
+  vertical-align: top;
+}
+
+.legal-placeholder {
+  color: var(--danger);
+}
+
+.legal-footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px 24px;
+  padding: 24px 20px 40px;
+  border-top: 1px solid var(--border);
+  font-size: 0.9rem;
+}
+
+.legal-footer a {
+  color: var(--muted);
+  text-decoration: none;
+  font-weight: 550;
+}
+
+.legal-footer a:hover,
+.legal-footer a[aria-current] {
+  color: var(--accent);
+}
+
 @media (max-width: 1100px) {
   .landing-hero {
     grid-template-columns: 1fr;

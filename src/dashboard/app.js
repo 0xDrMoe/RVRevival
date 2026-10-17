@@ -81,6 +81,22 @@ const PUBLIC_FOLDER = fileURLToPath(new URL("./public/", import.meta.url));
 
 // For text put into the page's HTML.
 const escapeHtml = (text) => text.replace(/[&<>"']/g, (char) => `&#${char.charCodeAt(0)};`);
+
+// LEGAL_CONTACT as shown on the Terms and Privacy pages: an email address or
+// web address becomes a link. Until it's set, the pages say so plainly.
+function contactHtml(contact) {
+  if (!contact) {
+    return '<strong class="legal-placeholder">[Contact not set yet: add LEGAL_CONTACT to the dashboard\'s .env]</strong>';
+  }
+  const text = escapeHtml(contact);
+  if (/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(contact)) {
+    return `<a href="mailto:${text}">${text}</a>`;
+  }
+  if (/^https:\/\/\S+$/.test(contact)) {
+    return `<a href="${text}" rel="noopener">${text}</a>`;
+  }
+  return text;
+}
 const SESSION_COOKIE = "rv_session";
 const STATE_COOKIE = "rv_oauth_state";
 // How long a person's Discord server list (and their permissions) is trusted.
@@ -244,6 +260,15 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
   const sendPage = (request, reply) => reply.header("Cache-Control", "no-cache").type("text/html; charset=utf-8").send(page);
   app.get("/", sendPage);
   app.get("/index.html", sendPage);
+
+  // The Terms of Service and Privacy Policy, linked from the landing page and
+  // given to Discord in the Developer Portal. Plain pages, readable without JavaScript.
+  for (const name of ["terms", "privacy"]) {
+    const legalPage = readFileSync(new URL(`./legal/${name}.html`, import.meta.url), "utf8")
+      .replaceAll("%BASE_URL%", escapeHtml(config.url.replace(/\/+$/, "")))
+      .replaceAll("%CONTACT%", contactHtml(config.legalContact));
+    app.get(`/${name}`, (request, reply) => reply.header("Cache-Control", "no-cache").type("text/html; charset=utf-8").send(legalPage));
+  }
 
   app.addHook("onSend", async (request, reply, payload) => {
     reply.header(

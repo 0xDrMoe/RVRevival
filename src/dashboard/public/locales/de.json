@@ -1021,6 +1021,8 @@
   "landingFaqPermissions_q": "Welche Berechtigungen braucht der Bot?",
   "landingFaqPermissions_a": "Die, nach denen er beim Hinzufügen fragt. Er kann nur Rollen unter seiner eigenen vergeben oder entfernen, also zieh seine Rolle über die Rollen, die er verwalten soll.",
   "landingFooterNav": "Abschnitte der Seite",
+  "landingTerms": "Nutzungsbedingungen",
+  "landingPrivacy": "Datenschutz",
   "landingNavFeatures": "Funktionen",
   "landingNavSteps": "So funktioniert's",
   "landingNavDashboard": "Dashboard",
