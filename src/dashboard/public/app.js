@@ -1452,7 +1452,7 @@ function settingsPage({ data, pageId, intro, cards, fields, after = null, heroEx
         }
       },
     },
-    cards,
+    h("div", { class: "settings-cards" }, cards),
     saveBar,
   );
   let header = pageHero(pageId, intro, data, heroExtra());
