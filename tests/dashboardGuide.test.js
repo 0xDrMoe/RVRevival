@@ -58,6 +58,17 @@ describe("dashboard guide", () => {
     }
   });
 
+  it("has parts with unique ids, known icons and something to say", () => {
+    const ids = GUIDE.map((part) => part.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    for (const part of GUIDE) {
+      expect(part.id, part.part).toMatch(/^[a-z]+$/);
+      expect(icons.has(part.icon), `${part.id} icon ${part.icon}`).toBe(true);
+      expect(part.about.length, part.id).toBeGreaterThan(0);
+      expect(part.sections.length, part.id).toBeGreaterThan(0);
+    }
+  });
+
   it("closes every `code` and **bold** mark", () => {
     for (const topic of topics) {
       for (const text of texts(topic)) {
