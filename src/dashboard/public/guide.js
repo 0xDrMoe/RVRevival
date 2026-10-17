@@ -452,13 +452,15 @@ export const GUIDE = [
         ],
         steps: [
           "Set the country channel on the **Country** page or with `/settings country-channel`.",
-          "Post the guide there with `/country-help`. It has a button per continent, **Type my country**, and 🌐 **Translate**.",
+          "Post the guide there from the **Country** page or with `/country-help`. It has a button per continent, **Type my country**, and 🌐 **Translate**.",
+          "Change the guide's wording and colour on the **Country** page, with a live preview. Saving updates the guide already posted.",
           "Members click their continent and pick, or type a name in any of the bot's languages or a common alias (`USA`, `UK`, `Deutschland`).",
         ],
         tips: [
           "**The country channel deletes every message**, staff's and admins' included. Deleted messages are saved in the logs channel.",
           "Once picked, only staff can change it. The bot never guesses; a name that doesn't match gets close suggestions.",
           "Central America and the Caribbean are under North America.",
+          "**The guide's buttons can't be changed**, by anyone, so picking always works. Your own wording shows in the server's language; translated copies use the bot's text.",
           "A guide missing buttons? Post it again with `/country-help` and delete the old one.",
         ],
       },

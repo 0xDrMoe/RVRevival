@@ -3597,6 +3597,7 @@ dialog textarea {
 .guide-body li code,
 .guide-body p code,
 .guide-summary code {
+  overflow-wrap: anywhere;
   padding: 1px 5px;
   border-radius: 5px;
   background: var(--surface-2);
@@ -3606,7 +3607,8 @@ dialog textarea {
 .guide-example pre {
   margin: 6px 0 0;
   padding: 10px 12px;
-  overflow-x: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--surface-2);
