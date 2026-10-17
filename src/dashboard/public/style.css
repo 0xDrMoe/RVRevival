@@ -406,7 +406,6 @@ kbd {
 }
 
 .main {
-  max-width: 1200px;
   margin: 0 auto;
   padding: 32px 20px 120px;
 }
@@ -1144,7 +1143,6 @@ form.settings > * + * {
 
 .content {
   width: 100%;
-  max-width: 1800px;
   padding: 28px 32px 120px;
 }
 
@@ -1177,6 +1175,12 @@ form.settings > * + * {
   /* A page with one card keeps it full width. */
   .settings-cards:has(> :only-child) {
     columns: auto;
+  }
+}
+
+@media (min-width: 2300px) {
+  .settings-cards:not(:has(> :only-child)) {
+    columns: 3;
   }
 }
 
