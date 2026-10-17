@@ -3940,3 +3940,284 @@ dialog textarea {
     padding-top: 2px;
   }
 }
+
+/* --- Landing page (logged out) ------------------------------------------------------ */
+
+.landing {
+  display: grid;
+  gap: 28px;
+}
+
+/* A full-color band in the accent gradient, with the logo floating on the far side. */
+.landing-hero {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 32px;
+  padding: 56px 48px;
+  border-radius: calc(var(--radius) + 10px);
+  color: #fff;
+  background:
+    radial-gradient(600px 340px at 85% 40%, rgb(255 255 255 / 18%), transparent 70%),
+    linear-gradient(125deg, color-mix(in srgb, var(--accent) 85%, #0b0820), var(--accent) 45%, var(--accent-2));
+  box-shadow: 0 24px 60px color-mix(in srgb, var(--accent) 30%, transparent), 0 4px 12px rgb(16 24 40 / 12%);
+}
+
+.landing-hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: radial-gradient(rgb(255 255 255 / 18%) 1.4px, transparent 1.6px) 0 0 / 18px 18px;
+  mask-image: linear-gradient(100deg, transparent 30%, #000 90%);
+}
+
+.landing-hero::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  width: 360px;
+  height: 360px;
+  inset-inline-end: -90px;
+  bottom: -220px;
+  border-radius: 30%;
+  background: #fff;
+  opacity: 0.1;
+  transform: rotate(22deg);
+}
+
+.landing-copy {
+  display: grid;
+  justify-items: start;
+  gap: 16px;
+}
+
+.landing-hero h1 {
+  margin: 0;
+  font-size: clamp(2.1rem, 5vw, 3.4rem);
+  font-weight: 850;
+  line-height: 1.05;
+  letter-spacing: -0.035em;
+  text-shadow: 0 2px 18px rgb(0 0 0 / 18%);
+}
+
+.landing-tagline {
+  margin: 0;
+  max-width: 54ch;
+  font-size: 1.12rem;
+  line-height: 1.55;
+  color: rgb(255 255 255 / 88%);
+}
+
+.landing-error {
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  background: rgb(0 0 0 / 22%);
+  font-weight: 600;
+}
+
+.landing-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.landing-invite,
+.landing-invite:hover {
+  background: #fff;
+  color: color-mix(in srgb, var(--accent) 80%, #000);
+  border-color: transparent;
+  box-shadow: 0 8px 22px rgb(0 0 0 / 18%);
+}
+
+.landing-invite:hover {
+  transform: translateY(-1px);
+}
+
+.landing-login,
+.landing-login:hover {
+  background: rgb(255 255 255 / 14%);
+  color: #fff;
+  border: 1px solid rgb(255 255 255 / 40%);
+}
+
+.landing-login:hover {
+  background: rgb(255 255 255 / 22%);
+}
+
+.landing-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 650;
+  background: rgb(0 0 0 / 20%);
+  border: 1px solid rgb(255 255 255 / 22%);
+  backdrop-filter: blur(4px);
+}
+
+.landing-status::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgb(255 255 255 / 60%);
+}
+
+.landing-status.on::before {
+  background: #4ade80;
+  box-shadow: 0 0 0 4px rgb(74 222 128 / 25%);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.landing-status.off::before {
+  background: #fca5a5;
+}
+
+@keyframes pulse {
+  50% {
+    box-shadow: 0 0 0 7px rgb(74 222 128 / 0%);
+  }
+}
+
+.landing-art img {
+  display: block;
+  width: 168px;
+  height: 168px;
+  border: 5px solid rgb(255 255 255 / 85%);
+  border-radius: 40px;
+  box-shadow: 0 24px 50px rgb(0 0 0 / 30%);
+  transform: rotate(-6deg);
+  animation: float 6s ease-in-out infinite;
+}
+
+@keyframes float {
+  50% {
+    transform: rotate(-3deg) translateY(-10px);
+  }
+}
+
+/* Room for a two-line label, so the numbers line up across the row. */
+.landing-stats .stat-head {
+  align-items: flex-start;
+  min-height: 2.9em;
+}
+
+.landing-stats .stat-value {
+  font-size: 2rem;
+}
+
+.sk-tile {
+  height: 112px;
+  border-radius: var(--radius);
+}
+
+.landing-section h2 {
+  margin: 0;
+  font-size: 1.45rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.landing-section > p {
+  margin: 4px 0 16px;
+}
+
+.landing-features {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 250px), 1fr));
+  gap: var(--gap);
+}
+
+.landing-feature {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  margin: 0;
+  background:
+    radial-gradient(200px 120px at 100% 0%, color-mix(in srgb, var(--tone) 11%, transparent), transparent 70%),
+    var(--surface);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.landing-feature:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lift);
+  border-color: color-mix(in srgb, var(--tone) 40%, var(--border));
+}
+
+.landing-feature h3 {
+  margin: 4px 0 0;
+  font-size: 1.05rem;
+}
+
+.landing-feature p {
+  margin: 0;
+  font-size: 0.92rem;
+}
+
+/* The closing call to action: a tinted band like the page headers. */
+.landing-cta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 28px 32px;
+  border: 1px solid color-mix(in srgb, var(--accent) 25%, var(--border));
+  border-radius: calc(var(--radius) + 6px);
+  background: linear-gradient(120deg, color-mix(in srgb, var(--accent) 14%, var(--surface)), color-mix(in srgb, var(--accent-2) 10%, var(--surface)));
+}
+
+.landing-cta h2 {
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 800;
+}
+
+.landing-cta p {
+  margin: 4px 0 0;
+  color: var(--muted);
+}
+
+.landing-cta .landing-actions {
+  margin: 0;
+}
+
+.landing-cta .landing-invite {
+  background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 65%, var(--accent-2)));
+  color: var(--accent-text);
+}
+
+.landing-cta .landing-login {
+  background: var(--surface);
+  color: var(--text);
+  border-color: var(--border);
+}
+
+@media (max-width: 760px) {
+  .landing-hero {
+    grid-template-columns: 1fr;
+    padding: 36px 22px;
+  }
+
+  .landing-art {
+    display: none;
+  }
+
+  .landing-actions,
+  .landing-actions .button {
+    width: 100%;
+  }
+
+  .landing-cta {
+    padding: 22px;
+  }
+}

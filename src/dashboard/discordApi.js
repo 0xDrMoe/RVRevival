@@ -94,16 +94,21 @@ export function createDiscordApi({ config, fetch = globalThis.fetch, rest }) {
 
   const asUser = (accessToken, path) => oauthRequest(path, { headers: { Authorization: `Bearer ${accessToken}` } });
 
-  // The bot's server IDs. Paged by 200, Discord's maximum.
+  // The bot's server IDs, and the members across them (Discord's rough counts).
+  // Paged by 200, Discord's maximum.
   const botGuilds = cached(async () => {
     const ids = new Set();
+    let members = 0;
     let after;
     for (;;) {
-      const query = new URLSearchParams({ limit: "200", ...(after ? { after } : {}) });
+      const query = new URLSearchParams({ limit: "200", with_counts: "true", ...(after ? { after } : {}) });
       const page = await bot.get(Routes.userGuilds(), { query });
-      page.forEach((guild) => ids.add(guild.id));
+      for (const guild of page) {
+        ids.add(guild.id);
+        members += guild.approximate_member_count ?? 0;
+      }
       if (page.length < 200) {
-        return ids;
+        return { ids, members };
       }
       after = page.at(-1).id;
     }
@@ -179,7 +184,12 @@ export function createDiscordApi({ config, fetch = globalThis.fetch, rest }) {
     fetchUser: (accessToken) => asUser(accessToken, "/users/@me"),
     fetchUserGuilds: (accessToken) => asUser(accessToken, "/users/@me/guilds"),
 
-    botGuildIds: () => botGuilds.get("all"),
+    botGuildIds: async () => (await botGuilds.get("all")).ids,
+    // How many servers the bot is in and how many members they have together.
+    async botReach() {
+      const { ids, members } = await botGuilds.get("all");
+      return { servers: ids.size, members };
+    },
     guild: (guildId) => guilds.get(guildId),
     channels: (guildId) => channels.get(guildId),
     member: (guildId, userId) => members.get(`${guildId}:${userId}`),
