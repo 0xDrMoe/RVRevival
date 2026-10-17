@@ -1144,8 +1144,40 @@ form.settings > * + * {
 
 .content {
   width: 100%;
-  max-width: 1100px;
+  max-width: 1800px;
   padding: 28px 32px 120px;
+}
+
+/* On wide screens settings cards flow into two columns, filled top to bottom
+   like a masonry wall, so pages use the whole width without gaps under short cards. */
+.settings-cards > * + * {
+  margin-top: var(--gap);
+}
+
+@media (min-width: 1400px) {
+  .settings-cards {
+    columns: 2;
+    column-gap: var(--gap);
+  }
+
+  .settings-cards > * {
+    break-inside: avoid;
+    margin: 0 0 var(--gap);
+  }
+
+  .settings-cards > * + * {
+    margin-top: 0;
+  }
+
+  /* Side-by-side editors with a live preview need the full width. */
+  .settings-cards > .embed-layout {
+    column-span: all;
+  }
+
+  /* A page with one card keeps it full width. */
+  .settings-cards:has(> :only-child) {
+    columns: auto;
+  }
 }
 
 .nav-scrim {
@@ -1797,7 +1829,7 @@ a.stat:hover {
   display: grid;
   gap: 5px;
   margin-bottom: 16px;
-  max-width: 560px;
+  max-width: 760px;
 }
 
 .field:last-child {
