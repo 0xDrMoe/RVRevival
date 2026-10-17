@@ -56,6 +56,7 @@ export const Setting = Object.freeze({
   ANTI_NUKE: "antiNuke", // anti-nuke limits, punishment and trusted users, an object (see raid/antiNuke.js)
   STATS_COUNTERS: "statsCounters", // server stats channels, a list of { id, template, channelId, categoryId, error } (see stats/statsCounters.js)
   MEDIA_ONLY: "mediaOnly", // media-only channels, { channelIds, allowLinks } (see community/mediaOnly.js)
+  SETUP_SKIPPED: "setupSkipped", // dashboard setup steps the server chose not to do, a list of names (see dashboard/settingsRules.js)
 });
 
 const KNOWN_SETTINGS = new Set(Object.values(Setting));

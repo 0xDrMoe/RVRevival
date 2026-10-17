@@ -47,6 +47,8 @@ const RESPONDER_CHANNELS = [ChannelType.GuildText, ChannelType.GuildAnnouncement
 const MAX_IGNORED_CHANNELS = 100;
 const MAX_DASHBOARD_ROLES = 25;
 const LOG_EVENTS = Object.values(LogEvent);
+// The steps on the dashboard's Setup card, in the order it shows them.
+export const SETUP_STEPS = Object.freeze(["logs", "serverLog", "modLog", "modRole", "country", "dashboard", "automod", "welcome"]);
 // Roles new members must never get automatically: Administrator and Manage Server.
 const AUTOROLE_FORBIDDEN = (1n << 3n) | (1n << 5n);
 // Roles the birthday role can't be: any with moderator permissions (as for role panels).
@@ -83,6 +85,7 @@ export const SETTING_RULES = Object.freeze({
   [Setting.BIRTHDAYS]: { kind: "birthdays", types: POSTING_CHANNELS, label: "Birthdays" },
   [Setting.AUTO_RESPONDERS]: { kind: "autoResponders", types: RESPONDER_CHANNELS, label: "Auto-responders" },
   [Setting.MEDIA_ONLY]: { kind: "mediaOnly", types: [ChannelType.GuildText, ChannelType.GuildAnnouncement], label: "Media-only channels" },
+  [Setting.SETUP_SKIPPED]: { kind: "setupSteps", label: "Skipped setup steps" },
 });
 
 // Checks one value. Returns what to save: null clears the setting, and empty
@@ -115,6 +118,13 @@ function checkValue(setting, value, { guildId, channels, roles }) {
       }
       const events = LOG_EVENTS.filter((event) => value.includes(event));
       return events.length > 0 ? events : null;
+    }
+    case "setupSteps": {
+      if (!Array.isArray(value) || !value.every((step) => SETUP_STEPS.includes(step))) {
+        throw new InvalidSetting(setting, "Unknown setup step.");
+      }
+      const steps = SETUP_STEPS.filter((step) => value.includes(step));
+      return steps.length > 0 ? steps : null;
     }
     case "roles": {
       if (!Array.isArray(value) || value.length > MAX_DASHBOARD_ROLES) {
