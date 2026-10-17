@@ -59,6 +59,7 @@ import { buildBackup, InvalidBackup, planRestore, settingLabel } from "./backup.
 import { MAX_STICKIES, MAX_STICKY_LENGTH, StickyStore } from "../sticky/stickyStore.js";
 import { checkTemplate, COUNTER_PRESETS, InvalidCounter, MAX_COUNTERS, newCounterId, normalizeCounters } from "../stats/statsCounters.js";
 import { buildPanelButtons, buildPanelMessage } from "../tickets/tickets.js";
+import { buildPostedGuide, buildPostedRows, guideText } from "../commands/countryHelp.js";
 import { ScheduledMessageStore } from "../scheduled/scheduledMessageStore.js";
 import { MAX_DELAY_MS, MAX_INTERVAL_MS, MAX_SCHEDULED, MAX_SCHEDULED_LENGTH, MIN_INTERVAL_MS } from "../scheduled/scheduler.js";
 import { buildCaseEmbed } from "../moderation/modLog.js";
@@ -472,6 +473,9 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
       if (setting === Setting.TICKET_CATEGORIES && !(await redrawTicketPanel(guildId, guild))) {
         lines.push("The ticket panel couldn't be updated; post it again with `/tickets panel`.");
       }
+      if ((setting === Setting.COUNTRY_GUIDE || setting === Setting.COUNTRY_CHANNEL) && !(await redrawCountryGuide(guildId, guild))) {
+        lines.push("The posted country guide couldn't be updated; post it again from the Country page.");
+      }
     }
     return lines;
   }
@@ -498,6 +502,47 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
       return true;
     } catch (error) {
       logger.warn("Couldn't update the ticket panel", { guildId, error });
+      return false;
+    }
+  }
+
+  // The country guide's built-in text and its fixed buttons, in the server's
+  // language, for the Country page's form and preview.
+  const countryGuideInfo = (guildId, guild) => {
+    const language = pickLanguage(guild.preferred_locale, config.forcedLanguage);
+    const { color, ...defaults } = guideText(language);
+    return {
+      defaults: { ...defaults, notes: translate(language, "helpNotes"), color },
+      fallbackNote: translate(language, "helpFallbackNote"),
+      channelNote: translate(language, "helpChannelNote"),
+      buttons: buildPostedRows(language).map((row) =>
+        row.toJSON().components.map((button) => ({ label: button.label, emoji: button.emoji?.name ?? null, primary: button.style === 1 })),
+      ),
+      post: guildSettings.get(guildId, Setting.COUNTRY_GUIDE_POST) ?? null,
+    };
+  };
+
+  const countryGuideMessage = (guildId, guild, channelId) =>
+    buildPostedGuide(pickLanguage(guild.preferred_locale, config.forcedLanguage), {
+      isCountryChannel: channelId === guildSettings.get(guildId, Setting.COUNTRY_CHANNEL),
+      guide: guildSettings.get(guildId, Setting.COUNTRY_GUIDE),
+    });
+
+  // Gives the last posted country guide the saved wording. Returns false if
+  // Discord refused; a deleted guide is forgotten.
+  async function redrawCountryGuide(guildId, guild) {
+    const post = guildSettings.get(guildId, Setting.COUNTRY_GUIDE_POST);
+    if (!post?.channelId) {
+      return true;
+    }
+    try {
+      await discord.editMessage(post.channelId, post.messageId, countryGuideMessage(guildId, guild, post.channelId));
+      return true;
+    } catch (error) {
+      if (error.status === 404) {
+        await guildSettings.clear(guildId, Setting.COUNTRY_GUIDE_POST);
+      }
+      logger.warn("Couldn't update the posted country guide", { guildId, error });
       return false;
     }
   }
@@ -609,6 +654,7 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
       caseCounts: store.countGuildCases(guildId),
       // What the bot posts when no welcome or leave message is set, in the server's language.
       communityDefaults: manage ? communityDefaults(guild) : null,
+      countryGuide: manage ? countryGuideInfo(guildId, guild) : null,
     };
   });
 
@@ -1464,6 +1510,33 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     sentMessages.edited(guildId, messageId, { summary, editedBy: session.userId });
     await logAction(guildId, session, `**Message edited** in <#${channelId}>`, [summary, `https://discord.com/channels/${guildId}/${channelId}/${messageId}`]);
     return { ok: true };
+  });
+
+  // --- Country guide ----------------------------------------------------------
+
+  // Posts the /country-help guide with the saved wording. Its buttons are
+  // always the bot's own, so they can't be changed from here.
+  app.post("/api/guilds/:id/country-guide", async (request, reply) => {
+    const access = await requireGuild(request, reply, { manage: true });
+    if (!access) {
+      return reply;
+    }
+    const { guildId, session } = access;
+    const channelId = request.body?.channelId;
+    const [guild, channels] = await Promise.all([discord.guild(guildId), discord.channels(guildId)]);
+    if (!channels.some((channel) => channel.id === channelId && POSTABLE.has(channel.type))) {
+      return reply.code(400).send({ error: "bad-channel", message: "Pick a text or announcement channel." });
+    }
+    let posted;
+    try {
+      posted = await discord.postMessage(channelId, countryGuideMessage(guildId, guild, channelId));
+    } catch (error) {
+      return discordRefused(reply, error);
+    }
+    const post = { channelId, messageId: posted.id };
+    await guildSettings.set(guildId, Setting.COUNTRY_GUIDE_POST, post);
+    await logAction(guildId, session, `**Country guide posted** in <#${channelId}>`, [`https://discord.com/channels/${guildId}/${channelId}/${posted.id}`]);
+    return { post };
   });
 
   // --- Feeds ------------------------------------------------------------------

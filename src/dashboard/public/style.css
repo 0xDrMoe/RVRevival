@@ -311,9 +311,9 @@ kbd {
 }
 
 .account-name {
-  max-width: 14ch;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  max-width: 18ch;
+  overflow-wrap: anywhere;
+  line-height: 1.2;
 }
 
 /* Dropdowns: the account menu and the server switcher. */
@@ -408,8 +408,9 @@ button,
   border-radius: var(--radius-sm);
   cursor: pointer;
   font-weight: 600;
+  text-align: center;
   text-decoration: none;
-  white-space: nowrap;
+  overflow-wrap: break-word;
   transition: background-color 0.12s ease, border-color 0.12s ease, color 0.12s ease, box-shadow 0.12s ease;
 }
 
@@ -539,7 +540,6 @@ textarea {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  white-space: nowrap;
   font-size: 0.9rem;
 }
 
@@ -1036,9 +1036,7 @@ form.settings > * + * {
 
 .switcher-text strong,
 .switcher-text .muted {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .switcher-text .muted {
@@ -1444,10 +1442,9 @@ a.stat:hover {
 
 .leader-name {
   flex: 1;
+  min-width: 0;
   font-weight: 550;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .recent {
@@ -1473,9 +1470,7 @@ a.stat:hover {
 }
 
 .recent-text > * {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .recent-text .muted {
@@ -1695,9 +1690,8 @@ a.stat:hover {
 }
 
 .check span:last-child {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .role-dot {
@@ -1958,6 +1952,8 @@ dialog textarea {
 
 .segmented {
   display: inline-flex;
+  flex-wrap: wrap;
+  max-width: 100%;
   padding: 3px;
   gap: 3px;
   border-radius: 12px;
@@ -2162,7 +2158,7 @@ dialog textarea {
 
 .rule-body {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
   align-items: start;
   gap: 12px;
   margin-top: 12px;
@@ -2623,9 +2619,7 @@ dialog textarea {
 
 .board-name strong,
 .board-name .muted {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .board-name:hover strong {
@@ -2716,9 +2710,7 @@ dialog textarea {
 
 .ticket-subject,
 .ticket-main .muted {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .ticket-title {
@@ -3168,6 +3160,9 @@ dialog textarea {
 
 .discord-embed-field strong {
   color: #f2f3f5;
+}
+
+.discord-embed-field > strong {
   display: block;
   margin-bottom: 2px;
 }
@@ -3237,11 +3232,6 @@ dialog textarea {
 /* Sticky messages */
 .ticket-main .sticky-preview {
   white-space: pre-line;
-  text-overflow: clip;
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
 }
 @media (min-width: 640px) {
   .sent-row .row-actions {
@@ -3607,6 +3597,7 @@ dialog textarea {
 .guide-body li code,
 .guide-body p code,
 .guide-summary code {
+  overflow-wrap: anywhere;
   padding: 1px 5px;
   border-radius: 5px;
   background: var(--surface-2);
@@ -3616,7 +3607,8 @@ dialog textarea {
 .guide-example pre {
   margin: 6px 0 0;
   padding: 10px 12px;
-  overflow-x: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--surface-2);
@@ -3655,4 +3647,38 @@ dialog textarea {
   .guide-table td:last-child {
     padding-top: 2px;
   }
+
+/* Country guide: the fixed buttons under the preview */
+.discord-buttons {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+}
+.discord-button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.discord-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 4px 14px;
+  border-radius: 8px;
+  background: #4e5058;
+  color: #fff;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: not-allowed;
+}
+.discord-button.primary {
+  background: #5865f2;
+}
+
+/* Text boxes that grow with their text, so nothing is hidden behind a scrollbar. */
+textarea.autosize {
+  field-sizing: content;
+  min-height: 4.5em;
+  max-height: 24em;
 }

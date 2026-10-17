@@ -21,6 +21,7 @@ const SAME_SERVER_LABELS = {
   [Setting.TICKETS]: "Ticket panel",
   [Setting.TEMP_VOICE]: "Join-to-create voice",
   [Setting.STATS_COUNTERS]: "Server stats counters",
+  [Setting.COUNTRY_GUIDE_POST]: "Posted country guide",
 };
 const KNOWN = new Set(Object.values(Setting));
 

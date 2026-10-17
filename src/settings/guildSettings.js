@@ -61,6 +61,8 @@ export const Setting = Object.freeze({
   LOG_ROUTES: "logRoutes", // a log channel per kind of entry, { route: channelId } (see logs/logRoutes.js)
   PERMISSION_PRESET: "permissionPreset", // the premade permission setup last applied, a name (see permissions/presets.js)
   BOT_INVITER: "botInviterId", // who added the bot, from the audit log; may change permissions like the owner
+  COUNTRY_GUIDE: "countryGuide", // the /country-help guide's wording and colour, an object (see countries/guide.js)
+  COUNTRY_GUIDE_POST: "countryGuidePost", // the last guide posted, { channelId, messageId }, so the dashboard can update it
 });
 
 const KNOWN_SETTINGS = new Set(Object.values(Setting));

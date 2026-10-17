@@ -322,3 +322,51 @@ describe("Translate this message", () => {
     expect(embedOf(sentMessage(elsewhere.reply)).fields[1].value).not.toContain(translate("de", "helpChannelNote"));
   });
 });
+
+describe("the server's own guide wording", () => {
+  const guide = { title: "Pick your flag", steps: "Click a continent.", color: 0xeb459e };
+
+  async function settingsWith(values) {
+    const settings = new GuildSettings();
+    for (const [setting, value] of Object.entries(values)) {
+      await settings.set(GUILD_ID, setting, value);
+    }
+    return settings;
+  }
+
+  it("posts the custom wording and colour, with the same fixed buttons", async () => {
+    const command = createCountryHelpCommand({ guildSettings: await settingsWith({ [Setting.COUNTRY_GUIDE]: guide }) });
+    const interaction = fakeInteraction();
+    await command.execute(interaction);
+
+    const embed = postedEmbed(interaction);
+    expect(embed).toMatchObject({ title: "Pick your flag", color: 0xeb459e, description: translate("en", "helpIntro") });
+    expect(embed.fields[0]).toEqual({ name: translate("en", "helpStepsTitle"), value: "Click a continent." });
+    expect(embed.fields[1].value).toBe(notes("en"));
+    const ids = postedButtons(interaction).map((button) => button.custom_id);
+    expect(ids).toEqual([...CONTINENTS.map((continent) => PickerId.CONTINENT + continent), PickerId.BUTTON, TranslateId.BUTTON]);
+  });
+
+  it("remembers the posted guide so the dashboard can update it", async () => {
+    const settings = await settingsWith({});
+    const command = createCountryHelpCommand({ guildSettings: settings });
+    const interaction = fakeInteraction();
+    interaction.channel.send = vi.fn(async () => ({ id: "610000000000000001" }));
+    await command.execute(interaction);
+    expect(settings.get(GUILD_ID, Setting.COUNTRY_GUIDE_POST)).toEqual({ channelId: CHANNEL_ID, messageId: "610000000000000001" });
+  });
+
+  it("uses the custom wording for copies in the server's language only", async () => {
+    const { components } = createCountryHelpCommand({ guildSettings: await settingsWith({ [Setting.COUNTRY_GUIDE]: guide }) });
+    const english = { ...fakeComponentInteraction({ locale: "en-US" }), guildLocale: "en-US" };
+    await components[TranslateId.BUTTON].handle(english);
+    expect(embedOf(sentMessage(english.reply)).title).toBe("Pick your flag");
+
+    const german = { ...fakeComponentInteraction({ locale: "de" }), guildLocale: "en-US" };
+    await components[TranslateId.BUTTON].handle(german);
+    const embed = embedOf(sentMessage(german.reply));
+    expect(embed.title).toBe(translate("de", "helpTitle"));
+    expect(embed.fields[0].value).toBe(translate("de", "helpSteps"));
+    expect(embed.color).toBe(0xeb459e);
+  });
+});
