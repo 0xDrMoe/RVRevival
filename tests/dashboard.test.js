@@ -161,13 +161,29 @@ describe("dashboard", () => {
     expect(ok.statusCode).toBe(200);
     expect(ok.json().access).toBe("manage");
     expect(ok.json().roles).toEqual([
-      { id: ROLE_ID, name: "Mods", color: 0, position: 3, managed: false, hoist: false, mentionable: false, permissions: "0", emoji: null },
+      { id: ROLE_ID, name: "Mods", country: false, color: 0, position: 3, managed: false, hoist: false, mentionable: false, permissions: "0", emoji: null },
     ]);
     expect(ok.json().channels.map((channel) => channel.id)).toEqual([TEXT_ID, LOGS_ID, VOICE_ID]);
 
     expect((await app.inject({ method: "GET", url: `/api/guilds/${OTHER_GUILD_ID}`, cookies })).statusCode).toBe(403);
     expect((await app.inject({ method: "GET", url: `/api/guilds/${NO_BOT_GUILD_ID}`, cookies })).statusCode).toBe(404);
     expect((await app.inject({ method: "GET", url: "/api/guilds/not-an-id", cookies })).statusCode).toBe(404);
+  });
+
+  it("marks the roles named after a country, the way /country finds them", async () => {
+    discord.guild.mockImplementation(async (id) => ({
+      id,
+      name: "Rumbleverse Revival",
+      roles: [
+        { id: "700000000000000011", name: "Canada", position: 4, managed: false },
+        { id: "700000000000000012", name: "  côte d’ivoire ", position: 3, managed: false },
+        { id: "700000000000000013", name: "Canada Fans", position: 2, managed: false },
+        { id: "700000000000000014", name: "Canada", position: 1, managed: true },
+      ],
+    }));
+    const cookies = await login();
+    const { roles } = (await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}`, cookies })).json();
+    expect(roles.map((role) => role.country)).toEqual([true, true, false, false]);
   });
 
   it("re-reads the server list from Discord only every few minutes", async () => {

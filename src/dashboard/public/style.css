@@ -1690,6 +1690,10 @@ a.stat:hover {
   flex: none;
 }
 
+.check-list .link-button {
+  font-size: 0.85rem;
+}
+
 .check span:last-child {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1868,6 +1872,18 @@ a.stat:hover {
   gap: 10px;
   font-weight: 600;
   min-width: 160px;
+}
+
+/* Each group of roles starts with its name and how many roles it shows. */
+.roles .group-row th {
+  padding-top: 16px;
+  background: transparent;
+  color: var(--ink);
+  border-bottom: 2px solid var(--border);
+}
+
+.roles .group-row:hover th {
+  background: transparent;
 }
 
 /* --- Case filters ----------------------------------------------------------------- */

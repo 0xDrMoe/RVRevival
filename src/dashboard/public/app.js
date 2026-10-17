@@ -792,8 +792,8 @@ async function showServers({ refresh = false } = {}) {
     placeholder: t("serversSearch"),
     "aria-label": t("serversSearch"),
     oninput: () => {
-      const text = search.value.trim().toLowerCase();
-      cards.forEach((element) => (element.hidden = text !== "" && !element.dataset.name.includes(text)));
+      const words = searchWords(search.value);
+      cards.forEach((element) => (element.hidden = !matchesWords(searchable(element.dataset.name), words)));
       noMatch.hidden = cards.length === 0 || cards.some((element) => !element.hidden);
     },
   });
@@ -950,6 +950,24 @@ function guildLayout(data, pageId, ...content) {
 // Lowercase, without accents, for matching what's typed.
 const searchable = (text) => text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
+// The words typed in a filter box. A line of text matches when it holds every
+// word, in any order, ignoring case and accents: "mod team" finds "Team Moderators".
+const searchWords = (query) => searchable(query).split(/\s+/).filter(Boolean);
+const matchesWords = (text, words) => words.every((word) => text.includes(word));
+
+// Filter boxes inside a settings form: Enter mustn't save the form, and Esc clears the box.
+function filterKeys(input, onChange) {
+  input.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+    } else if (event.key === "Escape" && input.value !== "") {
+      event.preventDefault();
+      input.value = "";
+      onChange();
+    }
+  });
+}
+
 // Everything the search box can jump to: this server's pages, then the servers.
 function searchItems() {
   const items = [];
@@ -1063,66 +1081,115 @@ function onShortcut(event) {
 
 // A <select> of roles or channels, with "Not set" first. A saved value that
 // isn't in the list (a deleted channel) stays selected, so saving doesn't clear it.
+// Options with a `group` go under that heading (a channel's category, or
+// country and bot roles), after the ones without.
 function picker({ id, options, value, emptyLabel }) {
   const missing = value && !options.some((option) => option.id === value);
+  const option = (item) => h("option", { value: item.id, selected: item.id === value }, item.group ? (item.short ?? item.label) : item.label);
+  const groups = new Map();
+  for (const item of options.filter((item) => item.group)) {
+    groups.set(item.group, [...(groups.get(item.group) ?? []), item]);
+  }
   return h(
     "select",
     { id },
     h("option", { value: "" }, emptyLabel),
     missing ? h("option", { value, selected: true }, t("unknownOption", { id: value })) : null,
-    options.map((option) => h("option", { value: option.id, selected: option.id === value }, option.label)),
+    options.filter((item) => !item.group).map(option),
+    [...groups].map(([label, items]) => h("optgroup", { label }, items.map(option))),
   );
 }
 
+const channelPrefix = (channel) => (channel.type === CHANNEL.CATEGORY ? "▸ " : channel.type === CHANNEL.VOICE ? "🔊 " : "#");
 const channelLabel = (channel, channels) => {
   const parent = channels.find((other) => other.id === channel.parentId);
-  const prefix = channel.type === CHANNEL.CATEGORY ? "▸ " : channel.type === CHANNEL.VOICE ? "🔊 " : "#";
-  return parent ? `${prefix}${channel.name} (${parent.name})` : `${prefix}${channel.name}`;
+  return parent ? `${channelPrefix(channel)}${channel.name} (${parent.name})` : `${channelPrefix(channel)}${channel.name}`;
 };
 
-const roleOptions = (data) =>
-  data.roles.map((role) => ({ id: role.id, label: role.managed ? `@${role.name} (${t("botRole")})` : `@${role.name}` }));
+// A channel as a picker or checklist item. Pickers group channels under their category.
+const channelItem = (channel, channels) => ({
+  id: channel.id,
+  label: channelLabel(channel, channels),
+  short: `${channelPrefix(channel)}${channel.name}`,
+  group: channels.find((other) => other.id === channel.parentId)?.name,
+});
+
+// A role as a picker or checklist item. Pickers put country and bot roles under
+// their own headings, and checklists fold country roles away.
+const roleItem = (role, { mention = true, dot = false } = {}) => ({
+  id: role.id,
+  label: mention ? `@${role.name}` : role.name,
+  dot: dot ? roleDot(role) : undefined,
+  group: role.managed ? t("roleKind_bot") : role.country ? t("roleKind_country") : undefined,
+  country: Boolean(role.country),
+});
+
+const roleOptions = (data) => data.roles.map((role) => roleItem(role));
 const postableChannels = (data) =>
   data.channels
     .filter((channel) => [CHANNEL.TEXT, CHANNEL.ANNOUNCEMENT].includes(channel.type))
-    .map((channel) => ({ id: channel.id, label: channelLabel(channel, data.channels) }));
+    .map((channel) => channelItem(channel, data.channels));
 
-// Checkboxes with a filter box, a "ticked only" switch and a count.
+// Checkboxes with a filter box, a "ticked only" switch and a count. Country
+// roles fold away behind their own switch (ticked ones and filter matches stay
+// visible), so a server with dozens of them still gets a short list.
 function checkList({ name, items, checked, filterKey }) {
   const ticked = new Set(checked);
-  const boxes = items.map((item) =>
-    h(
+  const boxes = items.map((item) => {
+    const box = h(
       "label",
-      { class: "check", "data-name": item.label.toLowerCase() },
+      { class: "check" },
       h("input", { type: "checkbox", name, value: item.id, checked: ticked.has(item.id) }),
       item.dot ?? null,
       h("span", {}, item.label),
-    ),
-  );
+    );
+    box.dataset.search = searchable(item.label);
+    box.dataset.country = item.country ? "true" : "";
+    return box;
+  });
+  const countryCount = items.filter((item) => item.country).length;
   const count = h("span", { class: "count-pill" });
   const empty = h("p", { class: "muted empty", hidden: true }, t("nothingMatches"));
   const onlyTicked = h("input", { type: "checkbox" });
+  const showCountries = h("input", { type: "checkbox" });
   const filter = h("input", { type: "search", class: "grow", placeholder: t(filterKey), "aria-label": t(filterKey) });
+  const clear = h("button", { type: "button", class: "link-button", hidden: true }, t("untickAll"));
   const update = () => {
-    const text = filter.value.trim().toLowerCase();
+    const words = searchWords(filter.value);
     let shown = 0;
     let selected = 0;
     boxes.forEach((box) => {
       const isChecked = box.querySelector("input").checked;
-      box.hidden = (text !== "" && !box.dataset.name.includes(text)) || (onlyTicked.checked && !isChecked);
+      const folded = box.dataset.country && !showCountries.checked && !isChecked && words.length === 0;
+      box.hidden = folded || !matchesWords(box.dataset.search, words) || (onlyTicked.checked && !isChecked);
       shown += box.hidden ? 0 : 1;
       selected += isChecked ? 1 : 0;
     });
     count.textContent = t("selectedCount", { count: selected });
+    clear.hidden = selected === 0;
     empty.hidden = shown > 0;
   };
   filter.addEventListener("input", update);
+  filterKeys(filter, update);
   const element = h(
     "div",
     { class: "check-list", onchange: update },
-    h("div", { class: "toolbar" }, filter, h("label", { class: "switch" }, onlyTicked, h("span", {}, t("onlyTicked"))), count),
+    h(
+      "div",
+      { class: "toolbar" },
+      filter,
+      h("label", { class: "switch" }, onlyTicked, h("span", {}, t("onlyTicked"))),
+      countryCount > 0 ? h("label", { class: "switch" }, showCountries, h("span", {}, t("showCountryRoles", { count: countryCount }))) : null,
+      count,
+      clear,
+    ),
     h("div", { class: "checks scroll" }, boxes, empty),
   );
+  // Unticking everything counts as a change, so the save bar notices it.
+  clear.addEventListener("click", () => {
+    boxes.forEach((box) => (box.querySelector("input").checked = false));
+    element.dispatchEvent(new Event("change", { bubbles: true }));
+  });
   update();
   return element;
 }
@@ -1479,7 +1546,7 @@ async function showLogging(guildId) {
 
   const ignorable = data.channels
     .filter((channel) => [CHANNEL.TEXT, CHANNEL.ANNOUNCEMENT, CHANNEL.FORUM, CHANNEL.VOICE, CHANNEL.CATEGORY].includes(channel.type))
-    .map((channel) => ({ id: channel.id, label: channelLabel(channel, data.channels) }));
+    .map((channel) => channelItem(channel, data.channels));
 
   settingsPage({
     data,
@@ -1629,11 +1696,11 @@ async function showAutomod(guildId) {
     return;
   }
   const config = data.settings.automod;
-  const roles = data.roles.filter((role) => !role.managed).map((role) => ({ id: role.id, label: role.name, dot: roleDot(role) }));
+  const roles = data.roles.filter((role) => !role.managed).map((role) => roleItem(role, { mention: false, dot: true }));
   const mediaOnly = data.settings.mediaOnly ?? { channelIds: [], allowLinks: true };
   const channels = data.channels
     .filter((channel) => [CHANNEL.TEXT, CHANNEL.ANNOUNCEMENT, CHANNEL.FORUM, CHANNEL.VOICE, CHANNEL.CATEGORY].includes(channel.type))
-    .map((channel) => ({ id: channel.id, label: channelLabel(channel, data.channels) }));
+    .map((channel) => channelItem(channel, data.channels));
 
   settingsPage({
     data,
@@ -1806,7 +1873,7 @@ function birthdayCard(data, postable, defaults) {
   const saved = data.settings.birthdays ?? {};
   const roles = data.roles
     .filter((role) => role.id !== data.guild.id && !role.managed && (BigInt(role.permissions ?? 0) & BIRTHDAY_ROLE_FORBIDDEN) === 0n)
-    .map((role) => ({ id: role.id, label: `@${role.name}` }));
+    .map((role) => roleItem(role));
   const zones = h("datalist", { id: "birthdayZones" }, ["UTC", ...Intl.supportedValuesOf("timeZone")].map((zone) => h("option", { value: zone })));
   return card(
     t("sectionBirthdays"),
@@ -1891,7 +1958,7 @@ async function showRoles(guildId) {
   const persist = data.settings.rolePersist ?? {};
   const givable = data.roles
     .filter((role) => !role.managed && (BigInt(role.permissions ?? 0) & AUTOROLE_FORBIDDEN) === 0n)
-    .map((role) => ({ id: role.id, label: `@${role.name}`, dot: roleDot(role) }));
+    .map((role) => roleItem(role, { dot: true }));
   settingsPage({
     data,
     pageId: "roles",
@@ -1918,7 +1985,7 @@ async function showRoles(guildId) {
         h("p", { class: "help" }, t("persistIgnoreHelp")),
         checkList({
           name: "persistIgnore",
-          items: data.roles.filter((role) => !role.managed).map((role) => ({ id: role.id, label: `@${role.name}`, dot: roleDot(role) })),
+          items: data.roles.filter((role) => !role.managed).map((role) => roleItem(role, { dot: true })),
           checked: persist.ignoredRoleIds ?? [],
           filterKey: "filterRoles",
         }),
@@ -2153,7 +2220,7 @@ async function showResponders(guildId) {
   }
   const responderChannels = data.channels
     .filter((channel) => [CHANNEL.TEXT, CHANNEL.ANNOUNCEMENT, CHANNEL.FORUM, CHANNEL.CATEGORY].includes(channel.type))
-    .map((channel) => ({ id: channel.id, label: channelLabel(channel, data.channels) }));
+    .map((channel) => channelItem(channel, data.channels));
   const responders = editableList({
     items: data.settings.autoResponders ?? [],
     max: MAX_RESPONDERS,
@@ -2474,11 +2541,11 @@ async function showLevels(guildId) {
   // Reward roles: the bot never hands out bot roles or Administrator / Manage Server.
   const givable = data.roles
     .filter((role) => !role.managed && (BigInt(role.permissions ?? 0) & AUTOROLE_FORBIDDEN) === 0n)
-    .map((role) => ({ id: role.id, label: `@${role.name}` }));
-  const roles = data.roles.filter((role) => !role.managed).map((role) => ({ id: role.id, label: role.name, dot: roleDot(role) }));
+    .map((role) => roleItem(role));
+  const roles = data.roles.filter((role) => !role.managed).map((role) => roleItem(role, { mention: false, dot: true }));
   const channels = data.channels
     .filter((channel) => [CHANNEL.TEXT, CHANNEL.ANNOUNCEMENT, CHANNEL.FORUM, CHANNEL.VOICE, CHANNEL.CATEGORY].includes(channel.type))
-    .map((channel) => ({ id: channel.id, label: channelLabel(channel, data.channels) }));
+    .map((channel) => channelItem(channel, data.channels));
 
   const channelField = field(
     "levelsChannel",
@@ -2538,7 +2605,7 @@ async function showLevels(guildId) {
   const boosts = editableList({
     items: config.roleMultipliers ?? [],
     max: MAX_ROLE_MULTIPLIERS,
-    makeRow: (boost, removeBoost) => boostRow(boost ?? {}, roles.map((role) => ({ id: role.id, label: `@${role.label}` })), removeBoost),
+    makeRow: (boost, removeBoost) => boostRow(boost ?? {}, roles.map((role) => ({ ...role, label: `@${role.label}` })), removeBoost),
     focus: "select",
     emptyKey: "levelsBoostsNone",
     addKey: "levelsBoostAdd",
@@ -2641,7 +2708,13 @@ async function showCountry(guildId) {
 
 const hasPermission = (role, bit) => (BigInt(role.permissions) & (1n << bit)) !== 0n;
 
-// Every role in a table, with a name filter and a kind filter.
+// How many permission badges a role shows before "+N more".
+const SHOWN_PERMISSIONS = 3;
+
+// Every role, sorted into groups: roles with moderation powers, roles the bot
+// uses, bot roles, everyday roles, and country roles. Country roles are folded
+// into one row of chips, since there can be dozens of them and they rarely
+// carry permissions. A name filter and a group filter narrow it down.
 function rolesTable(data) {
   const { settings } = data;
   const usedAs = (role) =>
@@ -2650,56 +2723,83 @@ function rolesTable(data) {
       role.id === settings.modRoleId ? "usedMod" : null,
       (settings.dashboardRoleIds ?? []).includes(role.id) ? "usedDashboard" : null,
     ].filter(Boolean);
+  const nameOf = (role) => (role.emoji ? `${role.emoji} ${role.name}` : role.name);
 
-  const rows = data.roles.map((role) => {
+  const described = data.roles.map((role) => {
     const admin = hasPermission(role, ADMINISTRATOR);
     const powers = admin ? [] : PERMISSIONS.filter((permission) => hasPermission(role, permission.bit));
     const used = usedAs(role);
+    const kind = role.managed ? "bot" : admin || powers.length > 0 ? "power" : used.length > 0 ? "used" : role.country ? "country" : "other";
+    return { role, admin, powers, used, kind, search: searchable(role.name) };
+  });
+
+  const permissionBadges = ({ role, admin, powers }) => {
+    const extra = powers.slice(SHOWN_PERMISSIONS);
+    return h(
+      "div",
+      { class: "badges" },
+      admin ? h("span", { class: "badge badge-red" }, t("permAdmin")) : null,
+      powers.slice(0, SHOWN_PERMISSIONS).map((permission) => h("span", { class: "badge badge-amber" }, t(permission.key))),
+      extra.length > 0
+        ? h("span", { class: "badge", title: extra.map((permission) => t(permission.key)).join(", ") }, t("morePermissions", { count: extra.length }))
+        : null,
+      !admin && powers.length === 0 && !role.managed ? h("span", { class: "muted" }, "—") : null,
+    );
+  };
+  const roleRow = (entry) => {
     const row = h(
       "tr",
       {},
-      h("td", { class: "role-name" }, roleDot(role), h("span", {}, role.emoji ? `${role.emoji} ${role.name}` : role.name)),
-      h(
-        "td",
-        {},
-        h(
-          "div",
-          { class: "badges" },
-          role.managed ? h("span", { class: "badge badge-cyan" }, t("botRole")) : null,
-          role.hoist ? h("span", { class: "badge" }, t("roleHoisted")) : null,
-          admin ? h("span", { class: "badge badge-red" }, t("permAdmin")) : null,
-          powers.map((permission) => h("span", { class: "badge badge-amber" }, t(permission.key))),
-          !admin && powers.length === 0 && !role.managed ? h("span", { class: "muted" }, "—") : null,
-        ),
-      ),
-      h("td", {}, h("div", { class: "badges" }, used.map((key) => h("span", { class: "badge badge-accent" }, t(key))))),
+      h("td", { class: "role-name" }, roleDot(entry.role), h("span", {}, nameOf(entry.role))),
+      h("td", {}, permissionBadges(entry)),
+      h("td", {}, h("div", { class: "badges" }, entry.used.map((key) => h("span", { class: "badge badge-accent" }, t(key))))),
     );
-    row.dataset.name = role.name.toLowerCase();
-    row.dataset.kinds = [admin || powers.length > 0 ? "power" : "", role.managed ? "bot" : "", used.length > 0 ? "used" : ""].join(" ");
+    entry.element = row;
     return row;
+  };
+  const countryChip = (entry) => {
+    entry.element = h("span", { class: "role-chip" }, roleDot(entry.role), nameOf(entry.role));
+    return entry.element;
+  };
+
+  const groups = ["power", "used", "bot", "other", "country"].map((kind) => {
+    const entries = described.filter((entry) => entry.kind === kind);
+    const heading = h("th", { colspan: 3, scope: "colgroup" });
+    const rows = kind === "country"
+      ? [h("tr", {}, h("td", { colspan: 3 }, h("div", { class: "role-chips" }, entries.map(countryChip))))]
+      : entries.map(roleRow);
+    return { kind, entries, heading, body: h("tbody", { class: "role-group" }, h("tr", { class: "group-row" }, heading), rows) };
   });
 
-  const empty = h("tr", { hidden: true }, h("td", { colspan: 3, class: "muted empty" }, t("nothingMatches")));
   const shownCount = h("span", { class: "count-pill" });
+  const empty = h("tbody", { hidden: true }, h("tr", {}, h("td", { colspan: 3, class: "muted empty" }, t("nothingMatches"))));
   const search = h("input", { type: "search", class: "grow", placeholder: t("filterRoles"), "aria-label": t("filterRoles") });
   const kind = h(
     "select",
     { "aria-label": t("roleKind"), class: "auto" },
-    ["all", "power", "bot", "used"].map((value) => h("option", { value }, t(`roleKind_${value}`))),
+    ["all", ...groups.filter((group) => group.entries.length > 0).map((group) => group.kind)].map((value) =>
+      h("option", { value }, t(`roleKind_${value}`)),
+    ),
   );
   const filterRoles = () => {
-    const text = search.value.trim().toLowerCase();
+    const words = searchWords(search.value);
     let shown = 0;
-    rows.forEach((row) => {
-      row.hidden =
-        (text !== "" && !row.dataset.name.includes(text)) ||
-        (kind.value !== "all" && !row.dataset.kinds.split(" ").includes(kind.value));
-      shown += row.hidden ? 0 : 1;
-    });
+    for (const group of groups) {
+      const groupShown = kind.value === "all" || kind.value === group.kind;
+      let inGroup = 0;
+      for (const entry of group.entries) {
+        entry.element.hidden = !groupShown || !matchesWords(entry.search, words);
+        inGroup += entry.element.hidden ? 0 : 1;
+      }
+      group.body.hidden = inGroup === 0;
+      group.heading.textContent = `${t(`roleKind_${group.kind}`)} · ${inGroup}`;
+      shown += inGroup;
+    }
     empty.hidden = shown > 0;
-    shownCount.textContent = t("rolesShown", { shown, total: rows.length });
+    shownCount.textContent = t("rolesShown", { shown, total: described.length });
   };
   search.addEventListener("input", filterRoles);
+  filterKeys(search, filterRoles);
   kind.addEventListener("change", filterRoles);
   filterRoles();
 
@@ -2716,7 +2816,8 @@ function rolesTable(data) {
         "table",
         { class: "table roles" },
         h("thead", {}, h("tr", {}, ["roleColumn", "rolePowers", "roleUsedAs"].map((key) => h("th", { scope: "col" }, t(key))))),
-        h("tbody", {}, rows, empty),
+        groups.map((group) => group.body),
+        empty,
       ),
     ),
   );
@@ -2729,7 +2830,7 @@ async function showAccess(guildId) {
   }
   const dashboardRoles = data.roles
     .filter((role) => !role.managed)
-    .map((role) => ({ id: role.id, label: role.name, dot: roleDot(role) }));
+    .map((role) => roleItem(role, { mention: false, dot: true }));
   settingsPage({
     data,
     pageId: "access",
@@ -3791,7 +3892,7 @@ function readTicketCategories(form) {
 
 // The panel's buttons ("ticket types"), for people who can change settings.
 function ticketCategoriesCard(guildId, data) {
-  const roles = data.roles.filter((role) => role.id !== guildId && !role.managed).map((role) => ({ id: role.id, label: `@${role.name}` }));
+  const roles = data.roles.filter((role) => role.id !== guildId && !role.managed).map((role) => roleItem(role));
   const categories = editableList({
     items: data.settings.ticketCategories ?? [],
     max: MAX_TICKET_CATEGORIES,
@@ -4674,7 +4775,7 @@ async function showFeeds(guildId) {
     sourceInput.placeholder = t(`feedsSourcePlaceholder_${kind}`);
     sourceHelp.textContent = t(`feedsSourceHelp_${kind}`);
   };
-  const roles = data.roles.filter((role) => role.id !== guildId && !role.managed).map((role) => ({ id: role.id, label: `@${role.name}` }));
+  const roles = data.roles.filter((role) => role.id !== guildId && !role.managed).map((role) => roleItem(role));
   const add = h("button", { class: "primary", type: "submit" }, icon("plus", "icon small"), t("feedsAdd"));
   const messageInput = h("textarea", { id: "feedMessage", rows: 2, maxLength: 500, placeholder: t("feedsMessagePlaceholder") });
 
