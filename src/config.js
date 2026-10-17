@@ -106,6 +106,9 @@ function sessionSecret(env) {
   return secret;
 }
 
+// Shown on the Terms and Privacy pages unless LEGAL_CONTACT says otherwise.
+export const DEFAULT_LEGAL_CONTACT = "support@cedartechsolutions.ca";
+
 // Settings for running the web dashboard (npm run dashboard).
 export function loadDashboardConfig(env = process.env) {
   return {
@@ -118,6 +121,6 @@ export function loadDashboardConfig(env = process.env) {
     // The language of the default welcome and leave messages shown on the Community page.
     forcedLanguage: botLanguage(env),
     // How to reach the bot's team, shown on the Terms and Privacy pages.
-    legalContact: env.LEGAL_CONTACT?.trim() || undefined,
+    legalContact: env.LEGAL_CONTACT?.trim() || DEFAULT_LEGAL_CONTACT,
   };
 }
