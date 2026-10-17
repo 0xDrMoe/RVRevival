@@ -92,7 +92,9 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const THEMES = ["auto", "light", "dark"];
 const ACCENTS = ["blurple", "violet", "pink", "orange", "gold", "green", "cyan", "red"];
 const DENSITIES = ["comfortable", "compact"];
-const DEFAULT_APPEARANCE = { theme: "auto", accent: "blurple", density: "comfortable" };
+// "rumble" is the game-style look: chunky headings, bold outlines and comic shadows.
+const STYLES = ["clean", "rumble"];
+const DEFAULT_APPEARANCE = { theme: "auto", accent: "blurple", density: "comfortable", style: "clean" };
 
 // The pages of one server, in sidebar groups. `manage` pages need Manage
 // Server; the others are also open to dashboard roles. `on` says whether the
@@ -487,7 +489,7 @@ function field(labelKey, helpKey, control) {
 
 function applyAppearance() {
   const root = document.documentElement;
-  const { theme, accent, density } = state.appearance;
+  const { theme, accent, density, style } = state.appearance;
   if (theme === "auto") {
     delete root.dataset.theme;
   } else {
@@ -495,6 +497,7 @@ function applyAppearance() {
   }
   root.dataset.accent = accent;
   root.dataset.density = density;
+  root.dataset.style = style;
 }
 
 function loadAppearance() {
@@ -503,6 +506,7 @@ function loadAppearance() {
     theme: THEMES.includes(saved.theme) ? saved.theme : DEFAULT_APPEARANCE.theme,
     accent: ACCENTS.includes(saved.accent) ? saved.accent : DEFAULT_APPEARANCE.accent,
     density: DENSITIES.includes(saved.density) ? saved.density : DEFAULT_APPEARANCE.density,
+    style: STYLES.includes(saved.style) ? saved.style : DEFAULT_APPEARANCE.style,
   };
   applyAppearance();
 }
@@ -559,6 +563,14 @@ function openAppearance() {
       { method: "dialog" },
       h("h2", {}, t("appearanceTitle")),
       h("p", { class: "help" }, t("appearanceHelp")),
+      h("h3", {}, t("appearanceStyle")),
+      segmented(
+        t("appearanceStyle"),
+        STYLES.map((value) => ({ value, text: t(`style_${value}`) })),
+        state.appearance.style,
+        (style) => setAppearance({ style }),
+      ),
+      h("p", { class: "help" }, t("appearanceStyleHelp")),
       h("h3", {}, t("appearanceTheme")),
       segmented(
         t("appearanceTheme"),

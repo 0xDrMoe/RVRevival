@@ -112,7 +112,7 @@ export const GUIDE = [
           "**Ctrl+K** (⌘K on a Mac) searches every page and every topic in this guide.",
           "Settings pages show a save bar when something changed, and ask before you leave with unsaved changes.",
           "Filter boxes match words in any order and ignore accents. **Esc** clears them.",
-          "The account menu (top right) sets the language, theme, accent colour and spacing for your browser.",
+          "The account menu (top right) sets the language, style (clean, or the game-style Rumble look), theme, accent colour and spacing for your browser.",
           "**Everything you change here is posted in the logs channel with your name**, and listed on the Activity page.",
           "Logins last 7 days. Log out on shared computers.",
         ],

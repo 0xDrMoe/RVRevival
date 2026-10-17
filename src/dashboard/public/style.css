@@ -2194,14 +2194,21 @@ dialog textarea {
   box-shadow: 0 0 0 3px var(--text);
 }
 
-.accent-blurple { background: #5865f2; }
-.accent-violet { background: #7c3aed; }
-.accent-pink { background: #db2777; }
-.accent-orange { background: #ea580c; }
-.accent-gold { background: #b45309; }
-.accent-green { background: #059669; }
-.accent-cyan { background: #0891b2; }
-.accent-red { background: #e11d48; }
+/* The accent picker's swatches are bigger than the embed builder's ones further down. */
+.appearance .swatch {
+  width: 36px;
+  height: 36px;
+  border-width: 3px;
+}
+
+.accent-blurple { --swatch: #5865f2; }
+.accent-violet { --swatch: #7c3aed; }
+.accent-pink { --swatch: #db2777; }
+.accent-orange { --swatch: #ea580c; }
+.accent-gold { --swatch: #b45309; }
+.accent-green { --swatch: #059669; }
+.accent-cyan { --swatch: #0891b2; }
+.accent-red { --swatch: #e11d48; }
 
 .toast {
   position: fixed;
@@ -4220,4 +4227,258 @@ dialog textarea {
   .landing-cta {
     padding: 22px;
   }
+}
+
+/* --- Rumble style ------------------------------------------------------------------
+   An optional game-style look (Appearance > Style): chunky Lilita One headings,
+   bold outlines, hard comic shadows and full-color page headers. Everything here
+   sits under data-style="rumble" on <html>, so the clean style is untouched.
+   Lilita One is under the SIL Open Font License (fonts/LilitaOne-OFL.txt). */
+
+@font-face {
+  font-family: "Lilita One";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("fonts/lilita-one-latin-400-normal.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: "Lilita One";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("fonts/lilita-one-latin-ext-400-normal.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+:root[data-style="rumble"] {
+  --display: "Lilita One", "Arial Black", system-ui, sans-serif;
+  --pop: 4px 4px 0 var(--outline);
+  --pop-sm: 2px 2px 0 var(--outline);
+  --radius: 14px;
+}
+
+/* Warm paper in light mode, deep purple at night. */
+@media (prefers-color-scheme: light) {
+  :root[data-style="rumble"]:not([data-theme="dark"]) {
+    --bg: #fff6e6;
+    --surface-2: #fff3dd;
+    --border: #eadbc2;
+    --outline: #24183f;
+  }
+}
+
+:root[data-style="rumble"][data-theme="light"] {
+  --bg: #fff6e6;
+  --surface-2: #fff3dd;
+  --border: #eadbc2;
+  --outline: #24183f;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-style="rumble"]:not([data-theme="light"]) {
+    --bg: #130f20;
+    --surface: #1c1730;
+    --surface-2: #241e3b;
+    --surface-3: #2e2749;
+    --border: #3a3158;
+    --outline: #050309;
+  }
+}
+
+:root[data-style="rumble"][data-theme="dark"] {
+  --bg: #130f20;
+  --surface: #1c1730;
+  --surface-2: #241e3b;
+  --surface-3: #2e2749;
+  --border: #3a3158;
+  --outline: #050309;
+}
+
+[data-style="rumble"] body {
+  background:
+    radial-gradient(color-mix(in srgb, var(--outline) 9%, transparent) 1.1px, transparent 1.4px) 0 0 / 18px 18px,
+    radial-gradient(1100px 520px at 85% -120px, color-mix(in srgb, var(--accent) 16%, transparent), transparent 70%),
+    radial-gradient(900px 480px at -10% -80px, color-mix(in srgb, var(--accent-2) 12%, transparent), transparent 70%),
+    var(--bg);
+  background-attachment: fixed;
+}
+
+[data-style="rumble"] :is(h1, h2, .brand span, .stat-value, .guide-part-card strong, .landing h1) {
+  font-family: var(--display);
+  font-weight: 400;
+  letter-spacing: 0.01em;
+}
+
+[data-style="rumble"] h2 {
+  font-size: 1.2rem;
+}
+
+[data-style="rumble"] .topbar {
+  border-bottom: 2px solid var(--outline);
+}
+
+[data-style="rumble"] .topbar::after {
+  bottom: -6px;
+  height: 4px;
+}
+
+[data-style="rumble"] .sidebar {
+  border-inline-end: 2px solid var(--outline);
+}
+
+/* Cards, menus and dialogs: a bold outline and a hard offset shadow. */
+[data-style="rumble"] :is(.card, .menu, dialog.search, .switcher) {
+  border: 2px solid var(--outline);
+  box-shadow: var(--pop);
+}
+
+[data-style="rumble"] :is(.server, a.stat, .guide-part-card):hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 6px 6px 0 var(--outline);
+}
+
+/* Page headers turn into full-color banners. */
+[data-style="rumble"] .hero {
+  border: 2px solid var(--outline);
+  box-shadow: 6px 6px 0 var(--outline);
+  color: #fff;
+}
+
+/* The overview keeps the server's own gradient. */
+[data-style="rumble"] .hero:not(.hero-banner) {
+  background: linear-gradient(120deg, var(--tone, var(--accent)), color-mix(in srgb, var(--tone, var(--accent)) 50%, var(--accent-2)));
+}
+
+[data-style="rumble"] .hero::before {
+  inset: 0;
+  width: auto;
+  height: auto;
+  border-radius: 0;
+  transform: none;
+  opacity: 1;
+  background: radial-gradient(rgb(255 255 255 / 22%) 1.5px, transparent 1.8px) 0 0 / 14px 14px;
+  mask-image: linear-gradient(100deg, transparent 30%, #000 85%);
+}
+
+/* A diagonal slash across the far end. */
+[data-style="rumble"] .hero::after {
+  width: 90px;
+  height: 260%;
+  inset-inline-end: 120px;
+  top: -80%;
+  bottom: auto;
+  border-radius: 0;
+  background: #fff;
+  opacity: 0.14;
+  transform: rotate(24deg);
+}
+
+[data-style="rumble"] .hero h1 {
+  font-size: 2rem;
+  text-shadow: 2px 2px 0 rgb(0 0 0 / 28%);
+}
+
+[data-style="rumble"] .hero p {
+  color: rgb(255 255 255 / 90%);
+}
+
+[data-style="rumble"] .hero .chip-icon.lg {
+  background: #fff;
+  color: color-mix(in srgb, var(--tone, var(--accent)) 85%, #000);
+  border: 2px solid var(--outline);
+  box-shadow: var(--pop-sm);
+}
+
+[data-style="rumble"] .hero .guild-icon {
+  border: 2px solid var(--outline);
+  box-shadow: var(--pop-sm);
+}
+
+/* Icon chips become solid stickers. */
+[data-style="rumble"] .chip-icon {
+  background: var(--tone, var(--accent));
+  color: #fff;
+  border: 2px solid var(--outline);
+  box-shadow: var(--pop-sm);
+}
+
+[data-style="rumble"] .stat::before {
+  height: 6px;
+}
+
+[data-style="rumble"] .stat-value {
+  font-size: 2.1rem;
+}
+
+[data-style="rumble"] :is(.primary, .ghost, .danger) {
+  border: 2px solid var(--outline);
+  box-shadow: var(--pop-sm);
+  font-weight: 700;
+}
+
+[data-style="rumble"] :is(.primary, .ghost, .danger):hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 3px 3px 0 var(--outline);
+}
+
+[data-style="rumble"] :is(.primary, .ghost, .danger):active {
+  transform: translate(2px, 2px);
+  box-shadow: none;
+}
+
+[data-style="rumble"] .nav-link.active {
+  background: linear-gradient(120deg, var(--accent), color-mix(in srgb, var(--accent) 55%, var(--accent-2)));
+  color: #fff;
+  border: 2px solid var(--outline);
+  box-shadow: var(--pop-sm);
+}
+
+[data-style="rumble"] .nav-link.active::before {
+  content: none;
+}
+
+[data-style="rumble"] .nav-heading {
+  font-family: var(--display);
+  font-weight: 400;
+  font-size: 0.82rem;
+  letter-spacing: 0.06em;
+  color: color-mix(in srgb, var(--accent) 60%, var(--muted));
+}
+
+[data-style="rumble"] .feature {
+  border-width: 2px;
+}
+
+[data-style="rumble"] .feature.on {
+  border-color: var(--outline);
+  box-shadow: var(--pop-sm);
+}
+
+[data-style="rumble"] :is(.status.on, .count-pill) {
+  border: 2px solid var(--outline);
+}
+
+[data-style="rumble"] .server-banner {
+  border-bottom: 2px solid var(--outline);
+}
+
+[data-style="rumble"] .server-body .guild-icon {
+  border: 2px solid var(--outline);
+}
+
+[data-style="rumble"] .login::before {
+  border-bottom: 2px solid var(--outline);
+}
+
+[data-style="rumble"] .login-art img {
+  border: 2px solid var(--outline);
+  box-shadow: var(--pop);
+}
+
+[data-style="rumble"] .landing-hero {
+  border: 2px solid var(--outline);
+  box-shadow: 6px 6px 0 var(--outline);
 }
