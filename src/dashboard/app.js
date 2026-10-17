@@ -30,7 +30,10 @@
 // Every change is posted in the server's logs channel, like bot commands are.
 
 import { randomBytes, timingSafeEqual } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { constants as zlib } from "node:zlib";
+import fastifyCompress from "@fastify/compress";
 import fastifyCookie from "@fastify/cookie";
 import fastifyRateLimit from "@fastify/rate-limit";
 import fastifyStatic from "@fastify/static";
@@ -75,6 +78,9 @@ import { normalizeCommandRules } from "../permissions/commandRules.js";
 import { CUSTOM, InvalidPreset, planPreset } from "../permissions/presets.js";
 
 const PUBLIC_FOLDER = fileURLToPath(new URL("./public/", import.meta.url));
+
+// For text put into the page's HTML.
+const escapeHtml = (text) => text.replace(/[&<>"']/g, (char) => `&#${char.charCodeAt(0)};`);
 const SESSION_COOKIE = "rv_session";
 const STATE_COOKIE = "rv_oauth_state";
 // How long a person's Discord server list (and their permissions) is trusted.
@@ -226,7 +232,18 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
   const app = Fastify({ logger: false, trustProxy: "127.0.0.1", bodyLimit: 64 * 1024 });
   await app.register(fastifyCookie, { secret: config.sessionSecret });
   await app.register(fastifyRateLimit, { max: 300, timeWindow: "1 minute" });
-  await app.register(fastifyStatic, { root: PUBLIC_FOLDER, index: "index.html" });
+  // Brotli's default (quality 11) is too slow to run on every request; 5 is
+  // nearly as small. nginx passes compressed responses through as they are.
+  await app.register(fastifyCompress, { brotliOptions: { params: { [zlib.BROTLI_PARAM_QUALITY]: 5 } } });
+  await app.register(fastifyStatic, { root: PUBLIC_FOLDER, index: false });
+
+  // The page itself, with the site's address filled in for link previews
+  // (Discord and other sites want absolute URLs there). Always revalidated, so
+  // a deploy shows at once.
+  const page = readFileSync(new URL("./public/index.html", import.meta.url), "utf8").replaceAll("%BASE_URL%", escapeHtml(config.url.replace(/\/+$/, "")));
+  const sendPage = (request, reply) => reply.header("Cache-Control", "no-cache").type("text/html; charset=utf-8").send(page);
+  app.get("/", sendPage);
+  app.get("/index.html", sendPage);
 
   app.addHook("onSend", async (request, reply, payload) => {
     reply.header(

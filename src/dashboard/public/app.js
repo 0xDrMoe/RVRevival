@@ -776,17 +776,41 @@ function showLogin() {
 
 // --- Landing page ----------------------------------------------------------------
 
-// What the bot does, for the landing page: [icon, tone, string key].
+// What the bot does, for the landing page: [icon, tone, string key, commands].
+// tests/dashboardGuide.test.js checks every icon and command is a real one.
 const LANDING_FEATURES = [
-  ["gavel", "red", "landingModeration"],
-  ["shield", "amber", "landingAutomod"],
-  ["shieldCheck", "purple", "landingProtection"],
-  ["ticket", "cyan", "landingTickets"],
-  ["trophy", "green", "landingLeveling"],
-  ["users", "pink", "landingCommunity"],
-  ["list", "blue", "landingLogs"],
-  ["calendar", "accent", "landingMessages"],
+  ["gavel", "red", "landingModeration", ["/ban", "/timeout", "/warn", "/case"]],
+  ["shield", "amber", "landingAutomod", ["/settings automod", "/mediaonly"]],
+  ["shieldCheck", "purple", "landingProtection", ["/raid", "/antinuke", "/quarantine"]],
+  ["ticket", "cyan", "landingTickets", ["/tickets"]],
+  ["trophy", "green", "landingLeveling", ["/rank", "/leaderboard", "/levels"]],
+  ["users", "pink", "landingCommunity", ["/welcome", "/rolepanel", "/country"]],
+  ["list", "blue", "landingLogs", ["/modlogs"]],
+  ["calendar", "accent", "landingMessages", ["/schedule", "/feed", "/sticky"]],
+  ["gift", "amber", "landingGiveaways", ["/giveaway", "/starboard"]],
+  ["tag", "purple", "landingTags", ["/tag", "/tags", "/autoresponder"]],
+  ["volume", "cyan", "landingVoice", ["/voice"]],
+  ["bell", "pink", "landingTools", ["/remind", "/birthday", "/afk", "/highlight"]],
 ];
+
+// The three steps from invite to a working setup: [icon, string key].
+const LANDING_STEPS = [
+  ["plus", "landingStepAdd"],
+  ["key", "landingStepLogin"],
+  ["sliders", "landingStepSetup"],
+];
+
+// What the dashboard itself gives staff: [icon, tone, string key].
+const LANDING_DASHBOARD = [
+  ["key", "purple", "landingDashPermissions"],
+  ["search", "blue", "landingDashSearch"],
+  ["book", "green", "landingDashGuide"],
+  ["globe", "cyan", "landingDashLanguages"],
+  ["palette", "pink", "landingDashLook"],
+  ["download", "amber", "landingDashBackup"],
+];
+
+const LANDING_FAQ = ["landingFaqNative", "landingFaqAccess", "landingFaqCommands", "landingFaqPermissions"];
 
 // Big numbers shortened (12.4K), small ones in full.
 const formatCount = (value) =>
@@ -804,16 +828,26 @@ async function loadPublicStats() {
   return response.json();
 }
 
-// The tiles under the hero, filled in once the numbers arrive.
+function landingStat(iconName, tone, value, label) {
+  return h(
+    "div",
+    { class: `landing-stat tone-${tone}` },
+    iconChip(iconName, tone, "sm"),
+    h("strong", {}, value),
+    h("span", {}, label),
+  );
+}
+
+// The numbers band under the hero, filled in once the numbers arrive.
 function landingStats(stats) {
   const uptime = stats.online ? (stats.upSince ? formatDuration(Date.now() - stats.upSince) : t("landingOnline")) : t("landingOffline");
   return [
-    tile("layers", "accent", formatCount(stats.servers), t("landingServers")),
-    tile("users", "pink", formatCount(stats.members), t("landingMembers"), t("landingMembersSub")),
-    tile("zap", "amber", formatCount(stats.commandsRun), t("landingCommands")),
-    tile("gavel", "red", formatCount(stats.cases), t("landingCases")),
-    tile("ticket", "cyan", formatCount(stats.tickets), t("landingTickets_title")),
-    tile("activity", stats.online ? "green" : "gray", uptime, t("landingUptime"), stats.online && stats.upSince ? t("landingOnline") : null),
+    landingStat("layers", "accent", formatCount(stats.servers), t("landingServers")),
+    landingStat("users", "pink", formatCount(stats.members), t("landingMembers")),
+    landingStat("zap", "amber", formatCount(stats.commandsRun), t("landingCommands")),
+    landingStat("gavel", "red", formatCount(stats.cases), t("landingCases")),
+    landingStat("ticket", "cyan", formatCount(stats.tickets), t("landingTickets_title")),
+    landingStat("activity", stats.online ? "green" : "gray", uptime, t("landingUptime")),
   ];
 }
 
@@ -826,17 +860,57 @@ function landingStatus(stats) {
   );
 }
 
-function showLanding(failedLogin = false) {
-  const invite = h(
-    "a",
-    { class: "button landing-invite big", href: "https://discord.com/oauth2/authorize", target: "_blank", rel: "noopener", hidden: true },
-    icon("plus"),
-    t("landingAdd"),
+// A made-up Discord message from the bot, for the hero art.
+function landingDemo(tone, iconName, title, text) {
+  return h(
+    "div",
+    { class: `landing-demo tone-${tone}` },
+    h("img", { src: "favicon.svg", alt: "", width: 36, height: 36 }),
+    h(
+      "div",
+      {},
+      h("span", { class: "landing-demo-name" }, "Rumbleverse Revival", h("span", { class: "landing-demo-bot" }, t("landingBot"))),
+      h("div", { class: "landing-demo-embed" }, h("strong", {}, icon(iconName), title), h("span", {}, text)),
+    ),
   );
-  const ctaInvite = invite.cloneNode(true);
+}
+
+// A section of the landing page with its heading. The id lets the footer jump to it.
+function landingSection(id, title, intro, ...children) {
+  return h(
+    "section",
+    { class: "landing-section", id: `landing-${id}`, "aria-labelledby": `landing-${id}-title` },
+    h("h2", { id: `landing-${id}-title` }, title),
+    intro ? h("p", { class: "landing-intro" }, intro) : null,
+    ...children,
+  );
+}
+
+// Jumps to a section without touching the URL hash, which is the router's.
+const landingJump = (id, label) =>
+  h(
+    "button",
+    {
+      type: "button",
+      class: "link-button",
+      onclick: () => document.getElementById(`landing-${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" }),
+    },
+    label,
+  );
+
+function showLanding(failedLogin = false) {
+  const inviteButton = (extra = "") =>
+    h(
+      "a",
+      { class: `button landing-invite big${extra}`, href: "https://discord.com/oauth2/authorize", target: "_blank", rel: "noopener", hidden: true },
+      icon("plus"),
+      t("landingAdd"),
+    );
+  const invites = [inviteButton(), inviteButton(), inviteButton(" landing-step-action")];
   const login = () => h("a", { class: "button landing-login big", href: "/auth/login" }, icon("home"), t("landingDashboard"));
   const status = h("span", { class: "landing-status" }, t("loading"));
-  const stats = h("div", { class: "stats landing-stats", "aria-busy": "true" }, Array.from({ length: 6 }, () => h("span", { class: "sk sk-tile" })));
+  const stats = h("div", { class: "landing-stats", "aria-busy": "true" }, Array.from({ length: 6 }, () => h("span", { class: "sk sk-stat" })));
+  const statsBand = h("section", { class: "landing-stats-band", "aria-label": t("landingStatsTitle") }, stats);
 
   show(
     h(
@@ -852,42 +926,113 @@ function showLanding(failedLogin = false) {
           h("h1", {}, "Rumbleverse Revival"),
           h("p", { class: "landing-tagline" }, t("landingTagline")),
           failedLogin ? h("p", { class: "landing-error", role: "alert" }, t("loginFailed")) : null,
-          h("div", { class: "landing-actions" }, invite, login()),
+          h("div", { class: "landing-actions" }, invites[0], login()),
+          h(
+            "ul",
+            { class: "landing-points" },
+            ["landingPointCommands", "landingPointPick", "landingPointLanguages"].map((key) => h("li", {}, icon("check"), t(key))),
+          ),
         ),
-        h("div", { class: "landing-art", "aria-hidden": "true" }, h("img", { src: "favicon.svg", alt: "", width: 168, height: 168 })),
+        h(
+          "div",
+          { class: "landing-art", "aria-hidden": "true" },
+          landingDemo("red", "gavel", t("landingDemoCase_title"), t("landingDemoCase_text")),
+          landingDemo("green", "trophy", t("landingDemoLevel_title"), t("landingDemoLevel_text")),
+          landingDemo("cyan", "ticket", t("landingDemoTicket_title"), t("landingDemoTicket_text")),
+        ),
       ),
-      h("section", { "aria-label": t("landingStatsTitle") }, stats),
-      h(
-        "section",
-        { class: "landing-section" },
-        h("h2", {}, t("landingFeaturesTitle")),
-        h("p", { class: "muted" }, t("landingFeaturesIntro")),
+      statsBand,
+      landingSection(
+        "features",
+        t("landingFeaturesTitle"),
+        t("landingFeaturesIntro"),
         h(
           "div",
           { class: "landing-features" },
-          LANDING_FEATURES.map(([iconName, tone, key]) =>
+          LANDING_FEATURES.map(([iconName, tone, key, commands]) =>
             h(
               "article",
               { class: `landing-feature card tone-${tone}` },
               iconChip(iconName, tone),
               h("h3", {}, t(`${key}_title`)),
-              h("p", { class: "muted" }, t(`${key}_text`)),
+              h("p", {}, t(`${key}_text`)),
+              h("div", { class: "landing-commands" }, commands.map((command) => h("code", { dir: "ltr" }, command))),
             ),
           ),
+        ),
+      ),
+      landingSection(
+        "steps",
+        t("landingStepsTitle"),
+        t("landingStepsIntro"),
+        h(
+          "ol",
+          { class: "landing-steps" },
+          LANDING_STEPS.map(([iconName, key], index) =>
+            h(
+              "li",
+              { class: "landing-step card" },
+              h("span", { class: "landing-step-number" }, formatNumber(index + 1)),
+              h("h3", {}, icon(iconName), t(`${key}_title`)),
+              h("p", {}, t(`${key}_text`)),
+              index === 0 ? invites[2] : null,
+            ),
+          ),
+        ),
+      ),
+      landingSection(
+        "dashboard",
+        t("landingDashTitle"),
+        t("landingDashIntro"),
+        h(
+          "div",
+          { class: "landing-dash" },
+          LANDING_DASHBOARD.map(([iconName, tone, key]) =>
+            h(
+              "div",
+              { class: "landing-dash-item" },
+              iconChip(iconName, tone),
+              h("div", {}, h("h3", {}, t(`${key}_title`)), h("p", {}, t(`${key}_text`))),
+            ),
+          ),
+        ),
+      ),
+      landingSection(
+        "faq",
+        t("landingFaqTitle"),
+        null,
+        h(
+          "div",
+          { class: "landing-faq" },
+          LANDING_FAQ.map((key) => h("details", { class: "card" }, h("summary", {}, t(`${key}_q`)), h("p", {}, t(`${key}_a`)))),
         ),
       ),
       h(
         "section",
         { class: "landing-cta" },
         h("div", {}, h("h2", {}, t("landingCtaTitle")), h("p", {}, t("landingCtaText"))),
-        h("div", { class: "landing-actions" }, ctaInvite, login()),
+        h("div", { class: "landing-actions" }, invites[1], login()),
+      ),
+      h(
+        "footer",
+        { class: "landing-footer" },
+        h("span", { class: "landing-footer-brand" }, h("img", { src: "favicon.svg", alt: "", width: 24, height: 24 }), "Rumbleverse Revival"),
+        h(
+          "nav",
+          { "aria-label": t("landingFooterNav") },
+          landingJump("features", t("landingNavFeatures")),
+          landingJump("steps", t("landingNavSteps")),
+          landingJump("dashboard", t("landingNavDashboard")),
+          landingJump("faq", t("landingNavFaq")),
+          h("a", { href: "/auth/login" }, t("landingDashboard")),
+        ),
       ),
     ),
   );
 
   loadPublicStats()
     .then((data) => {
-      for (const link of [invite, ctaInvite]) {
+      for (const link of invites) {
         link.href = data.inviteUrl;
         link.hidden = false;
       }
@@ -897,7 +1042,7 @@ function showLanding(failedLogin = false) {
     })
     .catch(() => {
       status.remove();
-      stats.parentElement.remove();
+      statsBand.remove();
     });
 }
 
