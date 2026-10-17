@@ -125,7 +125,12 @@ html {
 body {
   margin: 0;
   min-height: 100vh;
-  background: var(--bg);
+  /* A soft wash of the accent colors behind everything, so pages don't sit on flat grey. */
+  background:
+    radial-gradient(1100px 520px at 85% -120px, color-mix(in srgb, var(--accent) 11%, transparent), transparent 70%),
+    radial-gradient(900px 480px at -10% -80px, color-mix(in srgb, var(--accent-2) 8%, transparent), transparent 70%),
+    var(--bg);
+  background-attachment: fixed;
   color: var(--text);
   font: 1rem/1.5 "Inter", system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", "Noto Sans Arabic", sans-serif;
   -webkit-font-smoothing: antialiased;
@@ -224,6 +229,17 @@ kbd {
   border-bottom: 1px solid var(--border);
 }
 
+/* A thin accent stripe under the top bar. */
+.topbar::after {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  bottom: -1px;
+  height: 2px;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  pointer-events: none;
+}
+
 .brand {
   display: flex;
   align-items: center;
@@ -237,6 +253,16 @@ kbd {
 
 .brand img {
   border-radius: 8px;
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+.brand span {
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  font-weight: 800;
+  letter-spacing: -0.01em;
 }
 
 .nav-toggle {
@@ -425,13 +451,13 @@ button:disabled {
 }
 
 .primary {
-  background: var(--accent);
+  background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 65%, var(--accent-2)));
   color: var(--accent-text);
-  box-shadow: 0 1px 2px color-mix(in srgb, var(--accent) 40%, transparent);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--accent) 35%, transparent);
 }
 
 .primary:hover {
-  background: color-mix(in srgb, var(--accent) 88%, var(--ink));
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 88%, var(--ink)), color-mix(in srgb, var(--accent) 55%, var(--accent-2)));
 }
 
 .ghost {
@@ -635,6 +661,16 @@ form.settings > * + * {
   height: 22px;
 }
 
+/* Page headers and number tiles get a solid, glossy chip. */
+.hero .chip-icon.lg,
+.stat .chip-icon {
+  background: linear-gradient(135deg, var(--tone, var(--accent)), color-mix(in srgb, var(--tone, var(--accent)) 60%, #1e1b4b));
+  color: #fff;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 25%),
+    0 6px 16px color-mix(in srgb, var(--tone, var(--accent)) 35%, transparent);
+}
+
 .toolbar {
   display: flex;
   flex-wrap: wrap;
@@ -652,11 +688,96 @@ form.settings > * + * {
   width: auto;
 }
 
+/* Page header: a tinted band in the page's color with a few soft shapes on the far side. */
 .hero {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 16px;
   margin-bottom: 24px;
+  padding: 22px 24px;
+  border: 1px solid color-mix(in srgb, var(--tone, var(--accent)) 22%, var(--border));
+  border-radius: calc(var(--radius) + 4px);
+  background:
+    linear-gradient(120deg, color-mix(in srgb, var(--tone, var(--accent)) 13%, var(--surface)) 0%, var(--surface) 70%);
+  box-shadow: var(--shadow);
+}
+
+.hero::before,
+.hero::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  border-radius: 28%;
+  pointer-events: none;
+  background: linear-gradient(135deg, var(--tone, var(--accent)), var(--accent-2));
+  opacity: 0.12;
+  transform: rotate(18deg);
+}
+
+.hero::before {
+  width: 190px;
+  height: 190px;
+  inset-inline-end: -40px;
+  top: -70px;
+}
+
+.hero::after {
+  width: 96px;
+  height: 96px;
+  inset-inline-end: 150px;
+  bottom: -58px;
+  opacity: 0.08;
+  transform: rotate(-12deg);
+}
+
+.hero h1 {
+  font-size: 1.65rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+/* The overview header, painted in the server's gradient with its icon. */
+.hero-banner {
+  border: none;
+  color: #fff;
+  box-shadow: 0 14px 34px rgb(16 24 40 / 16%);
+}
+
+.hero-banner::before {
+  inset: 0;
+  width: auto;
+  height: auto;
+  border-radius: 0;
+  transform: none;
+  opacity: 1;
+  background: radial-gradient(rgb(255 255 255 / 16%) 1.4px, transparent 1.6px) 0 0 / 16px 16px;
+  mask-image: linear-gradient(100deg, transparent 35%, #000 85%);
+}
+
+.hero-banner::after {
+  width: 220px;
+  height: 220px;
+  inset-inline-end: 40px;
+  bottom: -150px;
+  background: #fff;
+  opacity: 0.12;
+}
+
+.hero.hero-banner p {
+  color: rgb(255 255 255 / 85%);
+}
+
+.hero-banner .guild-icon {
+  border: 3px solid rgb(255 255 255 / 85%);
+  box-shadow: 0 8px 20px rgb(0 0 0 / 20%);
+}
+
+.hero-banner .guild-icon.placeholder {
+  background: rgb(255 255 255 / 22%);
+  color: #fff;
 }
 
 .hero-text {
@@ -725,9 +846,29 @@ form.settings > * + * {
   justify-items: center;
 }
 
+/* The login card opens with an accent band behind the logo. */
+.login {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  padding-top: 52px;
+}
+
+.login::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 96px;
+  z-index: -1;
+  background:
+    radial-gradient(rgb(255 255 255 / 20%) 1.3px, transparent 1.5px) 0 0 / 12px 12px,
+    linear-gradient(120deg, var(--accent), var(--accent-2));
+}
+
 .login-art img {
   display: block;
-  border-radius: 16px;
+  border: 4px solid var(--surface);
+  border-radius: 20px;
   box-shadow: var(--shadow-lift);
 }
 
@@ -880,11 +1021,25 @@ form.settings > * + * {
 }
 
 .server-banner {
-  height: 56px;
-  opacity: 0.85;
+  position: relative;
+  height: 64px;
+}
+
+/* Halftone dots over the server gradient, fading in from the far side. */
+.server-banner::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(rgb(255 255 255 / 20%) 1.3px, transparent 1.5px) 0 0 / 12px 12px;
+  mask-image: linear-gradient(100deg, transparent 30%, #000 90%);
+}
+
+.banner-muted.server-banner::after {
+  content: none;
 }
 
 .server-body {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -1086,15 +1241,31 @@ form.settings > * + * {
 }
 
 .nav-link.active {
-  background: color-mix(in srgb, var(--accent) 11%, transparent);
+  position: relative;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 16%, transparent), color-mix(in srgb, var(--accent) 4%, transparent));
   color: color-mix(in srgb, var(--accent) 85%, var(--ink));
   font-weight: 650;
 }
 
+.nav-link.active::before {
+  content: "";
+  position: absolute;
+  inset-block: 7px;
+  inset-inline-start: -12px;
+  width: 4px;
+  border-radius: 0 4px 4px 0;
+  background: linear-gradient(var(--accent), var(--accent-2));
+}
+
+[dir="rtl"] .nav-link.active::before {
+  border-radius: 4px 0 0 4px;
+}
+
+/* Each page keeps its own color in the sidebar. */
 .nav-icon {
   display: inline-grid;
   place-items: center;
-  color: var(--muted);
+  color: color-mix(in srgb, var(--tone) 80%, var(--muted));
 }
 
 .nav-link:hover .nav-icon {
@@ -1194,10 +1365,34 @@ dialog.search {
 }
 
 .stat {
+  position: relative;
+  overflow: hidden;
   display: grid;
   gap: 6px;
   color: var(--text);
   text-decoration: none;
+  background:
+    radial-gradient(160px 110px at 100% 0%, color-mix(in srgb, var(--tone) 13%, transparent), transparent 70%),
+    var(--surface);
+}
+
+/* A strip of the tile's color along the top. */
+.stat::before {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--tone), color-mix(in srgb, var(--tone) 30%, var(--accent-2)));
+}
+
+a.stat {
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+a.stat:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lift);
 }
 
 a.stat:hover {
@@ -1250,13 +1445,18 @@ a.stat:hover {
 }
 
 .feature:hover {
-  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
-  background: var(--surface-2);
+  border-color: color-mix(in srgb, var(--tone, var(--accent)) 45%, var(--border));
+  background: color-mix(in srgb, var(--tone, var(--accent)) 6%, var(--surface));
+}
+
+.feature.on {
+  border-color: color-mix(in srgb, var(--tone) 35%, var(--border));
+  background: linear-gradient(120deg, color-mix(in srgb, var(--tone) 11%, var(--surface)), var(--surface) 80%);
 }
 
 .grid-2 {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr));
   gap: var(--gap);
 }
 
