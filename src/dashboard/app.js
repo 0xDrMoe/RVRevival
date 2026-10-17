@@ -33,6 +33,7 @@ import fastifyRateLimit from "@fastify/rate-limit";
 import fastifyStatic from "@fastify/static";
 import Fastify from "fastify";
 import { normalizeAutomod } from "../automod/config.js";
+import { countryList, normalizeName } from "../countries/countries.js";
 import { normalizeAntiNuke } from "../raid/antiNuke.js";
 import { levelProgress, normalizeLeveling } from "../leveling/config.js";
 import { LevelStore, Period, PERIODS, periodStart } from "../leveling/levelStore.js";
@@ -105,9 +106,13 @@ const caseJson = (moderationCase) => ({
 });
 
 // What the browser gets for a role.
+// Country roles are named after a country, the same test /country uses.
+const COUNTRY_NAMES = new Set(countryList.countries.map((country) => normalizeName(country.name)));
+
 const roleJson = ({ id, name, color, position, managed, hoist, mentionable, permissions, unicode_emoji: emoji }) => ({
   id,
   name,
+  country: !managed && COUNTRY_NAMES.has(normalizeName(name)),
   color,
   position,
   managed,
