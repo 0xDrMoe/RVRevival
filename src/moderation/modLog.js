@@ -84,7 +84,8 @@ export function buildCaseEmbed(moderationCase, language = "en") {
 export function createModLog({ poster, store }) {
   return {
     async postCase(guild, moderationCase) {
-      const message = await poster.post(guild, MOD_LOG_SETTINGS, () => ({ embed: buildCaseEmbed(moderationCase) }));
+      // On its own message, so refreshCase() can replace its embed.
+      const message = await poster.post(guild, MOD_LOG_SETTINGS, () => ({ embed: buildCaseEmbed(moderationCase) }), { alone: true });
       if (message?.id && message.channelId) {
         store.setLogMessage(moderationCase.guildId, moderationCase.number, message.channelId, message.id);
       }

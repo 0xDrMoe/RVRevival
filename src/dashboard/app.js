@@ -481,7 +481,7 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
         guilds: listed.filter(Boolean),
         inviteUrl:
           `https://discord.com/oauth2/authorize?client_id=${discord.clientId}` +
-          "&scope=bot+applications.commands&permissions=1460709485718",
+          "&scope=bot+applications.commands&permissions=1461246356630",
       };
     });
   });
