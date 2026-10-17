@@ -55,6 +55,7 @@ import { GuildSettings, Setting } from "./settings/guildSettings.js";
 import { TicketStore } from "./tickets/ticketStore.js";
 import { closeDatabase, DEFAULT_DATABASE_FILE, openDatabase } from "./storage/database.js";
 import { logger, registerSecret } from "./utils/logger.js";
+import { withoutChannel } from "./logs/logRoutes.js";
 
 // Log unexpected errors instead of letting them silently kill the bot.
 process.on("unhandledRejection", (error) => {
@@ -233,7 +234,7 @@ async function start() {
     leveling,
     tempVoice: tempVoiceChannels,
   });
-  const handleInteraction = createInteractionHandler({ commands, logger, forcedLanguage, actionLog });
+  const handleInteraction = createInteractionHandler({ commands, logger, forcedLanguage, actionLog, guildSettings });
   const guardCountryChannel = createCountryChannelGuard({ guildSettings, logger, actionLog, botDeletions });
 
   // If the /country channel is deleted, allow any channel again instead of
@@ -416,6 +417,13 @@ async function start() {
           .catch((error) => logger.error("Couldn't forget a deleted ignored channel", { error }));
       }
       forgetAutomodExemption(channel.guildId, "exemptChannelIds", channel.id);
+      // Log entries routed to a deleted channel go back to their usual channel.
+      const routes = channel.guildId && withoutChannel(guildSettings.get(channel.guildId, Setting.LOG_ROUTES), channel.id);
+      if (routes) {
+        (Object.keys(routes).length > 0 ? guildSettings.set(channel.guildId, Setting.LOG_ROUTES, routes) : guildSettings.clear(channel.guildId, Setting.LOG_ROUTES))
+          .then(() => logger.info("A log channel was deleted; those entries go to the usual log channel again", { guildId: channel.guildId }))
+          .catch((error) => logger.error("Couldn't forget a deleted log channel", { error }));
+      }
       tempVoice.channelDeleted(channel);
       stickies.channelDeleted(channel);
       mediaOnly.channelDeleted(channel).catch((error) => logger.error("Couldn't forget a deleted media-only channel", { error }));

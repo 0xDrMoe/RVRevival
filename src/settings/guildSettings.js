@@ -57,6 +57,10 @@ export const Setting = Object.freeze({
   STATS_COUNTERS: "statsCounters", // server stats channels, a list of { id, template, channelId, categoryId, error } (see stats/statsCounters.js)
   MEDIA_ONLY: "mediaOnly", // media-only channels, { channelIds, allowLinks } (see community/mediaOnly.js)
   SETUP_SKIPPED: "setupSkipped", // dashboard setup steps the server chose not to do, a list of names (see dashboard/settingsRules.js)
+  COMMAND_RULES: "commandRules", // per-command rules, { command: { disabled, roleIds, blockedRoleIds, channelIds } } (see permissions/commandRules.js)
+  LOG_ROUTES: "logRoutes", // a log channel per kind of entry, { route: channelId } (see logs/logRoutes.js)
+  PERMISSION_PRESET: "permissionPreset", // the premade permission setup last applied, a name (see permissions/presets.js)
+  BOT_INVITER: "botInviterId", // who added the bot, from the audit log; may change permissions like the owner
 });
 
 const KNOWN_SETTINGS = new Set(Object.values(Setting));

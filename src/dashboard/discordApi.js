@@ -10,7 +10,7 @@
 // Discord rate-limits us. Server details are cached for a short while, since
 // every page load needs them.
 
-import { REST, Routes } from "discord.js";
+import { AuditLogEvent, REST, Routes } from "discord.js";
 
 const API = "https://discord.com/api/v10";
 // What we ask the person to share when they log in: their name and avatar, and
@@ -235,6 +235,20 @@ export function createDiscordApi({ config, fetch = globalThis.fetch, rest }) {
     async deleteChannel(guildId, channelId, reason) {
       await bot.delete(Routes.channel(channelId), { reason });
       channels.forget(guildId);
+    },
+
+    // Who added the bot to the server, from the audit log (kept 45 days), or
+    // null if it isn't there or the bot can't read it (View Audit Log).
+    // The bot's user ID is its application's ID.
+    async botInviter(guildId) {
+      try {
+        const log = await bot.get(Routes.guildAuditLog(guildId), {
+          query: new URLSearchParams({ action_type: String(AuditLogEvent.BotAdd), limit: "50" }),
+        });
+        return log.audit_log_entries?.find((entry) => entry.target_id === config.clientId)?.user_id ?? null;
+      } catch {
+        return null;
+      }
     },
 
     // The bot's own user ID, for the invite link.

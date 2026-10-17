@@ -5,9 +5,14 @@ import { PermissionFlagsBits } from "discord.js";
 import { Setting } from "../settings/guildSettings.js";
 
 // The role that may use every moderation command: the mod role from /settings,
-// or the staff role if no mod role is set.
+// or the staff role if no mod role is set. Once a permission setup was chosen
+// on the dashboard, the staff role is only for country changes.
 export function moderatorRoleId(guildSettings, guildId) {
-  return guildSettings?.get(guildId, Setting.MOD_ROLE) ?? guildSettings?.get(guildId, Setting.STAFF_ROLE);
+  const modRoleId = guildSettings?.get(guildId, Setting.MOD_ROLE);
+  if (modRoleId || guildSettings?.get(guildId, Setting.PERMISSION_PRESET)) {
+    return modRoleId;
+  }
+  return guildSettings?.get(guildId, Setting.STAFF_ROLE);
 }
 
 // Members with the Discord permission, or with the moderator role, may use a

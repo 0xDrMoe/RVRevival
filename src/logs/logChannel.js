@@ -10,6 +10,8 @@
 // channel wait and then go out together, up to 10 per message.
 
 import { embedLength, PermissionFlagsBits } from "discord.js";
+import { Setting } from "../settings/guildSettings.js";
+import { routedChannelId } from "./logRoutes.js";
 
 // Discord's limits for one message.
 const MAX_EMBEDS = 10;
@@ -34,8 +36,17 @@ export function createLogChannelPoster({ guildSettings, logger, now = Date.now }
   // log channel ID -> { busy, pending: entries waiting to be sent }
   const queues = new Map();
 
-  // The first of `settings` that is set, and its channel. Throws if that channel is gone.
-  function channelFor(guild, settings) {
+  // The channel `route` goes to, else the first of `settings` that is set, and
+  // its channel. Throws if that channel is gone.
+  function channelFor(guild, settings, route) {
+    const routed = routedChannelId(guildSettings, guild.id, route);
+    if (routed) {
+      const channel = guild.channels?.cache.get(routed);
+      if (!channel?.isTextBased?.()) {
+        throw Object.assign(new Error("The log channel no longer exists or isn't a text channel"), { setting: Setting.LOG_ROUTES });
+      }
+      return { setting: Setting.LOG_ROUTES, channel };
+    }
     for (const setting of settings) {
       const channelId = guildSettings.get(guild.id, setting);
       if (!channelId) {
@@ -231,19 +242,21 @@ export function createLogChannelPoster({ guildSettings, logger, now = Date.now }
   }
 
   return {
-    // Whether any of `settings` has a channel in this server.
-    isEnabled: (guild, settings) => Boolean(guild && settings.some((setting) => guildSettings.get(guild.id, setting))),
+    // Whether `route` has its own channel, or any of `settings` has one, in this server.
+    isEnabled: (guild, settings, route) =>
+      Boolean(guild && (routedChannelId(guildSettings, guild.id, route) || settings.some((setting) => guildSettings.get(guild.id, setting)))),
 
-    // Posts in the first channel of `settings` that is set. `build({ canAttach })`
+    // Posts in the channel of `route` (see logRoutes.js) if it has one, else in
+    // the first channel of `settings` that is set. `build({ canAttach })`
     // returns { embed, files? }. With `alone`, the entry gets a message of its
     // own (so it can be edited later). Returns the posted message, or undefined.
-    async post(guild, settings, build, { alone = false } = {}) {
+    async post(guild, settings, build, { alone = false, route } = {}) {
       if (!guild) {
         return undefined;
       }
       let target;
       try {
-        target = channelFor(guild, settings);
+        target = channelFor(guild, settings, route);
       } catch (error) {
         warnOnce(guild, error.setting ?? settings[0], error);
         return undefined;

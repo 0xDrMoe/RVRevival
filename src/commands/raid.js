@@ -29,6 +29,7 @@ import {
 import { Setting } from "../settings/guildSettings.js";
 import { beginModerationCommand } from "./commandHelpers.js";
 import { withDescription } from "./moderation.js";
+import { LogRoute } from "../logs/logRoutes.js";
 
 const COMMAND_NAME = "raid";
 const PERMISSION = PermissionFlagsBits.ManageChannels;
@@ -84,7 +85,7 @@ export function createRaidCommand({ guildSettings, modLog = noModLog, forcedLang
   }
 
   const logEntry = (guild, moderator, summary, lines, color) =>
-    modLog.post(guild, () => ({ embed: buildActionLogEmbed({ moderator, summary, lines, color }) }));
+    modLog.post(guild, () => ({ embed: buildActionLogEmbed({ moderator, summary, lines, color }) }), { route: LogRoute.PROTECTION });
 
   async function lockdown(interaction, answer) {
     const guild = interaction.guild;

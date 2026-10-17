@@ -3273,3 +3273,225 @@ dialog textarea {
   display: grid;
   gap: 4px;
 }
+
+/* --- Permissions ---------------------------------------------------------------- */
+
+.perm-tabs .segment {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.preset-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.preset-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-2);
+  cursor: pointer;
+}
+
+.preset-option:has(input:checked) {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+}
+
+.preset-option input[type="radio"] {
+  width: 18px;
+  height: 18px;
+  min-height: 0;
+  margin: 2px 0 0;
+  padding: 0;
+  flex: none;
+  box-shadow: none;
+  accent-color: var(--accent);
+}
+
+.preset-text {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.preset-text strong {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.preset-text .help {
+  margin: 0;
+}
+
+.preset-points {
+  margin: 4px 0 0;
+  padding-inline-start: 18px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.preset-points li + li {
+  margin-top: 2px;
+}
+
+.perm-roles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0 14px;
+}
+
+.perm-current {
+  display: grid;
+  gap: 6px;
+  justify-items: start;
+}
+
+.perm-current .help {
+  margin: 0;
+}
+
+.perm-review {
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+
+.perm-review h3 {
+  margin: 0 0 8px;
+  font-size: 0.95rem;
+}
+
+.change-list {
+  display: grid;
+  gap: 6px;
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.change-list li {
+  display: grid;
+  gap: 4px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  overflow-wrap: anywhere;
+}
+
+.change-values,
+.command-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  min-width: 0;
+}
+
+.command-chips code {
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: var(--surface-2);
+  font-size: 0.8rem;
+}
+
+.command-rules {
+  display: grid;
+  gap: 6px;
+}
+
+.command-rule {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+
+.command-rule > summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  padding: 10px 12px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.command-rule > summary::-webkit-details-marker {
+  display: none;
+}
+
+.command-rule > summary::after {
+  content: "";
+  margin-inline-start: auto;
+  width: 7px;
+  height: 7px;
+  border-right: 2px solid var(--muted);
+  border-bottom: 2px solid var(--muted);
+  transform: rotate(45deg);
+  transition: transform 0.15s ease;
+}
+
+.command-rule[open] > summary::after {
+  transform: rotate(-135deg);
+}
+
+.command-rule .badges {
+  min-width: 0;
+}
+
+.command-name {
+  font-weight: 700;
+}
+
+.command-rule-body {
+  display: grid;
+  gap: 12px;
+  padding: 4px 12px 12px;
+}
+
+.command-rule-body .field {
+  margin: 0;
+}
+
+.command-rule-body .checks.scroll {
+  max-height: 220px;
+  background: var(--surface);
+}
+
+.route-group + .route-group {
+  margin-top: 14px;
+}
+
+.route-group h3 {
+  margin: 0 0 8px;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.route-grid {
+  display: grid;
+  align-items: end;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 0 14px;
+}
+
+.route-grid .field-label {
+  overflow-wrap: anywhere;
+}
+
+.route-grid .field,
+.route-grid .field:last-child {
+  margin: 0 0 12px;
+}

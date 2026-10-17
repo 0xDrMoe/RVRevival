@@ -843,6 +843,65 @@ describe("dashboard", () => {
     expect(page.json()).toMatchObject({ isOwner: true, settings: { antiNuke }, people: { [MOD_ID]: null } });
   });
 
+  it("lets only the owner or whoever added the bot change command permissions", async () => {
+    const cookies = await login();
+    const rules = { ban: { roleIds: [ROLE_ID] } };
+    const refused = await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, { commandRules: rules });
+    expect(refused.statusCode).toBe(403);
+    expect(refused.json()).toMatchObject({ error: "permissions-only", setting: "commandRules" });
+    const preview = await write(cookies, "POST", `/api/guilds/${GUILD_ID}/permissions/preset`, { preset: "oneTeam", roles: { moderator: ROLE_ID } });
+    expect(preview.statusCode).toBe(403);
+
+    // Whoever added the bot, from the audit log, is remembered.
+    discord.botInviter = vi.fn(async () => USER_ID);
+    const page = await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}`, cookies });
+    expect(page.json()).toMatchObject({ canManagePermissions: true, botInviterId: USER_ID });
+    expect(page.json().commands).toContainEqual({ name: "ban", permission: "4", roleMode: "grant" });
+    expect(guildSettings.get(GUILD_ID, Setting.BOT_INVITER)).toBe(USER_ID);
+
+    const saved = await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, { commandRules: rules });
+    expect(saved.statusCode).toBe(200);
+    expect(guildSettings.get(GUILD_ID, Setting.COMMAND_RULES)).toEqual({
+      ban: { disabled: false, roleIds: [ROLE_ID], blockedRoleIds: [], channelIds: [] },
+    });
+    expect((await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, { commandRules: { nope: { disabled: true } } })).statusCode).toBe(400);
+  });
+
+  it("previews and applies a premade permission setup", async () => {
+    const base = discord.guild.getMockImplementation();
+    discord.guild.mockImplementation(async (id) => ({ ...(await base(id)), owner_id: USER_ID }));
+    const cookies = await login();
+    const url = `/api/guilds/${GUILD_ID}/permissions/preset`;
+    expect((await write(cookies, "POST", url, { preset: "oneTeam", roles: {} })).statusCode).toBe(400);
+
+    const preview = await write(cookies, "POST", url, { preset: "oneTeam", roles: { moderator: ROLE_ID } });
+    expect(preview.statusCode).toBe(200);
+    expect(preview.json()).toMatchObject({ dryRun: true });
+    expect(preview.json().changes.map((change) => change.setting).sort()).toEqual(
+      [Setting.DASHBOARD_ROLES, Setting.MOD_ROLE, Setting.PERMISSION_PRESET, Setting.STAFF_ROLE].sort(),
+    );
+    expect(guildSettings.get(GUILD_ID, Setting.MOD_ROLE)).toBeUndefined();
+
+    const applied = await write(cookies, "POST", url, { preset: "oneTeam", roles: { moderator: ROLE_ID }, dryRun: false });
+    expect(applied.statusCode).toBe(200);
+    expect(guildSettings.get(GUILD_ID, Setting.MOD_ROLE)).toBe(ROLE_ID);
+    expect(guildSettings.get(GUILD_ID, Setting.DASHBOARD_ROLES)).toEqual([ROLE_ID]);
+    expect(guildSettings.get(GUILD_ID, Setting.PERMISSION_PRESET)).toBe("oneTeam");
+
+    // Changing the command rules by hand afterwards makes the setup custom.
+    await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, { commandRules: { kick: { disabled: true } } });
+    expect(guildSettings.get(GUILD_ID, Setting.PERMISSION_PRESET)).toBe("custom");
+  });
+
+  it("posts dashboard changes in their own log channel when one is set", async () => {
+    const cookies = await login();
+    await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, { logsChannelId: LOGS_ID, logRoutes: { dashboard: TEXT_ID } });
+    discord.postMessage.mockClear();
+    await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, { welcomeMessage: "Hi {user}" });
+    expect(discord.postMessage).toHaveBeenCalledWith(TEXT_ID, expect.anything());
+    expect((await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, { logRoutes: { cases: VOICE_ID } })).statusCode).toBe(400);
+  });
+
   it("takes a ban appeal from a banned member and lets staff decide it", async () => {
     discord.unban = vi.fn(async () => {});
     discord.dm = vi.fn(async () => ({}));

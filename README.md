@@ -38,6 +38,7 @@ The Discord bot for the Rumbleverse Revival server. It is built as a set of inde
 | [Join-to-create voice](#join-to-create-voice) | `/voice` | Manage Server (`setup`, `off`), the channel's owner (`lock`, `unlock`), anyone in the channel (`claim`) |
 | [Leveling](#leveling) | `/rank`, `/leaderboard`, `/levels`, or the dashboard's Leveling page | Everyone (`/rank`, `/leaderboard`), Manage Server (`/levels`) |
 | [Country roles](#country-roles) | `/country`, `/country-staff`, `/country-help` | Everyone (`/country`), the staff role (`/country-staff`), Manage Server (`/country-help`) |
+| [Permissions](#permissions) | The dashboard's Permissions page | The server owner or whoever added the bot (log channels per kind: Manage Server) |
 | [Web dashboard](#web-dashboard) | https://rumbleverse.cedartechsolutions.ca | Manage Server, or a dashboard role |
 
 Every reply is translated into English, Spanish, German, French, Portuguese, Italian or Arabic (see [Languages](#languages)).
@@ -99,7 +100,7 @@ Dyno-style moderation. Every action gets a numbered case (per server, never reus
 | `/modlogs user` | A member's last 20 cases, newest first, with the total. | Timeout Members |
 | `/clearwarns user` | Deletes all of a member's warnings (other cases stay). Posted in the mod log. | Manage Server |
 
-- **Who can moderate.** Members with the permission in the table, **or** with the mod role from `/settings mod-role` (the staff role from `/settings staff-role` until a mod role is set). `/case delete` and `/clearwarns` always need Manage Server. Discord hides each command from members without its permission; to show the commands to the mod role too, add the role under *Server Settings > Integrations > the bot*, or give the role the permission.
+- **Who can moderate.** Members with the permission in the table, **or** with the mod role from `/settings mod-role` (the staff role from `/settings staff-role` until a mod role is set, unless a [permission setup](#permissions) was chosen), **or** with a role given the command on the [Permissions](#permissions) page. `/case delete` and `/clearwarns` always need Manage Server. Discord hides each command from members without its permission; to show the commands to the mod role too, add the role under *Server Settings > Integrations > the bot*, or give the role the permission.
 - **Hierarchy.** Nobody can act on themselves, the server owner or the bot, or on anyone whose highest role is equal to or above theirs (the owner can act on anyone). The bot also refuses when the member's highest role is equal to or above its own, and Discord never allows timing out administrators. These are checked before anything happens.
 - **DMs.** The member is DMed in the server's language: before a ban, softban or kick (afterwards there's no shared server), after a timeout, timeout removal or warning. Notes are never sent. If their DMs are closed, the action still happens; the reply and the case say the DM couldn't be sent.
 - **Audit log.** Discord's audit log shows the reason followed by `(by <moderator>)`, since the bot is the one acting.
@@ -478,6 +479,28 @@ Needs: the **Manage Roles** permission, and the bot's role above every country r
 
 Country names are the English ISO names, with a few shortened (for example *United States*, *Russia*, *Taiwan*). These live in `NAME_OVERRIDES` in `src/countries/countries.js`. Renaming one after roles exist makes the bot create a new role, so rename the Discord role too.
 
+### Permissions
+
+The dashboard's **Permissions** page has two tabs. Only the **server owner** or **whoever added the bot** (read from the audit log the first time the page opens, then remembered, since Discord keeps the audit log 45 days) can change the setup and the command rules; others with Manage Server can look.
+
+**Simple** applies a premade setup in one step, after showing exactly what will change:
+
+| Setup | What it does |
+| --- | --- |
+| Admins only | Only Discord's own permissions count (Ban Members for `/ban`, and so on). No mod role, no dashboard roles, no commands given to roles. |
+| One staff team (recommended) | One role is the mod role and the staff role, and can open the dashboard. |
+| Moderators and helpers | Moderators get every moderation command and the dashboard. Helpers become the staff role (country changes), can open the dashboard, and get `/warn`, `/note`, `/timeout`, `/untimeout`, `/purge`, `/slowmode`, `/case` and `/modlogs`. |
+
+Applying a setup keeps commands you turned off, blocked roles and channel limits. Once any setup is chosen, the staff role no longer doubles as the mod role. The page also lists, per role, the commands to allow under *Server Settings > Integrations > the bot*, because Discord hides a staff command from members without its permission.
+
+**Advanced** changes everything by hand:
+
+- **Staff roles:** the mod role, the staff role and the dashboard roles.
+- **Command permissions:** for each command, turn it off for everyone, give it to more roles (they use it as if they had its Discord permission; for commands everyone can use, it limits them to those roles), block roles, or keep it to some channels or categories. Members with Manage Server ignore role and channel limits; a command that's off is off for them too. `/antinuke` can't be given to roles, and `/country-staff` follows the staff role. Refusals are private and show in the logs channel. Changing these after applying a setup marks it as *Custom*.
+- **Log channels per kind:** send command uses, messages the bot deleted, dashboard changes, cases, other moderation actions, automod deletions, raid and anti-nuke alerts, and each server-log event to its own channel. Anything left on *Usual* goes where it always did. A deleted channel goes back to *Usual* by itself.
+
+Discord's own *Server Settings > Integrations* page can also limit a command to roles and channels, and hides it from everyone else; use it when hiding is all you need. The bot's rules are for giving a command to a role without the permission, blocking roles, or turning a command off.
+
 ### Web dashboard
 
 A website where admins log in with Discord and manage the bot without slash commands. Each server has a sidebar grouped into General, Moderation, Protection, Community, Messages and Settings, with a green dot next to every feature that's switched on. **Ctrl+K** (⌘K on a Mac, or `/`) opens a search box that jumps to any page or server. On phones the sidebar becomes a menu behind the ☰ button. Pages switch without reloading.
@@ -503,11 +526,11 @@ A website where admins log in with Discord and manage the bot without slash comm
 - **Staff roles:** staff and mod roles, the quarantine role, and the mod-log channel.
 - **Logging:** the logs and server-log channels, a switch for each server-log event, and ignored channels or categories (with a filter).
 - **Backup:** download every setting as a file, or restore one after seeing what would change (see [Settings backup](#settings-backup)).
-- **Roles & access:** the **dashboard roles** (see below), and a table of every role with its color, its strongest permissions and what the bot uses it for, filterable by name or kind.
+- **Permissions:** premade setups (Simple), or roles, command rules and a log channel per kind (Advanced), plus a table of every role with its color, its strongest permissions and what the bot uses it for (see [Permissions](#permissions)).
 
 Settings pages show a save bar when something changed, and ask before you leave with unsaved changes.
 
-**Dashboard roles.** Members with one of the roles ticked under *Roles & access* can open the server's Overview, Cases (view, edit reasons, delete, export) and Members without Manage Server. Only people with Manage Server can see or change settings. Roles are checked against Discord on every request (at most 30 seconds old), so removing someone's role takes their access away right away.
+**Dashboard roles.** Members with one of the roles ticked under *Permissions* can open the server's Overview, Cases (view, edit reasons, delete, export) and Members without Manage Server. Only people with Manage Server can see or change settings. Roles are checked against Discord on every request (at most 30 seconds old), so removing someone's role takes their access away right away.
 
 **Appearance.** The account menu (top right) picks a theme (match the device, light or dark), one of 8 accent colors and comfortable or compact spacing. It's remembered per browser.
 
@@ -669,6 +692,7 @@ src/
   giveaways/             Giveaways: saved in SQLite (giveawayStore.js), drawing winners (giveaways.js), ended on time (giveawayScheduler.js)
   tickets/               Support tickets: saved in SQLite (ticketStore.js), the panel, staff and messages (tickets.js), transcripts (transcript.js)
   raid/                  Raid protection: lockdown planning and restoring, the new-account gate and join alerts (raid.js), anti-nuke (antiNuke.js)
+  permissions/           Who can use what: per-command rules (commandRules.js), the premade setups (presets.js), the command list for the dashboard (catalog.js)
   tempRoles/             Temporary roles: saved in SQLite (tempRoleStore.js), taken away when due (tempRoleScheduler.js)
   messages/              Embed builder: checking messages against Discord's limits (embedMessage.js), messages posted from the dashboard (sentMessageStore.js)
   feeds/                 Feeds: reading RSS and Atom (parseFeed.js), safe fetching and finding YouTube and Reddit feeds (fetchFeed.js), saved in SQLite (feedStore.js), adding feeds and posts (feeds.js), checked on time (feedPoller.js)
@@ -684,7 +708,7 @@ src/
   scheduled/             Scheduled messages: saved in SQLite (scheduledMessageStore.js), posted when due (scheduler.js)
   reminders/             Reminders: saved in SQLite (reminderStore.js), sent when due (reminderScheduler.js)
   automod/               Automod: settings (config.js), what each rule matches (rules.js), acting on messages
-  logs/                  Logs channel, server log, and posting to log channels
+  logs/                  Logs channel, server log, posting to log channels, and a channel per kind of entry (logRoutes.js)
   moderation/            Moderation: cases (SQLite), checks, actions, mod log, temporary bans
   settings/              Per-server settings (saved in data/bot.db)
   storage/               The SQLite database: opening it and schema migrations

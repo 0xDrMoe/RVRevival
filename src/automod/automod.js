@@ -30,6 +30,7 @@ import {
   RULE_LABELS,
 } from "./config.js";
 import { countMentions, findBannedWord, findBlockedLink, findInvites, isMostlyCaps, repeatKey } from "./rules.js";
+import { LogRoute } from "../logs/logRoutes.js";
 
 // How far back repeated messages are compared.
 export const REPEAT_WINDOW_MS = 60_000;
@@ -334,7 +335,7 @@ export function createAutomod({
             lines: [`**Matched:** ${violation.detail}`, ...(content ? [codeBlock(content.slice(0, 1500))] : [])],
             color: 0xe67e22,
           }),
-        }));
+        }), { route: LogRoute.AUTOMOD });
       }
     } catch (error) {
       logger.warn("Automod couldn't finish acting on a message", { guildId: guild.id, userId: member.id, rule, action, error });

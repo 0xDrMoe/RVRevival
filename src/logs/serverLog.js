@@ -167,12 +167,13 @@ export function buildMemberChangedEmbed(oldMember, newMember) {
 //   botDeletions    messages the bot deleted itself (RecentIds)
 //   guildSettings   which events are switched off and which channels are ignored
 export function createServerLog({ poster, botDeletions, guildSettings }) {
-  const post = (guild, build) => poster.post(guild, SERVER_LOG_SETTINGS, build);
+  // Each event can have its own channel (log routes), named after the event.
+  const post = (guild, event, build) => poster.post(guild, SERVER_LOG_SETTINGS, build, { route: event });
 
   // Whether to log `event` in this server, and (for message events) in this
   // channel. Threads follow their parent channel, and channels their category.
   function wants(guild, event, channel) {
-    if (!guild || !poster.isEnabled(guild, SERVER_LOG_SETTINGS)) {
+    if (!guild || !poster.isEnabled(guild, SERVER_LOG_SETTINGS, event)) {
       return false;
     }
     if (guildSettings?.getList(guild.id, Setting.DISABLED_LOG_EVENTS).includes(event)) {
@@ -192,7 +193,7 @@ export function createServerLog({ poster, botDeletions, guildSettings }) {
       if (!wants(message.guild, LogEvent.MESSAGE_DELETE, channelOf(message)) || botDeletions?.has(message.id) || isFromBot(message)) {
         return;
       }
-      await post(message.guild, () => ({ embed: buildMessageDeletedEmbed(message) }));
+      await post(message.guild, LogEvent.MESSAGE_DELETE, () => ({ embed: buildMessageDeletedEmbed(message) }));
     },
 
     async messagesBulkDeleted(messages, channel) {
@@ -203,7 +204,7 @@ export function createServerLog({ poster, botDeletions, guildSettings }) {
         return;
       }
       const known = others.filter((message) => !message.partial);
-      await post(guild, ({ canAttach }) => ({
+      await post(guild, LogEvent.BULK_DELETE, ({ canAttach }) => ({
         embed: buildBulkDeleteEmbed(channel.id, others.length, known.length),
         files:
           canAttach && known.length > 0
@@ -221,18 +222,18 @@ export function createServerLog({ poster, botDeletions, guildSettings }) {
       if (!newMessage.editedTimestamp || (!oldMessage.partial && oldMessage.content === newMessage.content)) {
         return;
       }
-      await post(newMessage.guild, () => ({ embed: buildMessageEditedEmbed(oldMessage, newMessage) }));
+      await post(newMessage.guild, LogEvent.MESSAGE_EDIT, () => ({ embed: buildMessageEditedEmbed(oldMessage, newMessage) }));
     },
 
     async memberJoined(member) {
       if (wants(member.guild, LogEvent.MEMBER_JOIN)) {
-        await post(member.guild, () => ({ embed: buildMemberJoinedEmbed(member) }));
+        await post(member.guild, LogEvent.MEMBER_JOIN, () => ({ embed: buildMemberJoinedEmbed(member) }));
       }
     },
 
     async memberLeft(member) {
       if (member.user && wants(member.guild, LogEvent.MEMBER_LEAVE)) {
-        await post(member.guild, () => ({ embed: buildMemberLeftEmbed(member) }));
+        await post(member.guild, LogEvent.MEMBER_LEAVE, () => ({ embed: buildMemberLeftEmbed(member) }));
       }
     },
 
@@ -243,7 +244,7 @@ export function createServerLog({ poster, botDeletions, guildSettings }) {
       }
       const embed = buildMemberChangedEmbed(oldMember, newMember);
       if (embed) {
-        await post(newMember.guild, () => ({ embed }));
+        await post(newMember.guild, LogEvent.MEMBER_UPDATE, () => ({ embed }));
       }
     },
   };

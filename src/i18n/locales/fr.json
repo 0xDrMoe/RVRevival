@@ -1099,5 +1099,9 @@
   "mediaOnlyList": "**Salons réservés aux médias :** {list}\nLes liens comptent comme médias.",
   "mediaOnlyListNoLinks": "**Salons réservés aux médias :** {list}\nSeuls les fichiers envoyés comptent.",
   "mediaOnlyNote": "{user} ce salon est pour les images, vidéos, fichiers et liens. Commentez plutôt dans un fil.",
-  "mediaOnlyNoteNoLinks": "{user} ce salon est pour les images, vidéos et fichiers. Commentez plutôt dans un fil."
+  "mediaOnlyNoteNoLinks": "{user} ce salon est pour les images, vidéos et fichiers. Commentez plutôt dans un fil.",
+  "commandRuleDisabled": "`/{command}` est désactivée sur ce serveur.",
+  "commandRuleBlocked": "Un de tes rôles n'a pas le droit d'utiliser `/{command}` ici.",
+  "commandRuleChannel": "`/{command}` ne fonctionne que dans {channels}.",
+  "commandRuleRoles": "`/{command}` est réservée à certains rôles sur ce serveur."
 }

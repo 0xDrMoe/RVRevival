@@ -21,7 +21,8 @@
 //   #/g/<id>/scheduled     scheduled messages
 //   #/g/<id>/moderation    staff and mod roles, the mod log
 //   #/g/<id>/logging       log channels, events and ignored channels
-//   #/g/<id>/access        roles: who can open the dashboard, and every role
+//   #/g/<id>/access        permissions: premade setups (Simple), or roles, command
+//                          rules and log channels per kind (?tab=advanced)
 //
 // Everything shown comes from the JSON API in ../app.js. Text from Discord
 // (names, reasons) is always set as text, never as HTML.
@@ -1212,7 +1213,8 @@ function normalized(value) {
 // A settings page: cards of controls, and a save bar that appears when
 // something changed. `fields` maps each setting to a function reading its
 // value from the form. `after` goes below the form (it isn't saved).
-function settingsPage({ data, pageId, intro, cards, fields, after = null }) {
+// `heroExtra()` makes what goes on the right of the page title (tabs, say).
+function settingsPage({ data, pageId, intro, cards, fields, after = null, heroExtra = () => undefined }) {
   const guildId = data.guild.id;
   const saved = { ...data.settings };
   const changes = () =>
@@ -1269,7 +1271,7 @@ function settingsPage({ data, pageId, intro, cards, fields, after = null }) {
           refresh();
           // The sidebar dots and the page's on/off badge follow what was saved.
           state.shell?.nav.replaceChildren(...navLinks(data, pageId).filter(Boolean));
-          header.replaceWith((header = pageHero(pageId, intro, data)));
+          header.replaceWith((header = pageHero(pageId, intro, data, heroExtra())));
         } catch (error) {
           failed(error);
         } finally {
@@ -1280,7 +1282,7 @@ function settingsPage({ data, pageId, intro, cards, fields, after = null }) {
     cards,
     saveBar,
   );
-  let header = pageHero(pageId, intro, data);
+  let header = pageHero(pageId, intro, data, heroExtra());
   show(guildLayout(data, pageId, header, form, after));
 }
 
@@ -2823,30 +2825,487 @@ function rolesTable(data) {
   );
 }
 
+// --- Permissions -------------------------------------------------------------------
+
+const PRESETS = ["adminsOnly", "oneTeam", "twoTeams"];
+const PRESET_ROLES = { adminsOnly: [], oneTeam: ["moderator"], twoTeams: ["moderator", "helper"] };
+const RECOMMENDED_PRESET = "oneTeam";
+// The commands helpers get in the two-team setup (permissions/presets.js).
+const HELPER_COMMANDS = ["case", "modlogs", "note", "purge", "slowmode", "timeout", "untimeout", "warn"];
+// Where each kind of log entry goes without its own channel (logs/logRoutes.js).
+const LOG_ROUTE_GROUPS = [
+  { group: "logs", routes: ["commands", "botDeletions", "dashboard"] },
+  { group: "modLog", routes: ["cases", "modActions", "automod", "protection"] },
+  { group: "serverLog", routes: LOG_EVENTS },
+];
+// Discord permission bits, for "Needs Ban Members" on commands.
+const PERMISSION_NAMES = [
+  { key: "permAdmin", bit: ADMINISTRATOR },
+  ...PERMISSIONS,
+  { key: "permManageNicknames", bit: 27n },
+];
+const COMMANDS_WITH_OWN_ROLE = { "country-staff": "staff" };
+// The commands the mod role can use (they check it besides Discord's permission).
+const MODERATION_COMMANDS = ["ban", "unban", "kick", "softban", "timeout", "untimeout", "warn", "note", "purge", "case", "modlogs", "lock", "unlock", "slowmode", "role", "nick", "quarantine", "temprole", "giveaway", "tags"];
+
+const permissionName = (bits) => {
+  const value = BigInt(bits);
+  const names = PERMISSION_NAMES.filter((entry) => (value & (1n << entry.bit)) !== 0n).map((entry) => t(entry.key));
+  return names.join(", ");
+};
+const roleName = (data, id) => {
+  const role = data.roles.find((entry) => entry.id === id);
+  return role ? `@${role.name}` : t("unknownOption", { id });
+};
+const channelName = (data, id) => {
+  const channel = data.channels.find((entry) => entry.id === id);
+  return channel ? channelLabel(channel, data.channels) : t("unknownOption", { id });
+};
+const presetName = (preset) => t(preset ? `permPreset_${preset}` : "permPresetNone");
+
+function emptyRule() {
+  return { disabled: false, roleIds: [], blockedRoleIds: [], channelIds: [] };
+}
+
+// The rules without empty ones, or null, the way the server saves them.
+function cleanRules(rules) {
+  const kept = Object.entries(rules).filter(
+    ([, rule]) => rule.disabled || rule.roleIds.length > 0 || rule.blockedRoleIds.length > 0 || rule.channelIds.length > 0,
+  );
+  return kept.length > 0 ? Object.fromEntries(kept.map(([name, rule]) => [name, { ...rule }])) : null;
+}
+
+// A saved setting, in words, for the "what will change" list.
+function describePermissionSetting(setting, value, data) {
+  if (value === null || value === undefined || (Array.isArray(value) && value.length === 0)) {
+    return t("permValueNone");
+  }
+  switch (setting) {
+    case "modRoleId":
+    case "staffRoleId":
+      return roleName(data, value);
+    case "dashboardRoleIds":
+      return value.map((id) => roleName(data, id)).join(", ");
+    case "permissionPreset":
+      return presetName(value);
+    case "commandRules": {
+      const given = Object.entries(value).filter(([, rule]) => rule.roleIds.length > 0);
+      return given.length > 0
+        ? given.map(([name, rule]) => `/${name}: ${rule.roleIds.map((id) => roleName(data, id)).join(", ")}`).join(" · ")
+        : t("permValueNoGrants");
+    }
+    default:
+      return String(value);
+  }
+}
+
+// The two tabs at the top of the page.
+function permissionTabs(guildId, current) {
+  return h(
+    "div",
+    { class: "segmented perm-tabs", role: "tablist", "aria-label": t("permTabs") },
+    ["simple", "advanced"].map((tab) =>
+      h(
+        "a",
+        {
+          class: "button segment",
+          role: "tab",
+          href: `#/g/${guildId}/access${tab === "simple" ? "" : `?tab=${tab}`}`,
+          "aria-selected": String(tab === current),
+          "aria-pressed": String(tab === current),
+        },
+        icon(tab === "simple" ? "sparkles" : "sliders", "icon small"),
+        t(`permTab_${tab}`),
+      ),
+    ),
+  );
+}
+
+const lockedTip = (data) =>
+  data.canManagePermissions ? null : h("p", { class: "tip" }, icon("lock"), h("span", {}, t("permOwnerOnly")));
+
+// Which commands a role needs added under Integrations so Discord shows them.
+function nativeHint(data, preset, roles) {
+  const needsPermission = (name) => data.commands.some((command) => command.name === name && command.roleMode === "grant");
+  const moderation = data.commands.filter((command) => command.roleMode === "grant" && MODERATION_COMMANDS.includes(command.name)).map((command) => command.name);
+  const rows = [];
+  if (roles.moderator && preset !== "adminsOnly") {
+    rows.push([roles.moderator, moderation]);
+  }
+  if (roles.helper && preset === "twoTeams") {
+    rows.push([roles.helper, HELPER_COMMANDS.filter(needsPermission)]);
+  }
+  return card(
+    t("permNativeTitle"),
+    "eye",
+    "blue",
+    h("p", { class: "help" }, t("permNativeHelp")),
+    rows.length > 0
+      ? h(
+          "ul",
+          { class: "change-list" },
+          rows.map(([roleId, names]) =>
+            h("li", {}, h("strong", {}, roleName(data, roleId)), h("span", { class: "command-chips" }, names.map((name) => h("code", {}, `/${name}`)))),
+          ),
+        )
+      : null,
+  );
+}
+
+function showSimplePermissions(data) {
+  const guildId = data.guild.id;
+  const settings = data.settings;
+  const roles = roleOptions(data).filter((option) => !data.roles.find((role) => role.id === option.id)?.managed);
+  let preset = PRESETS.includes(settings.permissionPreset) ? settings.permissionPreset : RECOMMENDED_PRESET;
+  const chosen = { moderator: settings.modRoleId ?? "", helper: settings.permissionPreset === "twoTeams" ? (settings.staffRoleId ?? "") : "" };
+
+  const moderatorPicker = picker({ id: "permModerator", options: roles, value: chosen.moderator, emptyLabel: t("permPickRole") });
+  const helperPicker = picker({ id: "permHelper", options: roles, value: chosen.helper, emptyLabel: t("permPickRole") });
+  const moderatorField = field("permRole_moderator", "permRoleHelp_moderator", moderatorPicker);
+  const helperField = field("permRole_helper", "permRoleHelp_helper", helperPicker);
+  const review = h("div", { class: "perm-review", hidden: true });
+  const hint = h("div");
+  const previewButton = h("button", { class: "primary", type: "button" }, icon("eye", "icon small"), t("permPreview"));
+
+  const update = () => {
+    chosen.moderator = moderatorPicker.value;
+    chosen.helper = helperPicker.value;
+    moderatorField.hidden = !PRESET_ROLES[preset].includes("moderator");
+    helperField.hidden = !PRESET_ROLES[preset].includes("helper");
+    review.hidden = true;
+    hint.replaceChildren(nativeHint(data, preset, chosen));
+  };
+
+  const options = PRESETS.map((value) =>
+    h(
+      "label",
+      { class: "preset-option" },
+      h("input", { type: "radio", name: "preset", value, checked: value === preset }),
+      h(
+        "span",
+        { class: "preset-text" },
+        h("strong", {}, t(`permPreset_${value}`), value === RECOMMENDED_PRESET ? h("span", { class: "badge badge-green" }, t("permRecommended")) : null),
+        h("span", { class: "help" }, t(`permPresetHelp_${value}`)),
+        h("ul", { class: "preset-points" }, [1, 2, 3].map((index) => h("li", {}, t(`permPresetPoint_${value}_${index}`)))),
+      ),
+    ),
+  );
+  const optionGrid = h("div", { class: "preset-grid", role: "radiogroup", "aria-label": t("permChoose") }, options);
+  optionGrid.addEventListener("change", (event) => {
+    if (event.target.name === "preset") {
+      preset = event.target.value;
+      update();
+    }
+  });
+  moderatorPicker.addEventListener("change", update);
+  helperPicker.addEventListener("change", update);
+
+  const body = () => ({ preset, roles: Object.fromEntries(PRESET_ROLES[preset].map((kind) => [kind, chosen[kind] || null])) });
+
+  function showPlan(plan) {
+    if (plan.changes.length === 0) {
+      review.replaceChildren(h("p", { class: "muted" }, t("permNothingToChange")));
+      review.hidden = false;
+      return;
+    }
+    const apply = h("button", { class: "primary", type: "button" }, icon("check", "icon small"), t("permApply"));
+    apply.addEventListener("click", async () => {
+      apply.disabled = true;
+      try {
+        await api(`/api/guilds/${guildId}/permissions/preset`, { method: "POST", body: { ...body(), dryRun: false } });
+        toast(t("permApplied"));
+        state.cache = null;
+        route();
+      } catch (error) {
+        failed(error);
+        apply.disabled = false;
+      }
+    });
+    review.replaceChildren(
+      h("h3", {}, t("permPreviewTitle")),
+      h(
+        "ul",
+        { class: "change-list" },
+        plan.changes.map((change) =>
+          h(
+            "li",
+            {},
+            h("strong", {}, t(`permSetting_${change.setting}`)),
+            h(
+              "span",
+              { class: "change-values" },
+              h("span", { class: "muted" }, describePermissionSetting(change.setting, change.before, data)),
+              h("span", { "aria-hidden": "true" }, " → "),
+              h("span", {}, describePermissionSetting(change.setting, change.after, data)),
+            ),
+          ),
+        ),
+      ),
+      h("div", { class: "toolbar" }, h("span", { class: "grow" }), apply),
+    );
+    review.hidden = false;
+  }
+
+  previewButton.addEventListener("click", async () => {
+    previewButton.disabled = true;
+    try {
+      showPlan(await api(`/api/guilds/${guildId}/permissions/preset`, { method: "POST", body: body() }));
+    } catch (error) {
+      failed(error);
+    } finally {
+      previewButton.disabled = !data.canManagePermissions;
+    }
+  });
+
+  const current = settings.permissionPreset;
+  const currentCard = card(
+    t("permCurrent"),
+    "key",
+    "purple",
+    h(
+      "div",
+      { class: "perm-current" },
+      h("span", { class: `badge ${current ? "badge-accent" : ""}` }, presetName(current)),
+      h("p", { class: "help" }, t(current ? (current === "custom" ? "permCurrentHelp_custom" : `permPresetHelp_${current}`) : "permCurrentHelp_none")),
+    ),
+  );
+  const chooseCard = card(
+    t("permChoose"),
+    "sparkles",
+    "green",
+    lockedTip(data),
+    h("p", { class: "help" }, t("permChooseHelp")),
+    optionGrid,
+    h("div", { class: "perm-roles" }, moderatorField, helperField),
+    h("div", { class: "toolbar" }, h("span", { class: "grow" }), previewButton),
+    review,
+  );
+  if (!data.canManagePermissions) {
+    chooseCard.querySelectorAll("input, select, button").forEach((control) => {
+      control.disabled = true;
+    });
+  }
+  update();
+  show(
+    guildLayout(
+      data,
+      "access",
+      pageHero("access", t("accessIntro"), data, permissionTabs(guildId, "simple")),
+      currentCard,
+      chooseCard,
+      hint,
+      rolesTable(data),
+    ),
+  );
+}
+
+// One command in the Advanced tab: a summary line, and its rule's controls
+// (made when it's first opened, since most are never opened).
+function commandRuleRow(command, rules, data, roleItems, channelItems) {
+  const rule = () => rules[command.name] ?? emptyRule();
+  const badges = h("span", { class: "badges" });
+  const drawBadges = () => {
+    const current = rule();
+    const permission = BigInt(command.permission);
+    badges.replaceChildren(
+      ...[
+        permission === 0n ? h("span", { class: "badge" }, t("permEveryone")) : h("span", { class: "badge badge-amber" }, t("permNeeds", { permission: permissionName(permission) })),
+        current.disabled ? h("span", { class: "badge badge-red" }, t("permRuleOffBadge")) : null,
+        current.roleIds.length > 0 ? h("span", { class: "badge badge-accent" }, t(command.roleMode === "restrict" ? "permRuleOnlyBadge" : "permRuleRolesBadge", { count: current.roleIds.length })) : null,
+        current.blockedRoleIds.length > 0 ? h("span", { class: "badge badge-pink" }, t("permRuleBlockedBadge", { count: current.blockedRoleIds.length })) : null,
+        current.channelIds.length > 0 ? h("span", { class: "badge badge-cyan" }, t("permRuleChannelsBadge", { count: current.channelIds.length })) : null,
+      ].filter(Boolean),
+    );
+  };
+  const body = h("div", { class: "command-rule-body" });
+  const details = h(
+    "details",
+    { class: "command-rule", "data-name": command.name },
+    h("summary", {}, h("code", { class: "command-name" }, `/${command.name}`), badges),
+    body,
+  );
+
+  const listOf = (name) => [...body.querySelectorAll(`input[name="${name}"]:checked`)].map((box) => box.value);
+  const read = () => {
+    const next = {
+      disabled: !body.querySelector('input[name="ruleOn"]').checked,
+      roleIds: command.roleMode === "none" ? [] : listOf(`ruleRoles-${command.name}`),
+      blockedRoleIds: listOf(`ruleBlocked-${command.name}`),
+      channelIds: listOf(`ruleChannels-${command.name}`),
+    };
+    rules[command.name] = next;
+    drawBadges();
+  };
+
+  function build() {
+    const current = rule();
+    const own = COMMANDS_WITH_OWN_ROLE[command.name];
+    const rolesPart =
+      command.roleMode === "none"
+        ? h("p", { class: "tip" }, icon("lock"), h("span", {}, t(own ? `permRuleNoRoles_${own}` : "permRuleNoRoles_admin")))
+        : h(
+            "div",
+            { class: "field" },
+            h("span", { class: "field-label" }, t(command.roleMode === "restrict" ? "permRuleRestrict" : "permRuleGrant")),
+            h("span", { class: "help" }, command.roleMode === "restrict" ? t("permRuleRestrictHelp") : t("permRuleGrantHelp", { permission: permissionName(command.permission) })),
+            checkList({ name: `ruleRoles-${command.name}`, items: roleItems(), checked: current.roleIds, filterKey: "filterRoles" }),
+          );
+    body.replaceChildren(
+      h(
+        "label",
+        { class: "switch-card" },
+        h("span", { class: "switch-text" }, h("strong", {}, t("permRuleOn")), h("span", { class: "help" }, t("permRuleOnHelp"))),
+        h("span", { class: "switch" }, h("input", { type: "checkbox", name: "ruleOn", role: "switch", checked: !current.disabled, "aria-label": t("permRuleOn") })),
+      ),
+      rolesPart,
+      h(
+        "div",
+        { class: "field" },
+        h("span", { class: "field-label" }, t("permRuleBlocked")),
+        h("span", { class: "help" }, t("permRuleBlockedHelp")),
+        checkList({ name: `ruleBlocked-${command.name}`, items: roleItems(), checked: current.blockedRoleIds, filterKey: "filterRoles" }),
+      ),
+      h(
+        "div",
+        { class: "field" },
+        h("span", { class: "field-label" }, t("permRuleChannels")),
+        h("span", { class: "help" }, t("permRuleChannelsHelp")),
+        checkList({ name: `ruleChannels-${command.name}`, items: channelItems, checked: current.channelIds, filterKey: "filterChannels" }),
+      ),
+    );
+    if (!data.canManagePermissions) {
+      body.querySelectorAll("input").forEach((control) => {
+        if (control.type !== "search") {
+          control.disabled = true;
+        }
+      });
+    }
+  }
+
+  details.addEventListener("toggle", () => {
+    if (details.open && body.childElementCount === 0) {
+      build();
+    }
+  });
+  // Runs before the form's own change handler, so the save bar sees the new rule.
+  body.addEventListener("change", (event) => {
+    if (event.target.type !== "search") {
+      read();
+    }
+  });
+  drawBadges();
+  return details;
+}
+
+function showAdvancedPermissions(data) {
+  const guildId = data.guild.id;
+  const settings = data.settings;
+  const roles = roleOptions(data);
+  const rolePicker = (key) => picker({ id: key, options: roles, value: settings[key], emptyLabel: t("notSet") });
+  // Made fresh for each list, since a dot element can only be in one place.
+  const roleItems = () => data.roles.filter((role) => !role.managed).map((role) => roleItem(role, { mention: false, dot: true }));
+  const channelItems = data.channels
+    .filter((channel) => [CHANNEL.TEXT, CHANNEL.ANNOUNCEMENT, CHANNEL.FORUM, CHANNEL.VOICE, CHANNEL.CATEGORY].includes(channel.type))
+    .map((channel) => channelItem(channel, data.channels));
+
+  // The rules being edited, by command name.
+  const rules = Object.fromEntries(
+    Object.entries(settings.commandRules ?? {}).map(([name, rule]) => [name, { ...emptyRule(), ...rule }]),
+  );
+  const rows = data.commands.map((command) => commandRuleRow(command, rules, data, roleItems, channelItems));
+  const empty = h("p", { class: "muted empty", hidden: true }, t("nothingMatches"));
+  const filter = h("input", { type: "search", class: "grow", placeholder: t("filterCommands"), "aria-label": t("filterCommands") });
+  const onlyRules = h("input", { type: "checkbox" });
+  const filterRows = () => {
+    const text = filter.value.trim().toLowerCase().replace(/^\//, "");
+    let shown = 0;
+    rows.forEach((row) => {
+      row.hidden = (text !== "" && !row.dataset.name.includes(text)) || (onlyRules.checked && !rules[row.dataset.name]);
+      shown += row.hidden ? 0 : 1;
+    });
+    empty.hidden = shown > 0;
+  };
+  filter.addEventListener("input", filterRows);
+  onlyRules.addEventListener("change", (event) => {
+    event.stopPropagation();
+    filterRows();
+  });
+
+  const postable = postableChannels(data);
+  const routes = settings.logRoutes ?? {};
+  const routeGroups = LOG_ROUTE_GROUPS.map(({ group, routes: names }) =>
+    h(
+      "div",
+      { class: "route-group" },
+      h("h3", {}, t(`permLogGroup_${group}`)),
+      h(
+        "div",
+        { class: "route-grid" },
+        names.map((route) =>
+          field(
+            LOG_EVENTS.includes(route) ? `logEvent_${route}` : `logRoute_${route}`,
+            null,
+            picker({ id: `route-${route}`, options: postable, value: routes[route], emptyLabel: t(`permLogDefault_${group}`) }),
+          ),
+        ),
+      ),
+    ),
+  );
+
+  const commandsCard = card(
+    t("permCommands"),
+    "zap",
+    "amber",
+    lockedTip(data),
+    h("p", { class: "help" }, t("permCommandsHelp")),
+    h("p", { class: "tip" }, icon("alert"), h("span", {}, t("permCommandsNative"))),
+    h("div", { class: "toolbar" }, filter, h("label", { class: "switch" }, onlyRules, h("span", {}, t("permOnlyWithRules")))),
+    h("div", { class: "command-rules" }, rows, empty),
+  );
+  settingsPage({
+    data,
+    pageId: "access",
+    intro: t("accessIntro"),
+    heroExtra: () => permissionTabs(guildId, "advanced"),
+    cards: [
+      card(
+        t("permRolesTitle"),
+        "shield",
+        "red",
+        lockedTip(data),
+        field("modRole", "modRoleHelp", rolePicker("modRoleId")),
+        field("staffRole", "staffRoleHelp", rolePicker("staffRoleId")),
+        h("div", { class: "field" }, h("span", { class: "field-label" }, t("dashboardAccess")), h("span", { class: "help" }, t("dashboardAccessHelp")), checkList({ name: "dashboardRole", items: roleItems(), checked: settings.dashboardRoleIds ?? [], filterKey: "filterRoles" })),
+      ),
+      commandsCard,
+      card(t("permLogRoutes"), "list", "blue", h("p", { class: "help" }, t("permLogRoutesHelp")), routeGroups),
+    ],
+    fields: {
+      modRoleId: selectValue("modRoleId"),
+      staffRoleId: selectValue("staffRoleId"),
+      dashboardRoleIds: checkedList("dashboardRole"),
+      commandRules: () => cleanRules(rules),
+      logRoutes: (form) => {
+        const picked = LOG_ROUTE_GROUPS.flatMap((entry) => entry.routes)
+          .map((route) => [route, form.querySelector(`#route-${route}`).value])
+          .filter(([, id]) => id);
+        return picked.length > 0 ? Object.fromEntries(picked) : null;
+      },
+    },
+  });
+}
+
 async function showAccess(guildId) {
   const data = await loadManagedGuild(guildId);
   if (!data) {
     return;
   }
-  const dashboardRoles = data.roles
-    .filter((role) => !role.managed)
-    .map((role) => roleItem(role, { mention: false, dot: true }));
-  settingsPage({
-    data,
-    pageId: "access",
-    intro: t("accessIntro"),
-    cards: [
-      card(
-        t("dashboardAccess"),
-        "key",
-        "purple",
-        h("p", { class: "help" }, t("dashboardAccessHelp")),
-        checkList({ name: "dashboardRole", items: dashboardRoles, checked: data.settings.dashboardRoleIds ?? [], filterKey: "filterRoles" }),
-      ),
-    ],
-    fields: { dashboardRoleIds: checkedList("dashboardRole") },
-    after: rolesTable(data),
-  });
+  const query = new URLSearchParams(location.hash.split("?")[1] ?? "");
+  if (query.get("tab") === "advanced") {
+    showAdvancedPermissions(data);
+  } else {
+    showSimplePermissions(data);
+  }
 }
 
 // --- Overview ----------------------------------------------------------------

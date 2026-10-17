@@ -16,11 +16,14 @@
 //   GET  /api/guilds/:id/levels           the XP leaderboard (?page=&period=all|week|month)
 //   GET  /api/guilds/:id/tickets          support tickets (?status=open|closed|all&user=&before=)
 //   GET  /api/guilds/:id/tickets/:number  one ticket and its transcript (?download=1 for a .txt file)
+//   POST /api/guilds/:id/permissions/preset  preview or apply a premade permission setup
 //
 // Two levels of access to a server the bot is in:
 //   - "manage": Manage Server, Administrator or the owner. Everything.
 //   - "cases": anyone with one of the server's dashboard roles (a setting). The
 //     overview, the cases, member history and tickets, but not the settings.
+// The bot's permission settings (command rules, premade setups) can only be
+// changed by the server owner or whoever added the bot.
 // That is checked on every request: permissions against their Discord server
 // list (re-read at most every few minutes), roles against the bot's view of
 // the member (re-read at most every 30 seconds).
@@ -64,6 +67,10 @@ import { ActivityStore } from "./activityStore.js";
 import { canManage, DiscordApiError } from "./discordApi.js";
 import { SESSION_DAYS, SessionStore } from "./sessions.js";
 import { checkSettingChanges, describeValue, InvalidSetting, SETTING_RULES } from "./settingsRules.js";
+import { LogRoute, routedChannelId } from "../logs/logRoutes.js";
+import { botCommandCatalog } from "../permissions/catalog.js";
+import { normalizeCommandRules } from "../permissions/commandRules.js";
+import { CUSTOM, InvalidPreset, planPreset } from "../permissions/presets.js";
 
 const PUBLIC_FOLDER = fileURLToPath(new URL("./public/", import.meta.url));
 const SESSION_COOKIE = "rv_session";
@@ -79,6 +86,8 @@ const TICKET_STATUSES = ["open", "closed", "all"];
 const MAX_LEADERBOARD_PAGE = 400;
 const MAX_SEARCH_LENGTH = 100;
 const STATS_DAYS = 30;
+// How long a failed look-up of who added the bot is trusted.
+const INVITER_RETRY_MS = 10 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DISCORD_ID = /^\d{17,20}$/;
 const CASE_ACTIONS = Object.values(CaseAction);
@@ -389,6 +398,31 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     return { session, guildId, access };
   }
 
+  // Who added the bot: saved the first time the audit log shows it, since the
+  // audit log only keeps 45 days. Failed look-ups are retried after a while.
+  const inviterLookups = new Map();
+  async function botInviterId(guildId) {
+    const saved = guildSettings.get(guildId, Setting.BOT_INVITER);
+    if (saved || typeof discord.botInviter !== "function") {
+      return saved ?? null;
+    }
+    const failedAt = inviterLookups.get(guildId);
+    if (failedAt && Date.now() - failedAt < INVITER_RETRY_MS) {
+      return null;
+    }
+    const inviterId = await discord.botInviter(guildId);
+    if (!inviterId) {
+      inviterLookups.set(guildId, Date.now());
+      return null;
+    }
+    inviterLookups.delete(guildId);
+    await guildSettings.set(guildId, Setting.BOT_INVITER, inviterId);
+    return inviterId;
+  }
+
+  // The server owner and whoever added the bot may change who can do what.
+  const canManagePermissions = async (guild, userId) => guild.owner_id === userId || (await botInviterId(guild.id)) === userId;
+
   // A server's settings for the browser. Automod and leveling always come with
   // every default filled in, so the page can show them as they are.
   const settingsJson = (guildId) => ({
@@ -399,6 +433,48 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     [Setting.APPEALS]: normalizeAppeals(guildSettings.get(guildId, Setting.APPEALS)),
     [Setting.MEDIA_ONLY]: normalizeMediaOnly(guildSettings.get(guildId, Setting.MEDIA_ONLY)),
   });
+
+  // Settings saved in a fuller form than the dashboard sends, made comparable.
+  const rulesOrNull = (saved) => {
+    const rules = normalizeCommandRules(saved);
+    return Object.keys(rules).length > 0 ? rules : null;
+  };
+  const NORMALIZE = {
+    [Setting.AUTOMOD]: normalizeAutomod,
+    [Setting.LEVELING]: normalizeLeveling,
+    [Setting.ANTI_NUKE]: normalizeAntiNuke,
+    [Setting.APPEALS]: normalizeAppeals,
+    [Setting.MEDIA_ONLY]: normalizeMediaOnly,
+    [Setting.COMMAND_RULES]: rulesOrNull,
+  };
+  const savedValue = (guildId, setting) => {
+    const saved = guildSettings.get(guildId, setting);
+    return NORMALIZE[setting] ? NORMALIZE[setting](saved) : saved;
+  };
+  const sameValue = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+
+  // Saves `changes` ({ setting: value | null }, already checked) and returns
+  // the log lines for those that changed.
+  async function saveSettings(guildId, guild, changes) {
+    const lines = [];
+    for (const [setting, value] of Object.entries(changes)) {
+      // Unsaved automod, leveling or anti-nuke means the defaults, which is what the page was shown.
+      const before = savedValue(guildId, setting);
+      if (sameValue(before, value)) {
+        continue;
+      }
+      if (value === null) {
+        await guildSettings.clear(guildId, setting);
+      } else {
+        await guildSettings.set(guildId, setting, value);
+      }
+      lines.push(`**${SETTING_RULES[setting].label}:** ${describeValue(setting, before)} → ${describeValue(setting, value)}`);
+      if (setting === Setting.TICKET_CATEGORIES && !(await redrawTicketPanel(guildId, guild))) {
+        lines.push("The ticket panel couldn't be updated; post it again with `/tickets panel`.");
+      }
+    }
+    return lines;
+  }
 
   // Gives the ticket panel's message the current category buttons. Panels
   // posted before titles were saved keep their text and only get new buttons.
@@ -444,7 +520,7 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     } catch (error) {
       logger.warn("Couldn't save a dashboard change", { guildId, error });
     }
-    const channelId = guildSettings.get(guildId, Setting.LOGS_CHANNEL);
+    const channelId = routedChannelId(guildSettings, guildId, LogRoute.DASHBOARD) ?? guildSettings.get(guildId, Setting.LOGS_CHANNEL);
     if (!channelId) {
       return;
     }
@@ -512,6 +588,11 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
       access: access.access,
       // Anti-nuke can only be changed by the owner.
       isOwner: guild.owner_id === access.session.userId,
+      // Command rules and premade setups: the owner or whoever added the bot.
+      canManagePermissions: manage ? await canManagePermissions(guild, access.session.userId) : false,
+      botInviterId: manage ? await botInviterId(guildId) : null,
+      // Every command, for the command permissions table.
+      commands: manage ? botCommandCatalog() : [],
       // Names for the user IDs the settings mention (anti-nuke's trusted people).
       people: manage ? await peopleNames(guildId, normalizeAntiNuke(guildSettings.get(guildId, Setting.ANTI_NUKE)).trustedUserIds) : {},
       // People with a dashboard role only see the cases, not how the server is set up.
@@ -575,42 +656,29 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
       throw error;
     }
 
-    const NORMALIZE = {
-      [Setting.AUTOMOD]: normalizeAutomod,
-      [Setting.LEVELING]: normalizeLeveling,
-      [Setting.ANTI_NUKE]: normalizeAntiNuke,
-      [Setting.APPEALS]: normalizeAppeals,
-      [Setting.MEDIA_ONLY]: normalizeMediaOnly,
-    };
-    const ownerOnly = Object.keys(changes).filter((setting) => {
-      if (!SETTING_RULES[setting].ownerOnly) {
-        return false;
-      }
-      const before = NORMALIZE[setting] ? NORMALIZE[setting](guildSettings.get(guildId, setting)) : guildSettings.get(guildId, setting);
-      return JSON.stringify(before ?? null) !== JSON.stringify(changes[setting]);
-    });
+    const changed = (setting) => !sameValue(savedValue(guildId, setting), changes[setting]);
+    const ownerOnly = Object.keys(changes).filter((setting) => SETTING_RULES[setting].ownerOnly && changed(setting));
     if (ownerOnly.length > 0 && guild.owner_id !== session.userId) {
       return reply.code(403).send({ error: "owner-only", setting: ownerOnly[0], message: "Only the server owner can change this." });
     }
-
-    const lines = [];
-    for (const [setting, value] of Object.entries(changes)) {
-      const saved = guildSettings.get(guildId, setting);
-      // Unsaved automod, leveling or anti-nuke means the defaults, which is what the page was shown.
-      const before = NORMALIZE[setting] ? NORMALIZE[setting](saved) : saved;
-      if (JSON.stringify(before ?? null) === JSON.stringify(value)) {
-        continue;
-      }
-      if (value === null) {
-        await guildSettings.clear(guildId, setting);
-      } else {
-        await guildSettings.set(guildId, setting, value);
-      }
-      lines.push(`**${SETTING_RULES[setting].label}:** ${describeValue(setting, before)} → ${describeValue(setting, value)}`);
-      if (setting === Setting.TICKET_CATEGORIES && !(await redrawTicketPanel(guildId, guild))) {
-        lines.push("The ticket panel couldn't be updated; post it again with `/tickets panel`.");
-      }
+    const permissionsOnly = Object.keys(changes).filter((setting) => SETTING_RULES[setting].permissionsOnly && changed(setting));
+    if (permissionsOnly.length > 0 && !(await canManagePermissions(guild, session.userId))) {
+      return reply.code(403).send({
+        error: "permissions-only",
+        setting: permissionsOnly[0],
+        message: "Only the server owner or whoever added the bot can change this.",
+      });
     }
+    // Hand-made command rules no longer match the premade setup that was applied.
+    if (
+      permissionsOnly.includes(Setting.COMMAND_RULES) &&
+      !(Setting.PERMISSION_PRESET in changes) &&
+      guildSettings.get(guildId, Setting.PERMISSION_PRESET)
+    ) {
+      changes[Setting.PERMISSION_PRESET] = CUSTOM;
+    }
+
+    const lines = await saveSettings(guildId, guild, changes);
     if (lines.length > 0) {
       logger.info("Dashboard settings change", { guildId, userId: session.userId, settings: Object.keys(changes) });
       await logAction(guildId, session, "**Settings changed**", lines);
@@ -1679,7 +1747,14 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     const [guild, channels] = await Promise.all([discord.guild(guildId), discord.channels(guildId)]);
     let plan;
     try {
-      plan = planRestore(request.body?.backup, { guildId, channels, roles: guild.roles, isOwner: guild.owner_id === session.userId, current: guildSettings.all(guildId) });
+      plan = planRestore(request.body?.backup, {
+        guildId,
+        channels,
+        roles: guild.roles,
+        isOwner: guild.owner_id === session.userId,
+        canManagePermissions: await canManagePermissions(guild, session.userId),
+        current: guildSettings.all(guildId),
+      });
     } catch (error) {
       if (error instanceof InvalidBackup) {
         return reply.code(400).send({ error: "invalid-backup", message: error.message });
@@ -1711,6 +1786,46 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
       summary.changes.map((change) => change.label),
     );
     return { dryRun: false, ...summary };
+  });
+
+  // --- Permissions ----------------------------------------------------------
+
+  // { preset, roles: { moderator, helper }, dryRun }: what a premade setup
+  // would change ({ changes: [{ setting, label, before, after }] }), or applies it.
+  app.post("/api/guilds/:id/permissions/preset", { config: { rateLimit: { max: 20, timeWindow: "1 minute" } } }, async (request, reply) => {
+    const access = await requireGuild(request, reply, { manage: true });
+    if (!access) {
+      return reply;
+    }
+    const { guildId, session } = access;
+    const [guild, channels] = await Promise.all([discord.guild(guildId), discord.channels(guildId)]);
+    if (!(await canManagePermissions(guild, session.userId))) {
+      return reply.code(403).send({ error: "permissions-only", message: "Only the server owner or whoever added the bot can change this." });
+    }
+    const roles = request.body?.roles && typeof request.body.roles === "object" ? request.body.roles : {};
+    const isRole = (id) => typeof id === "string" && id !== guildId && guild.roles.some((role) => role.id === id && !role.managed);
+    let changes;
+    try {
+      const plan = planPreset(request.body?.preset, { roles, isRole, current: guildSettings.all(guildId) });
+      changes = checkSettingChanges(plan, { guildId, channels, roles: guild.roles });
+    } catch (error) {
+      if (error instanceof InvalidPreset || error instanceof InvalidSetting) {
+        return reply.code(400).send({ error: "invalid-preset", message: error.message });
+      }
+      throw error;
+    }
+    const summary = Object.entries(changes)
+      .filter(([setting, value]) => !sameValue(savedValue(guildId, setting), value))
+      .map(([setting, value]) => ({ setting, label: SETTING_RULES[setting].label, before: savedValue(guildId, setting) ?? null, after: value }));
+    if (request.body?.dryRun !== false) {
+      return { dryRun: true, changes: summary };
+    }
+    const lines = await saveSettings(guildId, guild, changes);
+    if (lines.length > 0) {
+      logger.info("Dashboard permission setup applied", { guildId, userId: session.userId, preset: request.body.preset });
+      await logAction(guildId, session, "**Permission setup applied**", lines);
+    }
+    return { dryRun: false, changes: summary, settings: settingsJson(guildId) };
   });
 
   // --- Activity -------------------------------------------------------------

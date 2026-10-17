@@ -5,6 +5,7 @@
 import { EmbedBuilder, escapeMarkdown, time, TimestampStyles } from "discord.js";
 import { translate } from "../i18n/i18n.js";
 import { Setting } from "../settings/guildSettings.js";
+import { LogRoute } from "../logs/logRoutes.js";
 import { formatDuration } from "../utils/duration.js";
 import { CaseAction } from "./caseStore.js";
 
@@ -85,7 +86,10 @@ export function createModLog({ poster, store }) {
   return {
     async postCase(guild, moderationCase) {
       // On its own message, so refreshCase() can replace its embed.
-      const message = await poster.post(guild, MOD_LOG_SETTINGS, () => ({ embed: buildCaseEmbed(moderationCase) }), { alone: true });
+      const message = await poster.post(guild, MOD_LOG_SETTINGS, () => ({ embed: buildCaseEmbed(moderationCase) }), {
+        alone: true,
+        route: LogRoute.CASES,
+      });
       if (message?.id && message.channelId) {
         store.setLogMessage(moderationCase.guildId, moderationCase.number, message.channelId, message.id);
       }
@@ -100,8 +104,9 @@ export function createModLog({ poster, store }) {
       return poster.edit(guild, moderationCase.logChannelId, moderationCase.logMessageId, buildCaseEmbed(moderationCase));
     },
 
-    // Posts something that isn't a case (a purge) in the same channel.
-    post: (guild, build) => poster.post(guild, MOD_LOG_SETTINGS, build),
+    // Posts something that isn't a case (a purge) in the same channel, or in
+    // the channel of `route` (see logs/logRoutes.js) when it has one.
+    post: (guild, build, { route = LogRoute.MOD_ACTIONS } = {}) => poster.post(guild, MOD_LOG_SETTINGS, build, { route }),
   };
 }
 

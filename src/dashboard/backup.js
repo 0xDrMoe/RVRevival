@@ -11,8 +11,8 @@ import { checkSettingChanges, InvalidSetting, SETTING_RULES } from "./settingsRu
 export const BACKUP_FORMAT = "rvrevival-settings";
 export const BACKUP_VERSION = 1;
 
-// Running state, not configuration: never backed up.
-const NOT_BACKED_UP = new Set([Setting.LOCKDOWN]);
+// Running state, or facts about one server (who added the bot): never backed up.
+const NOT_BACKED_UP = new Set([Setting.LOCKDOWN, Setting.BOT_INVITER]);
 // Settings the dashboard has no form for. They point at messages and
 // channels of the server they were made on, so they're only restored there
 // (stats counters get new channels elsewhere).
@@ -53,8 +53,9 @@ function normalized(setting, value, server) {
 }
 
 // What restoring `backup` would do: { apply: { setting: value | null }, skipped: [{ setting, reason, message }], unchanged }.
-// `server` is { guildId, channels, roles, isOwner, current } (current: the saved settings now).
-export function planRestore(backup, { guildId, channels, roles, isOwner, current }) {
+// `server` is { guildId, channels, roles, isOwner, canManagePermissions, current }
+// (current: the saved settings now; canManagePermissions: the owner or whoever added the bot).
+export function planRestore(backup, { guildId, channels, roles, isOwner, canManagePermissions = isOwner, current }) {
   if (!backup || typeof backup !== "object" || backup.format !== BACKUP_FORMAT) {
     throw new InvalidBackup("That isn't a settings backup from this bot.");
   }
@@ -77,6 +78,10 @@ export function planRestore(backup, { guildId, channels, roles, isOwner, current
     if (SETTING_RULES[setting]) {
       if (SETTING_RULES[setting].ownerOnly && !isOwner) {
         skipped.push({ setting, reason: "owner-only" });
+        continue;
+      }
+      if (SETTING_RULES[setting].permissionsOnly && !canManagePermissions) {
+        skipped.push({ setting, reason: "permissions-only" });
         continue;
       }
       try {
