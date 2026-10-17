@@ -76,6 +76,8 @@ Showing the text needs the **Message Content** intent (see [Setup](#setup), step
 
 Autocomplete suggestions aren't logged. Log entries are always in English, since only staff read them. Mentions in log entries never ping anyone, and typed text is shown as code, so it can't add formatting. The bot needs **View Channel**, **Send Messages**, **Embed Links** and **Attach Files** in the logs channel; without Attach Files, entries are posted without the saved files. If the bot can't post there at all, commands keep working and the console log warns once until posting works again. Log entries contain what members wrote, so make the logs channel visible to staff only.
 
+**Webhook posting.** With **Manage Webhooks** in a log channel (logs, mod-log or server-log), the bot makes one webhook there, named and pictured like the bot, and posts entries through it. Webhook posts have their own rate limits, so a busy log doesn't slow down the bot's replies and other messages. Entries that come in while a post is still on its way are sent together, up to 10 per message, so a burst of deletions or joins takes a few messages instead of dozens. Moderation cases always get a message of their own, so `/case reason` can update them. If the bot doesn't have Manage Webhooks, or the webhook is deleted, the bot posts as itself (and makes a new webhook next time when it can); entries look the same either way.
+
 ### Moderation
 
 Dyno-style moderation. Every action gets a numbered case (per server, never reused), is posted in the mod-log channel, and the member is DMed when possible. Replies to the moderator are private; the mod log is the public record.
@@ -569,10 +571,10 @@ After that, updates are the usual `git pull && npm ci`, then `pm2 restart rv-bot
 2. **Invite it.** Replace `YOUR_CLIENT_ID` and open:
 
    ```
-   https://discord.com/oauth2/authorize?client_id=YOUR_CLIENT_ID&scope=bot+applications.commands&permissions=1460709485718
+   https://discord.com/oauth2/authorize?client_id=YOUR_CLIENT_ID&scope=bot+applications.commands&permissions=1461246356630
    ```
 
-   `permissions=1460709485718` is **Kick Members**, **Ban Members**, **Timeout Members**, **View Audit Log**, **Manage Roles**, **Manage Channels**, **Manage Nicknames**, **Manage Messages**, **Read Message History**, **View Channels**, **Send Messages**, **Send Messages in Threads**, **Create Private Threads**, **Manage Threads**, **Move Members**, **Connect**, **Embed Links** and **Attach Files**, which is what the current features need. If the bot was invited with fewer, either re-invite it with this link or give its role the missing permissions (for moderation: Kick Members, Ban Members, Timeout Members and View Audit Log server-wide, Read Message History for `/purge`, Create Private Threads and Manage Threads for tickets, Move Members and Connect for join-to-create voice). If a new feature needs more, update this number and re-invite the bot.
+   `permissions=1461246356630` is **Kick Members**, **Ban Members**, **Timeout Members**, **View Audit Log**, **Manage Roles**, **Manage Channels**, **Manage Nicknames**, **Manage Messages**, **Manage Webhooks**, **Read Message History**, **View Channels**, **Send Messages**, **Send Messages in Threads**, **Create Private Threads**, **Manage Threads**, **Move Members**, **Connect**, **Embed Links** and **Attach Files**, which is what the current features need. If the bot was invited with fewer, either re-invite it with this link or give its role the missing permissions (for moderation: Kick Members, Ban Members, Timeout Members and View Audit Log server-wide, Read Message History for `/purge`, Create Private Threads and Manage Threads for tickets, Move Members and Connect for join-to-create voice, Manage Webhooks for posting logs through webhooks). If a new feature needs more, update this number and re-invite the bot.
 
 3. **Fix the role hierarchy.** In *Server Settings > Roles*, drag the bot's role above any roles it manages (existing country roles; new ones are created below it automatically) and above every member it should be able to ban, kick or time out. Keep it below your admin roles so moderators can't use it on admins.
 
@@ -719,7 +721,7 @@ Replies use each user's Discord language when it's supported, otherwise English.
 | `/country-help` says it can't post | Give the bot **View Channel**, **Send Messages** and **Embed Links** in that channel. |
 | Messages in the `/country` channel aren't deleted | Give the bot **View Channel** and **Manage Messages** in that channel (the log warns once when it can't). |
 | `/country-staff` says no staff role is set | An admin runs `/settings staff-role`. |
-| Nothing shows up in the logs channel | Check `/settings show`, then give the bot **View Channel**, **Send Messages**, **Embed Links** and **Attach Files** there (the console log warns once when it can't post). |
+| Nothing shows up in the logs channel | Check `/settings show`, then give the bot **View Channel**, **Send Messages**, **Embed Links** and **Attach Files** there, plus **Manage Webhooks** to post through a webhook (the console log warns once when it can't post). |
 | Deleted messages are logged without their text | Turn on **Message Content Intent** in the Developer Portal (*Bot* tab), then restart the bot. |
 | A member needs a different country | Staff run `/country-staff set`. |
 | A moderation command says my role must be above theirs | Move the bot's role above the member's highest role in *Server Settings > Roles*. |

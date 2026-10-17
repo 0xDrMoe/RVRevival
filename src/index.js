@@ -80,6 +80,8 @@ const BASE_INTENTS = [
   GatewayIntentBits.GuildModeration,
   GatewayIntentBits.GuildMessageReactions,
   GatewayIntentBits.GuildVoiceStates,
+  // So the log poster notices when someone deletes or edits its webhooks.
+  GatewayIntentBits.GuildWebhooks,
 ];
 const PRIVILEGED_INTENT_SETS = [
   [GatewayIntentBits.GuildMembers, GatewayIntentBits.MessageContent],
@@ -405,6 +407,7 @@ async function start() {
     client.on(Events.ThreadDelete, safely("a deleted thread", (thread) => commands.get("tickets").threadDeleted(thread)));
     client.on(Events.VoiceStateUpdate, safely("join-to-create voice", (before, after) => tempVoice.voiceStateUpdate(before, after)));
 
+    client.on(Events.WebhooksUpdate, (channel) => poster.webhooksChanged(channel.id));
     client.on(Events.ChannelDelete, (channel) => {
       // A deleted channel no longer needs ignoring in the server log.
       if (channel.guildId && guildSettings.getList(channel.guildId, Setting.LOG_IGNORED_CHANNELS).includes(channel.id)) {

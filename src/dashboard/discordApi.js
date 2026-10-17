@@ -20,6 +20,8 @@ const CACHE_MS = 30_000;
 // Expired cache entries are cleared out once a cache holds this many.
 const CACHE_SWEEP_SIZE = 1000;
 const MEMBER_SEARCH_LIMIT = 10;
+// Discord's error for editing a message someone else (here, a webhook) posted.
+const CANNOT_EDIT_OTHERS_MESSAGE = 50005;
 
 const MANAGE_GUILD = 1n << 5n;
 const ADMINISTRATOR = 1n << 3n;
@@ -192,8 +194,26 @@ export function createDiscordApi({ config, fetch = globalThis.fetch, rest }) {
     // Posts a message as the bot. Mentions never ping.
     postMessage: (channelId, payload) =>
       bot.post(Routes.channelMessages(channelId), { body: { ...payload, allowed_mentions: { parse: [] } } }),
-    editMessage: (channelId, messageId, payload) =>
-      bot.patch(Routes.channelMessage(channelId, messageId), { body: { ...payload, allowed_mentions: { parse: [] } } }),
+    // Log entries are posted by the bot's webhook, and only that webhook can
+    // edit them (Discord answers 50005 to the bot), so those go through it.
+    async editMessage(channelId, messageId, payload) {
+      const body = { ...payload, allowed_mentions: { parse: [] } };
+      try {
+        return await bot.patch(Routes.channelMessage(channelId, messageId), { body });
+      } catch (error) {
+        if (error.code !== CANNOT_EDIT_OTHERS_MESSAGE) {
+          throw error;
+        }
+        const message = await bot.get(Routes.channelMessage(channelId, messageId));
+        const webhook = message.webhook_id && (await bot.get(Routes.webhook(message.webhook_id)));
+        if (!webhook?.token) {
+          throw error;
+        }
+        // A message in a thread is edited through its parent channel's webhook.
+        const query = webhook.channel_id === channelId ? undefined : new URLSearchParams({ thread_id: channelId });
+        return bot.patch(Routes.webhookMessage(webhook.id, webhook.token, messageId), { body, query, auth: false });
+      }
+    },
     deleteMessage: (channelId, messageId) => bot.delete(Routes.channelMessage(channelId, messageId)),
     // One message, or null if it's gone (or the bot can't see the channel).
     message: (channelId, messageId) => orNull(bot.get(Routes.channelMessage(channelId, messageId))),
