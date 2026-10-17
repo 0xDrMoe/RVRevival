@@ -13,6 +13,7 @@ import { translate } from "../i18n/i18n.js";
 import { Outcome } from "../roles/countryRoles.js";
 import { Setting } from "../settings/guildSettings.js";
 import { createLogChannelPoster } from "./logChannel.js";
+import { LogRoute } from "./logRoutes.js";
 
 // How a command ended. Commands return { status, key?, values?, note? } from
 // execute(): `key` and `values` name the reply the user got (logged in English),
@@ -279,20 +280,20 @@ export function createActionLog({
   fetchFile = fetch,
   poster = createLogChannelPoster({ guildSettings, logger }),
 }) {
-  const post = (guild, build) => poster.post(guild, [Setting.LOGS_CHANNEL], build);
+  const post = (guild, route, build) => poster.post(guild, [Setting.LOGS_CHANNEL], build, { route });
 
   return {
     logCommand: (interaction, outcome) =>
-      post(interaction.guild, () => ({ embed: buildCommandLogEmbed(interaction, outcome) })),
+      post(interaction.guild, LogRoute.COMMANDS, () => ({ embed: buildCommandLogEmbed(interaction, outcome) })),
 
     // Call before deleting a message: starts downloading its attachments while
     // their links still work. Skipped when the server has no logs channel.
     saveAttachments: async (message) =>
-      message.guild && guildSettings.get(message.guild.id, Setting.LOGS_CHANNEL) ? saveAttachments(message, { fetchFile }) : [],
+      poster.isEnabled(message.guild, [Setting.LOGS_CHANNEL], LogRoute.BOT_DELETIONS) ? saveAttachments(message, { fetchFile }) : [],
 
     // `saved` is what saveAttachments() returned, re-uploaded with the entry.
     logDeletedMessage: (message, outcome, saved = []) =>
-      post(message.guild, ({ canAttach }) => {
+      post(message.guild, LogRoute.BOT_DELETIONS, ({ canAttach }) => {
         const shown = canAttach
           ? saved
           : saved.map(({ id, file, reason }) => ({ id, reason: file ? "not saved: the bot needs Attach Files here" : reason }));

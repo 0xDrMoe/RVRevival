@@ -18,6 +18,10 @@ import { checkAppeals, InvalidAppeals } from "../appeals/config.js";
 import { checkCategories, describeCategories, InvalidCategories } from "../tickets/categories.js";
 import { checkJoinGate, InvalidJoinGate } from "../raid/raid.js";
 import { LogEvent } from "../logs/serverLog.js";
+import { checkLogRoutes, describeLogRoutes, InvalidLogRoutes } from "../logs/logRoutes.js";
+import { botCommandCatalog } from "../permissions/catalog.js";
+import { checkCommandRules, describeCommandRules, InvalidCommandRules } from "../permissions/commandRules.js";
+import { CUSTOM, PRESETS } from "../permissions/presets.js";
 import { Setting } from "../settings/guildSettings.js";
 
 export class InvalidSetting extends Error {
@@ -86,6 +90,10 @@ export const SETTING_RULES = Object.freeze({
   [Setting.AUTO_RESPONDERS]: { kind: "autoResponders", types: RESPONDER_CHANNELS, label: "Auto-responders" },
   [Setting.MEDIA_ONLY]: { kind: "mediaOnly", types: [ChannelType.GuildText, ChannelType.GuildAnnouncement], label: "Media-only channels" },
   [Setting.SETUP_SKIPPED]: { kind: "setupSteps", label: "Skipped setup steps" },
+  [Setting.LOG_ROUTES]: { kind: "logRoutes", types: POSTING_CHANNELS, label: "Log channels per kind" },
+  // Only the owner or whoever added the bot may change these (checked by the dashboard route).
+  [Setting.COMMAND_RULES]: { kind: "commandRules", types: IGNORABLE_CHANNELS, label: "Command permissions", permissionsOnly: true },
+  [Setting.PERMISSION_PRESET]: { kind: "preset", label: "Permission setup", permissionsOnly: true },
 });
 
 // Checks one value. Returns what to save: null clears the setting, and empty
@@ -313,6 +321,33 @@ function checkValue(setting, value, { guildId, channels, roles }) {
         throw error;
       }
     }
+    case "logRoutes":
+      try {
+        return checkLogRoutes(value, { isChannel: (id) => channelOk(id, rule.types) });
+      } catch (error) {
+        if (error instanceof InvalidLogRoutes) {
+          throw new InvalidSetting(setting, error.message);
+        }
+        throw error;
+      }
+    case "commandRules":
+      try {
+        return checkCommandRules(value, {
+          catalog: botCommandCatalog(),
+          isRole: (id) => roleOk(id) && !roles.find((role) => role.id === id).managed,
+          isChannel: (id) => channelOk(id, rule.types),
+        });
+      } catch (error) {
+        if (error instanceof InvalidCommandRules) {
+          throw new InvalidSetting(setting, error.message);
+        }
+        throw error;
+      }
+    case "preset":
+      if (![...PRESETS, CUSTOM].includes(value)) {
+        throw new InvalidSetting(setting, "Unknown permission setup.");
+      }
+      return value;
     case "automod":
       try {
         return checkAutomod(value, {
@@ -363,6 +398,10 @@ export function describeValue(setting, value) {
       return `<#${value.channelId}> · ${value.emoji} ${value.threshold}`;
     case "antiNuke":
       return describeAntiNuke(value);
+    case "logRoutes":
+      return describeLogRoutes(value);
+    case "commandRules":
+      return describeCommandRules(value);
     case "ticketCategories":
       return describeCategories(value);
     case "appeals":

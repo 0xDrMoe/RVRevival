@@ -4,10 +4,13 @@
 
 import { MessageFlags } from "discord.js";
 import { pickLanguage, translate } from "./i18n/i18n.js";
-import { noActionLog, Status } from "./logs/actionLog.js";
+import { noActionLog, result, Status } from "./logs/actionLog.js";
+import { commandVerdict, withGrant } from "./permissions/commandRules.js";
 import { isExpiredInteractionError } from "./utils/discordErrors.js";
 
-export function createInteractionHandler({ commands, logger, forcedLanguage, actionLog = noActionLog }) {
+// `guildSettings` holds each server's command rules (permissions/commandRules.js);
+// without it every command runs as Discord allows.
+export function createInteractionHandler({ commands, logger, forcedLanguage, actionLog = noActionLog, guildSettings }) {
   // Buttons, forms and menus by custom ID, collected from every command.
   const components = new Map(
     [...commands.values()].flatMap((command) => Object.entries(command.components ?? {})),
@@ -45,6 +48,20 @@ export function createInteractionHandler({ commands, logger, forcedLanguage, act
         note: "The bot doesn't know this command. Re-run `npm run register`.",
       });
       return;
+    }
+
+    const verdict = commandVerdict(interaction, command, guildSettings);
+    if (verdict.refusal) {
+      const language = pickLanguage(interaction.locale, forcedLanguage);
+      await interaction
+        .reply({ content: translate(language, verdict.refusal, verdict.values), flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] } })
+        .catch((error) => logger.warn("Couldn't tell someone a command is limited here", { error }));
+      await actionLog.logCommand(interaction, result(Status.REFUSED, verdict.refusal, verdict.values));
+      return;
+    }
+    if (verdict.grant) {
+      // A role allowed this command: the command's own checks see the permission it needs.
+      interaction.memberPermissions = withGrant(interaction.memberPermissions, verdict.grant);
     }
 
     let outcome;

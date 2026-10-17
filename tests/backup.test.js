@@ -54,6 +54,23 @@ describe("settings backup", () => {
     ]);
   });
 
+  it("restores command permissions only for the owner or whoever added the bot, and never who added it", () => {
+    const backup = backupOf({
+      [Setting.COMMAND_RULES]: { ban: { disabled: true } },
+      [Setting.PERMISSION_PRESET]: "oneTeam",
+      [Setting.BOT_INVITER]: "300000000000000001",
+    });
+    expect(backup.settings).not.toHaveProperty(Setting.BOT_INVITER);
+    const refused = planRestore(backup, server());
+    expect(refused.apply).toEqual({});
+    expect(refused.skipped.map((entry) => entry.reason)).toEqual(["permissions-only", "permissions-only"]);
+    const allowed = planRestore(backup, server({ canManagePermissions: true }));
+    expect(allowed.apply).toEqual({
+      [Setting.COMMAND_RULES]: { ban: { disabled: true, roleIds: [], blockedRoleIds: [], channelIds: [] } },
+      [Setting.PERMISSION_PRESET]: "oneTeam",
+    });
+  });
+
   it("counts settings that are already the same", () => {
     const plan = planRestore(backupOf({ [Setting.LOGS_CHANNEL]: TEXT_ID }), server({ current: { [Setting.LOGS_CHANNEL]: TEXT_ID } }));
     expect(plan).toEqual({ apply: {}, skipped: [], unchanged: 1 });

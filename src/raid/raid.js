@@ -9,6 +9,7 @@ import { ChannelType, PermissionFlagsBits } from "discord.js";
 import { buildActionLogEmbed, noModLog } from "../moderation/modLog.js";
 import { moderatorRoleId } from "../moderation/checks.js";
 import { Setting } from "../settings/guildSettings.js";
+import { LogRoute } from "../logs/logRoutes.js";
 
 export const GateAction = Object.freeze({ KICK: "kick", ALERT: "alert" });
 export const GATE_ACTIONS = Object.values(GateAction);
@@ -183,7 +184,7 @@ export function createRaidGuard({ guildSettings, moderation, modLog = noModLog, 
   async function alert(guild, summary, lines = []) {
     await modLog.post(guild, () => ({
       embed: buildActionLogEmbed({ moderator: guild.client?.user ?? { id: "0", tag: "Raid protection" }, summary, lines, color: 0xed4245 }),
-    }));
+    }), { route: LogRoute.PROTECTION });
   }
 
   async function checkJoinRate(member, gate) {

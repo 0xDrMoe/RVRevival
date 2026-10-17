@@ -60,6 +60,18 @@ describe("server log", () => {
     expect(embed.description).toContain("hello");
   });
 
+  it("posts an event in its own channel when it has one, even without a server-log channel", async () => {
+    const joinChannel = { isTextBased: () => true, permissionsFor: () => ({ has: () => true }), send: vi.fn(async () => ({})) };
+    guild.channels.cache.set(CHANNEL_ID, joinChannel);
+    await settings.clear(GUILD_ID, Setting.SERVER_LOG_CHANNEL);
+    await settings.set(GUILD_ID, Setting.LOG_ROUTES, { [LogEvent.MEMBER_JOIN]: CHANNEL_ID });
+    const member = { id: USER_ID, guild, user: { ...author, createdTimestamp: 0 } };
+    await serverLog.memberJoined(member);
+    await serverLog.memberLeft({ ...member, joinedTimestamp: 0 });
+    expect(joinChannel.send).toHaveBeenCalledTimes(1);
+    expect(logChannel.send).not.toHaveBeenCalled();
+  });
+
   it("skips bots, messages the bot deleted itself, and servers without a channel", async () => {
     await serverLog.messageDeleted(fakeMessage({ guild, author: { ...author, bot: true } }));
     botDeletions.add("600000000000000001");

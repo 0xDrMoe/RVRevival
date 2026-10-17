@@ -1099,5 +1099,9 @@
   "mediaOnlyList": "**قنوات الوسائط فقط:** {list}\nالروابط تُحسب وسائط.",
   "mediaOnlyListNoLinks": "**قنوات الوسائط فقط:** {list}\nالملفات المرفوعة فقط تُحسب.",
   "mediaOnlyNote": "{user} هذه القناة للصور والفيديوهات والملفات والروابط. علّق في سلسلة بدلًا من ذلك.",
-  "mediaOnlyNoteNoLinks": "{user} هذه القناة للصور والفيديوهات والملفات. علّق في سلسلة بدلًا من ذلك."
+  "mediaOnlyNoteNoLinks": "{user} هذه القناة للصور والفيديوهات والملفات. علّق في سلسلة بدلًا من ذلك.",
+  "commandRuleDisabled": "الأمر `/{command}` متوقف في هذا الخادم.",
+  "commandRuleBlocked": "أحد أدوارك غير مسموح له باستخدام `/{command}` هنا.",
+  "commandRuleChannel": "الأمر `/{command}` يعمل فقط في {channels}.",
+  "commandRuleRoles": "الأمر `/{command}` مخصص لأدوار معينة فقط في هذا الخادم."
 }

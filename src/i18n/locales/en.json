@@ -1099,5 +1099,9 @@
   "mediaOnlyList": "**Media-only channels:** {list}\nLinks count as media.",
   "mediaOnlyListNoLinks": "**Media-only channels:** {list}\nOnly uploads count as media.",
   "mediaOnlyNote": "{user} this channel is for pictures, videos, files and links. Comment in a thread instead.",
-  "mediaOnlyNoteNoLinks": "{user} this channel is for pictures, videos and files. Comment in a thread instead."
+  "mediaOnlyNoteNoLinks": "{user} this channel is for pictures, videos and files. Comment in a thread instead.",
+  "commandRuleDisabled": "`/{command}` is turned off in this server.",
+  "commandRuleBlocked": "One of your roles isn't allowed to use `/{command}` here.",
+  "commandRuleChannel": "`/{command}` only works in {channels}.",
+  "commandRuleRoles": "`/{command}` is only for certain roles in this server."
 }

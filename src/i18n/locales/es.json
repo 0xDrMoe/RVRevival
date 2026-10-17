@@ -1099,5 +1099,9 @@
   "mediaOnlyList": "**Canales solo multimedia:** {list}\nLos enlaces cuentan como multimedia.",
   "mediaOnlyListNoLinks": "**Canales solo multimedia:** {list}\nSolo cuentan los archivos subidos.",
   "mediaOnlyNote": "{user} este canal es para imágenes, videos, archivos y enlaces. Comenta en un hilo.",
-  "mediaOnlyNoteNoLinks": "{user} este canal es para imágenes, videos y archivos. Comenta en un hilo."
+  "mediaOnlyNoteNoLinks": "{user} este canal es para imágenes, videos y archivos. Comenta en un hilo.",
+  "commandRuleDisabled": "`/{command}` está desactivado en este servidor.",
+  "commandRuleBlocked": "Uno de tus roles no puede usar `/{command}` aquí.",
+  "commandRuleChannel": "`/{command}` solo funciona en {channels}.",
+  "commandRuleRoles": "`/{command}` es solo para ciertos roles en este servidor."
 }

@@ -1,8 +1,9 @@
-import { MessageFlags, RESTJSONErrorCodes } from "discord.js";
+import { Collection, MessageFlags, PermissionFlagsBits, PermissionsBitField, RESTJSONErrorCodes, SlashCommandBuilder } from "discord.js";
 import { describe, expect, it, vi } from "vitest";
 import { translate } from "../src/i18n/i18n.js";
 import { createInteractionHandler } from "../src/interactionHandler.js";
 import { Status } from "../src/logs/actionLog.js";
+import { GuildSettings, Setting } from "../src/settings/guildSettings.js";
 import { discordError, fakeLogger } from "./helpers/fakes.js";
 
 function fakeCommandInteraction(commandName, { deferred = false, locale = "en-US" } = {}) {
@@ -82,6 +83,40 @@ describe("interaction handler", () => {
       respond,
     });
     expect(respond).toHaveBeenCalledWith([]);
+  });
+
+  describe("command rules", () => {
+    const HELPER_ROLE = "700000000000000002";
+    const banData = new SlashCommandBuilder().setName("ban").setDescription("ban").setDefaultMemberPermissions(PermissionFlagsBits.BanMembers);
+
+    async function setup(rule) {
+      const guildSettings = new GuildSettings();
+      await guildSettings.set("900000000000000001", Setting.COMMAND_RULES, { ban: rule });
+      const execute = vi.fn(async (interaction) => interaction.memberPermissions.has(PermissionFlagsBits.BanMembers));
+      const commands = new Map([["ban", { name: "ban", data: banData, execute }]]);
+      const actionLog = { logCommand: vi.fn(async () => {}) };
+      const handler = createInteractionHandler({ commands, logger: fakeLogger(), actionLog, guildSettings });
+      const interaction = {
+        ...fakeCommandInteraction("ban"),
+        member: { roles: { cache: new Collection([[HELPER_ROLE, { id: HELPER_ROLE }]]) } },
+        memberPermissions: new PermissionsBitField(0n).freeze(),
+      };
+      return { handler, execute, actionLog, interaction };
+    }
+
+    it("refuses a turned-off command without running it, and logs the refusal", async () => {
+      const { handler, execute, actionLog, interaction } = await setup({ disabled: true });
+      await handler(interaction);
+      expect(execute).not.toHaveBeenCalled();
+      expect(interaction.reply).toHaveBeenCalledWith(expect.objectContaining({ content: translate("en", "commandRuleDisabled", { command: "ban" }), flags: MessageFlags.Ephemeral }));
+      expect(actionLog.logCommand).toHaveBeenCalledWith(interaction, expect.objectContaining({ status: Status.REFUSED, key: "commandRuleDisabled" }));
+    });
+
+    it("runs the command with the permission a role was given", async () => {
+      const { handler, execute, interaction } = await setup({ roleIds: [HELPER_ROLE] });
+      await handler(interaction);
+      await expect(execute.mock.results[0].value).resolves.toBe(true);
+    });
   });
 
   describe("logs channel", () => {

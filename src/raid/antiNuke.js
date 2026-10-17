@@ -13,6 +13,7 @@ import { AuditLogEvent, PermissionFlagsBits } from "discord.js";
 import { pickLanguage, translate } from "../i18n/i18n.js";
 import { buildActionLogEmbed, noModLog } from "../moderation/modLog.js";
 import { Setting } from "../settings/guildSettings.js";
+import { LogRoute } from "../logs/logRoutes.js";
 
 export const NukeAction = Object.freeze({
   CHANNEL_DELETE: "channelDelete",
@@ -220,7 +221,7 @@ export function createAntiNuke({ guildSettings, moderation, quarantine, modLog =
         lines,
         color: 0xed4245,
       }),
-    }));
+    }), { route: LogRoute.PROTECTION });
     await tellOwner(guild, (language) => ({
       server: guild.name,
       user: member?.user?.tag ?? member?.user?.username ?? userId,
