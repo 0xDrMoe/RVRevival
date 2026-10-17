@@ -849,6 +849,7 @@ describe("dashboard", () => {
     const refused = await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, { commandRules: rules });
     expect(refused.statusCode).toBe(403);
     expect(refused.json()).toMatchObject({ error: "permissions-only", setting: "commandRules" });
+    expect((await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, { nativePermissions: false })).statusCode).toBe(403);
     const preview = await write(cookies, "POST", `/api/guilds/${GUILD_ID}/permissions/preset`, { preset: "oneTeam", roles: { moderator: ROLE_ID } });
     expect(preview.statusCode).toBe(403);
 
@@ -865,6 +866,13 @@ describe("dashboard", () => {
       ban: { disabled: false, roleIds: [ROLE_ID], blockedRoleIds: [], channelIds: [] },
     });
     expect((await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, { commandRules: { nope: { disabled: true } } })).statusCode).toBe(400);
+
+    // Whether Discord permissions count: on is the default and saved as nothing.
+    expect((await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, { nativePermissions: "no" })).statusCode).toBe(400);
+    await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, { nativePermissions: false });
+    expect(guildSettings.get(GUILD_ID, Setting.NATIVE_PERMISSIONS)).toBe(false);
+    await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, { nativePermissions: true });
+    expect(guildSettings.get(GUILD_ID, Setting.NATIVE_PERMISSIONS)).toBeUndefined();
   });
 
   it("previews and applies a premade permission setup", async () => {

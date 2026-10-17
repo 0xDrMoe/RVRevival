@@ -930,5 +930,9 @@
   "logRoute_automod": "Automod deletions",
   "logRoute_protection": "Raid and anti-nuke alerts",
   "permManageNicknames": "Manage Nicknames",
-  "backupReason_permissions-only": "Only the server owner or the person who added the bot can restore this."
+  "backupReason_permissions-only": "Only the server owner or the person who added the bot can restore this.",
+  "permNative": "Discord permissions count",
+  "permNativeOffTip": "Discord permissions are off. Only Administrators, the mod role and the roles you give each command can use commands that need a permission, and Manage Server no longer skips the role and channel limits. Pick a mod role so your team isn't locked out.",
+  "permNativeOffSimple": "Discord permissions don't count in this server: members also need the mod role or a role given the command. Change it on the Advanced tab.",
+  "permNativeCountHelp": "On: members with the permission a command needs (like Ban Members for /ban) can use it, as Discord intends. Off: they also need the mod role or a role you give the command below. Administrators and the owner can always use everything."
 }

@@ -930,5 +930,9 @@
   "logRoute_automod": "Suppressions de l'automod",
   "logRoute_protection": "Alertes raid et anti-nuke",
   "permManageNicknames": "Gérer les pseudos",
-  "backupReason_permissions-only": "Seul le propriétaire du serveur ou la personne qui a ajouté le bot peut restaurer ceci."
+  "backupReason_permissions-only": "Seul le propriétaire du serveur ou la personne qui a ajouté le bot peut restaurer ceci.",
+  "permNative": "Compter les permissions Discord",
+  "permNativeOffTip": "Les permissions Discord sont désactivées. Seuls les administrateurs, le rôle de modération et les rôles donnés à chaque commande peuvent utiliser les commandes qui demandent une permission, et Gérer le serveur ne contourne plus les limites de rôles et de salons. Choisis un rôle de modération pour que ton équipe ne soit pas bloquée.",
+  "permNativeOffSimple": "Les permissions Discord ne comptent pas sur ce serveur : il faut aussi le rôle de modération ou un rôle qui a la commande. Change-le dans l'onglet Avancé.",
+  "permNativeCountHelp": "Activé : les membres qui ont la permission demandée par une commande (comme Bannir des membres pour /ban) peuvent l'utiliser, comme le prévoit Discord. Désactivé : il leur faut aussi le rôle de modération ou un rôle à qui tu donnes la commande ci-dessous. Les administrateurs et le propriétaire peuvent toujours tout utiliser."
 }

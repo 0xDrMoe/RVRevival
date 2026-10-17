@@ -96,6 +96,7 @@ export const SETTING_RULES = Object.freeze({
   // Only the owner or whoever added the bot may change these (checked by the dashboard route).
   [Setting.COMMAND_RULES]: { kind: "commandRules", types: IGNORABLE_CHANNELS, label: "Command permissions", permissionsOnly: true },
   [Setting.PERMISSION_PRESET]: { kind: "preset", label: "Permission setup", permissionsOnly: true },
+  [Setting.NATIVE_PERMISSIONS]: { kind: "nativePermissions", label: "Discord permissions count", permissionsOnly: true },
 });
 
 // Checks one value. Returns what to save: null clears the setting, and empty
@@ -345,6 +346,12 @@ function checkValue(setting, value, { guildId, channels, roles }) {
         }
         throw error;
       }
+    case "nativePermissions":
+      if (typeof value !== "boolean") {
+        throw new InvalidSetting(setting, "Send whether Discord permissions count as true or false.");
+      }
+      // On is the default, so it's saved as no value.
+      return value ? null : false;
     case "preset":
       if (![...PRESETS, CUSTOM].includes(value)) {
         throw new InvalidSetting(setting, "Unknown permission setup.");
@@ -386,6 +393,9 @@ export function checkSettingChanges(changes, server) {
 
 // "<@&123>", "<#456>", "<@&1>, <@&2>", "Edited messages, Members joining" or "none", for the log entry.
 export function describeValue(setting, value) {
+  if (SETTING_RULES[setting]?.kind === "nativePermissions") {
+    return value === false ? "off (the bot's roles only)" : "on";
+  }
   if (value === null || value === undefined || (Array.isArray(value) && value.length === 0)) {
     return "*none*";
   }

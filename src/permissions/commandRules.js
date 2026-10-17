@@ -13,11 +13,19 @@
 // Members with Manage Server ignore the roles and channels, so admins can't
 // lock themselves out; a disabled command is off for everyone.
 //
+// Discord permissions (the NATIVE_PERMISSIONS setting, on by default): when
+// off, a Discord permission alone no longer lets a member use the bot's
+// commands. A command that needs one (/ban needs Ban Members) then needs the
+// mod role or a role given the command here, and the command's own checks see
+// only what those roles give. Administrators (and the owner) are never
+// limited, and only they ignore the roles and channels.
+//
 // Discord hides a command from members without its permission. A role given a
 // command here must also be allowed under Server Settings > Integrations > the
 // bot, or its members won't see the command to use it.
 
 import { PermissionFlagsBits, PermissionsBitField } from "discord.js";
+import { moderatorRoleId } from "../moderation/checks.js";
 import { Setting } from "../settings/guildSettings.js";
 
 export const MAX_RULE_ROLES = 25;
@@ -174,9 +182,13 @@ function inChannels(channel, ids) {
   return [channel.id, channel.parentId, channel.parent?.parentId].some((id) => id && ids.includes(id));
 }
 
+// Whether Discord permissions let members use the bot's commands here (the default).
+export const nativePermissionsOn = (guildSettings, guildId) => guildSettings?.get(guildId, Setting.NATIVE_PERMISSIONS) !== false;
+
 // What the rules say about `interaction` using `command` (a slash command):
 //   { refusal: "<translation key>", values }   it must not run
-//   { grant: <permission bits> }               it runs as if the member had them
+//   { grant: <permission bits> }               it runs as if the member also had them
+//   { only: <permission bits> }                it runs as if the member had only these
 //   {}                                         it runs as usual
 export function commandVerdict(interaction, command, guildSettings) {
   const guildId = interaction.guildId;
@@ -184,34 +196,38 @@ export function commandVerdict(interaction, command, guildSettings) {
     return {};
   }
   const rule = normalizeCommandRules(guildSettings.get(guildId, Setting.COMMAND_RULES))[command.name];
-  if (!rule) {
-    return {};
-  }
-  if (rule.disabled) {
+  if (rule?.disabled) {
     return { refusal: "commandRuleDisabled", values: { command: command.name } };
   }
-  if (interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
+  const native = nativePermissionsOn(guildSettings, guildId);
+  // has() counts Administrator as every permission, and the owner has Administrator.
+  if (interaction.memberPermissions?.has(native ? PermissionFlagsBits.ManageGuild : PermissionFlagsBits.Administrator)) {
     return {};
   }
   const member = interaction.member;
-  if (hasAnyRole(member, rule.blockedRoleIds)) {
+  if (rule && hasAnyRole(member, rule.blockedRoleIds)) {
     return { refusal: "commandRuleBlocked", values: { command: command.name } };
   }
-  if (rule.channelIds.length > 0 && !inChannels(interaction.channel, rule.channelIds)) {
+  if (rule && rule.channelIds.length > 0 && !inChannels(interaction.channel, rule.channelIds)) {
     return {
       refusal: "commandRuleChannel",
       values: { command: command.name, channels: rule.channelIds.map((id) => `<#${id}>`).join(", ") },
     };
   }
   const mode = roleModeOf(command);
-  if (rule.roleIds.length === 0 || mode === RoleMode.NONE) {
-    return {};
+  const roleIds = mode === RoleMode.NONE ? [] : (rule?.roleIds ?? []);
+  const hasRole = hasAnyRole(member, roleIds);
+  if (mode === RoleMode.RESTRICT && roleIds.length > 0 && !hasRole) {
+    return { refusal: "commandRuleRoles", values: { command: command.name } };
   }
-  const hasRole = hasAnyRole(member, rule.roleIds);
-  if (mode === RoleMode.RESTRICT) {
-    return hasRole ? {} : { refusal: "commandRuleRoles", values: { command: command.name } };
+  const grant = mode === RoleMode.GRANT && hasRole ? commandPermission(command) : 0n;
+  if (native) {
+    return grant ? { grant } : {};
   }
-  return hasRole ? { grant: commandPermission(command) } : {};
+  if (commandPermission(command) !== 0n && !grant && !hasAnyRole(member, [moderatorRoleId(guildSettings, guildId)].filter(Boolean))) {
+    return { refusal: "commandRuleNative", values: { command: command.name } };
+  }
+  return { only: grant };
 }
 
 // The member's permissions plus `grant`, for the rest of the command to check.

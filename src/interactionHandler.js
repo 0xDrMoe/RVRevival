@@ -62,6 +62,9 @@ export function createInteractionHandler({ commands, logger, forcedLanguage, act
     if (verdict.grant) {
       // A role allowed this command: the command's own checks see the permission it needs.
       interaction.memberPermissions = withGrant(interaction.memberPermissions, verdict.grant);
+    } else if (verdict.only !== undefined) {
+      // Discord permissions don't count here: the command sees only what the bot's roles give.
+      interaction.memberPermissions = withGrant(0n, verdict.only);
     }
 
     let outcome;

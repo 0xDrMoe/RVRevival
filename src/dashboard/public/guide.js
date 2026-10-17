@@ -63,7 +63,7 @@ export const GUIDE = [
           ],
         },
         tips: [
-          "**Discord permissions count too.** Anyone with the matching permission (say **Ban Members** for `/ban`) can use that command without the mod role.",
+          "**Discord permissions count too**, unless the owner turns that off. Anyone with the matching permission (say **Ban Members** for `/ban`) can use that command without the mod role. With **Discord permissions count** off on the Permissions page, they also need the mod role or a role given the command; Administrators always can.",
           "**The Permissions page changes all of this.** On its **Advanced** tab a command can be given to more roles, blocked for some roles, kept to some channels, or turned off.",
           "The mod role falls back to the staff role until a separate mod role or a permission setup is chosen.",
           "`/case delete` and `/clearwarns` always need an admin, because they erase history.",
@@ -863,11 +863,12 @@ export const GUIDE = [
         steps: [
           "On **Simple**, pick a setup and its roles, press **Preview changes** to see exactly what will change, then **Apply this setup**.",
           "Add each staff role under *Server Settings → Integrations → the bot*, so Discord shows them their commands. The page lists which commands each role needs.",
-          "Fine-tune on **Advanced**: the mod role, staff role and dashboard roles; **Command permissions** for each command (on or off, also allowed roles, only these roles, blocked roles, only these channels); and **Log channels per kind**.",
+          "Fine-tune on **Advanced**: whether **Discord permissions count**; the mod role, staff role and dashboard roles; **Command permissions** for each command (on or off, also allowed roles, only these roles, blocked roles, only these channels); and **Log channels per kind**.",
         ],
         tips: [
           "People with a dashboard role see **Overview**, **Guide**, **Cases**, **Members** and **Tickets**, with full case access. Admins see every page; Anti-nuke stays owner-only. Removing someone's role takes their access away within 30 seconds.",
           "Members with Manage Server ignore role and channel limits, but a command that's off is off for them too. `/antinuke` can't be given to roles, and `/country-staff` follows the staff role.",
+          "**Discord permissions count** (on by default) lets anyone with a command's permission use it, as Discord intends. Turn it off to make the bot's roles the only way in: a command that needs a permission then needs the mod role or a role you gave it, the command sees only what those roles give, and only Administrators skip the role and channel limits. Administrators and the owner always keep access, so set a mod role first.",
           "Applying a setup keeps commands you turned off, blocked roles and channel limits. Changing things on Advanced afterwards marks the setup as *Custom*.",
           "A refused command is private and shows in the logs channel.",
           "The role table at the bottom shows every role's colour, strongest permissions and what the bot uses it for. Country roles are folded away: flip **Country roles** or type a name in the filter box.",
