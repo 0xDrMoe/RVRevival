@@ -536,7 +536,7 @@ Settings pages show a save bar when something changed, and ask before you leave 
 
 **Dashboard roles.** Members with one of the roles ticked under *Permissions* can open the server's Overview, Cases (view, edit reasons, delete, export) and Members without Manage Server. Only people with Manage Server can see or change settings. Roles are checked against Discord on every request (at most 30 seconds old), so removing someone's role takes their access away right away.
 
-**Appearance.** The account menu (top right) picks a theme (match the device, light or dark), one of 8 accent colors and comfortable or compact spacing. It's remembered per browser.
+**Appearance.** The account menu (top right) picks a style (Clean, or Rumble: a game-style look with chunky Lilita One headings, bold outlines and comic shadows), a theme (match the device, light or dark), one of 8 accent colors and comfortable or compact spacing. It's remembered per browser.
 
 Every change made on the dashboard is listed on the **Activity** page and posted in the server's logs channel with who made it, like commands are. The bot picks up dashboard changes within 5 seconds. The dashboard is in the same 7 languages as the bot (picked from the browser, or the account menu).
 
