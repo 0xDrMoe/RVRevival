@@ -425,11 +425,13 @@ function icon(name, className = "icon") {
 const iconChip = (name, tone, size = "") => h("span", { class: `chip-icon tone-${tone} ${size}`.trim(), "aria-hidden": "true" }, icon(name));
 
 // The title of a page: its icon, name and what it's for. `extra` goes on the right (a status, buttons).
-function hero(title, intro, tone, { iconName, extra } = {}) {
+// `lead` replaces the icon (the overview shows the server's own icon); `banner`
+// paints the header in one of the server gradients from bannerFor.
+function hero(title, intro, tone, { iconName, extra, lead, banner } = {}) {
   return h(
     "header",
-    { class: "hero" },
-    iconName ? iconChip(iconName, tone, "lg") : null,
+    { class: `hero tone-${tone}${banner ? ` hero-banner ${banner}` : ""}` },
+    lead ?? (iconName ? iconChip(iconName, tone, "lg") : null),
     h("div", { class: "hero-text" }, h("h1", {}, title), intro ? h("p", {}, intro) : null),
     extra ? h("div", { class: "hero-extra" }, extra) : null,
   );
@@ -3729,7 +3731,10 @@ async function showOverview(guildId) {
     guildLayout(
       data,
       "overview",
-      hero(t("overviewTitle", { name: guild.name }), t(canManageGuild(data) ? "overviewIntro" : "overviewIntroCases"), "blue", { iconName: "home" }),
+      hero(t("overviewTitle", { name: guild.name }), t(canManageGuild(data) ? "overviewIntro" : "overviewIntroCases"), "blue", {
+        lead: guildIcon(guild, "lg"),
+        banner: bannerFor(guild.id),
+      }),
       tiles,
       canManageGuild(data) ? featuresCard(data) : null,
       canManageGuild(data) ? setupCard(data) : null,
@@ -3771,7 +3776,7 @@ function featuresCard(data) {
         const on = page.on(data.settings);
         return h(
           "a",
-          { class: `feature${on ? " on" : ""}`, href: `#/g/${data.guild.id}/${page.id}` },
+          { class: `feature tone-${page.tone}${on ? " on" : ""}`, href: `#/g/${data.guild.id}/${page.id}` },
           iconChip(page.icon, page.tone, "sm"),
           h("span", { class: "grow" }, t(`page_${page.id}`)),
           h("span", { class: `status ${on ? "on" : "off"}` }, t(on ? "featureOn" : "featureOff")),
