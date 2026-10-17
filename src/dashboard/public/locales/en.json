@@ -1021,6 +1021,8 @@
   "landingFaqPermissions_q": "What permissions does the bot need?",
   "landingFaqPermissions_a": "The ones it asks for when you add it. It can only give or take roles below its own, so drag its role above the roles it should manage.",
   "landingFooterNav": "Page sections",
+  "landingTerms": "Terms",
+  "landingPrivacy": "Privacy",
   "landingNavFeatures": "Features",
   "landingNavSteps": "How it works",
   "landingNavDashboard": "Dashboard",

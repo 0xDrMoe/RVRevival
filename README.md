@@ -542,6 +542,8 @@ Every change made on the dashboard is listed on the **Activity** page and posted
 
 **How it works.** It's a second process (`npm run dashboard`, pm2 app `rv-dashboard`) that shares `data/bot.db` with the bot. It only listens on `127.0.0.1:3080`; nginx (or Caddy) puts it on the internet with HTTPS. Logging in uses Discord OAuth2 with the `identify` and `guilds` scopes only, so it can see your name, avatar and server list, nothing else. Permissions are re-checked against Discord on every request (your server list is re-read at most every 5 minutes, or when you press *Refresh list*). Logins last 7 days. The session cookie is HTTP-only and Secure, and changes are only accepted from the dashboard's own address.
 
+**Terms of Service and Privacy Policy.** The dashboard serves them at `/terms` and `/privacy` (sources in `src/dashboard/legal/`), linked from the landing page's footer. Discord asks for both before it verifies a bot: in the Developer Portal > your application > *General Information*, set **Terms of Service URL** to `https://rumbleverse.cedartechsolutions.ca/terms` and **Privacy Policy URL** to `https://rumbleverse.cedartechsolutions.ca/privacy`. Set `LEGAL_CONTACT` in `.env` (an email address, a web address such as a Discord invite, or plain text) so the pages say how to reach you; until it's set they show a red placeholder. The text was written from what the bot actually stores, but it's a template, not legal advice. When a feature starts storing something new, update the Privacy Policy and its date.
+
 **Setting it up on the VPS** (once):
 
 1. **DNS.** At the DNS provider for `cedartechsolutions.ca`, add an `A` record: name `rumbleverse`, value the VPS's public IP address. (Add an `AAAA` record too if the VPS has IPv6.)

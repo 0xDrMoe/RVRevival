@@ -1021,6 +1021,8 @@
   "landingFaqPermissions_q": "De quelles permissions le bot a-t-il besoin ?",
   "landingFaqPermissions_a": "Celles qu'il demande quand vous l'ajoutez. Il ne peut donner ou retirer que des rôles placés sous le sien, alors placez son rôle au-dessus de ceux qu'il doit gérer.",
   "landingFooterNav": "Sections de la page",
+  "landingTerms": "Conditions",
+  "landingPrivacy": "Confidentialité",
   "landingNavFeatures": "Fonctions",
   "landingNavSteps": "Comment ça marche",
   "landingNavDashboard": "Tableau de bord",
