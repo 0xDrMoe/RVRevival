@@ -126,6 +126,23 @@ describe("dashboard", () => {
     expect(page.headers["x-content-type-options"]).toBe("nosniff");
   });
 
+  it("fills in the site's address for link previews and compresses what it sends", async () => {
+    for (const url of ["/", "/index.html"]) {
+      const page = await app.inject({ method: "GET", url });
+      expect(page.statusCode).toBe(200);
+      expect(page.headers["content-type"]).toContain("text/html");
+      expect(page.headers["cache-control"]).toBe("no-cache");
+      expect(page.body).toContain(`<meta property="og:image" content="${URL_ORIGIN}/og-image.jpg" />`);
+      expect(page.body).not.toContain("%BASE_URL%");
+    }
+    const script = await app.inject({ method: "GET", url: "/app.js", headers: { "accept-encoding": "br, gzip" } });
+    expect(script.statusCode).toBe(200);
+    expect(script.headers["content-encoding"]).toBe("br");
+    const image = await app.inject({ method: "GET", url: "/og-image.jpg" });
+    expect(image.statusCode).toBe(200);
+    expect(image.headers["content-type"]).toBe("image/jpeg");
+  });
+
   it("shares only bot-wide totals on the public stats, without a login, and reuses them", async () => {
     store.createCase({ guildId: GUILD_ID, action: CaseAction.WARN, userId: USER_ID, moderatorId: "2", reason: "secret reason" });
     const stats = new BotStatsStore(db);

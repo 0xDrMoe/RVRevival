@@ -3986,21 +3986,24 @@ dialog textarea {
 
 /* --- Landing page (logged out) ------------------------------------------------------ */
 
+/* Narrower than the dashboard so lines stay readable on wide screens. */
 .landing {
   display: grid;
-  gap: 28px;
+  gap: 56px;
+  max-width: 1240px;
+  margin: 0 auto;
 }
 
-/* A full-color band in the accent gradient, with the logo floating on the far side. */
+/* A full-color band in the accent gradient, with made-up bot messages on the far side. */
 .landing-hero {
   position: relative;
   isolation: isolate;
   overflow: hidden;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
   align-items: center;
-  gap: 32px;
-  padding: 56px 48px;
+  gap: 40px;
+  padding: 56px 52px;
   border-radius: calc(var(--radius) + 10px);
   color: #fff;
   background:
@@ -4035,12 +4038,12 @@ dialog textarea {
 .landing-copy {
   display: grid;
   justify-items: start;
-  gap: 16px;
+  gap: 18px;
 }
 
 .landing-hero h1 {
   margin: 0;
-  font-size: clamp(2.1rem, 5vw, 3.4rem);
+  font-size: clamp(2.2rem, 5vw, 3.6rem);
   font-weight: 850;
   line-height: 1.05;
   letter-spacing: -0.035em;
@@ -4067,7 +4070,6 @@ dialog textarea {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
-  margin-top: 6px;
 }
 
 .landing-invite,
@@ -4090,6 +4092,32 @@ dialog textarea {
 }
 
 .landing-login:hover {
+  background: rgb(255 255 255 / 22%);
+}
+
+.landing-points {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: rgb(255 255 255 / 90%);
+}
+
+.landing-points li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.landing-points .icon {
+  width: 16px;
+  height: 16px;
+  padding: 2px;
+  border-radius: 50%;
   background: rgb(255 255 255 / 22%);
 }
 
@@ -4130,58 +4158,171 @@ dialog textarea {
   }
 }
 
-.landing-art img {
-  display: block;
-  width: 168px;
-  height: 168px;
-  border: 5px solid rgb(255 255 255 / 85%);
-  border-radius: 40px;
-  box-shadow: 0 24px 50px rgb(0 0 0 / 30%);
-  transform: rotate(-6deg);
+/* Three Discord-style messages, staggered like a chat. */
+.landing-art {
+  display: grid;
+  gap: 14px;
+}
+
+.landing-demo {
+  display: flex;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: #313338;
+  color: #dbdee1;
+  box-shadow: 0 18px 40px rgb(0 0 0 / 28%);
   animation: float 6s ease-in-out infinite;
+}
+
+.landing-demo:nth-child(2) {
+  margin-inline-start: 36px;
+  animation-delay: -2s;
+}
+
+.landing-demo:nth-child(3) {
+  margin-inline-end: 24px;
+  animation-delay: -4s;
+}
+
+.landing-demo img {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+}
+
+.landing-demo > div {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.landing-demo-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.88rem;
+  font-weight: 650;
+  color: #f2f3f5;
+}
+
+.landing-demo-bot {
+  padding: 0 5px;
+  border-radius: 4px;
+  background: #5865f2;
+  color: #fff;
+  font-size: 0.66rem;
+  font-weight: 700;
+  line-height: 1.5;
+  text-transform: uppercase;
+}
+
+.landing-demo-embed {
+  display: grid;
+  gap: 2px;
+  padding: 8px 12px;
+  border-inline-start: 4px solid var(--tone);
+  border-radius: 4px;
+  background: #2b2d31;
+  font-size: 0.84rem;
+}
+
+.landing-demo-embed strong {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #f2f3f5;
+}
+
+.landing-demo-embed .icon {
+  width: 15px;
+  height: 15px;
+  color: var(--tone);
 }
 
 @keyframes float {
   50% {
-    transform: rotate(-3deg) translateY(-10px);
+    transform: translateY(-6px);
   }
 }
 
-/* Room for a two-line label, so the numbers line up across the row. */
-.landing-stats .stat-head {
-  align-items: flex-start;
-  min-height: 2.9em;
+/* The live numbers: one band, split into cells. */
+.landing-stats-band {
+  margin-top: -28px;
 }
 
-.landing-stats .stat-value {
-  font-size: 2rem;
+.landing-stats {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) + 4px);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  overflow: hidden;
 }
 
-.sk-tile {
-  height: 112px;
-  border-radius: var(--radius);
+.landing-stat {
+  display: grid;
+  justify-items: start;
+  gap: 4px;
+  padding: 20px 22px;
+}
+
+.landing-stat + .landing-stat {
+  border-inline-start: 1px solid var(--border);
+}
+
+.landing-stat .chip-icon {
+  margin-bottom: 6px;
+}
+
+.landing-stat strong {
+  font-size: 1.7rem;
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.landing-stat span:last-child {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.sk-stat {
+  height: 108px;
+  margin: 1px;
+}
+
+.landing-section {
+  display: grid;
+  gap: 8px;
+  scroll-margin-top: 80px;
 }
 
 .landing-section h2 {
   margin: 0;
-  font-size: 1.45rem;
+  font-size: clamp(1.4rem, 3vw, 1.85rem);
   font-weight: 800;
   letter-spacing: -0.02em;
 }
 
-.landing-section > p {
-  margin: 4px 0 16px;
+.landing-intro {
+  margin: 0 0 12px;
+  max-width: 70ch;
+  color: var(--muted);
+  font-size: 1.02rem;
 }
 
 .landing-features {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 250px), 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: var(--gap);
 }
 
 .landing-feature {
   display: grid;
-  align-content: start;
+  grid-template-rows: auto auto 1fr auto;
   gap: 8px;
   margin: 0;
   background:
@@ -4204,6 +4345,156 @@ dialog textarea {
 .landing-feature p {
   margin: 0;
   font-size: 0.92rem;
+  color: var(--muted);
+}
+
+.landing-commands {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.landing-commands code {
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--tone) 10%, var(--surface-2));
+  color: color-mix(in srgb, var(--tone) 70%, var(--text));
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+/* How it works: three numbered cards. */
+.landing-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--gap);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.landing-step {
+  position: relative;
+  display: grid;
+  align-content: start;
+  justify-items: start;
+  gap: 8px;
+  margin: 0;
+  padding-top: 26px;
+}
+
+.landing-step-number {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: var(--accent-text);
+  font-weight: 800;
+}
+
+.landing-step h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0 0;
+  font-size: 1.08rem;
+}
+
+.landing-step h3 .icon {
+  width: 18px;
+  height: 18px;
+  color: var(--accent);
+}
+
+.landing-step p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.landing-step .landing-step-action {
+  margin-top: 6px;
+  background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 65%, var(--accent-2)));
+  color: var(--accent-text);
+  box-shadow: none;
+}
+
+/* What the dashboard gives staff: a plain list, no cards. */
+.landing-dash {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 22px 28px;
+}
+
+.landing-dash-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.landing-dash-item h3 {
+  margin: 4px 0 2px;
+  font-size: 1rem;
+}
+
+.landing-dash-item p {
+  margin: 0;
+  font-size: 0.92rem;
+  color: var(--muted);
+}
+
+/* Native <details>, so it works without script and stays keyboard friendly. */
+.landing-faq {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 12px var(--gap);
+}
+
+.landing-faq details {
+  margin: 0;
+  padding: 0;
+}
+
+.landing-faq summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 20px;
+  font-weight: 650;
+  cursor: pointer;
+  list-style: none;
+}
+
+.landing-faq summary::-webkit-details-marker {
+  display: none;
+}
+
+.landing-faq summary::after {
+  content: "+";
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--surface-2);
+  color: var(--accent);
+  font-weight: 700;
+  transition: transform 0.15s ease;
+}
+
+.landing-faq details[open] summary::after {
+  transform: rotate(45deg);
+}
+
+.landing-faq details p {
+  margin: 0;
+  padding: 0 20px 18px;
+  color: var(--muted);
 }
 
 /* The closing call to action: a tinted band like the page headers. */
@@ -4213,7 +4504,7 @@ dialog textarea {
   align-items: center;
   justify-content: space-between;
   gap: 20px;
-  padding: 28px 32px;
+  padding: 32px 36px;
   border: 1px solid color-mix(in srgb, var(--accent) 25%, var(--border));
   border-radius: calc(var(--radius) + 6px);
   background: linear-gradient(120deg, color-mix(in srgb, var(--accent) 14%, var(--surface)), color-mix(in srgb, var(--accent-2) 10%, var(--surface)));
@@ -4221,17 +4512,13 @@ dialog textarea {
 
 .landing-cta h2 {
   margin: 0;
-  font-size: 1.35rem;
+  font-size: 1.45rem;
   font-weight: 800;
 }
 
 .landing-cta p {
   margin: 4px 0 0;
   color: var(--muted);
-}
-
-.landing-cta .landing-actions {
-  margin: 0;
 }
 
 .landing-cta .landing-invite {
@@ -4245,14 +4532,140 @@ dialog textarea {
   border-color: var(--border);
 }
 
-@media (max-width: 760px) {
+.landing-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 24px;
+  margin-top: -24px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.landing-footer-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.landing-footer nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+}
+
+.landing-footer :is(a, .link-button) {
+  padding: 0;
+  text-decoration: none;
+  color: var(--muted);
+  font-weight: 550;
+}
+
+.landing-footer :is(a, .link-button):hover {
+  color: var(--accent);
+}
+
+@media (max-width: 1100px) {
   .landing-hero {
     grid-template-columns: 1fr;
-    padding: 36px 22px;
   }
 
   .landing-art {
     display: none;
+  }
+
+  .landing-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .landing-stat:nth-child(3n + 1) {
+    border-inline-start: 0;
+  }
+
+  .landing-stat:nth-child(n + 4) {
+    border-top: 1px solid var(--border);
+  }
+
+  .landing-features,
+  .landing-dash {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .landing {
+    gap: 44px;
+  }
+
+  .landing-hero {
+    padding: 36px 22px;
+  }
+
+  .landing-stats-band {
+    margin-top: -20px;
+  }
+
+  .landing-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .landing-stat:nth-child(n) {
+    border-inline-start: 0;
+    border-top: 0;
+  }
+
+  .landing-stat:nth-child(even) {
+    border-inline-start: 1px solid var(--border);
+  }
+
+  .landing-stat:nth-child(n + 3) {
+    border-top: 1px solid var(--border);
+  }
+
+  .landing-stat {
+    padding: 16px;
+  }
+
+  .landing-features,
+  .landing-steps,
+  .landing-dash,
+  .landing-faq {
+    grid-template-columns: 1fr;
+  }
+
+  /* Icon (or step number) beside the title, to keep the long list short. */
+  .landing-feature,
+  .landing-step {
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-rows: none;
+    align-items: center;
+    column-gap: 12px;
+    padding-top: var(--pad, 18px);
+  }
+
+  .landing-feature > *,
+  .landing-step > * {
+    grid-column: 1 / -1;
+  }
+
+  .landing-feature > .chip-icon,
+  .landing-step > .landing-step-number {
+    grid-column: 1;
+  }
+
+  .landing-feature h3,
+  .landing-step h3 {
+    grid-column: 2;
+    margin: 0;
+  }
+
+  .landing-step .landing-step-action {
+    justify-self: stretch;
   }
 
   .landing-actions,
@@ -4517,4 +4930,25 @@ dialog textarea {
 [data-style="rumble"] .landing-hero {
   border: 2px solid var(--outline);
   box-shadow: 6px 6px 0 var(--outline);
+}
+
+[data-style="rumble"] :is(.landing-section h2, .landing-cta h2) {
+  font-size: clamp(1.6rem, 3vw, 2.1rem);
+}
+
+[data-style="rumble"] :is(.landing-stats, .landing-demo) {
+  border: 2px solid var(--outline);
+  box-shadow: var(--pop);
+}
+
+[data-style="rumble"] .landing-stat strong {
+  font-family: var(--display);
+  font-weight: 400;
+  font-size: 1.9rem;
+}
+
+[data-style="rumble"] .landing-step-number {
+  border: 2px solid var(--outline);
+  font-family: var(--display);
+  font-weight: 400;
 }

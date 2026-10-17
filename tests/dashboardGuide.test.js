@@ -83,4 +83,20 @@ describe("dashboard guide", () => {
     const missing = commandNames().filter((name) => !usages.some((usage) => usage.startsWith(`${name} `)));
     expect(missing).toEqual([]);
   });
+
+  it("shows only real icons and commands on the landing page", () => {
+    const block = page.slice(page.indexOf("const LANDING_FEATURES = ["), page.indexOf("const LANDING_STEPS"));
+    const features = [...block.matchAll(/^ {2}\["(\w+)", "\w+", "(\w+)", \[([^\]]*)\]\],$/gm)];
+    expect(features.length).toBeGreaterThan(8);
+    const names = commandNames();
+    for (const [, iconName, key, list] of features) {
+      expect(icons.has(iconName), `${key} icon ${iconName}`).toBe(true);
+      for (const [, command] of list.matchAll(/"([^"]+)"/g)) {
+        expect(
+          names.some((name) => name === command || name.startsWith(`${command} `)),
+          `${key} command ${command}`,
+        ).toBe(true);
+      }
+    }
+  });
 });
