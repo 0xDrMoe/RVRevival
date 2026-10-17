@@ -3495,3 +3495,164 @@ dialog textarea {
 .route-grid .field:last-child {
   margin: 0 0 12px;
 }
+
+/* --- Guide ---------------------------------------------------------------------- */
+
+.guide-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: var(--gap);
+}
+
+.guide-contents {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(200px, 100%), 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.guide-contents ul {
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.guide-contents .link-button {
+  padding-inline: 0;
+  text-align: start;
+  white-space: normal;
+}
+
+.guide-part {
+  margin-bottom: 24px;
+}
+
+.guide-part-title {
+  margin: 0 0 10px;
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.guide-topic {
+  margin-bottom: 10px;
+  padding: 0;
+  scroll-margin-top: calc(var(--topbar) + 12px);
+}
+
+.guide-topic > summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px var(--pad);
+  cursor: pointer;
+  list-style: none;
+}
+
+.guide-topic > summary::-webkit-details-marker {
+  display: none;
+}
+
+.guide-topic > summary > .grow {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.guide-summary {
+  font-size: 0.88rem;
+}
+
+.guide-chevron {
+  transition: transform 0.15s;
+}
+
+.guide-topic[open] .guide-chevron {
+  transform: rotate(180deg);
+}
+
+.guide-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+  padding: 0 var(--pad) var(--pad);
+}
+
+.guide-body > p,
+.guide-body .tip {
+  margin: 0;
+}
+
+.guide-steps,
+.guide-tips {
+  margin: 6px 0 0;
+  padding-inline-start: 22px;
+  display: grid;
+  gap: 6px;
+}
+
+.guide-table td:first-child {
+  width: 34%;
+  font-weight: 600;
+}
+
+.guide-commands td:first-child {
+  font-weight: 400;
+}
+
+.guide-table td code,
+.guide-body li code,
+.guide-body p code,
+.guide-summary code {
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: var(--surface-2);
+  font: 0.85em ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.guide-example pre {
+  margin: 6px 0 0;
+  padding: 10px 12px;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  font: 0.85rem/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+@media (max-width: 640px) {
+  .guide-toolbar {
+    flex-wrap: wrap;
+  }
+
+  /* Each row of a guide table becomes a small block: the command, then what it does. */
+  .guide-table thead {
+    display: none;
+  }
+
+  .guide-table tr {
+    display: grid;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .guide-table tbody tr:last-child {
+    border-bottom: none;
+  }
+
+  .guide-table td,
+  .guide-table td:first-child {
+    width: auto;
+    border-bottom: none;
+  }
+
+  .guide-table td:first-child {
+    padding-bottom: 2px;
+  }
+
+  .guide-table td:last-child {
+    padding-top: 2px;
+  }
+}
