@@ -740,12 +740,15 @@ async function logout() {
   showLogin();
 }
 
+// Logged out: the landing page, or a plain login card for someone appealing a ban.
 function showLogin() {
   const failedLogin = new URLSearchParams(location.hash.split("?")[1] ?? "").get("login") === "failed";
   const appealing = /^#\/appeal\/\d{17,20}$/.test(location.hash);
-  if (appealing) {
-    rememberReturn(location.hash);
+  if (!appealing) {
+    showLanding(failedLogin);
+    return;
   }
+  rememberReturn(location.hash);
   show(
     h(
       "section",
@@ -757,6 +760,133 @@ function showLogin() {
       h("a", { class: "button primary big", href: "/auth/login" }, t("loginButton")),
     ),
   );
+}
+
+// --- Landing page ----------------------------------------------------------------
+
+// What the bot does, for the landing page: [icon, tone, string key].
+const LANDING_FEATURES = [
+  ["gavel", "red", "landingModeration"],
+  ["shield", "amber", "landingAutomod"],
+  ["shieldCheck", "purple", "landingProtection"],
+  ["ticket", "cyan", "landingTickets"],
+  ["trophy", "green", "landingLeveling"],
+  ["users", "pink", "landingCommunity"],
+  ["list", "blue", "landingLogs"],
+  ["calendar", "accent", "landingMessages"],
+];
+
+// Big numbers shortened (12.4K), small ones in full.
+const formatCount = (value) =>
+  value === null || value === undefined
+    ? "–"
+    : new Intl.NumberFormat(state.language, value >= 10_000 ? { notation: "compact", maximumFractionDigits: 1 } : {}).format(value);
+
+// The public numbers, from /api/public/stats. No login needed, and a failure
+// only hides the numbers.
+async function loadPublicStats() {
+  const response = await fetch("/api/public/stats", { credentials: "same-origin" });
+  if (!response.ok) {
+    throw new ApiError(response.status, {});
+  }
+  return response.json();
+}
+
+// The tiles under the hero, filled in once the numbers arrive.
+function landingStats(stats) {
+  const uptime = stats.online ? (stats.upSince ? formatDuration(Date.now() - stats.upSince) : t("landingOnline")) : t("landingOffline");
+  return [
+    tile("layers", "accent", formatCount(stats.servers), t("landingServers")),
+    tile("users", "pink", formatCount(stats.members), t("landingMembers"), t("landingMembersSub")),
+    tile("zap", "amber", formatCount(stats.commandsRun), t("landingCommands")),
+    tile("gavel", "red", formatCount(stats.cases), t("landingCases")),
+    tile("ticket", "cyan", formatCount(stats.tickets), t("landingTickets_title")),
+    tile("activity", stats.online ? "green" : "gray", uptime, t("landingUptime"), stats.online && stats.upSince ? t("landingOnline") : null),
+  ];
+}
+
+// The bot's online dot in the hero.
+function landingStatus(stats) {
+  return h(
+    "span",
+    { class: `landing-status ${stats.online ? "on" : "off"}` },
+    stats.online && stats.upSince ? t("landingUpFor", { time: formatDuration(Date.now() - stats.upSince) }) : t(stats.online ? "landingOnline" : "landingOffline"),
+  );
+}
+
+function showLanding(failedLogin = false) {
+  const invite = h(
+    "a",
+    { class: "button landing-invite big", href: "https://discord.com/oauth2/authorize", target: "_blank", rel: "noopener", hidden: true },
+    icon("plus"),
+    t("landingAdd"),
+  );
+  const ctaInvite = invite.cloneNode(true);
+  const login = () => h("a", { class: "button landing-login big", href: "/auth/login" }, icon("home"), t("landingDashboard"));
+  const status = h("span", { class: "landing-status" }, t("loading"));
+  const stats = h("div", { class: "stats landing-stats", "aria-busy": "true" }, Array.from({ length: 6 }, () => h("span", { class: "sk sk-tile" })));
+
+  show(
+    h(
+      "div",
+      { class: "landing" },
+      h(
+        "header",
+        { class: "landing-hero" },
+        h(
+          "div",
+          { class: "landing-copy" },
+          status,
+          h("h1", {}, "Rumbleverse Revival"),
+          h("p", { class: "landing-tagline" }, t("landingTagline")),
+          failedLogin ? h("p", { class: "landing-error", role: "alert" }, t("loginFailed")) : null,
+          h("div", { class: "landing-actions" }, invite, login()),
+        ),
+        h("div", { class: "landing-art", "aria-hidden": "true" }, h("img", { src: "favicon.svg", alt: "", width: 168, height: 168 })),
+      ),
+      h("section", { "aria-label": t("landingStatsTitle") }, stats),
+      h(
+        "section",
+        { class: "landing-section" },
+        h("h2", {}, t("landingFeaturesTitle")),
+        h("p", { class: "muted" }, t("landingFeaturesIntro")),
+        h(
+          "div",
+          { class: "landing-features" },
+          LANDING_FEATURES.map(([iconName, tone, key]) =>
+            h(
+              "article",
+              { class: `landing-feature card tone-${tone}` },
+              iconChip(iconName, tone),
+              h("h3", {}, t(`${key}_title`)),
+              h("p", { class: "muted" }, t(`${key}_text`)),
+            ),
+          ),
+        ),
+      ),
+      h(
+        "section",
+        { class: "landing-cta" },
+        h("div", {}, h("h2", {}, t("landingCtaTitle")), h("p", {}, t("landingCtaText"))),
+        h("div", { class: "landing-actions" }, ctaInvite, login()),
+      ),
+    ),
+  );
+
+  loadPublicStats()
+    .then((data) => {
+      for (const link of [invite, ctaInvite]) {
+        link.href = data.inviteUrl;
+        link.hidden = false;
+      }
+      status.replaceWith(landingStatus(data));
+      stats.replaceChildren(...landingStats(data));
+      stats.removeAttribute("aria-busy");
+    })
+    .catch(() => {
+      status.remove();
+      stats.parentElement.remove();
+    });
 }
 
 // --- Servers -----------------------------------------------------------------

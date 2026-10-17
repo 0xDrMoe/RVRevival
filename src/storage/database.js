@@ -367,6 +367,14 @@ const MIGRATIONS = [
   ) WITHOUT ROWID;
   CREATE INDEX xp_daily_by_day ON xp_daily (guild_id, day);
   `,
+  // 25: bot-wide numbers for the public landing page (stats/botStats.js):
+  // commands run, when the bot last started and its last heartbeat.
+  `
+  CREATE TABLE bot_stats (
+    name   TEXT    PRIMARY KEY,
+    value  INTEGER NOT NULL
+  ) WITHOUT ROWID;
+  `,
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS.length;

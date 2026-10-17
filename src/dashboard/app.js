@@ -57,6 +57,7 @@ import { FeedStore, MAX_FEEDS } from "../feeds/feedStore.js";
 import { normalizeMediaOnly } from "../community/mediaOnly.js";
 import { buildBackup, InvalidBackup, planRestore, settingLabel } from "./backup.js";
 import { MAX_STICKIES, MAX_STICKY_LENGTH, StickyStore } from "../sticky/stickyStore.js";
+import { BotStatsStore } from "../stats/botStats.js";
 import { checkTemplate, COUNTER_PRESETS, InvalidCounter, MAX_COUNTERS, newCounterId, normalizeCounters } from "../stats/statsCounters.js";
 import { buildPanelButtons, buildPanelMessage } from "../tickets/tickets.js";
 import { buildPostedGuide, buildPostedRows, guideText } from "../commands/countryHelp.js";
@@ -78,6 +79,8 @@ const SESSION_COOKIE = "rv_session";
 const STATE_COOKIE = "rv_oauth_state";
 // How long a person's Discord server list (and their permissions) is trusted.
 const GUILD_LIST_MS = 5 * 60 * 1000;
+// How long the landing page's public numbers are reused before they're counted again.
+const PUBLIC_STATS_MS = 2 * 60 * 1000;
 const MAX_REASON_LENGTH = 512;
 const CASES_PAGE = 50;
 const EXPORT_LIMIT = 10_000;
@@ -212,6 +215,10 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
   const sentMessages = new SentMessageStore(db);
   const feeds = new FeedStore(db);
   const stickies = new StickyStore(db);
+  const botStats = new BotStatsStore(db);
+  const inviteUrl =
+    `https://discord.com/oauth2/authorize?client_id=${discord.clientId}` +
+    "&scope=bot+applications.commands&permissions=1461246356630";
   const secureCookies = config.url.startsWith("https://");
   const cookieOptions = { path: "/", httpOnly: true, secure: secureCookies, sameSite: "lax" };
 
@@ -605,11 +612,27 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
       return {
         user: { id: session.userId, username: session.username, avatar: session.avatar ?? null },
         guilds: listed.filter(Boolean),
-        inviteUrl:
-          `https://discord.com/oauth2/authorize?client_id=${discord.clientId}` +
-          "&scope=bot+applications.commands&permissions=1461246356630",
+        inviteUrl,
       };
     });
+  });
+
+  // The public landing page's numbers. Only totals across every server, never
+  // anything about one server or one person, and worked out at most once per
+  // PUBLIC_STATS_MS however many people load the page.
+  let publicStats;
+  app.get("/api/public/stats", { config: { rateLimit: { max: 60, timeWindow: "1 minute" } } }, async () => {
+    if (publicStats && publicStats.expiresAt > Date.now()) {
+      return publicStats.value;
+    }
+    // Without Discord the page still shows the bot's own numbers.
+    const reach = await discord.botReach().catch((error) => {
+      logger.warn("Couldn't count the bot's servers for the landing page", { error });
+      return { servers: null, members: null };
+    });
+    const value = { ...reach, ...botStats.totals(), inviteUrl };
+    publicStats = { value, expiresAt: Date.now() + PUBLIC_STATS_MS };
+    return value;
   });
 
   app.get("/api/guilds/:id", async (request, reply) => {

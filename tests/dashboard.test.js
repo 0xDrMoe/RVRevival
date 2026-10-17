@@ -12,6 +12,7 @@ import { defaultAutomod } from "../src/automod/config.js";
 import { DEFAULT_LEVELING } from "../src/leveling/config.js";
 import { LevelStore } from "../src/leveling/levelStore.js";
 import { TicketStore } from "../src/tickets/ticketStore.js";
+import { BotStatsStore } from "../src/stats/botStats.js";
 import { MemberEvent, MemberEventStore } from "../src/members/memberEventStore.js";
 import { SavedRoles, SavedRoleStore } from "../src/members/savedRoleStore.js";
 import { CaseAction, CaseStore } from "../src/moderation/caseStore.js";
@@ -53,6 +54,7 @@ function fakeDiscord() {
       { id: NO_BOT_GUILD_ID, name: "My own server", icon: "abc", owner: true, permissions: "0" },
     ]),
     botGuildIds: vi.fn(async () => new Set([GUILD_ID, OTHER_GUILD_ID])),
+    botReach: vi.fn(async () => ({ servers: 2, members: 1500 })),
     guild: vi.fn(async (id) => ({
       id,
       name: "Rumbleverse Revival",
@@ -122,6 +124,40 @@ describe("dashboard", () => {
     expect(page.headers["content-security-policy"]).toContain("script-src 'self'");
     expect(page.headers["content-security-policy"]).toContain("frame-ancestors 'none'");
     expect(page.headers["x-content-type-options"]).toBe("nosniff");
+  });
+
+  it("shares only bot-wide totals on the public stats, without a login, and reuses them", async () => {
+    store.createCase({ guildId: GUILD_ID, action: CaseAction.WARN, userId: USER_ID, moderatorId: "2", reason: "secret reason" });
+    const stats = new BotStatsStore(db);
+    stats.started(Date.now() - 60_000);
+    stats.countCommand();
+    stats.countCommand();
+
+    const response = await app.inject({ method: "GET", url: "/api/public/stats" });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      servers: 2,
+      members: 1500,
+      commandsRun: 2,
+      cases: 1,
+      tickets: 0,
+      online: true,
+      upSince: expect.any(Number),
+      inviteUrl: expect.stringContaining(`client_id=${config.clientId}`),
+    });
+    expect(response.body).not.toContain("secret reason");
+    expect(response.body).not.toContain(USER_ID);
+
+    stats.countCommand();
+    await app.inject({ method: "GET", url: "/api/public/stats" });
+    expect(discord.botReach).toHaveBeenCalledTimes(1);
+  });
+
+  it("still shows the bot's own numbers when Discord can't be reached", async () => {
+    discord.botReach.mockRejectedValue(new Error("down"));
+    const response = await app.inject({ method: "GET", url: "/api/public/stats" });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ servers: null, members: null, commandsRun: 0, online: false, upSince: null });
   });
 
   it("logs in with Discord and lists only the servers the person can manage", async () => {

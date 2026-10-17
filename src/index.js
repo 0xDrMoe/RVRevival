@@ -20,6 +20,7 @@ import { createRolePersistence } from "./members/rolePersistence.js";
 import { TempRoleStore } from "./tempRoles/tempRoleStore.js";
 import { FeedStore } from "./feeds/feedStore.js";
 import { createFeedPoller } from "./feeds/feedPoller.js";
+import { BotStatsStore, HEARTBEAT_MS } from "./stats/botStats.js";
 import { createStatsUpdater } from "./stats/statsUpdater.js";
 import { createAfk } from "./afk/afk.js";
 import { AfkStore } from "./afk/afkStore.js";
@@ -122,6 +123,18 @@ async function start() {
   const tickets = new TicketStore(db);
   // Members' XP for leveling (/rank, /levels).
   const levels = new LevelStore(db);
+  // Commands run and uptime, for the dashboard's public landing page.
+  const botStats = new BotStatsStore(db);
+  // A busy database must never take the bot down over a counter.
+  const countSafely = (what, work) => {
+    try {
+      work();
+    } catch (error) {
+      logger.warn(`Couldn't record the bot's ${what}`, { error });
+    }
+  };
+  const heartbeat = setInterval(() => countSafely("heartbeat", () => botStats.heartbeat()), HEARTBEAT_MS);
+  heartbeat.unref();
   // Join-to-create voice channels (/voice).
   const tempVoiceChannels = new TempVoiceStore(db);
   const tempVoice = createTempVoice({ guildSettings, store: tempVoiceChannels, logger });
@@ -315,9 +328,13 @@ async function start() {
       feedPoller = createFeedPoller({ client: readyClient, store: feeds, logger, forcedLanguage });
       feedPoller.start();
       statsUpdater.start(readyClient);
+      countSafely("start time", () => botStats.started());
     });
 
     client.on(Events.InteractionCreate, (interaction) => {
+      if (interaction.isChatInputCommand()) {
+        countSafely("command count", () => botStats.countCommand());
+      }
       handleInteraction(interaction).catch((error) => logger.error("Interaction handler crashed", { error }));
     });
 
@@ -507,6 +524,7 @@ async function start() {
       statsUpdater.stop();
       leveling.stopVoiceXp();
       automod.stop();
+      clearInterval(heartbeat);
       await client?.destroy().catch(() => {});
       closeDatabase(db);
       process.exit(0);
