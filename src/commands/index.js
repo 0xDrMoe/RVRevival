@@ -8,6 +8,7 @@ import { createCountryCommand } from "./country.js";
 import { createCountryHelpCommand } from "./countryHelp.js";
 import { createCountryStaffCommand } from "./countryStaff.js";
 import { createGiveawayCommand } from "./giveaway.js";
+import { createGuideCommand } from "./guide.js";
 import { createLevelCommands } from "./levels.js";
 import { createMemberToolCommands } from "./memberTools.js";
 import { createModerationCommands } from "./moderation.js";
@@ -54,7 +55,8 @@ import { createWelcomeCommand } from "./welcome.js";
 // to run /afk, `stickyStore` (sticky/stickyStore.js) with `stickies`
 // (sticky/stickies.js) to run /sticky, `highlightStore`
 // (highlights/highlightStore.js) with `highlights` (highlights/highlights.js)
-// to run /highlight, not to register them.
+// to run /highlight, not to register them. `dashboardUrl` adds dashboard links
+// to /guide.
 export function createCommands({
   logger,
   guildSettings,
@@ -79,6 +81,7 @@ export function createCommands({
   stickies,
   highlightStore,
   highlights,
+  dashboardUrl,
 }) {
   // Shared, so /country and /country-staff can't change the same member at the same time.
   const roleService = new CountryRoleService(logger);
@@ -88,6 +91,7 @@ export function createCommands({
     createCountryStaffCommand({ logger, guildSettings, forcedLanguage, roleService }),
     createCountryHelpCommand({ guildSettings, forcedLanguage }),
     createSettingsCommand({ guildSettings, forcedLanguage }),
+    createGuideCommand({ forcedLanguage, dashboardUrl }),
     ...createModerationCommands(moderationOptions),
     createPurgeCommand({ guildSettings, forcedLanguage, modLog, botDeletions }),
     createCaseCommand(moderationOptions),

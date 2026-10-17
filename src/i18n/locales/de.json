@@ -1104,5 +1104,26 @@
   "commandRuleBlocked": "Eine deiner Rollen darf `/{command}` hier nicht nutzen.",
   "commandRuleChannel": "`/{command}` funktioniert nur in {channels}.",
   "commandRuleRoles": "`/{command}` ist auf diesem Server nur für bestimmte Rollen.",
-  "commandRuleNative": "Auf diesem Server reicht eine Discord-Berechtigung allein nicht für `/{command}`. Du brauchst die Mod-Rolle oder eine Rolle, die den Befehl nutzen darf."
+  "commandRuleNative": "Auf diesem Server reicht eine Discord-Berechtigung allein nicht für `/{command}`. Du brauchst die Mod-Rolle oder eine Rolle, die den Befehl nutzen darf.",
+
+  "guideCommandDescription": "Lies den Bot-Leitfaden: jede Funktion und jeder Befehl, Seite für Seite",
+  "guideTopicOptionDescription": "Direkt zu einem Teil oder Thema springen",
+  "guideTitle": "Leitfaden",
+  "guideHomeIntro": "So nutzt du den Bot und jede Funktion: wer was nutzen darf, die Befehle und wie man alles einrichtet.\n\nWähle unten im Menü einen Teil oder drücke **Weiter**, um Seite für Seite zu lesen.",
+  "guideContents": "Inhalt",
+  "guidePickPart": "Teil wählen",
+  "guidePickTopic": "Thema wählen",
+  "guidePrevious": "Zurück",
+  "guideNext": "Weiter",
+  "guideOpenDashboard": "Im Dashboard öffnen",
+  "guidePage": "Seite {page} von {pages}",
+  "guideEnglishNote": "Der Leitfaden ist vorerst auf Englisch",
+  "guideTopicCount": "{count} Themen",
+  "guideTopics": "Themen",
+  "guideWho": "Wer:",
+  "guideNative": "Das kann Discord selbst:",
+  "guideSteps": "Schritte",
+  "guideCommands": "Befehle",
+  "guideExample": "Beispiel",
+  "guideGoodToKnow": "Gut zu wissen"
 }

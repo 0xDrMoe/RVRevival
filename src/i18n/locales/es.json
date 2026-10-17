@@ -1104,5 +1104,26 @@
   "commandRuleBlocked": "Uno de tus roles no puede usar `/{command}` aquí.",
   "commandRuleChannel": "`/{command}` solo funciona en {channels}.",
   "commandRuleRoles": "`/{command}` es solo para ciertos roles en este servidor.",
-  "commandRuleNative": "En este servidor, un permiso de Discord no basta para usar `/{command}`. Necesitas el rol de moderación o un rol autorizado para usarlo."
+  "commandRuleNative": "En este servidor, un permiso de Discord no basta para usar `/{command}`. Necesitas el rol de moderación o un rol autorizado para usarlo.",
+
+  "guideCommandDescription": "Lee la guía del bot: cada función y comando, página a página",
+  "guideTopicOptionDescription": "Ir directamente a una parte o tema",
+  "guideTitle": "Guía",
+  "guideHomeIntro": "Cómo usar el bot y cada función: quién puede usar qué, los comandos y cómo configurar cada uno.\n\nElige una parte en el menú de abajo o pulsa **Siguiente** para leerla página a página.",
+  "guideContents": "Índice",
+  "guidePickPart": "Elige una parte",
+  "guidePickTopic": "Elige un tema",
+  "guidePrevious": "Anterior",
+  "guideNext": "Siguiente",
+  "guideOpenDashboard": "Abrir en el panel",
+  "guidePage": "Página {page} de {pages}",
+  "guideEnglishNote": "Por ahora la guía está en inglés",
+  "guideTopicCount": "{count} temas",
+  "guideTopics": "Temas",
+  "guideWho": "Quién:",
+  "guideNative": "Discord puede hacerlo:",
+  "guideSteps": "Pasos",
+  "guideCommands": "Comandos",
+  "guideExample": "Ejemplo",
+  "guideGoodToKnow": "Bueno saber"
 }

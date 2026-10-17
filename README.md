@@ -34,6 +34,7 @@ The Discord bot for the Rumbleverse Revival server. It is built as a set of inde
 | [Settings backup](#settings-backup) | The dashboard's Backup page | Manage Server or a dashboard role that can change settings (anti-nuke: the server owner) |
 | [Highlights](#highlights) | `/highlight` | Everyone |
 | [AFK](#afk) | `/afk` | Everyone |
+| [Guide](#guide) | `/guide`, or the dashboard's Guide page | Everyone |
 | [Ban appeals](#ban-appeals) | The dashboard's Ban appeals page | Manage Server or a dashboard role that can change settings (banned members fill in the form) |
 | [Join-to-create voice](#join-to-create-voice) | `/voice` | Manage Server (`setup`, `off`), the channel's owner (`lock`, `unlock`), anyone in the channel (`claim`) |
 | [Leveling](#leveling) | `/rank`, `/leaderboard`, `/levels`, or the dashboard's Leveling page | Everyone (`/rank`, `/leaderboard`), Manage Server (`/levels`) |
@@ -421,6 +422,10 @@ The DM shows the message and a link to it. It matches whole words only ("cat" do
 
 If the bot may change your nickname (it has **Manage Nicknames** and a higher role than yours), it adds "[AFK] " in front of it while you're away and takes it off when you're back. Mentions in AFK messages never ping anyone. To turn `/afk` off, hide it in **Server Settings → Integrations**.
 
+### Guide
+
+**`/guide [topic]`** shows the dashboard's Guide in Discord, privately, so members can read it without logging in. It opens on the contents (a line per part); **Previous** and **Next** page through every part and topic in order, and two menus jump to a part or to a topic in it. `topic` (with suggestions as you type) opens a part or topic straight away. When `DASHBOARD_URL` is set, **Open on the dashboard** links to the same page there. The text is the same English as on the dashboard (it comes from `src/dashboard/public/guide.js`); the buttons and menus follow the user's language. Paging isn't logged; running `/guide` is, like every command.
+
 ### Ban appeals
 
 Lets banned members ask to be unbanned without a second account or a DM to a moderator. Turn it on in the dashboard's **Ban appeals** page (off by default), then:
@@ -510,7 +515,7 @@ A website where admins log in with Discord and manage the bot without slash comm
 - **Landing page:** what visitors see before logging in: a hero with **Add to Discord** and **Open dashboard** buttons, whether the bot is online and for how long, and bot-wide numbers (servers, members across them, commands run, moderation cases, tickets and uptime) from `GET /api/public/stats`. That route needs no login, only gives totals across every server (never anything about one server or person), and counts them at most every 2 minutes. The bot records commands run, its start time and a heartbeat every minute in `data/bot.db`; it shows as offline after 3 minutes without one. People appealing a ban still get the plain login card. Below that it lists every feature with its main commands, the three setup steps, what the dashboard gives staff, a short FAQ and a footer. The page's link preview (in Discord and elsewhere) uses `og-image.jpg`, with the address from `DASHBOARD_URL` filled in by the server, and every response is compressed (brotli or gzip).
 - **Servers:** every server you can open, with a search box. Servers without the bot get an invite link.
 - **Overview:** member and online counts, total cases, cases in the last 7 and 30 days, running temporary bans, which features are on (each links to its page), a setup checklist (hidden once everything is done), a chart of cases per day for the last 30 days (click the legend to hide actions), cases per action, the latest cases, the busiest moderators (each links to their cases) and the most moderated members (each links to their history).
-- **Guide:** how to use the bot and every feature, in English: who can use what, each command with an example, setup steps, Discord's own features to try first, and troubleshooting. It's split into pages: the first page has a card per part (Getting started, Moderation, Protection, Community, Messages, Settings, Reference) and a search over every topic, each part has its own page listing its topics, and each topic has its own page with the other topics in its part and Previous and Next links (`#/g/<id>/guide?part=<id>`, `?topic=<id>`). Ctrl+K finds parts and topics, and each settings page has a **How it works** button that opens its topic. The text lives in `src/dashboard/public/guide.js`; a test fails if a slash command or subcommand is missing from it.
+- **Guide:** how to use the bot and every feature, in English: who can use what, each command with an example, setup steps, Discord's own features to try first, and troubleshooting. It's split into pages: the first page has a card per part (Getting started, Moderation, Protection, Community, Messages, Settings, Reference) and a search over every topic, each part has its own page listing its topics, and each topic has its own page with the other topics in its part and Previous and Next links (`#/g/<id>/guide?part=<id>`, `?topic=<id>`). Ctrl+K finds parts and topics, and each settings page has a **How it works** button that opens its topic. The text lives in `src/dashboard/public/guide.js`; a test fails if a slash command or subcommand is missing from it. The same text is in Discord with `/guide` (see [Guide](#guide)).
 - **Activity:** every change made on the dashboard, newest first, with who made it and what changed. Kept even when there's no logs channel (the newest 500 per server).
 - **Cases:** every moderation case, newest first. Search reasons and names, pick one or more actions, and filter by member ID, moderator ID and date range; clicking a name shows only their cases. Active filters show as chips you can remove. **Export CSV** downloads the filtered list (up to 10,000 cases). Reasons can be edited (the mod-log post is updated too) and cases deleted.
 - **Members:** find someone by the start of their username or nickname, or paste a user ID to find someone who left. Each person's page shows when their account was made (flagged if under 7 days old), when they joined, how many times they joined, their roles, a timeout or temporary ban in progress, Discord's ban reason if they're banned, every case as a timeline, their support tickets (with links to the threads), their level and leaderboard place, and their recent joins and leaves (the bot keeps the newest 50 per person). Each case in **Cases** has a *History* link to it.
@@ -687,6 +692,7 @@ src/
     feed.js              Feeds: /feed
     stats.js             Server stats: /stats
     afk.js               AFK: /afk
+    guide.js             Guide: /guide, its page buttons and menus
     sticky.js            Sticky messages: /sticky
     highlight.js         Highlights: /highlight
     mediaOnly.js         Media-only channels: /mediaonly
