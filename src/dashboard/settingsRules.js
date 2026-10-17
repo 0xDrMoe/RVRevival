@@ -17,6 +17,7 @@ import { checkMediaOnly, describeMediaOnly, InvalidMediaOnly } from "../communit
 import { checkAppeals, InvalidAppeals } from "../appeals/config.js";
 import { checkCategories, describeCategories, InvalidCategories } from "../tickets/categories.js";
 import { checkJoinGate, InvalidJoinGate } from "../raid/raid.js";
+import { checkGuide, describeGuide, InvalidGuide } from "../countries/guide.js";
 import { LogEvent } from "../logs/serverLog.js";
 import { checkLogRoutes, describeLogRoutes, InvalidLogRoutes } from "../logs/logRoutes.js";
 import { botCommandCatalog } from "../permissions/catalog.js";
@@ -63,6 +64,7 @@ export const SETTING_RULES = Object.freeze({
   [Setting.STAFF_ROLE]: { kind: "role", label: "Staff role" },
   [Setting.MOD_ROLE]: { kind: "role", label: "Mod role" },
   [Setting.COUNTRY_CHANNEL]: { kind: "channel", types: POSTING_CHANNELS, label: "/country channel" },
+  [Setting.COUNTRY_GUIDE]: { kind: "countryGuide", label: "Country guide" },
   [Setting.LOGS_CHANNEL]: { kind: "channel", types: POSTING_CHANNELS, label: "Logs channel" },
   [Setting.QUARANTINE_ROLE]: { kind: "role", label: "Quarantine role" },
   [Setting.MOD_LOG_CHANNEL]: { kind: "channel", types: POSTING_CHANNELS, label: "Mod-log channel" },
@@ -348,6 +350,15 @@ function checkValue(setting, value, { guildId, channels, roles }) {
         throw new InvalidSetting(setting, "Unknown permission setup.");
       }
       return value;
+    case "countryGuide":
+      try {
+        return checkGuide(value);
+      } catch (error) {
+        if (error instanceof InvalidGuide) {
+          throw new InvalidSetting(setting, error.message);
+        }
+        throw error;
+      }
     case "automod":
       try {
         return checkAutomod(value, {
@@ -406,6 +417,8 @@ export function describeValue(setting, value) {
       return describeCategories(value);
     case "appeals":
       return `${value.enabled ? "open" : "closed"} · ${value.channelId ? `<#${value.channelId}>` : "mod-log channel"} · ${value.questions.length} question(s) · wait ${value.cooldownDays} days after a denial`;
+    case "countryGuide":
+      return describeGuide(value);
     case "mediaOnly":
       return value.channelIds.length > 0 ? describeMediaOnly(value) : `none · links ${value.allowLinks ? "allowed" : "not allowed"}`;
     case "rolePersist":

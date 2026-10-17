@@ -959,6 +959,49 @@ describe("dashboard", () => {
     expect((await write(cookies, "POST", `/api/appeals/${GUILD_ID}`, { answers: ["again"] })).statusCode).toBe(409);
   });
 
+  it("shows the country guide's built-in text and fixed buttons", async () => {
+    const cookies = await login();
+    const { countryGuide } = (await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}`, cookies })).json();
+    expect(countryGuide.defaults).toMatchObject({ title: "Get your country role", stepsTitle: "How to get it", color: 0x5865f2 });
+    expect(countryGuide.buttons.flat().map((button) => button.label)).toContain("Type my country");
+    expect(countryGuide.post).toBeNull();
+  });
+
+  it("posts the country guide and updates it when its wording is saved", async () => {
+    const cookies = await login();
+    discord.postMessage = vi.fn(async () => ({ id: "610000000000000001" }));
+    expect((await write(cookies, "POST", `/api/guilds/${GUILD_ID}/country-guide`, { channelId: VOICE_ID })).statusCode).toBe(400);
+
+    const posted = await write(cookies, "POST", `/api/guilds/${GUILD_ID}/country-guide`, { channelId: TEXT_ID });
+    expect(posted.json().post).toEqual({ channelId: TEXT_ID, messageId: "610000000000000001" });
+    const [channelId, payload] = discord.postMessage.mock.calls.find(([id]) => id === TEXT_ID);
+    expect(channelId).toBe(TEXT_ID);
+    expect(payload.embeds[0].title).toBe("Get your country role");
+    expect(payload.components.flatMap((row) => row.components.map((button) => button.custom_id))).toContain("country-guide:translate");
+
+    const saved = await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, { countryGuide: { title: "Pick your flag", color: 0xeb459e } });
+    expect(saved.statusCode).toBe(200);
+    expect(saved.json().settings.countryGuide).toEqual({ title: "Pick your flag", color: 0xeb459e });
+    const [editChannel, editId, edit] = discord.editMessage.mock.calls.at(-1);
+    expect([editChannel, editId]).toEqual([TEXT_ID, "610000000000000001"]);
+    expect(edit.embeds[0]).toMatchObject({ title: "Pick your flag", color: 0xeb459e });
+
+    // The buttons can't be changed.
+    const buttons = await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, { countryGuide: { buttons: [] } });
+    expect(buttons.statusCode).toBe(400);
+  });
+
+  it("forgets a posted country guide that was deleted", async () => {
+    const cookies = await login();
+    await guildSettings.set(GUILD_ID, Setting.COUNTRY_GUIDE_POST, { channelId: TEXT_ID, messageId: "610000000000000001" });
+    discord.editMessage = vi.fn(async () => {
+      throw new DiscordApiError(404, "Unknown Message");
+    });
+    const saved = await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, { countryGuide: { title: "Pick your flag" } });
+    expect(saved.statusCode).toBe(200);
+    expect(guildSettings.get(GUILD_ID, Setting.COUNTRY_GUIDE_POST)).toBeUndefined();
+  });
+
   it("saves ticket types and redraws the posted panel", async () => {
     const cookies = await login();
     const ticketCategories = [{ id: "bugs", label: "Bug report", emoji: "🐞", description: null, staffRoleId: ROLE_ID, questions: ["What happened?"] }];

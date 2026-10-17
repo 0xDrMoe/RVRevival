@@ -95,6 +95,12 @@ describe("settings backup", () => {
     expect(planRestore(backupOf({ [Setting.TICKETS]: tickets }, OTHER_ID), server()).skipped).toEqual([{ setting: Setting.TICKETS, reason: "other-server" }]);
   });
 
+  it("restores the posted country guide only on the server it was posted on", () => {
+    const post = { channelId: TEXT_ID, messageId: "810000000000000001" };
+    expect(planRestore(backupOf({ [Setting.COUNTRY_GUIDE_POST]: post }), server()).apply).toEqual({ [Setting.COUNTRY_GUIDE_POST]: post });
+    expect(planRestore(backupOf({ [Setting.COUNTRY_GUIDE_POST]: post }, OTHER_ID), server()).skipped).toEqual([{ setting: Setting.COUNTRY_GUIDE_POST, reason: "other-server" }]);
+  });
+
   it("gives stats counters new channels on another server", () => {
     const counters = [{ id: "a1b2c3d4", template: "Members: {members}", channelId: TEXT_ID, categoryId: null, error: null }];
     expect(planRestore(backupOf({ [Setting.STATS_COUNTERS]: counters }), server()).apply[Setting.STATS_COUNTERS]).toEqual(counters);

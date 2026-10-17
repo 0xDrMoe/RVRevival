@@ -474,6 +474,7 @@ Members pick the country they live in and get a role named after it. They can on
   - Nothing works until an admin runs `/settings staff-role`.
   - Every change is logged with who made it.
 - **`/country-help`** (Manage Server only) posts a standalone message in the current channel telling members how to get their country, with the continent, **Type my country** and **Translate this message** buttons under it, and confirms privately to the admin. When posted in the `/country` channel, it also says that any other message there is deleted automatically.
+- **Dashboard → Country** shows every country setting in one place: the `/country` channel, the staff role, and the guide's wording (title, introduction, steps, notes and their headings) and colour, with a live preview. It can post the guide too, and saving updates the last guide posted (from the dashboard or with `/country-help`). The buttons are fixed and can't be changed there, so members' picks always work. Custom wording is used in the server's language; translated copies in other languages keep the built-in text (with the custom colour).
 
 Needs: the **Manage Roles** permission, and the bot's role above every country role (including ones staff remove) (see [Setup](#setup), step 3). `/country-help` also needs **View Channel**, **Send Messages** (or **Send Messages in Threads**) and **Embed Links** in the channel it posts to. Keeping the `/country` channel clean needs **Manage Messages** in that channel.
 

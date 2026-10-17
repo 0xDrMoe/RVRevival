@@ -2696,18 +2696,209 @@ async function showLevels(guildId) {
   });
 }
 
+// The parts of the country guide members read, with their size limits (as
+// countries/guide.js checks them). The buttons are the bot's and can't be changed.
+const GUIDE_PARTS = [
+  { part: "title", max: 256, rows: 0 },
+  { part: "intro", max: 1000, rows: 3 },
+  { part: "stepsTitle", max: 256, rows: 0 },
+  { part: "steps", max: 1000, rows: 4 },
+  { part: "notesTitle", max: 256, rows: 0 },
+  { part: "notes", max: 600, rows: 5 },
+];
+const guideInputId = (part) => `guide-${part}`;
+
+// The guide's wording from the form: only what differs from the built-in text.
+function readCountryGuide(form, defaults) {
+  const guide = {};
+  GUIDE_PARTS.forEach(({ part }) => {
+    const text = form.querySelector(`#${guideInputId(part)}`).value.replace(/\r\n?/g, "\n").trim();
+    if (text && text !== defaults[part]) {
+      guide[part] = text;
+    }
+  });
+  const color = colorNumber(form.querySelector("#guideColor").value);
+  if (color !== defaults.color) {
+    guide.color = color;
+  }
+  return Object.keys(guide).length > 0 ? guide : null;
+}
+
+// The guide as members will see it, with its fixed buttons.
+function countryGuidePreview(form, data, info, isCountryChannel) {
+  const value = (part) => form.querySelector(`#${guideInputId(part)}`).value.trim() || info.defaults[part];
+  const notes = [value("notes"), info.fallbackNote, isCountryChannel ? info.channelNote : null].filter(Boolean).join("\n");
+  const message = embedPreview(
+    {
+      content: "",
+      embed: {
+        title: value("title"),
+        url: "",
+        description: value("intro"),
+        color: colorNumber(form.querySelector("#guideColor").value),
+        author: { name: "", icon_url: "" },
+        footer: { text: "" },
+        image: { url: "" },
+        thumbnail: { url: "" },
+        fields: [
+          { name: value("stepsTitle"), value: value("steps"), inline: false },
+          { name: value("notesTitle"), value: notes, inline: false },
+        ],
+      },
+    },
+    data,
+  );
+  message.querySelectorAll("[data-color]").forEach((element) => element.style.setProperty("--embed-color", element.dataset.color || "transparent"));
+  message.querySelector(".discord-body").append(
+    h(
+      "div",
+      { class: "discord-buttons", "aria-label": t("countryButtonsLocked") },
+      info.buttons.map((row) =>
+        h(
+          "div",
+          { class: "discord-button-row" },
+          row.map((button) => h("span", { class: `discord-button${button.primary ? " primary" : ""}` }, button.emoji ? h("span", { "aria-hidden": "true" }, button.emoji) : null, button.label)),
+        ),
+      ),
+    ),
+  );
+  return message;
+}
+
 async function showCountry(guildId) {
   const data = await loadManagedGuild(guildId);
   if (!data) {
     return;
   }
+  const info = data.countryGuide;
+  const guide = data.settings.countryGuide ?? {};
+  const savedColor = hexColor(guide.color ?? info.defaults.color);
+
+  const guideInputs = GUIDE_PARTS.map(({ part, max, rows }) => {
+    // Filled with the text members see now, so it can be edited in place.
+    const text = guide[part] ?? info.defaults[part];
+    const attributes = { id: guideInputId(part), maxLength: max };
+    const control =
+      rows === 0
+        ? h("input", { ...attributes, type: "text", value: text })
+        : h("textarea", { ...attributes, rows: Math.max(rows, text.split("\n").length + 1), class: "autosize" }, text);
+    return field(`guide_${part}`, part === "notes" ? "guide_notesHelp" : null, control);
+  });
+  const colorInput = h("input", { id: "guideColor", type: "color", value: savedColor, "aria-label": t("embedColor") });
+  const swatches = EMBED_SWATCHES.map((swatch) => {
+    const button = h("button", {
+      type: "button",
+      class: "swatch",
+      title: swatch,
+      "aria-label": swatch,
+      onclick: () => {
+        colorInput.value = swatch;
+        colorInput.dispatchEvent(new Event("input", { bubbles: true }));
+      },
+    });
+    button.style.setProperty("--swatch", swatch);
+    return button;
+  });
+  const resetGuide = h(
+    "button",
+    {
+      type: "button",
+      class: "ghost small",
+      onclick: () => {
+        GUIDE_PARTS.forEach(({ part }) => {
+          document.getElementById(guideInputId(part)).value = info.defaults[part];
+        });
+        colorInput.value = hexColor(info.defaults.color);
+        colorInput.dispatchEvent(new Event("input", { bubbles: true }));
+      },
+    },
+    icon("refresh", "icon small"),
+    h("span", {}, t("countryGuideReset")),
+  );
+
+  // Posting: where the guide goes, and where the last one is.
+  const postChannel = picker({ id: "guidePostChannel", options: postableChannels(data), value: info.post?.channelId ?? data.settings.countryChannelId ?? null, emptyLabel: t("embedPickChannel") });
+  const postedLine = h("p", { class: "help" });
+  const showPosted = () => {
+    const channel = data.channels.find((entry) => entry.id === info.post?.channelId);
+    postedLine.replaceChildren(
+      ...(info.post
+        ? [
+            t("countryGuidePostedIn", { channel: channel ? `#${channel.name}` : t("embedUnknownChannel") }),
+            " ",
+            h("a", { href: `https://discord.com/channels/${guildId}/${info.post.channelId}/${info.post.messageId}`, target: "_blank", rel: "noopener noreferrer" }, t("countryGuideOpen")),
+          ]
+        : [t("countryGuideNotPosted")]),
+    );
+  };
+  showPosted();
+  const postButton = h(
+    "button",
+    {
+      type: "button",
+      class: "primary",
+      onclick: async () => {
+        if (state.unsaved) {
+          toast(t("countryGuideSaveFirst"), "error");
+          return;
+        }
+        const channelId = postChannel.value;
+        if (!channelId) {
+          toast(t("embedPickChannel"), "error");
+          return;
+        }
+        postButton.disabled = true;
+        try {
+          const result = await api(`/api/guilds/${guildId}/country-guide`, { method: "POST", body: { channelId } });
+          info.post = result.post;
+          state.cache = null;
+          showPosted();
+          toast(t("countryGuidePosted"));
+        } catch (error) {
+          failed(error);
+        } finally {
+          postButton.disabled = false;
+        }
+      },
+    },
+    icon("upload", "icon small"),
+    h("span", {}, t("countryGuidePost")),
+  );
+
+  const preview = h("div", { class: "embed-preview" });
+  const guideCard = card(
+    t("countryGuideTitle"),
+    "edit",
+    "purple",
+    h("p", { class: "help" }, t("countryGuideHelp")),
+    h("div", { class: "embed-color-row" }, h("span", { class: "field-label" }, t("embedColor")), colorInput, h("div", { class: "swatches" }, swatches)),
+    guideInputs,
+    h("div", { class: "toolbar" }, resetGuide),
+  );
+  const previewCard = card(
+    t("countryGuidePreview"),
+    "eye",
+    "green",
+    preview,
+    h("p", { class: "tip" }, icon("lock"), h("span", {}, t("countryButtonsLocked"))),
+  );
+  const postCard = card(
+    t("countryGuidePostTitle"),
+    "upload",
+    "blue",
+    h("p", { class: "help" }, t("countryGuidePostHelp")),
+    field("countryGuidePostChannel", null, postChannel),
+    postedLine,
+    h("div", { class: "toolbar" }, postButton),
+  );
+
   settingsPage({
     data,
     pageId: "country",
     intro: t("countryIntro"),
     cards: [
       card(
-        t("countryChannel"),
+        t("countryWhere"),
         "globe",
         "green",
         field(
@@ -2720,10 +2911,30 @@ async function showCountry(guildId) {
             emptyLabel: t("anyChannel"),
           }),
         ),
+        field("staffRole", "countryStaffRoleHelp", picker({ id: "countryStaffRoleId", options: roleOptions(data), value: data.settings.staffRoleId, emptyLabel: t("notSet") })),
       ),
+      h("div", { class: "embed-layout" }, h("div", {}, guideCard, postCard), h("div", { class: "embed-side" }, previewCard)),
     ],
-    fields: { countryChannelId: selectValue("countryChannelId") },
+    fields: {
+      countryChannelId: selectValue("countryChannelId"),
+      staffRoleId: selectValue("countryStaffRoleId"),
+      countryGuide: (form) => readCountryGuide(form, info.defaults),
+    },
   });
+
+  const form = main.querySelector("form.settings");
+  const drawPreview = () => {
+    const countryChannelId = form.querySelector("#countryChannelId").value;
+    // The guide usually goes in the /country channel.
+    if (!postChannel.value && countryChannelId) {
+      postChannel.value = countryChannelId;
+    }
+    const target = postChannel.value || info.post?.channelId;
+    preview.replaceChildren(countryGuidePreview(form, data, info, Boolean(countryChannelId) && target === countryChannelId));
+  };
+  form.addEventListener("input", drawPreview);
+  form.addEventListener("change", drawPreview);
+  drawPreview();
 }
 
 const hasPermission = (role, bit) => (BigInt(role.permissions) & (1n << bit)) !== 0n;
