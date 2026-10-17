@@ -1104,5 +1104,26 @@
   "commandRuleBlocked": "أحد أدوارك غير مسموح له باستخدام `/{command}` هنا.",
   "commandRuleChannel": "الأمر `/{command}` يعمل فقط في {channels}.",
   "commandRuleRoles": "الأمر `/{command}` مخصص لأدوار معينة فقط في هذا الخادم.",
-  "commandRuleNative": "في هذا الخادم، لا تكفي صلاحية Discord وحدها لاستخدام `/{command}`. تحتاج إلى دور المشرفين أو دور مسموح له باستخدامه."
+  "commandRuleNative": "في هذا الخادم، لا تكفي صلاحية Discord وحدها لاستخدام `/{command}`. تحتاج إلى دور المشرفين أو دور مسموح له باستخدامه.",
+
+  "guideCommandDescription": "اقرأ دليل البوت: كل ميزة وأمر، صفحة بصفحة",
+  "guideTopicOptionDescription": "انتقل مباشرة إلى جزء أو موضوع",
+  "guideTitle": "الدليل",
+  "guideHomeIntro": "كيفية استخدام البوت وكل ميزة: من يمكنه استخدام ماذا، والأوامر، وكيفية إعداد كل منها.\n\nاختر جزءًا من القائمة أدناه، أو اضغط **التالي** لقراءته صفحة بصفحة.",
+  "guideContents": "المحتويات",
+  "guidePickPart": "اختر جزءًا",
+  "guidePickTopic": "اختر موضوعًا",
+  "guidePrevious": "السابق",
+  "guideNext": "التالي",
+  "guideOpenDashboard": "افتح في لوحة التحكم",
+  "guidePage": "الصفحة {page} من {pages}",
+  "guideEnglishNote": "الدليل باللغة الإنجليزية حاليًا",
+  "guideTopicCount": "{count} مواضيع",
+  "guideTopics": "المواضيع",
+  "guideWho": "من:",
+  "guideNative": "يمكن لـ Discord فعل ذلك:",
+  "guideSteps": "الخطوات",
+  "guideCommands": "الأوامر",
+  "guideExample": "مثال",
+  "guideGoodToKnow": "من المفيد معرفته"
 }

@@ -246,6 +246,7 @@ async function start() {
     levels,
     leveling,
     tempVoice: tempVoiceChannels,
+    dashboardUrl: config.dashboardUrl,
   });
   const handleInteraction = createInteractionHandler({ commands, logger, forcedLanguage, actionLog, guildSettings });
   const guardCountryChannel = createCountryChannelGuard({ guildSettings, logger, actionLog, botDeletions });

@@ -77,6 +77,7 @@ export const GUIDE = [
         icon: "bot",
         tone: "cyan",
         summary: "Things that are the same for every command.",
+        commands: [["/guide [topic]", "This guide in Discord, just for you. Page through it with the buttons, or pick a part or topic from the menus."]],
         table: {
           head: ["", ""],
           rows: [
