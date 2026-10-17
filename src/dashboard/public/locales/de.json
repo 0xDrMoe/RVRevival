@@ -930,5 +930,9 @@
   "logRoute_automod": "Löschungen durch Automod",
   "logRoute_protection": "Raid- und Anti-Nuke-Warnungen",
   "permManageNicknames": "Spitznamen verwalten",
-  "backupReason_permissions-only": "Nur der Serverbesitzer oder wer den Bot hinzugefügt hat, kann das wiederherstellen."
+  "backupReason_permissions-only": "Nur der Serverbesitzer oder wer den Bot hinzugefügt hat, kann das wiederherstellen.",
+  "permNative": "Discord-Berechtigungen zählen",
+  "permNativeOffTip": "Discord-Berechtigungen sind aus. Nur Administratoren, die Mod-Rolle und die Rollen, die du jedem Befehl gibst, dürfen Befehle nutzen, die eine Berechtigung brauchen, und Server verwalten umgeht die Rollen- und Kanalgrenzen nicht mehr. Wähle eine Mod-Rolle, damit dein Team nicht ausgesperrt wird.",
+  "permNativeOffSimple": "Discord-Berechtigungen zählen auf diesem Server nicht: Mitglieder brauchen zusätzlich die Mod-Rolle oder eine Rolle mit dem Befehl. Ändere das im Tab Erweitert.",
+  "permNativeCountHelp": "An: Mitglieder mit der Berechtigung, die ein Befehl braucht (z. B. Mitglieder bannen für /ban), dürfen ihn nutzen, wie bei Discord vorgesehen. Aus: Sie brauchen zusätzlich die Mod-Rolle oder eine Rolle, der du den Befehl unten gibst. Administratoren und der Eigentümer dürfen immer alles."
 }

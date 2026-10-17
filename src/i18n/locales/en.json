@@ -1103,5 +1103,6 @@
   "commandRuleDisabled": "`/{command}` is turned off in this server.",
   "commandRuleBlocked": "One of your roles isn't allowed to use `/{command}` here.",
   "commandRuleChannel": "`/{command}` only works in {channels}.",
-  "commandRuleRoles": "`/{command}` is only for certain roles in this server."
+  "commandRuleRoles": "`/{command}` is only for certain roles in this server.",
+  "commandRuleNative": "In this server, a Discord permission alone isn't enough for `/{command}`. You need the mod role or a role allowed to use it."
 }

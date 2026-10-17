@@ -89,9 +89,12 @@ describe("interaction handler", () => {
     const HELPER_ROLE = "700000000000000002";
     const banData = new SlashCommandBuilder().setName("ban").setDescription("ban").setDefaultMemberPermissions(PermissionFlagsBits.BanMembers);
 
-    async function setup(rule) {
+    async function setup(rule, { native = true } = {}) {
       const guildSettings = new GuildSettings();
       await guildSettings.set("900000000000000001", Setting.COMMAND_RULES, { ban: rule });
+      if (!native) {
+        await guildSettings.set("900000000000000001", Setting.NATIVE_PERMISSIONS, false);
+      }
       const execute = vi.fn(async (interaction) => interaction.memberPermissions.has(PermissionFlagsBits.BanMembers));
       const commands = new Map([["ban", { name: "ban", data: banData, execute }]]);
       const actionLog = { logCommand: vi.fn(async () => {}) };
@@ -116,6 +119,15 @@ describe("interaction handler", () => {
       const { handler, execute, interaction } = await setup({ roleIds: [HELPER_ROLE] });
       await handler(interaction);
       await expect(execute.mock.results[0].value).resolves.toBe(true);
+    });
+
+    it("runs the command with only the role's permission when Discord permissions don't count", async () => {
+      const { handler, execute, interaction } = await setup({ roleIds: [HELPER_ROLE] }, { native: false });
+      interaction.memberPermissions = new PermissionsBitField(PermissionFlagsBits.KickMembers).freeze();
+      await handler(interaction);
+      expect(execute).toHaveBeenCalledOnce();
+      expect(interaction.memberPermissions.has(PermissionFlagsBits.BanMembers)).toBe(true);
+      expect(interaction.memberPermissions.has(PermissionFlagsBits.KickMembers)).toBe(false);
     });
   });
 

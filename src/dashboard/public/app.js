@@ -3309,6 +3309,7 @@ function showSimplePermissions(data) {
       { class: "perm-current" },
       h("span", { class: `badge ${current ? "badge-accent" : ""}` }, presetName(current)),
       h("p", { class: "help" }, t(current ? (current === "custom" ? "permCurrentHelp_custom" : `permPresetHelp_${current}`) : "permCurrentHelp_none")),
+      settings.nativePermissions === false ? h("p", { class: "tip" }, icon("lock"), h("span", {}, t("permNativeOffSimple"))) : null,
     ),
   );
   const chooseCard = card(
@@ -3494,6 +3495,21 @@ function showAdvancedPermissions(data) {
     ),
   );
 
+  // Whether Discord permissions alone let members use commands (on unless saved as false).
+  const nativeBox = h("input", { type: "checkbox", name: "nativePermissions", role: "switch", checked: settings.nativePermissions !== false, disabled: !data.canManagePermissions, "aria-label": t("permNative") });
+  const nativeSwitch = h(
+    "label",
+    { class: "switch-card" },
+    h("span", { class: "switch-text" }, h("strong", {}, t("permNative")), h("span", { class: "help" }, t("permNativeCountHelp"))),
+    h("span", { class: "switch" }, nativeBox),
+  );
+  const nativeWarning = h("p", { class: "tip" }, icon("alert"), h("span", {}, t("permNativeOffTip")));
+  const drawNative = () => {
+    nativeWarning.hidden = nativeBox.checked;
+  };
+  nativeBox.addEventListener("change", drawNative);
+  drawNative();
+
   const commandsCard = card(
     t("permCommands"),
     "zap",
@@ -3515,6 +3531,8 @@ function showAdvancedPermissions(data) {
         "shield",
         "red",
         lockedTip(data),
+        nativeSwitch,
+        nativeWarning,
         field("modRole", "modRoleHelp", rolePicker("modRoleId")),
         field("staffRole", "staffRoleHelp", rolePicker("staffRoleId")),
         h("div", { class: "field" }, h("span", { class: "field-label" }, t("dashboardAccess")), h("span", { class: "help" }, t("dashboardAccessHelp")), checkList({ name: "dashboardRole", items: roleItems(), checked: settings.dashboardRoleIds ?? [], filterKey: "filterRoles" })),
@@ -3523,6 +3541,7 @@ function showAdvancedPermissions(data) {
       card(t("permLogRoutes"), "list", "blue", h("p", { class: "help" }, t("permLogRoutesHelp")), routeGroups),
     ],
     fields: {
+      nativePermissions: (form) => (form.querySelector('input[name="nativePermissions"]').checked ? null : false),
       modRoleId: selectValue("modRoleId"),
       staffRoleId: selectValue("staffRoleId"),
       dashboardRoleIds: checkedList("dashboardRole"),

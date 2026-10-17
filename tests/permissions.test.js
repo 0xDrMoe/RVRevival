@@ -92,6 +92,44 @@ describe("command rules", () => {
     expect(commandVerdict(interaction({ roles: [MUTED_ROLE], permissions: PermissionFlagsBits.ManageGuild, channel: { id: OTHER_CHANNEL } }), rank, settings)).toEqual({});
   });
 
+  describe("with Discord permissions not counting", () => {
+    beforeEach(async () => {
+      await settings.set(GUILD_ID, Setting.NATIVE_PERMISSIONS, false);
+      await settings.set(GUILD_ID, Setting.MOD_ROLE, MOD_ROLE);
+    });
+
+    it("refuses a member who only has the Discord permission", () => {
+      expect(commandVerdict(interaction({ permissions: PermissionFlagsBits.BanMembers | PermissionFlagsBits.ManageGuild }), ban, settings)).toMatchObject({
+        refusal: "commandRuleNative",
+      });
+    });
+
+    it("lets the mod role in with none of the member's own permissions", () => {
+      expect(commandVerdict(interaction({ roles: [MOD_ROLE], permissions: PermissionFlagsBits.ManageGuild }), ban, settings)).toEqual({ only: 0n });
+    });
+
+    it("gives a role allowed the command only that command's permission", async () => {
+      await rules({ ban: { roleIds: [HELPER_ROLE] } });
+      expect(commandVerdict(interaction({ roles: [HELPER_ROLE], permissions: PermissionFlagsBits.KickMembers }), ban, settings)).toEqual({
+        only: PermissionFlagsBits.BanMembers,
+      });
+    });
+
+    it("leaves commands everyone can use open, without the member's permissions", () => {
+      expect(commandVerdict(interaction({ permissions: PermissionFlagsBits.ManageGuild }), rank, settings)).toEqual({ only: 0n });
+    });
+
+    it("never limits administrators, and only they skip the role and channel limits", async () => {
+      await rules({ rank: { channelIds: [CATEGORY_ID] } });
+      const admin = { permissions: PermissionFlagsBits.Administrator, channel: { id: OTHER_CHANNEL } };
+      expect(commandVerdict(interaction(admin), ban, settings)).toEqual({});
+      expect(commandVerdict(interaction(admin), rank, settings)).toEqual({});
+      expect(commandVerdict(interaction({ permissions: PermissionFlagsBits.ManageGuild, channel: { id: OTHER_CHANNEL } }), rank, settings)).toMatchObject({
+        refusal: "commandRuleChannel",
+      });
+    });
+  });
+
   it("never gives out a command that needs Administrator", async () => {
     await rules({ antinuke: { roleIds: [HELPER_ROLE] } });
     expect(commandVerdict(interaction({ roles: [HELPER_ROLE] }), antinuke, settings)).toEqual({});

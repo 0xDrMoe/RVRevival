@@ -1103,5 +1103,6 @@
   "commandRuleDisabled": "الأمر `/{command}` متوقف في هذا الخادم.",
   "commandRuleBlocked": "أحد أدوارك غير مسموح له باستخدام `/{command}` هنا.",
   "commandRuleChannel": "الأمر `/{command}` يعمل فقط في {channels}.",
-  "commandRuleRoles": "الأمر `/{command}` مخصص لأدوار معينة فقط في هذا الخادم."
+  "commandRuleRoles": "الأمر `/{command}` مخصص لأدوار معينة فقط في هذا الخادم.",
+  "commandRuleNative": "في هذا الخادم، لا تكفي صلاحية Discord وحدها لاستخدام `/{command}`. تحتاج إلى دور المشرفين أو دور مسموح له باستخدامه."
 }

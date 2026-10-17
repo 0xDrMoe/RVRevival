@@ -930,5 +930,9 @@
   "logRoute_automod": "Exclusões do automod",
   "logRoute_protection": "Alertas de raid e anti-nuke",
   "permManageNicknames": "Gerenciar apelidos",
-  "backupReason_permissions-only": "Só o dono do servidor ou quem adicionou o bot pode restaurar isto."
+  "backupReason_permissions-only": "Só o dono do servidor ou quem adicionou o bot pode restaurar isto.",
+  "permNative": "Contar as permissões do Discord",
+  "permNativeOffTip": "As permissões do Discord estão desligadas. Só administradores, o cargo de moderação e os cargos que você der a cada comando podem usar comandos que pedem uma permissão, e Gerenciar servidor não ignora mais os limites de cargos e canais. Escolha um cargo de moderação para sua equipe não ficar de fora.",
+  "permNativeOffSimple": "As permissões do Discord não contam neste servidor: também é preciso o cargo de moderação ou um cargo com o comando. Altere isso na aba Avançado.",
+  "permNativeCountHelp": "Ligado: quem tem a permissão que um comando pede (como Banir membros para /ban) pode usá-lo, como o Discord prevê. Desligado: também precisa do cargo de moderação ou de um cargo a que você dê o comando abaixo. Administradores e o dono sempre podem usar tudo."
 }
