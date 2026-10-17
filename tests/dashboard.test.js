@@ -1350,7 +1350,7 @@ describe("dashboard helpers", () => {
       DASHBOARD_SESSION_SECRET: SECRET,
     };
     expect(loadDashboardConfig(env)).toMatchObject({ url: "https://rumbleverse.example.com", port: 3080 });
-    expect(loadDashboardConfig(env).legalContact).toBeUndefined();
+    expect(loadDashboardConfig(env).legalContact).toBe("support@cedartechsolutions.ca");
     expect(loadDashboardConfig({ ...env, LEGAL_CONTACT: "  team@example.com " }).legalContact).toBe("team@example.com");
     expect(() => loadDashboardConfig({ ...env, DASHBOARD_URL: "http://rumbleverse.example.com" })).toThrow(/https/);
     expect(() => loadDashboardConfig({ ...env, DASHBOARD_SESSION_SECRET: "short" })).toThrow(/32/);
