@@ -179,6 +179,7 @@ describe("dashboard", () => {
     store.createCase({ guildId: GUILD_ID, action: CaseAction.WARN, userId: USER_ID, moderatorId: "2", reason: "secret reason" });
     const stats = new BotStatsStore(db);
     stats.started(Date.now() - 60_000);
+    stats.heartbeat(Date.now(), 42);
     stats.countCommand();
     stats.countCommand();
 
@@ -192,6 +193,8 @@ describe("dashboard", () => {
       tickets: 0,
       online: true,
       upSince: expect.any(Number),
+      ping: 42,
+      uptime: { percent: 100, days: expect.any(Array) },
       inviteUrl: expect.stringContaining(`client_id=${config.clientId}`),
     });
     expect(response.body).not.toContain("secret reason");

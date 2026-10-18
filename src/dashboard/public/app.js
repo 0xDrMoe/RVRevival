@@ -828,26 +828,88 @@ async function loadPublicStats() {
   return response.json();
 }
 
-function landingStat(iconName, tone, value, label) {
+// 99.96 → "99.9%": rounded down, so the page never claims more uptime than there was.
+const formatUptime = (percent) =>
+  percent === null || percent === undefined
+    ? "–"
+    : new Intl.NumberFormat(state.language, { style: "percent", maximumFractionDigits: 1 }).format(Math.floor(percent * 10) / 1000);
+
+// Counts a number up from zero when it first shows, unless the person asked
+// for less motion. `format` turns the number into its text.
+function countUp(element, value, format) {
+  element.textContent = format(value);
+  if (typeof value !== "number" || value <= 0 || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    return;
+  }
+  const started = performance.now();
+  const step = (now) => {
+    const progress = Math.min(1, (now - started) / 900);
+    // Ease out, so it slows into the real number.
+    const shown = value * (1 - (1 - progress) ** 3);
+    element.textContent = format(progress < 1 ? (Number.isInteger(value) ? Math.floor(shown) : shown) : value);
+    if (progress < 1) {
+      requestAnimationFrame(step);
+    }
+  };
+  requestAnimationFrame(step);
+}
+
+function landingStat(iconName, tone, value, label, format = formatCount) {
+  const number = h("strong", {});
+  countUp(number, value, format);
+  return h("div", { class: `landing-stat tone-${tone}` }, iconChip(iconName, tone, "sm"), number, h("span", {}, label));
+}
+
+// How a day's bar is colored: [class, tone].
+const uptimeLevel = (percent) =>
+  percent === null ? "none" : percent >= 99 ? "up" : percent >= 95 ? "dip" : "down";
+
+// One bar a day for the last 30 days, oldest first, like a status page.
+function landingUptimeStrip(stats) {
+  const days = stats.uptime?.days ?? [];
+  const today = Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate());
+  const dateFormat = new Intl.DateTimeFormat(state.language, { month: "short", day: "numeric", timeZone: "UTC" });
+  const bars = days.map((percent, index) => {
+    const date = dateFormat.format(today - (days.length - 1 - index) * DAY_MS);
+    const label = t("landingDayUptime", { date, percent: percent === null ? t("landingNoData") : formatUptime(percent) });
+    return h("span", { class: `uptime-bar ${uptimeLevel(percent)}`, title: label, role: "listitem", "aria-label": label });
+  });
+  const live = stats.online
+    ? [
+        stats.upSince ? t("landingUpFor", { time: formatDuration(Date.now() - stats.upSince) }) : t("landingOnline"),
+        stats.ping === null || stats.ping === undefined ? null : t("landingPing", { ms: formatNumber(stats.ping) }),
+      ]
+    : [t("landingOffline")];
   return h(
     "div",
-    { class: `landing-stat tone-${tone}` },
-    iconChip(iconName, tone, "sm"),
-    h("strong", {}, value),
-    h("span", {}, label),
+    { class: "landing-uptime" },
+    h(
+      "div",
+      { class: "landing-uptime-head" },
+      h("strong", {}, t("landingUptimeDays")),
+      h("span", { class: `landing-uptime-live ${stats.online ? "on" : "off"}` }, live.filter(Boolean).join(" · ")),
+    ),
+    h("div", { class: "uptime-bars", role: "list", "aria-label": t("landingUptimeDays") }, bars),
+    h(
+      "div",
+      { class: "landing-uptime-scale" },
+      h("span", {}, t("landingDaysAgo", { count: formatNumber(days.length) })),
+      h("span", {}, t("landingToday")),
+    ),
   );
 }
 
 // The numbers band under the hero, filled in once the numbers arrive.
 function landingStats(stats) {
-  const uptime = stats.online ? (stats.upSince ? formatDuration(Date.now() - stats.upSince) : t("landingOnline")) : t("landingOffline");
+  const uptime = stats.uptime?.percent ?? null;
   return [
-    landingStat("layers", "accent", formatCount(stats.servers), t("landingServers")),
-    landingStat("users", "pink", formatCount(stats.members), t("landingMembers")),
-    landingStat("zap", "amber", formatCount(stats.commandsRun), t("landingCommands")),
-    landingStat("gavel", "red", formatCount(stats.cases), t("landingCases")),
-    landingStat("ticket", "cyan", formatCount(stats.tickets), t("landingTickets_title")),
-    landingStat("activity", stats.online ? "green" : "gray", uptime, t("landingUptime")),
+    landingStat("layers", "accent", stats.servers, t("landingServers")),
+    landingStat("users", "pink", stats.members, t("landingMembers")),
+    landingStat("zap", "amber", stats.commandsRun, t("landingCommands")),
+    landingStat("gavel", "red", stats.cases, t("landingCases")),
+    landingStat("ticket", "cyan", stats.tickets, t("landingTickets_title")),
+    landingStat("activity", stats.online ? "green" : "gray", uptime, t("landingUptimeShort"), formatUptime),
+    landingUptimeStrip(stats),
   ];
 }
 
@@ -857,6 +919,9 @@ function landingStatus(stats) {
     "span",
     { class: `landing-status ${stats.online ? "on" : "off"}` },
     stats.online && stats.upSince ? t("landingUpFor", { time: formatDuration(Date.now() - stats.upSince) }) : t(stats.online ? "landingOnline" : "landingOffline"),
+    stats.uptime?.percent === null || stats.uptime?.percent === undefined
+      ? null
+      : h("span", { class: "landing-status-uptime" }, t("landingUptimeBadge", { percent: formatUptime(stats.uptime.percent) })),
   );
 }
 

@@ -375,6 +375,14 @@ const MIGRATIONS = [
     value  INTEGER NOT NULL
   ) WITHOUT ROWID;
   `,
+  // 26: how long the bot was online in each hour (stats/botStats.js), for the
+  // landing page's 30-day uptime. Hours older than the window are pruned.
+  `
+  CREATE TABLE bot_uptime (
+    hour       INTEGER PRIMARY KEY,
+    online_ms  INTEGER NOT NULL
+  ) WITHOUT ROWID;
+  `,
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS.length;

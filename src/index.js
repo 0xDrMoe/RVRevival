@@ -133,7 +133,8 @@ async function start() {
       logger.warn(`Couldn't record the bot's ${what}`, { error });
     }
   };
-  const heartbeat = setInterval(() => countSafely("heartbeat", () => botStats.heartbeat()), HEARTBEAT_MS);
+  // The Discord ping goes with it, for the landing page (`client` is set by connect() below).
+  const heartbeat = setInterval(() => countSafely("heartbeat", () => botStats.heartbeat(Date.now(), client?.ws.ping)), HEARTBEAT_MS);
   heartbeat.unref();
   // Join-to-create voice channels (/voice).
   const tempVoiceChannels = new TempVoiceStore(db);
