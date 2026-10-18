@@ -4289,6 +4289,96 @@ dialog textarea {
   color: var(--muted);
 }
 
+.landing-stat.tone-green strong {
+  color: var(--tone);
+}
+
+/* The 30-day uptime: one bar a day, along the bottom of the band. */
+.landing-uptime {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 10px;
+  padding: 18px 22px 16px;
+  border-top: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface) 92%, #10b981 8%);
+}
+
+.landing-uptime-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 6px 16px;
+  font-size: 0.9rem;
+}
+
+.landing-uptime-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.landing-uptime-live::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ef4444;
+}
+
+.landing-uptime-live.on::before {
+  background: #10b981;
+  box-shadow: 0 0 0 3px rgb(16 185 129 / 25%);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.uptime-bars {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 4px;
+  height: 34px;
+}
+
+.uptime-bar {
+  border-radius: 4px;
+  background: var(--border);
+  transition: transform 0.15s ease, filter 0.15s ease;
+}
+
+.uptime-bar:hover {
+  transform: scaleY(1.12);
+  filter: brightness(1.1);
+}
+
+.uptime-bar.up {
+  background: #10b981;
+}
+
+.uptime-bar.dip {
+  background: #f59e0b;
+}
+
+.uptime-bar.down {
+  background: #ef4444;
+}
+
+.landing-uptime-scale {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.landing-status-uptime {
+  padding-inline-start: 8px;
+  border-inline-start: 1px solid rgb(255 255 255 / 30%);
+  font-variant-numeric: tabular-nums;
+}
+
 .sk-stat {
   height: 108px;
   margin: 1px;
@@ -4742,6 +4832,15 @@ dialog textarea {
     padding: 16px;
   }
 
+  .landing-uptime {
+    padding: 16px;
+  }
+
+  .uptime-bars {
+    gap: 2px;
+    height: 28px;
+  }
+
   .landing-features,
   .landing-steps,
   .landing-dash,
@@ -5050,6 +5149,14 @@ dialog textarea {
 [data-style="rumble"] :is(.landing-stats, .landing-demo) {
   border: 2px solid var(--outline);
   box-shadow: var(--pop);
+}
+
+[data-style="rumble"] .landing-uptime {
+  border-top: 2px solid var(--outline);
+}
+
+[data-style="rumble"] .uptime-bar:not(.none) {
+  box-shadow: inset 0 -3px 0 rgb(0 0 0 / 18%);
 }
 
 [data-style="rumble"] .landing-stat strong {
