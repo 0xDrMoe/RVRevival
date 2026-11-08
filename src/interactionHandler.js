@@ -158,7 +158,7 @@ export function createInteractionHandler({ commands, logger, forcedLanguage, act
       await handleAutocomplete(interaction);
     } else if (interaction.isChatInputCommand()) {
       await handleCommand(interaction);
-    } else if (interaction.isButton() || interaction.isModalSubmit() || interaction.isStringSelectMenu()) {
+    } else if (interaction.isButton() || interaction.isModalSubmit() || interaction.isAnySelectMenu()) {
       await handleComponent(interaction);
     }
   };

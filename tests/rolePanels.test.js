@@ -1,6 +1,7 @@
-import { ButtonStyle, MessageFlags, PermissionFlagsBits } from "discord.js";
+import { ButtonStyle, ChannelType, MessageFlags, PermissionFlagsBits } from "discord.js";
 import { describe, expect, it, vi } from "vitest";
 import { buildRolePanelCommandData, createRolePanelCommand } from "../src/commands/rolePanel.js";
+import { createRolePanelWizard, parseWizardId, SESSION_IDLE_MS, wizardId } from "../src/commands/rolePanelWizard.js";
 import { buildPanelMessage, buttonId, cleanEmoji, PanelMode, parseButtonId, roleProblem } from "../src/community/rolePanels.js";
 import { translate } from "../src/i18n/i18n.js";
 import { Status } from "../src/logs/actionLog.js";
@@ -174,7 +175,7 @@ describe("/rolepanel", () => {
   it("is hidden from members without Manage Roles", () => {
     const data = buildRolePanelCommandData();
     expect(data.default_member_permissions).toBe(PermissionFlagsBits.ManageRoles.toString());
-    expect(data.options.map((option) => option.name)).toEqual(["create", "add", "remove", "delete", "list"]);
+    expect(data.options.map((option) => option.name)).toEqual(["setup", "create", "add", "remove", "delete", "list"]);
   });
 
   it("refuses members without Manage Roles", async () => {
@@ -299,5 +300,208 @@ describe("/rolepanel", () => {
       expect((await click(PC_ROLE, member)).outcome.key).toBe("rolePanelButtonBroken");
       expect(member.roles.add).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe("/rolepanel setup", () => {
+  const OTHER_CHANNEL = "800000000000000002";
+
+  // Fakes the parts of a slash command, button, menu or form the editor uses.
+  function fakeEditorInteraction(guild, { customId, values, fields = {}, member = fakeMember(ADMIN_ID, 40), userId = ADMIN_ID, panel = null } = {}) {
+    const interaction = {
+      customId,
+      values,
+      locale: "en-US",
+      guildId: GUILD_ID,
+      guild,
+      member,
+      user: { id: userId },
+      channel: guild.channel,
+      deferred: false,
+      replied: false,
+      inCachedGuild: () => true,
+      memberPermissions: { has: (bit) => bit === PermissionFlagsBits.ManageRoles },
+      options: { getSubcommand: () => "setup", getInteger: () => panel },
+      fields: { getTextInputValue: (name) => fields[name] ?? "" },
+      reply: vi.fn(async (payload) => {
+        interaction.replied = true;
+        interaction.shown = payload;
+      }),
+      update: vi.fn(async (payload) => (interaction.shown = payload)),
+      deferUpdate: vi.fn(async () => (interaction.deferred = true)),
+      editReply: vi.fn(async (payload) => (interaction.shown = payload)),
+      showModal: vi.fn(async (modal) => (interaction.modal = modal.toJSON())),
+    };
+    return interaction;
+  }
+
+  const customIds = (payload) => payload.components.flatMap((row) => row.toJSON().components.map((component) => component.custom_id));
+  const buttonLabels = (payload) => payload.components.flatMap((row) => row.toJSON().components.map((component) => component.label)).filter(Boolean);
+
+  function setupEditor({ guild = fakeGuild() } = {}) {
+    guild.channel.type = ChannelType.GuildText;
+    const other = { ...guild.channel, id: OTHER_CHANNEL, send: vi.fn(async (payload) => ({ id: "500000000000000099", payload })) };
+    guild.channels.cache.set(OTHER_CHANNEL, other);
+    const guildSettings = new GuildSettings();
+    const command = createRolePanelCommand({ guildSettings, logger: fakeLogger() });
+    const handle = command.componentPrefixes["rpw:"].handle;
+    let shown;
+    const open = async (panel = null) => {
+      const interaction = fakeEditorInteraction(guild, { panel });
+      const outcome = await command.execute(interaction);
+      shown = interaction.shown;
+      return { interaction, outcome };
+    };
+    // Clicks the component whose ID ends with `action` on the editor as last shown.
+    const click = async (action, options = {}) => {
+      const customId = options.customId ?? customIds(shown).find((id) => id.split(":")[2] === action);
+      expect(customId, action).toBeDefined();
+      const interaction = fakeEditorInteraction(guild, { ...options, customId });
+      const outcome = await handle(interaction);
+      if (interaction.shown) {
+        shown = interaction.shown;
+      }
+      return { interaction, outcome };
+    };
+    const sessionId = () => customIds(shown)[0].split(":")[1];
+    const submit = (action, fields, arg) => click(action, { customId: wizardId(sessionId(), action, arg), fields });
+    return { guild, other, guildSettings, command, open, click, submit, shown: () => shown, panels: () => guildSettings.get(GUILD_ID, Setting.ROLE_PANELS) ?? [] };
+  }
+
+  it("round-trips its custom IDs", () => {
+    expect(parseWizardId(wizardId("0123456789ab", "save"))).toEqual({ sessionId: "0123456789ab", action: "save", arg: undefined });
+    expect(parseWizardId(wizardId("0123456789ab", "roleform", PC_ROLE))).toEqual({ sessionId: "0123456789ab", action: "roleform", arg: PC_ROLE });
+    expect(parseWizardId(`rp:1:${PC_ROLE}`)).toBeUndefined();
+  });
+
+  it("starts a new panel when there are none, and posts nothing until Save", async () => {
+    const editor = setupEditor();
+    const { interaction } = await editor.open();
+    expect(interaction.reply).toHaveBeenCalledWith(expect.objectContaining({ flags: MessageFlags.Ephemeral }));
+    expect(buttonLabels(editor.shown())).toEqual(
+      expect.arrayContaining(["Add roles", "Edit message", "Post panel", "Cancel all changes"]),
+    );
+    expect(editor.shown().embeds[0].toJSON().title).toBe("Pick your roles");
+
+    await editor.click("vadd");
+    const menu = editor.shown().components[0].toJSON().components[0];
+    expect(menu).toMatchObject({ type: 6, max_values: 25 });
+    // Bulk add: two good roles, one with moderator permissions, one above the bot.
+    await editor.click("addroles", { values: [PC_ROLE, CONSOLE_ROLE, MOD_ROLE, HIGH_ROLE] });
+    const notice = editor.shown().content;
+    expect(notice).toContain(`Added <@&${PC_ROLE}>, <@&${CONSOLE_ROLE}>.`);
+    expect(notice).toContain(translate("en", "rolePanelDangerous", { role: `<@&${MOD_ROLE}>` }));
+    expect(notice).toContain(translate("en", "rolePanelAboveBot", { role: `<@&${HIGH_ROLE}>` }));
+
+    await editor.click("msg");
+    await editor.submit("msgform", { title: "Platforms", description: "Pick yours" });
+    await editor.click("vedit");
+    const { interaction: picked } = await editor.click("editpick", { values: [PC_ROLE] });
+    expect(picked.modal.custom_id).toContain(`roleform:${PC_ROLE}`);
+    await editor.submit("roleform", { emoji: "pc", label: "" }, PC_ROLE);
+    expect(editor.shown().content).toBe(translate("en", "rolePanelBadEmoji"));
+    await editor.submit("roleform", { emoji: "🖥️", label: "Computer" }, PC_ROLE);
+    await editor.click("mode");
+
+    expect(editor.guild.sent).toHaveLength(0);
+    expect(editor.panels()).toEqual([]);
+
+    const { outcome } = await editor.click("save");
+    expect(outcome).toMatchObject({ status: Status.SUCCESS, key: "rolePanelWizardPosted" });
+    expect(editor.guild.sent).toHaveLength(1);
+    expect(editor.panels()).toEqual([
+      expect.objectContaining({
+        id: 1,
+        channelId: CHANNEL_ID,
+        title: "Platforms",
+        description: "Pick yours",
+        mode: PanelMode.UNIQUE,
+        roles: [
+          { roleId: PC_ROLE, emoji: "🖥️", label: "Computer" },
+          { roleId: CONSOLE_ROLE, emoji: null, label: null },
+        ],
+      }),
+    ]);
+    // Saved: the editor stays open on the saved panel, with nothing left to save.
+    expect(editor.shown().embeds[1].toJSON().footer.text).toBe("No unsaved changes.");
+    expect(buttonLabels(editor.shown())).toContain("Delete panel");
+  });
+
+  it("throws every change away on Cancel", async () => {
+    const editor = setupEditor();
+    await editor.open();
+    await editor.click("vadd");
+    await editor.click("addroles", { values: [PC_ROLE] });
+    await editor.click("cancel");
+    expect(editor.shown()).toMatchObject({ content: "Cancelled. None of your changes were saved.", components: [] });
+    expect(editor.panels()).toEqual([]);
+    expect(editor.guild.sent).toHaveLength(0);
+  });
+
+  it("edits an existing panel: removes roles, moves it and deletes the old message", async () => {
+    const editor = setupEditor();
+    await editor.open();
+    await editor.click("vadd");
+    await editor.click("addroles", { values: [PC_ROLE, CONSOLE_ROLE] });
+    await editor.click("save");
+    const firstMessage = editor.panels()[0].messageId;
+
+    await editor.open(1);
+    await editor.click("vremove");
+    await editor.click("removeroles", { values: [CONSOLE_ROLE] });
+    expect(editor.shown().content).toBe(`Removed <@&${CONSOLE_ROLE}>.`);
+    await editor.click("vchannel");
+    await editor.click("setchannel", { values: [OTHER_CHANNEL] });
+    const { outcome } = await editor.click("save");
+    expect(outcome).toMatchObject({ status: Status.SUCCESS, key: "rolePanelWizardSaved" });
+    expect(editor.panels()).toEqual([expect.objectContaining({ id: 1, channelId: OTHER_CHANNEL, roles: [{ roleId: PC_ROLE, emoji: null, label: null }] })]);
+    expect(editor.other.send).toHaveBeenCalledTimes(1);
+    expect(editor.guild.channel.messages.delete).toHaveBeenCalledWith(firstMessage);
+  });
+
+  it("lists the panels to pick from, and deletes one only after asking", async () => {
+    const editor = setupEditor();
+    await editor.open();
+    await editor.click("save");
+    await editor.open();
+    expect(editor.shown().embeds[0].toJSON().title).toBe("Role panel setup");
+    await editor.click("pick", { values: ["1"] });
+    await editor.click("vdelete");
+    expect(editor.panels()).toHaveLength(1);
+    const { outcome } = await editor.click("confirmdelete");
+    expect(outcome).toMatchObject({ status: Status.SUCCESS, key: "rolePanelDeleted" });
+    expect(editor.panels()).toEqual([]);
+    expect(editor.shown().content).toBe('Deleted the panel "Pick your roles".');
+  });
+
+  it("refuses a panel that doesn't exist", async () => {
+    const editor = setupEditor();
+    const { interaction, outcome } = await editor.open(7);
+    expect(outcome).toMatchObject({ status: Status.REFUSED, key: "rolePanelNotFound" });
+    expect(interaction.reply).toHaveBeenCalledWith(expect.objectContaining({ content: translate("en", "rolePanelNotFound") }));
+  });
+
+  it("closes for anyone else, and after 30 idle minutes", async () => {
+    let time = 1_000;
+    const editor = setupEditor();
+    await editor.open();
+    const stranger = await editor.click("vadd", { userId: USER_ID });
+    expect(stranger.interaction.update).toHaveBeenCalledWith(expect.objectContaining({ content: translate("en", "rolePanelWizardExpired") }));
+    // The command's own clock isn't injectable, so check the wizard directly.
+    const wizard = createRolePanelWizard({
+      guildSettings: new GuildSettings(),
+      logger: fakeLogger(),
+      locks: { run: (key, task) => task() },
+      save: async () => {},
+      publish: async (panel) => panel,
+      now: () => time,
+    });
+    const interaction = fakeEditorInteraction(editor.guild, {});
+    await wizard.start(interaction, null);
+    const id = customIds(interaction.shown)[0];
+    time += SESSION_IDLE_MS + 1;
+    const late = fakeEditorInteraction(editor.guild, { customId: id });
+    await wizard.handle(late);
+    expect(late.update).toHaveBeenCalledWith(expect.objectContaining({ content: translate("en", "rolePanelWizardExpired") }));
   });
 });

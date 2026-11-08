@@ -30,6 +30,7 @@ function fakeInteraction({ topic = null, locale = "en-US", customId, values } = 
     values,
     options: { getString: () => topic, getFocused: () => topic ?? "" },
     isStringSelectMenu: () => values !== undefined,
+    isAnySelectMenu: () => values !== undefined,
     reply: vi.fn(async () => {}),
     update: vi.fn(async () => {}),
     respond: vi.fn(async () => {}),

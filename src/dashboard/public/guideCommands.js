@@ -1078,8 +1078,13 @@ export const COMMAND_PARTS = [
         who: "**Manage Roles**.",
         usages: [
           {
+            usage: "/rolepanel setup [panel]",
+            what: "Opens a private editor. Pick a panel or create a new one, then use its buttons: **Add roles** (up to 25 at once), **Edit a role** (emoji and button text), **Remove roles**, **Edit message**, **Channel** and the mode. Nothing is posted until you press **Save**; **Cancel all changes** throws the draft away. **Delete panel** asks first.",
+            options: [["panel", "The panel to open. Leave it out to pick one from a list or create a new one."]],
+          },
+          {
             usage: "/rolepanel create channel title [description] [mode]",
-            what: "Posts a new, empty panel. Add roles with `/rolepanel add`. Up to 10 panels.",
+            what: "Posts a new, empty panel. Add roles with `/rolepanel setup` or `/rolepanel add`. Up to 10 panels.",
             options: [
               ["channel", "Where to post the panel."],
               ["title", "The panel's title, up to 100 characters, like *Pick your platform*."],
@@ -1116,8 +1121,10 @@ export const COMMAND_PARTS = [
             options: [],
           },
         ],
-        example: ["/rolepanel create channel:#roles title:Platforms mode:Pick any number of roles", "/rolepanel add panel:Platforms role:@PC emoji:🖥️", "/rolepanel add panel:Platforms role:@Console emoji:🎮 label:PlayStation or Xbox"],
+        example: ["/rolepanel setup", "/rolepanel setup panel:Platforms", "/rolepanel add panel:Platforms role:@Console emoji:🎮 label:PlayStation or Xbox"],
         tips: [
+          "The editor is only visible to you and closes after 30 minutes without use (or when the bot restarts). Saving checks every role again.",
+          "Moving a panel to another channel with **Channel** posts it there and deletes the old message when you save.",
           "Members click once to get the role and again to take it off.",
           "A panel message deleted by accident comes back on the next `add` or `remove`.",
           "Country roles stay on the country guide, never on a panel.",
