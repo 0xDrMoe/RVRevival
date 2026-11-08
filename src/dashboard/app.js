@@ -344,7 +344,7 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     });
     reply.setCookie(SESSION_COOKIE, sessionToken, { ...cookieOptions, maxAge: SESSION_DAYS * 24 * 60 * 60 });
     logger.info("Dashboard login", { userId: user.id });
-    return reply.redirect("/");
+    return reply.redirect("/#/servers");
   });
 
   app.post("/auth/logout", async (request, reply) => {

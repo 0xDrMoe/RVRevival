@@ -2,6 +2,7 @@
   "loading": "Loading…",
   "logout": "Log out",
   "topLogin": "Log in",
+  "topHome": "Home page",
   "loginTitle": "Rabble Dashboard",
   "loginIntro": "Log in with Discord to manage the bot in servers where you have Manage Server.",
   "loginButton": "Log in with Discord",

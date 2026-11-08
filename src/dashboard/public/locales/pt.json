@@ -2,6 +2,7 @@
   "loading": "Carregando…",
   "logout": "Sair",
   "topLogin": "Entrar",
+  "topHome": "Página inicial",
   "loginTitle": "Painel do Rabble",
   "loginIntro": "Entre com o Discord para gerenciar o bot nos servidores em que você tem Gerenciar servidor.",
   "loginButton": "Entrar com o Discord",

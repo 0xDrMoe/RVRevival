@@ -2,6 +2,7 @@
   "loading": "Cargando…",
   "logout": "Cerrar sesión",
   "topLogin": "Iniciar sesión",
+  "topHome": "Página de inicio",
   "loginTitle": "Panel de Rabble",
   "loginIntro": "Inicia sesión con Discord para gestionar el bot en los servidores donde tienes Gestionar servidor.",
   "loginButton": "Iniciar sesión con Discord",

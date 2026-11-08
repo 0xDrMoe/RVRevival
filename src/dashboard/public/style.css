@@ -4925,7 +4925,8 @@ dialog textarea {
 }
 
 .topbar-login,
-.topnav-invite {
+.topnav-invite,
+.topnav-dashboard {
   min-height: 36px;
   white-space: nowrap;
 }
@@ -4936,10 +4937,9 @@ dialog textarea {
   gap: 8px;
 }
 
-/* The invite button sits next to the account controls on the far side. */
-.topnav-invite {
-  margin-inline-start: auto;
-  white-space: nowrap;
+/* The buttons sit next to the account controls on the far side. */
+.topnav-links {
+  margin-inline-end: auto;
 }
 
 @media (max-width: 1000px) {
@@ -4953,7 +4953,8 @@ dialog textarea {
     margin-inline-start: auto;
   }
 
-  .topnav-invite {
+  .topnav-invite,
+  .topnav-dashboard {
     display: none;
   }
 }

@@ -352,10 +352,12 @@ function svg(tag, attributes = {}, ...children) {
 }
 
 function show(...children) {
-  // The section links in the top bar belong to the landing page only.
-  if (!children[0]?.classList?.contains("landing")) {
+  // The section links in the top bar belong to the landing page, and search to the dashboard.
+  const landing = Boolean(children[0]?.classList?.contains("landing"));
+  if (!landing) {
     topnav.hidden = true;
   }
+  document.getElementById("searchButton").hidden = landing || !state.me;
   if (!(children.length === 1 && children[0] === state.shell?.element)) {
     document.body.classList.remove("in-guild");
   }
@@ -703,6 +705,8 @@ function renderAccount() {
     "div",
     { class: "menu", role: "menu", hidden: true },
     h("div", { class: "menu-user" }, avatar(), h("strong", {}, user.username)),
+    h("a", { class: "menu-item", role: "menuitem", href: "#/servers" }, icon("layers"), t("allServers")),
+    h("a", { class: "menu-item", role: "menuitem", href: "#/" }, icon("home"), t("topHome")),
     h(
       "button",
       { class: "menu-item", type: "button", role: "menuitem", onclick: () => (closeMenus(), openAppearance()) },
@@ -1003,9 +1007,11 @@ function showLanding(failedLogin = false) {
       landingJump("faq", t("landingNavFaq")),
     ),
     topInvite,
+    state.me ? h("a", { class: "button ghost small topnav-dashboard", href: "#/servers" }, icon("layers"), t("landingDashboard")) : null,
   );
   topnav.hidden = false;
-  const login = () => h("a", { class: "button landing-login big", href: "/auth/login" }, icon("home"), t("landingDashboard"));
+  const dashboardHref = state.me ? "#/servers" : "/auth/login";
+  const login = () => h("a", { class: "button landing-login big", href: dashboardHref }, icon("home"), t("landingDashboard"));
   const status = h("span", { class: "landing-status" }, t("loading"));
   const stats = h("div", { class: "landing-stats", "aria-busy": "true" }, Array.from({ length: 6 }, () => h("span", { class: "sk sk-stat" })));
   const statsBand = h("section", { class: "landing-stats-band", "aria-label": t("landingStatsTitle") }, stats);
@@ -1262,7 +1268,7 @@ function guildSwitcher(data) {
       h("a", { class: "menu-item", role: "menuitem", href: `#/g/${entry.id}/overview` }, guildIcon(entry, "xs"), h("span", { class: "grow" }, entry.name)),
     ),
     others.length > 0 ? h("hr") : null,
-    h("a", { class: "menu-item", role: "menuitem", href: "#/" }, icon("layers"), t("allServers")),
+    h("a", { class: "menu-item", role: "menuitem", href: "#/servers" }, icon("layers"), t("allServers")),
   );
   const button = h(
     "button",
@@ -6658,9 +6664,21 @@ function takeReturn() {
   }
 }
 
+// The landing page is for everyone, logged in or not. Logged in, it shows
+// the account menu and a link to the dashboard.
+async function showHome() {
+  if (!state.me) {
+    const response = await fetch("/api/me", { credentials: "same-origin" }).catch(() => null);
+    state.me = response?.ok ? await response.json().catch(() => null) : null;
+    renderChrome();
+  }
+  const failedLogin = new URLSearchParams(location.hash.split("?")[1] ?? "").get("login") === "failed";
+  showLanding(failedLogin);
+}
+
 async function route() {
   let [path] = location.hash.replace(/^#/, "").split("?");
-  if (path === "" || path === "/") {
+  if (path === "/servers") {
     const back = takeReturn();
     if (back && /^#\/appeal\/\d{17,20}$/.test(back)) {
       history.replaceState(null, "", back);
@@ -6694,13 +6712,15 @@ async function route() {
       await showAppealForm(appeal[1]);
     } else if (match && SHOW_PAGE[pageId]) {
       await SHOW_PAGE[pageId](match[1]);
-    } else {
+    } else if (path === "/servers") {
       await showServers();
+    } else {
+      await showHome();
     }
   } catch (error) {
     failed(error);
     if (!(error instanceof ApiError && error.status === 401) && match) {
-      show(h("p", { class: "muted empty" }, t("errorGeneric")), h("a", { class: "button ghost", href: "#/" }, t("backToServers")));
+      show(h("p", { class: "muted empty" }, t("errorGeneric")), h("a", { class: "button ghost", href: "#/servers" }, t("backToServers")));
     }
   }
 }

@@ -108,7 +108,7 @@ describe("dashboard", () => {
       url: `/auth/callback?code=abc&state=${state}`,
       cookies: { rv_oauth_state: stateCookie.value },
     });
-    expect(callback.headers.location).toBe("/");
+    expect(callback.headers.location).toBe("/#/servers");
     const session = callback.cookies.find((cookie) => cookie.name === "rv_session");
     expect(session).toMatchObject({ httpOnly: true, secure: true, sameSite: "Lax" });
     return { rv_session: session.value };

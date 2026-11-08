@@ -2,6 +2,7 @@
   "loading": "Wird geladen…",
   "logout": "Abmelden",
   "topLogin": "Anmelden",
+  "topHome": "Startseite",
   "loginTitle": "Rabble Dashboard",
   "loginIntro": "Melde dich mit Discord an, um den Bot auf Servern zu verwalten, auf denen du Server verwalten darfst.",
   "loginButton": "Mit Discord anmelden",
