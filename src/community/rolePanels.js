@@ -24,6 +24,9 @@ export const MAX_TITLE_LENGTH = 100;
 export const MAX_DESCRIPTION_LENGTH = 1000;
 export const MAX_LABEL_LENGTH = 80;
 export const BUTTON_PREFIX = "rp:";
+// Confirm, under the "Add X?" question: "rpc:<panel>:<role>:<add|remove>".
+export const CONFIRM_PREFIX = "rpc:";
+export const PickAction = Object.freeze({ ADD: "add", REMOVE: "remove" });
 
 // Roles members must never be able to give themselves.
 
@@ -46,6 +49,13 @@ export const buttonId = (panelId, roleId) => `${BUTTON_PREFIX}${panelId}:${roleI
 export function parseButtonId(customId) {
   const match = /^rp:(\d+):(\d{17,20})$/.exec(customId);
   return match ? { panelId: Number(match[1]), roleId: match[2] } : undefined;
+}
+
+export const confirmId = (panelId, roleId, action) => `${CONFIRM_PREFIX}${panelId}:${roleId}:${action}`;
+
+export function parseConfirmId(customId) {
+  const match = /^rpc:(\d+):(\d{17,20}):(add|remove)$/.exec(customId);
+  return match ? { panelId: Number(match[1]), roleId: match[2], action: match[3] } : undefined;
 }
 
 // Why a role can't go on a panel (a translation key), or undefined if it can.

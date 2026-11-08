@@ -16,6 +16,7 @@ import { createModerationCommands } from "./moderation.js";
 import { createPurgeCommand } from "./purge.js";
 import { createRemindCommand } from "./remind.js";
 import { createRolePanelCommand } from "./rolePanel.js";
+import { createRoleConfirmations, RoleConfirmStore } from "../roles/roleConfirmations.js";
 import { createSettingsCommand } from "./settings.js";
 import { createStarboardCommand } from "./starboard.js";
 import { createTagCommands } from "./tags.js";
@@ -58,7 +59,8 @@ import { createServerInfoCommand } from "./serverInfo.js";
 // (sticky/stickies.js) to run /sticky, `highlightStore`
 // (highlights/highlightStore.js) with `highlights` (highlights/highlights.js)
 // to run /highlight, not to register them. `dashboardUrl` adds dashboard links
-// to /guide and /dashboard.
+// to /guide and /dashboard. `roleConfirmations` (roles/roleConfirmations.js)
+// makes role panels and the country picker ask before changing roles.
 export function createCommands({
   logger,
   guildSettings,
@@ -85,13 +87,14 @@ export function createCommands({
   stickies,
   highlightStore,
   highlights,
+  roleConfirmations = createRoleConfirmations({ guildSettings, store: new RoleConfirmStore(), forcedLanguage }),
   dashboardUrl,
 }) {
   // Shared, so /country and /country-staff can't change the same member at the same time.
   const roleService = new CountryRoleService(logger);
   const moderationOptions = { logger, guildSettings, forcedLanguage, moderation };
   const commands = [
-    createCountryCommand({ logger, guildSettings, forcedLanguage, roleService }),
+    createCountryCommand({ logger, guildSettings, forcedLanguage, roleService, confirmations: roleConfirmations }),
     createCountryStaffCommand({ logger, guildSettings, forcedLanguage, roleService }),
     createCountryHelpCommand({ guildSettings, forcedLanguage }),
     createSettingsCommand({ guildSettings, forcedLanguage }),
@@ -105,7 +108,7 @@ export function createCommands({
     ...createChannelToolCommands({ guildSettings, modLog, forcedLanguage }),
     ...createMemberToolCommands({ guildSettings, modLog, forcedLanguage }),
     createWelcomeCommand({ guildSettings, forcedLanguage }),
-    createRolePanelCommand({ guildSettings, logger, forcedLanguage }),
+    createRolePanelCommand({ guildSettings, logger, forcedLanguage, confirmations: roleConfirmations }),
     ...createTagCommands({ guildSettings, forcedLanguage }),
     createRemindCommand({ reminders, forcedLanguage }),
     createGiveawayCommand({ giveaways, guildSettings, logger, forcedLanguage }),

@@ -400,6 +400,16 @@ const MIGRATIONS = [
   );
   CREATE INDEX ticket_events_by_ticket ON ticket_events (ticket_id, id);
   `,
+  // 28: members who turned role pick confirmations on or off for themselves
+  // (roles/roleConfirmations.js). No row = the server's default.
+  `
+  CREATE TABLE role_confirm_prefs (
+    guild_id  TEXT    NOT NULL,
+    user_id   TEXT    NOT NULL,
+    enabled   INTEGER NOT NULL,
+    PRIMARY KEY (guild_id, user_id)
+  ) WITHOUT ROWID;
+  `,
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS.length;

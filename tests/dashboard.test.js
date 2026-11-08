@@ -1418,6 +1418,14 @@ describe("dashboard helpers", () => {
     expect(() => checkSettingChanges([], server)).toThrow(InvalidSetting);
   });
 
+  it("saves role pick confirmations as off or nothing (on is the default)", () => {
+    const server = { guildId: GUILD_ID, roles: [], channels: [] };
+    expect(checkSettingChanges({ roleConfirmations: false }, server)).toEqual({ roleConfirmations: false });
+    expect(checkSettingChanges({ roleConfirmations: true }, server)).toEqual({ roleConfirmations: null });
+    expect(checkSettingChanges({ roleConfirmations: null }, server)).toEqual({ roleConfirmations: null });
+    expect(() => checkSettingChanges({ roleConfirmations: "off" }, server)).toThrow(InvalidSetting);
+  });
+
   it("checks the starboard settings", () => {
     const server = { guildId: GUILD_ID, roles: [], channels: [{ id: TEXT_ID, type: ChannelType.GuildText }] };
     expect(checkSettingChanges({ starboard: { channelId: TEXT_ID, threshold: 5, emoji: " ⭐ ", extra: 1 } }, server)).toEqual({

@@ -2,7 +2,17 @@ import { ButtonStyle, ChannelType, MessageFlags, PermissionFlagsBits } from "dis
 import { describe, expect, it, vi } from "vitest";
 import { buildRolePanelCommandData, createRolePanelCommand } from "../src/commands/rolePanel.js";
 import { createRolePanelWizard, parseWizardId, SESSION_IDLE_MS, wizardId } from "../src/commands/rolePanelWizard.js";
-import { buildPanelMessage, buttonId, cleanEmoji, PanelMode, parseButtonId, roleProblem } from "../src/community/rolePanels.js";
+import {
+  buildPanelMessage,
+  buttonId,
+  cleanEmoji,
+  confirmId,
+  PanelMode,
+  parseButtonId,
+  parseConfirmId,
+  roleProblem,
+} from "../src/community/rolePanels.js";
+import { ConfirmId, createRoleConfirmations, RoleConfirmStore } from "../src/roles/roleConfirmations.js";
 import { translate } from "../src/i18n/i18n.js";
 import { Status } from "../src/logs/actionLog.js";
 import { GuildSettings, Setting } from "../src/settings/guildSettings.js";
@@ -152,7 +162,10 @@ describe("/rolepanel", () => {
         getRole: () => guild.roles.cache.get(options.role) ?? role(options.role, "x", 1),
         getFocused: () => options.focused ?? "",
       },
+      user: { id: member.id },
+      inGuild: () => true,
       reply: vi.fn(async () => (interaction.replied = true)),
+      update: vi.fn(async () => {}),
       deferReply: vi.fn(async () => (interaction.deferred = true)),
       editReply: vi.fn(async () => {}),
       respond: vi.fn(async () => {}),
@@ -160,16 +173,19 @@ describe("/rolepanel", () => {
     return interaction;
   }
 
-  const setup = () => {
+  const setup = ({ withConfirmations = false } = {}) => {
     const guildSettings = new GuildSettings();
-    const command = createRolePanelCommand({ guildSettings, logger: fakeLogger() });
+    const confirmations = withConfirmations
+      ? createRoleConfirmations({ guildSettings, store: new RoleConfirmStore() })
+      : undefined;
+    const command = createRolePanelCommand({ guildSettings, logger: fakeLogger(), confirmations });
     const guild = fakeGuild();
     const run = async (subcommand, options) => {
       const interaction = fakeInteraction(guild, subcommand, options);
       const outcome = await command.execute(interaction);
       return { interaction, outcome };
     };
-    return { guildSettings, command, guild, run, panels: () => guildSettings.get(GUILD_ID, Setting.ROLE_PANELS) };
+    return { guildSettings, command, guild, run, confirmations, panels: () => guildSettings.get(GUILD_ID, Setting.ROLE_PANELS) };
   };
 
   it("is hidden from members without Manage Roles", () => {
@@ -299,6 +315,128 @@ describe("/rolepanel", () => {
       const member = fakeMember(USER_ID, 1);
       expect((await click(PC_ROLE, member)).outcome.key).toBe("rolePanelButtonBroken");
       expect(member.roles.add).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("confirmations", () => {
+    async function withPanel(mode, { serverDefault } = {}) {
+      const context = setup({ withConfirmations: true });
+      if (serverDefault === false) {
+        context.guildSettings.set(GUILD_ID, Setting.ROLE_CONFIRM, false);
+      }
+      await context.run("create", { options: { title: "Roles", mode } });
+      await context.run("add", { options: { panel: 1, role: PC_ROLE } });
+      await context.run("add", { options: { panel: 1, role: CONSOLE_ROLE } });
+      const press = async (customId, member) => {
+        const interaction = fakeInteraction(context.guild, null, { member });
+        interaction.customId = customId;
+        const component =
+          context.command.components[customId] ??
+          Object.entries(context.command.componentPrefixes).find(([prefix]) => customId.startsWith(prefix))[1];
+        const outcome = await component.handle(interaction);
+        return { outcome, reply: interaction.reply.mock.calls[0]?.[0], update: interaction.update.mock.calls[0]?.[0] };
+      };
+      const ids = (payload) => payload.components.flatMap((row) => row.toJSON().components.map((button) => button.custom_id));
+      return { ...context, press, ids };
+    }
+
+    it("parses confirm IDs and nothing else", () => {
+      expect(parseConfirmId(confirmId(3, PC_ROLE, "add"))).toEqual({ panelId: 3, roleId: PC_ROLE, action: "add" });
+      expect(parseConfirmId(`rpc:3:${PC_ROLE}:steal`)).toBeUndefined();
+      expect(parseButtonId(confirmId(3, PC_ROLE, "add"))).toBeUndefined();
+    });
+
+    it("asks before adding, and adds on Confirm", async () => {
+      const { press, ids } = await withPanel("toggle");
+      const member = fakeMember(USER_ID, 1);
+      const asked = await press(buttonId(1, PC_ROLE), member);
+      expect(asked.outcome).toBeNull();
+      expect(asked.reply.flags).toBe(MessageFlags.Ephemeral);
+      expect(asked.reply.content).toBe(translate("en", "roleConfirmAdd", { role: `<@&${PC_ROLE}>`, old: "" }));
+      expect(ids(asked.reply)).toEqual([confirmId(1, PC_ROLE, "add"), ConfirmId.CANCEL, ConfirmId.TURN_OFF]);
+      expect(member.roles.add).not.toHaveBeenCalled();
+
+      const confirmed = await press(confirmId(1, PC_ROLE, "add"), member);
+      expect(confirmed.outcome.key).toBe("rolePanelYouGot");
+      expect([...member.owned]).toEqual([PC_ROLE]);
+      expect(ids(confirmed.update)).toEqual([ConfirmId.TURN_OFF]);
+    });
+
+    it("says a removal takes the role away, with a red Confirm", async () => {
+      const { press } = await withPanel("toggle");
+      const member = fakeMember(USER_ID, 1, [PC_ROLE]);
+      const asked = await press(buttonId(1, PC_ROLE), member);
+      expect(asked.reply.content).toContain(translate("en", "roleConfirmRemove", { role: `<@&${PC_ROLE}>` }));
+      expect(asked.reply.components[0].toJSON().components[0].style).toBe(ButtonStyle.Danger);
+      expect((await press(confirmId(1, PC_ROLE, "remove"), member)).outcome.key).toBe("rolePanelYouLost");
+      expect(member.owned.size).toBe(0);
+    });
+
+    it("names the role a unique panel takes away", async () => {
+      const { press } = await withPanel("unique");
+      const member = fakeMember(USER_ID, 1, [CONSOLE_ROLE]);
+      const asked = await press(buttonId(1, PC_ROLE), member);
+      expect(asked.reply.content).toBe(translate("en", "roleConfirmSwap", { role: `<@&${PC_ROLE}>`, old: `<@&${CONSOLE_ROLE}>` }));
+      expect((await press(confirmId(1, PC_ROLE, "add"), member)).outcome.key).toBe("rolePanelYouSwapped");
+      expect([...member.owned]).toEqual([PC_ROLE]);
+    });
+
+    it("changes nothing when the member's roles changed while it asked", async () => {
+      const { press } = await withPanel("toggle");
+      const member = fakeMember(USER_ID, 1, [PC_ROLE]);
+      const { outcome } = await press(confirmId(1, PC_ROLE, "add"), member);
+      expect(outcome.key).toBe("rolePanelAlreadyHave");
+      expect(member.roles.add).not.toHaveBeenCalled();
+      expect(member.roles.remove).not.toHaveBeenCalled();
+    });
+
+    it("re-checks the panel on Confirm", async () => {
+      const { press, run } = await withPanel("toggle");
+      await run("remove", { options: { panel: 1, role: PC_ROLE } });
+      const member = fakeMember(USER_ID, 1);
+      expect((await press(confirmId(1, PC_ROLE, "add"), member)).outcome.key).toBe("rolePanelButtonGone");
+      expect(member.roles.add).not.toHaveBeenCalled();
+    });
+
+    it("Cancel changes nothing", async () => {
+      const { press } = await withPanel("toggle");
+      const member = fakeMember(USER_ID, 1);
+      const cancelled = await press(ConfirmId.CANCEL, member);
+      expect(cancelled.update).toMatchObject({ content: translate("en", "roleConfirmCancelled"), components: [] });
+      expect(member.roles.add).not.toHaveBeenCalled();
+    });
+
+    it("lets a member turn them off and on for themselves", async () => {
+      const { press, ids, confirmations } = await withPanel("toggle");
+      const member = fakeMember(USER_ID, 1);
+      const off = await press(ConfirmId.TURN_OFF, member);
+      expect(off.outcome.key).toBe("roleConfirmNowOff");
+      expect(ids(off.update)).toEqual([ConfirmId.TURN_ON]);
+      expect(confirmations.isOn(GUILD_ID, USER_ID)).toBe(false);
+      expect(confirmations.isOn(GUILD_ID, ADMIN_ID)).toBe(true);
+
+      const direct = await press(buttonId(1, PC_ROLE), member);
+      expect(direct.outcome.key).toBe("rolePanelYouGot");
+      expect(ids(direct.reply)).toEqual([ConfirmId.TURN_ON]);
+
+      expect((await press(ConfirmId.TURN_ON, member)).outcome.key).toBe("roleConfirmNowOn");
+      expect((await press(buttonId(1, CONSOLE_ROLE), member)).outcome).toBeNull();
+    });
+
+    it("follows the server's default unless the member chose", async () => {
+      const { press, confirmations } = await withPanel("toggle", { serverDefault: false });
+      const member = fakeMember(USER_ID, 1);
+      expect((await press(buttonId(1, PC_ROLE), member)).outcome.key).toBe("rolePanelYouGot");
+      await press(ConfirmId.TURN_ON, member);
+      expect(confirmations.isOn(GUILD_ID, USER_ID)).toBe(true);
+      expect((await press(buttonId(1, CONSOLE_ROLE), member)).outcome).toBeNull();
+    });
+
+    it("forgets a member's choice when they leave", async () => {
+      const { press, confirmations } = await withPanel("toggle");
+      await press(ConfirmId.TURN_OFF, fakeMember(USER_ID, 1));
+      confirmations.memberLeft({ id: USER_ID, guild: { id: GUILD_ID } });
+      expect(confirmations.isOn(GUILD_ID, USER_ID)).toBe(true);
     });
   });
 });

@@ -31,6 +31,7 @@ import { createStickies } from "./sticky/stickies.js";
 import { StickyStore } from "./sticky/stickyStore.js";
 import { createHighlights } from "./highlights/highlights.js";
 import { HighlightStore } from "./highlights/highlightStore.js";
+import { createRoleConfirmations, RoleConfirmStore } from "./roles/roleConfirmations.js";
 import { createMediaOnly } from "./community/mediaOnly.js";
 import { createTempRoleScheduler } from "./tempRoles/tempRoleScheduler.js";
 import { createRaidGuard } from "./raid/raid.js";
@@ -206,6 +207,8 @@ async function start() {
   // Words members get a DM about (/highlight).
   const highlightStore = new HighlightStore(db);
   const highlights = createHighlights({ store: highlightStore, logger, forcedLanguage });
+  // "Add X?" before role panels and the country picker change a member's roles.
+  const roleConfirmations = createRoleConfirmations({ guildSettings, store: new RoleConfirmStore(db), forcedLanguage });
   // Gives members their roles back when they rejoin (/welcome persist).
   const rolePersistence = createRolePersistence({
     guildSettings,
@@ -256,6 +259,7 @@ async function start() {
     stickies,
     highlightStore,
     highlights,
+    roleConfirmations,
     giveaways,
     tickets,
     ticketLog,
@@ -426,6 +430,7 @@ async function start() {
     client.on(Events.GuildMemberRemove, safely("forgetting a birthday", (member) => birthdayStore.remove(member.guild.id, member.id)));
     client.on(Events.GuildMemberRemove, safely("forgetting an AFK", (member) => afk.memberLeft(member)));
     client.on(Events.GuildMemberRemove, safely("forgetting highlights", (member) => highlights.memberLeft(member)));
+    client.on(Events.GuildMemberRemove, safely("forgetting role confirmations", (member) => roleConfirmations.memberLeft(member)));
     client.on(Events.GuildMemberUpdate, safely("autoroles after screening", (before, after) => welcomer.memberUpdated(before, after)));
     client.on(
       Events.GuildMemberRemove,
