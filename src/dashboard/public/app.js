@@ -6243,7 +6243,6 @@ async function showBackup(guildId) {
 // --- Branding ----------------------------------------------------------------------
 
 const BRANDING_NICKNAME_MAX = 32;
-const BRANDING_BIO_MAX = 190;
 // Each image is sent as a data: URL. Keeping both under about 400 KB keeps
 // the request under nginx's default 1 MB limit.
 const BRANDING_IMAGE_MAX = 400_000;
@@ -6284,7 +6283,7 @@ async function shrinkImage(file, [width, height]) {
   throw new Error("Too big");
 }
 
-// The Branding page: the bot's nickname, avatar, banner and bio in this
+// The Branding page: the bot's nickname, avatar and banner in this
 // server (Discord's per-server profile), and the embed colour.
 async function showBranding(guildId) {
   const data = await loadManagedGuild(guildId);
@@ -6302,7 +6301,6 @@ async function showBranding(guildId) {
   let draft = {};
 
   const nickname = h("input", { id: "brandingNickname", type: "text", maxLength: BRANDING_NICKNAME_MAX, autocomplete: "off" });
-  const bio = h("textarea", { id: "brandingBio", rows: 3, maxLength: BRANDING_BIO_MAX });
   const colorInput = h("input", { id: "brandingColor", type: "color", "aria-label": t("brandingColor") });
   const colorState = h("p", { class: "help" });
   const saveButton = h("button", { class: "primary", type: "button" }, icon("check", "icon small"), t("brandingSave"));
@@ -6311,7 +6309,6 @@ async function showBranding(guildId) {
   const previewBanner = h("div", { class: "brand-banner" });
   const previewAvatar = h("img", { class: "brand-avatar", alt: "" });
   const previewName = h("strong", { class: "brand-name" });
-  const previewBio = h("p", { class: "brand-bio" });
   const sampleAvatar = h("img", { class: "discord-avatar", alt: "" });
   const sampleName = h("strong", {});
   const sampleEmbed = h(
@@ -6350,8 +6347,6 @@ async function showBranding(guildId) {
     sampleEmbed.style.setProperty("--brand", color ?? BRANDING_FALLBACK_COLOR);
     previewName.replaceChildren(name, h("span", { class: "app-badge" }, "APP"));
     sampleName.replaceChildren(name, " ", h("span", { class: "app-badge" }, "APP"));
-    previewBio.textContent = bio.value.trim();
-    previewBio.hidden = !bio.value.trim();
     colorState.textContent = color ? "" : t("brandingColorUsingDefault");
     colorState.hidden = Boolean(color);
     saveButton.disabled = Object.keys(changes()).length === 0;
@@ -6363,10 +6358,6 @@ async function showBranding(guildId) {
     const nick = nickname.value.trim() || null;
     if (nick !== (saved.nickname ?? null)) {
       body.nickname = nick;
-    }
-    const about = bio.value.trim() || null;
-    if (about !== (saved.bio ?? null)) {
-      body.bio = about;
     }
     for (const part of ["avatar", "banner"]) {
       if (draft[part] !== undefined) {
@@ -6383,7 +6374,6 @@ async function showBranding(guildId) {
     draft = {};
     nickname.value = saved.nickname ?? "";
     nickname.placeholder = saved.defaults.name;
-    bio.value = saved.bio ?? "";
     colorInput.value = saved.color === null ? BRANDING_FALLBACK_COLOR : hexColor(saved.color);
     refresh();
   }
@@ -6397,7 +6387,6 @@ async function showBranding(guildId) {
   };
   colorInput.addEventListener("input", () => setColor(Number.parseInt(colorInput.value.slice(1), 16)));
   nickname.addEventListener("input", refresh);
-  bio.addEventListener("input", refresh);
   const swatches = [BRANDING_FALLBACK_COLOR, ...EMBED_SWATCHES].map((swatch) => {
     const button = h("button", { type: "button", class: "swatch", title: swatch, "aria-label": swatch, onclick: () => setColor(Number.parseInt(swatch.slice(1), 16)) });
     button.style.setProperty("--swatch", swatch);
@@ -6480,7 +6469,6 @@ async function showBranding(guildId) {
             "user",
             "pink",
             field("brandingNickname", "brandingNicknameHelp", nickname),
-            field("brandingBio", "brandingBioHelp", bio),
             imagePicker("avatar"),
             imagePicker("banner"),
             h("p", { class: "help" }, t("brandingRateHelp")),
@@ -6507,7 +6495,7 @@ async function showBranding(guildId) {
           h(
             "div",
             { class: "embed-preview brand-preview" },
-            h("div", { class: "brand-card" }, previewBanner, previewAvatar, h("div", { class: "brand-card-body" }, previewName, previewBio)),
+            h("div", { class: "brand-card" }, previewBanner, previewAvatar, h("div", { class: "brand-card-body" }, previewName)),
             h("div", { class: "discord-message" }, sampleAvatar, h("div", { class: "discord-body" }, h("div", { class: "discord-head" }, sampleName), sampleEmbed)),
           ),
           h("p", { class: "help" }, t("brandingLimits")),

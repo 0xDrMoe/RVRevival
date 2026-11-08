@@ -906,11 +906,11 @@ const FEATURE_PARTS = [
         icon: "palette",
         tone: "pink",
         page: "branding",
-        summary: "Give the bot its own nickname, avatar, banner, bio and embed colour in this server.",
+        summary: "Give the bot its own nickname, avatar, banner and embed colour in this server.",
         who: "Admins.",
         steps: [
           "Open **Branding**, change what you like and press **Save branding**. The preview shows how it will look.",
-          "**Use default** puts the avatar or banner back to the bot's own. An empty nickname or bio does the same.",
+          "**Use default** puts the avatar or banner back to the bot's own. An empty nickname does the same.",
           "**Embed colour** is used on role panels, the ticket panel and tickets, /rank and /leaderboard.",
         ],
         tips: [

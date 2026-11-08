@@ -1083,39 +1083,34 @@ describe("dashboard", () => {
     expect((await write(cookies, "POST", `/api/appeals/${GUILD_ID}`, { answers: ["again"] })).statusCode).toBe(409);
   });
 
-  it("changes the bot's look in one server and keeps the colour and bio", async () => {
+  it("changes the bot's look in one server and keeps the colour", async () => {
     const cookies = await login();
     const before = (await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}/branding`, cookies })).json();
     expect(before).toMatchObject({
       color: null,
-      bio: null,
       nickname: null,
       avatarUrl: null,
       defaults: { name: "Rabble", avatarUrl: `https://cdn.discordapp.com/avatars/${config.clientId}/abc.png?size=512` },
     });
 
     const png = `data:image/png;base64,${Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2]).toString("base64")}`;
-    const saved = await write(cookies, "PATCH", `/api/guilds/${GUILD_ID}/branding`, { nickname: "Butterfly", avatar: png, bio: "Hi!", color: 0x7c5cff });
+    const saved = await write(cookies, "PATCH", `/api/guilds/${GUILD_ID}/branding`, { nickname: "Butterfly", avatar: png, color: 0x7c5cff });
     expect(saved.statusCode).toBe(200);
-    expect(discord.editBotProfile).toHaveBeenCalledWith(GUILD_ID, { nick: "Butterfly", avatar: png, bio: "Hi!" }, "Branding changed on the dashboard by Moe");
+    expect(discord.editBotProfile).toHaveBeenCalledWith(GUILD_ID, { nick: "Butterfly", avatar: png }, "Branding changed on the dashboard by Moe");
     expect(saved.json()).toMatchObject({
       nickname: "Butterfly",
-      bio: "Hi!",
       color: 0x7c5cff,
       avatarUrl: `https://cdn.discordapp.com/guilds/${GUILD_ID}/users/${config.clientId}/avatars/a_new.gif?size=512`,
     });
-    expect(guildSettings.get(GUILD_ID, Setting.BRANDING)).toEqual({ color: 0x7c5cff, bio: "Hi!" });
+    expect(guildSettings.get(GUILD_ID, Setting.BRANDING)).toEqual({ color: 0x7c5cff });
     const activity = (await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}/activity`, cookies })).json();
     expect(activity.entries[0]).toMatchObject({ summary: "**Bot branding changed**" });
 
     // Only the colour: Discord isn't asked, and resetting clears the setting.
     discord.editBotProfile.mockClear();
-    await write(cookies, "PATCH", `/api/guilds/${GUILD_ID}/branding`, { color: null, bio: null });
-    expect(discord.editBotProfile).toHaveBeenCalledWith(GUILD_ID, { bio: "" }, expect.any(String));
-    expect(guildSettings.get(GUILD_ID, Setting.BRANDING)).toBeUndefined();
-    discord.editBotProfile.mockClear();
-    await write(cookies, "PATCH", `/api/guilds/${GUILD_ID}/branding`, { color: 0x123456 });
+    await write(cookies, "PATCH", `/api/guilds/${GUILD_ID}/branding`, { color: null });
     expect(discord.editBotProfile).not.toHaveBeenCalled();
+    expect(guildSettings.get(GUILD_ID, Setting.BRANDING)).toBeUndefined();
   });
 
   it("refuses bad branding and explains Discord's refusals", async () => {

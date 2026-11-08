@@ -1,9 +1,9 @@
 // Per-server branding: how the bot looks in one server.
 //
-// The bot's nickname, avatar, banner and bio in a server are Discord's own
+// The bot's nickname, avatar and banner in a server are Discord's own
 // per-server profile (PATCH /guilds/:id/members/@me), set from the dashboard's
-// Branding page. Discord keeps the images; only the bio and the embed colour
-// are saved here, under Setting.BRANDING, as { color, bio }.
+// Branding page. Discord keeps the images; only the embed colour is saved
+// here, under Setting.BRANDING, as { color }.
 //
 // The embed colour is used by the embeds members see from day to day (role
 // panels, the ticket panel and ticket threads, /rank and /leaderboard). Logs,
@@ -16,7 +16,6 @@
 import { Setting } from "../settings/guildSettings.js";
 
 export const MAX_NICKNAME = 32;
-export const MAX_BIO = 190;
 // After the dashboard shrinks it: an avatar is at most 512×512 and a banner
 // 960×384, so 2 MB is plenty.
 export const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
@@ -37,10 +36,7 @@ const isColor = (value) => Number.isInteger(value) && value >= 0 && value <= 0xf
 
 // The saved branding with anything unusable dropped.
 export function normalizeBranding(saved) {
-  return {
-    color: isColor(saved?.color) ? saved.color : null,
-    bio: typeof saved?.bio === "string" && saved.bio.trim() ? saved.bio.slice(0, MAX_BIO) : null,
-  };
+  return { color: isColor(saved?.color) ? saved.color : null };
 }
 
 export const brandingOf = (guildSettings, guildId) => normalizeBranding(guildSettings?.get(guildId, Setting.BRANDING));
@@ -83,7 +79,7 @@ function optionalText(value, max, label) {
 // Turns a change from the dashboard into Discord's request body (only what
 // changed) and the new saved branding. Keys left out stay as they are; null
 // puts that part back to the bot's default.
-//   change   { nickname, bio, avatar, banner, color }, each optional
+//   change   { nickname, avatar, banner, color }, each optional
 //   current  the saved branding (normalizeBranding)
 export function planBrandingChange(change, current) {
   if (!change || typeof change !== "object" || Array.isArray(change)) {
@@ -93,10 +89,6 @@ export function planBrandingChange(change, current) {
   const saved = { ...current };
   if (change.nickname !== undefined) {
     profile.nick = optionalText(change.nickname, MAX_NICKNAME, "nickname");
-  }
-  if (change.bio !== undefined) {
-    saved.bio = optionalText(change.bio, MAX_BIO, "bio");
-    profile.bio = saved.bio ?? "";
   }
   for (const part of ["avatar", "banner"]) {
     if (change[part] !== undefined) {
@@ -109,7 +101,7 @@ export function planBrandingChange(change, current) {
     }
     saved.color = change.color;
   }
-  if (Object.keys(profile).length === 0 && saved.color === current.color && saved.bio === current.bio) {
+  if (Object.keys(profile).length === 0 && saved.color === current.color) {
     throw new InvalidBranding("Nothing to change.");
   }
   return { profile, saved };

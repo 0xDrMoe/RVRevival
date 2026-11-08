@@ -5415,12 +5415,6 @@ dialog textarea {
   overflow-wrap: anywhere;
 }
 
-.brand-bio {
-  margin: 8px 0 0;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  font-size: 0.9rem;
-}
 
 .app-badge {
   display: inline-block;

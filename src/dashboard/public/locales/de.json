@@ -875,8 +875,6 @@
   "brandingProfile": "Profil auf diesem Server",
   "brandingNickname": "Spitzname",
   "brandingNicknameHelp": "Bis zu 32 Zeichen. Leer lassen, um den eigenen Namen des Bots zu verwenden.",
-  "brandingBio": "Über mich",
-  "brandingBioHelp": "Wird im Profil des Bots auf diesem Server angezeigt. Bis zu 190 Zeichen.",
   "brandingAvatar": "Avatar",
   "brandingAvatarHelp": "Wird quadratisch zugeschnitten und auf 512×512 verkleinert. Animierte Bilder werden zu Standbildern.",
   "brandingBanner": "Profilbanner",
