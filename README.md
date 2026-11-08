@@ -390,7 +390,7 @@ Discord's limits are checked before sending: 2,000 characters of text, 6,000 in 
   - **Mastodon**: `@name@server` or the profile link (`https://mastodon.social/@name`).
   - **Reddit**: the subreddit (`r/gaming`). **GitHub releases**: the repository (`owner/name` or its link). **RSS**: the feed's full link.
 
-  `role` is pinged with each post. `message` replaces the default text and can use `{title}`, `{link}`, `{author}`, `{feed}` and, for Twitch and Kick, `{game}`. Bluesky and Mastodon posts have no title, so `{title}` is the start of the post's text.
+  `role` is pinged with each post; it can be @everyone for people with **Mention @everyone**, and Rabble needs that permission in the channel too or the post goes out without the ping. On the dashboard's **Feeds** page, **Edit** changes a feed's channel, ping and message. `message` replaces the default text and can use `{title}`, `{link}`, `{author}`, `{feed}` and, for Twitch and Kick, `{game}`. Bluesky and Mastodon posts have no title, so `{title}` is the start of the post's text.
 - **`/feed remove id`** stops following it. **`/feed list`** shows what the server follows, with the problem next to any feed that can't be read or posted.
 
 The bot checks each feed every 10 minutes (YouTube live every 3, Twitch and Kick every 2) and posts only items that appear after the feed was added, at most three at a time (oldest first), so a feed never floods a channel. A server can follow up to 20 feeds. Feed links must point to the public internet: addresses on private networks (like the VPS itself) are refused, also after redirects. Needs **Manage Server**. The bot needs View Channel and Send Messages in the channel. YouTube feeds added before the Shorts and live types keep posting every upload.

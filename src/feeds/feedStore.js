@@ -63,6 +63,7 @@ export class FeedStore {
       byKind: this.#db.prepare("SELECT * FROM feeds WHERE kind = ? ORDER BY id"),
       checked: this.#db.prepare("UPDATE feeds SET seen = ?, checked_at = ?, posted_at = COALESCE(?, posted_at), last_error = NULL, failures = 0 WHERE id = ?"),
       failed: this.#db.prepare("UPDATE feeds SET checked_at = ?, last_error = ?, failures = failures + 1 WHERE id = ?"),
+      update: this.#db.prepare("UPDATE feeds SET channel_id = ?, role_id = ?, message = ? WHERE guild_id = ? AND id = ? RETURNING *"),
       delete: this.#db.prepare("DELETE FROM feeds WHERE guild_id = ? AND id = ?"),
       deleteGuild: this.#db.prepare("DELETE FROM feeds WHERE guild_id = ?"),
     };
@@ -108,6 +109,12 @@ export class FeedStore {
 
   failed(id, { error, checkedAt = Date.now() }) {
     this.#statements.failed.run(checkedAt, String(error).slice(0, 300), id);
+  }
+
+  // Changes where a feed posts, who it pings and what it says. What it
+  // follows stays: that's a new feed. Returns the feed, or undefined.
+  update(guildId, id, { channelId, roleId = null, message = null }) {
+    return toFeed(this.#statements.update.get(channelId, roleId, message, guildId, id));
   }
 
   delete(guildId, id) {

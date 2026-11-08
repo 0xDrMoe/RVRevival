@@ -131,6 +131,11 @@ export function buildFeedPost(feed, item, language) {
   };
   const template = feed.message ?? translate(language, DEFAULT_MESSAGE_KEYS[feed.kind] ?? DEFAULT_MESSAGE_KEYS.rss);
   const text = fill(template, values).trim();
+  // The @everyone role has the server's ID, and Discord only pings it as
+  // plain "@everyone" (a <@&id> mention of it shows but pings no one).
+  if (feed.roleId && feed.roleId === feed.guildId) {
+    return { content: `@everyone ${text}`.slice(0, 2000), allowedMentions: { parse: ["everyone"], roles: [] } };
+  }
   const content = `${feed.roleId ? `<@&${feed.roleId}> ` : ""}${text}`.slice(0, 2000);
   return { content, allowedMentions: { parse: [], roles: feed.roleId ? [feed.roleId] : [] } };
 }

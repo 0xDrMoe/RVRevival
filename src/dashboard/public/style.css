@@ -3468,6 +3468,20 @@ dialog textarea {
   background: var(--surface-2);
 }
 
+/* A feed's edit form opens under its row, full width. */
+.feed-row {
+  flex-wrap: wrap;
+}
+
+.feed-editor {
+  flex-basis: 100%;
+  margin-top: 6px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
 /* The preview looks like Discord's dark theme whatever the dashboard's theme. */
 .embed-preview {
   background: #313338;

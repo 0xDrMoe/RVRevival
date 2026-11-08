@@ -5303,7 +5303,8 @@ function ticketWelcomePreview(look, category, data, defaults) {
 function ticketPanelEditor(guildId, data) {
   const defaults = data.ticketDefaults;
   const look = data.settings.ticketPanel ?? {};
-  const roles = data.roles.filter((role) => role.id !== guildId && !role.managed).map((role) => roleItem(role));
+  // @everyone is the role with the server's ID; listed first.
+  const roles = [{ id: guildId, label: t("feedsEveryone") }, ...data.roles.filter((role) => role.id !== guildId && !role.managed).map((role) => roleItem(role))];
   const categories = editableList({
     items: data.settings.ticketCategories ?? [],
     max: MAX_TICKET_CATEGORIES,
@@ -6316,17 +6317,81 @@ const FEED_ICONS = {
 // Kinds that need keys on the bot's server; the message shown without them.
 const FEED_KEYS_OFF = { twitch: "feedsTwitchOff", kick: "feedsKickOff" };
 
-function feedRow(guildId, feed, data, onRemoved) {
+// "@everyone" when a feed pings everyone (the role with the server's ID).
+const feedPingLabel = (guildId, roleId, data) => {
+  if (!roleId) {
+    return null;
+  }
+  if (roleId === guildId) {
+    return "@everyone";
+  }
+  const role = data.roles.find((item) => item.id === roleId);
+  return role ? `@${role.name}` : t("unknownOption", { id: roleId });
+};
+
+// One followed feed. Edit opens a form under it for where it posts, who it
+// pings and its message; what it follows stays (that's a new feed).
+function feedRow(guildId, feed, data, roles, onChanged) {
   const channel = data.channels.find((item) => item.id === feed.channelId);
-  const role = feed.roleId && data.roles.find((item) => item.id === feed.roleId);
   const facts = [
     channel ? `#${channel.name}` : t("unknownOption", { id: feed.channelId }),
-    role ? `@${role.name}` : null,
+    feedPingLabel(guildId, feed.roleId, data),
     feed.postedAt ? t("feedsLastPost", { date: formatAgo(feed.postedAt) }) : t("feedsNoPostYet"),
   ].filter(Boolean);
-  const row = h(
+  const editor = h("div", { class: "feed-editor", hidden: true });
+  const editButton = h("button", { class: "ghost small", type: "button", "aria-expanded": "false" }, t("embedEdit"));
+
+  const closeEditor = () => {
+    editor.hidden = true;
+    editor.replaceChildren();
+    editButton.setAttribute("aria-expanded", "false");
+  };
+
+  const openEditor = () => {
+    const channelPicker = picker({ id: `feedChannel-${feed.id}`, options: postableChannels(data), value: feed.channelId, emptyLabel: t("embedPickChannel") });
+    channelPicker.required = true;
+    const rolePicker = picker({ id: `feedRole-${feed.id}`, options: roles, value: feed.roleId, emptyLabel: t("feedsNoRole") });
+    const messageInput = h("textarea", { rows: 2, maxLength: 500, placeholder: t("feedsMessagePlaceholder") });
+    messageInput.value = feed.message ?? "";
+    const save = h("button", { class: "primary small", type: "submit" }, t("feedsSave"));
+    const form = h(
+      "form",
+      {
+        onsubmit: async (event) => {
+          event.preventDefault();
+          save.disabled = true;
+          try {
+            await api(`/api/guilds/${guildId}/feeds/${feed.id}`, {
+              method: "PATCH",
+              body: { channelId: channelPicker.value, roleId: rolePicker.value || null, message: messageInput.value.trim() || null },
+            });
+            toast(t("feedsEdited", { name: feed.name }));
+            onChanged();
+          } catch (error) {
+            failed(error);
+            save.disabled = false;
+          }
+        },
+      },
+      h(
+        "div",
+        { class: "embed-grid" },
+        field("feedsChannel", null, channelPicker),
+        field("feedsRole", "feedsRoleHelp", rolePicker),
+      ),
+      field("feedsMessage", "feedsMessageHelp", messageInput),
+      h("div", { class: "toolbar" }, h("span", { class: "grow" }), h("button", { class: "ghost small", type: "button", onclick: closeEditor }, t("cancel")), save),
+    );
+    editor.replaceChildren(form);
+    editor.hidden = false;
+    editButton.setAttribute("aria-expanded", "true");
+    channelPicker.focus();
+  };
+  editButton.addEventListener("click", () => (editor.hidden ? openEditor() : closeEditor()));
+
+  return h(
     "li",
-    { class: "sent-row" },
+    { class: "sent-row feed-row" },
     iconChip(FEED_ICONS[feed.kind] ?? "rss", FEED_TONES[feed.kind], "sm"),
     h(
       "span",
@@ -6336,27 +6401,32 @@ function feedRow(guildId, feed, data, onRemoved) {
       feed.lastError ? h("span", { class: "danger-text small-text" }, t("feedsProblem", { error: feed.lastError })) : null,
     ),
     h(
-      "button",
-      {
-        class: "ghost small",
-        type: "button",
-        onclick: async () => {
-          if (!confirm(t("feedsRemoveConfirm", { name: feed.name }))) {
-            return;
-          }
-          try {
-            await api(`/api/guilds/${guildId}/feeds/${feed.id}`, { method: "DELETE" });
-            toast(t("feedsRemoved"));
-            onRemoved();
-          } catch (error) {
-            failed(error);
-          }
+      "span",
+      { class: "row-actions" },
+      editButton,
+      h(
+        "button",
+        {
+          class: "ghost small",
+          type: "button",
+          onclick: async () => {
+            if (!confirm(t("feedsRemoveConfirm", { name: feed.name }))) {
+              return;
+            }
+            try {
+              await api(`/api/guilds/${guildId}/feeds/${feed.id}`, { method: "DELETE" });
+              toast(t("feedsRemoved"));
+              onChanged();
+            } catch (error) {
+              failed(error);
+            }
+          },
         },
-      },
-      t("tagRemove"),
+        t("tagRemove"),
+      ),
     ),
+    editor,
   );
-  return row;
 }
 
 async function showFeeds(guildId) {
@@ -6378,13 +6448,14 @@ async function showFeeds(guildId) {
     sourceHelp.textContent = off ? t(FEED_KEYS_OFF[kind]) : t(`feedsSourceHelp_${kind}`);
     sourceHelp.classList.toggle("danger-text", off);
   };
-  const roles = data.roles.filter((role) => role.id !== guildId && !role.managed).map((role) => roleItem(role));
+  // @everyone is the role with the server's ID; listed first.
+  const roles = [{ id: guildId, label: t("feedsEveryone") }, ...data.roles.filter((role) => role.id !== guildId && !role.managed).map((role) => roleItem(role))];
   const add = h("button", { class: "primary", type: "submit" }, icon("plus", "icon small"), t("feedsAdd"));
   const messageInput = h("textarea", { id: "feedMessage", rows: 2, maxLength: 500, placeholder: t("feedsMessagePlaceholder") });
 
   async function load() {
     const result = await api(`/api/guilds/${guildId}/feeds`);
-    list.replaceChildren(...result.feeds.map((feed) => feedRow(guildId, feed, data, () => load().catch(failed))));
+    list.replaceChildren(...result.feeds.map((feed) => feedRow(guildId, feed, data, roles, () => load().catch(failed))));
     empty.hidden = result.feeds.length > 0;
     countPill.textContent = t("tagsCount", { count: result.feeds.length, max: result.max });
     add.disabled = result.feeds.length >= result.max;
