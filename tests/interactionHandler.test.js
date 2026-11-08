@@ -177,6 +177,7 @@ describe("interaction handler", () => {
         isButton: () => true,
         isModalSubmit: () => false,
         isStringSelectMenu: () => false,
+        isAnySelectMenu: () => false,
         reply: vi.fn(async () => {}),
         editReply: vi.fn(async () => {}),
       };

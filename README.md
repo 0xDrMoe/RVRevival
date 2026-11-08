@@ -184,12 +184,13 @@ Giving roles needs **Manage Roles** and the bot's role above the autoroles.
 
 **Roles on rejoin.** `/welcome persist enabled:true` (or the switch on the dashboard's **Autoroles** page) makes the bot remember members' roles when they leave and give them back when they rejoin, so leaving can't shake off a restricted role. Roles with moderator permissions (ban, kick, manage anything, mention everyone…), bot and booster roles, and roles above the bot are never given back automatically; the dashboard can also list roles to never give back. Saved roles are used once and forgotten after a year. Quarantined members keep their [quarantine](#quarantine) instead.
 
-**Community servers should use Onboarding.** Discord's own Onboarding (Server Settings → Onboarding) gives new members roles and lets them pick their own, so on a Community server we recommend it over autoroles and role panels. `/welcome autorole`, `/welcome show`, `/rolepanel create` and the dashboard's Autoroles page say so when the server is a Community server. Autoroles and role panels are there for servers that don't use Onboarding.
+**Community servers should use Onboarding.** Discord's own Onboarding (Server Settings → Onboarding) gives new members roles and lets them pick their own, so on a Community server we recommend it over autoroles and role panels. `/welcome autorole`, `/welcome show`, `/rolepanel create`, saving a new panel in `/rolepanel setup` and the dashboard's Autoroles page say so when the server is a Community server. Autoroles and role panels are there for servers that don't use Onboarding.
 
 ### Role panels
 
 A role panel is a message with a button per role. Members click a button to get the role, and click again to take it off. Good for platforms (PC, PlayStation, Xbox), regions, and ping roles for events or playtests. In **Pick only one role** mode, picking a role takes away the panel's other roles.
 
+- `/rolepanel setup panel:<panel>` opens a private editor (only you see it). Leave `panel` out to pick a panel from a list or create a new one. Its buttons: **Add roles** (a role menu, up to 25 roles at once), **Edit a role** (emoji and button text), **Remove roles**, **Edit message** (title and text), **Channel**, the mode, **Save** (or **Post panel** for a new one), **Cancel all changes** and **Delete panel** (asks first). Every change is a draft until you save; drafts are kept in memory only and close after 30 idle minutes or a restart. Saving checks every role again.
 - `/rolepanel create channel:<channel> title:<…> description:<…> mode:<Pick any number | Pick only one>` posts a new, empty panel (up to 10 per server).
 - `/rolepanel add panel:<panel> role:<role> emoji:<emoji> label:<text>` adds a button (up to 25 per panel); adding a role that's already there updates its emoji and label.
 - `/rolepanel remove panel:<panel> role:<role>` removes a button; `/rolepanel delete panel:<panel>` deletes the panel and its message.
@@ -683,6 +684,7 @@ src/
     memberTools.js       Member tools: /role, /nick
     welcome.js           Community: /welcome
     rolePanel.js         Community: /rolepanel and its buttons
+    rolePanelWizard.js   Community: the /rolepanel setup editor
     tags.js              Custom commands: /tag, /tags and the form
     autoResponder.js     Auto-responders: /autoresponder and the reply form
     remind.js            Reminders: /remind

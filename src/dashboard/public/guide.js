@@ -525,14 +525,16 @@ const FEATURE_PARTS = [
         commands: [
           ["/welcome autorole role", "Gives every new member that role, or stops (up to 10)."],
           ["/welcome persist enabled", "Gives members their roles back when they leave and rejoin."],
+          ["/rolepanel setup [panel]", "Opens a private editor: create a panel, add many roles at once, set emojis and button text, then save."],
           ["/rolepanel create channel title [description] [mode]", "Posts a new panel. `mode` is any number of roles, or only one."],
           ["/rolepanel add panel role [emoji] [label]", "Adds a role button to a panel."],
           ["/rolepanel remove panel role", "Takes a role button off."],
           ["/rolepanel delete panel", "Deletes a panel and its message."],
           ["/rolepanel list", "Lists the panels."],
         ],
-        example: ["/rolepanel create channel:#roles title:Platforms mode:Pick any number of roles", "/rolepanel add panel:Platforms role:@PC emoji:🖥️"],
+        example: ["/rolepanel setup", "/rolepanel setup panel:Platforms", "/rolepanel add panel:Platforms role:@PC emoji:🖥️"],
         tips: [
+          "In `/rolepanel setup`, nothing changes until you press **Save**. **Cancel all changes** throws the draft away. An editor left alone for 30 minutes closes.",
           "If members must accept the rules first (Rules Screening), autoroles wait until they do.",
           "Members click a button to get the role and click again to remove it. A one-role panel swaps the old one out, good for region or main platform.",
           "Panels refuse staff and admin roles, bot roles, and roles above the bot or you. A deleted panel message comes back on the next `add` or `remove`.",

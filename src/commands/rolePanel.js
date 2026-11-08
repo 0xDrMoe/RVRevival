@@ -6,6 +6,7 @@
 //   /rolepanel remove panel:<…> role:@PC                                   remove a button
 //   /rolepanel delete panel:<…>                                            delete the panel and its message
 //   /rolepanel list
+//   /rolepanel setup [panel]                                               a private editor for all of it (rolePanelWizard.js)
 //
 // Needs Manage Roles. Roles with moderator or admin permissions, managed roles
 // and roles above the bot or the admin can't go on a panel.
@@ -36,6 +37,7 @@ import { result, Status } from "../logs/actionLog.js";
 import { Setting } from "../settings/guildSettings.js";
 import { isPermissionError } from "../utils/discordErrors.js";
 import { KeyedLock } from "../utils/keyedLock.js";
+import { createRolePanelWizard, WIZARD_PREFIX } from "./rolePanelWizard.js";
 
 const COMMAND_NAME = "rolepanel";
 
@@ -52,6 +54,11 @@ export function buildRolePanelCommandData() {
     .setContexts(InteractionContextType.Guild)
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles);
   return withDescription(command, "rolePanelCommandDescription")
+    .addSubcommand((sub) =>
+      withDescription(sub.setName("setup"), "rolePanelSetupDescription").addIntegerOption((option) =>
+        withDescription(option.setName("panel"), "rolePanelSetupPanelOptionDescription").setAutocomplete(true),
+      ),
+    )
     .addSubcommand((sub) =>
       withDescription(sub.setName("create"), "rolePanelCreateDescription")
         .addChannelOption((option) =>
@@ -103,6 +110,18 @@ export function createRolePanelCommand({ guildSettings, logger, forcedLanguage }
   const locks = new KeyedLock();
   const save = (guildId, panels) =>
     panels.length > 0 ? guildSettings.set(guildId, Setting.ROLE_PANELS, panels) : guildSettings.clear(guildId, Setting.ROLE_PANELS);
+  // Posts or edits the panel's message; undefined if the bot can't post there.
+  const publish = async (panel, guild, emptyText) => {
+    try {
+      return await publishPanel(panel, guild, emptyText);
+    } catch (error) {
+      if (isPermissionError(error) || error.code === "NO_CHANNEL") {
+        return undefined;
+      }
+      throw error;
+    }
+  };
+  const wizard = createRolePanelWizard({ guildSettings, logger, forcedLanguage, locks, save, publish });
 
   async function execute(interaction) {
     const language = pickLanguage(interaction.locale, forcedLanguage);
@@ -131,6 +150,11 @@ export function createRolePanelCommand({ guildSettings, logger, forcedLanguage }
     const emptyText = translate(pickLanguage(guild.preferredLocale, forcedLanguage), "rolePanelEmpty");
     const subcommand = interaction.options.getSubcommand();
 
+    if (subcommand === "setup") {
+      const started = await wizard.start(interaction, interaction.options.getInteger("panel"));
+      return started.refusal ? answer(Status.REFUSED, started.refusal) : result(Status.SUCCESS);
+    }
+
     if (subcommand === "list") {
       const panels = panelsOf(guildSettings, guildId);
       if (panels.length === 0) {
@@ -152,16 +176,6 @@ export function createRolePanelCommand({ guildSettings, logger, forcedLanguage }
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     return locks.run(guildId, async () => {
       const panels = panelsOf(guildSettings, guildId);
-      const publish = async (panel) => {
-        try {
-          return await publishPanel(panel, guild, emptyText);
-        } catch (error) {
-          if (isPermissionError(error) || error.code === "NO_CHANNEL") {
-            return undefined;
-          }
-          throw error;
-        }
-      };
 
       if (subcommand === "create") {
         if (panels.length >= MAX_PANELS) {
@@ -177,7 +191,7 @@ export function createRolePanelCommand({ guildSettings, logger, forcedLanguage }
           mode: interaction.options.getString("mode") === PanelMode.UNIQUE ? PanelMode.UNIQUE : PanelMode.TOGGLE,
           roles: [],
         };
-        const posted = await publish(panel);
+        const posted = await publish(panel, guild, emptyText);
         if (!posted) {
           return answer(Status.FAILED, "rolePanelCannotPost", { channel: `<#${channel.id}>` });
         }
@@ -232,7 +246,7 @@ export function createRolePanelCommand({ guildSettings, logger, forcedLanguage }
         }
         next = { ...panel, roles: panel.roles.filter((entry) => entry.roleId !== role.id) };
       }
-      const posted = await publish(next);
+      const posted = await publish(next, guild, emptyText);
       if (!posted) {
         return answer(Status.FAILED, "rolePanelCannotPost", { channel: `<#${panel.channelId}>` });
       }
@@ -305,6 +319,11 @@ export function createRolePanelCommand({ guildSettings, logger, forcedLanguage }
     data: buildRolePanelCommandData(),
     execute,
     autocomplete,
-    componentPrefixes: { [BUTTON_PREFIX]: { label: "Role panel button", handle: handleButton } },
+    componentPrefixes: {
+      [BUTTON_PREFIX]: { label: "Role panel button", handle: handleButton },
+      [WIZARD_PREFIX]: { label: "Role panel setup", handle: wizard.handle },
+    },
+    // For tests.
+    wizard,
   };
 }
