@@ -8,6 +8,7 @@ import { createCommands } from "./commands/index.js";
 import { createStarboard } from "./community/starboard.js";
 import { StarboardStore } from "./community/starboardStore.js";
 import { createWelcomer } from "./community/welcome.js";
+import { createGuildJoinHandler } from "./guilds/guildJoin.js";
 import { normalizeAppeals } from "./appeals/config.js";
 import { ConfigError, loadBotConfig } from "./config.js";
 import { createGiveawayScheduler } from "./giveaways/giveawayScheduler.js";
@@ -205,6 +206,7 @@ async function start() {
   const externalActions = createExternalActionRecorder({ moderation, botActions, logger });
 
   // Automod (/settings automod): spam, banned words, invites, links, mentions, capitals.
+  const guildJoin = createGuildJoinHandler({ guildSettings, logger, dashboardUrl: config.dashboardUrl, forcedLanguage });
   const automod = createAutomod({ guildSettings, moderation, modLog, logger, forcedLanguage, botDeletions });
   // Media-only channels (/mediaonly): text-only messages are deleted.
   const mediaOnly = createMediaOnly({ guildSettings, logger, forcedLanguage, botDeletions });
@@ -393,6 +395,7 @@ async function start() {
       Events.GuildMemberRemove,
       safely("remembering a leave", (member) => memberEvents.record(member.guild.id, member.id, MemberEvent.LEAVE)),
     );
+    client.on(Events.GuildCreate, safely("being added to a server", (guild) => guildJoin.guildJoined(guild)));
     client.on(Events.GuildMemberAdd, safely("a member joining", (member) => serverLog.memberJoined(member)));
     client.on(Events.GuildMemberAdd, safely("welcoming a member", (member) => welcomer.memberJoined(member)));
     client.on(Events.GuildMemberAdd, safely("the join gate", (member) => raidGuard.memberJoined(member)));
