@@ -855,6 +855,7 @@
   "backupReason_owner-only": "Só o dono do servidor pode restaurar isto.",
   "backupReason_invalid": "Não serve para este servidor.",
   "backupReason_other-server": "Aponta para mensagens do servidor de origem, então só é restaurado lá.",
+  "backupReason_unsigned": "Aponta para canais, cargos ou mensagens, por isso só é restaurado a partir de um backup sem alterações feito neste servidor.",
   "permTabs": "Visão de permissões",
   "permTab_simple": "Simples",
   "permTab_advanced": "Avançado",

@@ -14,8 +14,9 @@ const roles = [
   { id: GUILD_ID, name: "@everyone", position: 0, managed: false },
   { id: ROLE_ID, name: "Mods", position: 3, managed: false },
 ];
-const server = (overrides = {}) => ({ guildId: GUILD_ID, channels, roles, isOwner: false, current: {}, ...overrides });
-const backupOf = (settings, guildId = GUILD_ID) => buildBackup({ guildId, guildName: "Rumbleverse Revival", settings, now: Date.UTC(2026, 9, 16) });
+const SECRET = "a-long-random-dashboard-session-secret";
+const server = (overrides = {}) => ({ guildId: GUILD_ID, channels, roles, isOwner: false, current: {}, secret: SECRET, ...overrides });
+const backupOf = (settings, guildId = GUILD_ID) => buildBackup({ guildId, guildName: "Rumbleverse Revival", settings, secret: SECRET, now: Date.UTC(2026, 9, 16) });
 
 describe("settings backup", () => {
   it("holds every saved setting except the running lockdown", () => {
@@ -26,6 +27,7 @@ describe("settings backup", () => {
       exportedAt: "2026-10-16T00:00:00.000Z",
       guild: { id: GUILD_ID, name: "Rumbleverse Revival" },
       settings: { [Setting.LOGS_CHANNEL]: TEXT_ID },
+      signature: expect.stringMatching(/^[\w-]{43}$/),
     });
   });
 
@@ -105,6 +107,33 @@ describe("settings backup", () => {
     const counters = [{ id: "a1b2c3d4", template: "Members: {members}", channelId: TEXT_ID, categoryId: null, error: null }];
     expect(planRestore(backupOf({ [Setting.STATS_COUNTERS]: counters }), server()).apply[Setting.STATS_COUNTERS]).toEqual(counters);
     expect(planRestore(backupOf({ [Setting.STATS_COUNTERS]: counters }, OTHER_ID), server()).apply[Setting.STATS_COUNTERS]).toEqual([{ ...counters[0], channelId: null }]);
+  });
+
+  it("restores panels and posted messages only from an unchanged, signed backup of this server", () => {
+    const tickets = { channelId: TEXT_ID, messageId: "810000000000000001" };
+    const counters = [{ id: "a1b2c3d4", template: "Members: {members}", channelId: TEXT_ID, categoryId: null, error: null }];
+    const genuine = backupOf({ [Setting.TICKETS]: tickets, [Setting.STATS_COUNTERS]: counters });
+    // The file survives being saved and opened again.
+    expect(planRestore(JSON.parse(JSON.stringify(genuine, null, 2)), server()).apply).toEqual({ [Setting.TICKETS]: tickets, [Setting.STATS_COUNTERS]: counters });
+
+    const forged = { ...genuine, settings: { ...genuine.settings, [Setting.TICKETS]: { ...tickets, channelId: GONE_ID } } };
+    const unsigned = { ...genuine, signature: undefined };
+    const otherSecret = server({ secret: "another-secret-entirely" });
+    for (const [backup, target] of [[forged, server()], [unsigned, server()], [genuine, otherSecret]]) {
+      const plan = planRestore(backup, target);
+      expect(plan.apply).not.toHaveProperty(Setting.TICKETS);
+      expect(plan.skipped).toContainEqual({ setting: Setting.TICKETS, reason: "unsigned" });
+      // Counters still come back, with new channels instead of the ones in the file.
+      expect(plan.apply[Setting.STATS_COUNTERS]).toEqual([{ ...counters[0], channelId: null }]);
+    }
+    // Copying a signature onto another server's ID doesn't help either.
+    const moved = { ...backupOf({ [Setting.TICKETS]: tickets }, OTHER_ID), guild: { id: GUILD_ID, name: "x" } };
+    expect(planRestore(moved, server()).skipped).toEqual([{ setting: Setting.TICKETS, reason: "unsigned" }]);
+  });
+
+  it("still restores settings with a form from a hand-made backup", () => {
+    const handMade = { format: BACKUP_FORMAT, version: BACKUP_VERSION, guild: { id: GUILD_ID }, settings: { [Setting.LOGS_CHANNEL]: TEXT_ID } };
+    expect(planRestore(handMade, server()).apply).toEqual({ [Setting.LOGS_CHANNEL]: TEXT_ID });
   });
 
   it("names settings the way the dashboard does", () => {

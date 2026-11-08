@@ -124,6 +124,24 @@ describe("dashboard", () => {
     expect(page.headers["content-security-policy"]).toContain("script-src 'self'");
     expect(page.headers["content-security-policy"]).toContain("frame-ancestors 'none'");
     expect(page.headers["x-content-type-options"]).toBe("nosniff");
+    expect(page.headers["content-security-policy"]).toContain("object-src 'none'");
+    expect(page.headers["x-frame-options"]).toBe("DENY");
+    expect(page.headers["cross-origin-opener-policy"]).toBe("same-origin");
+    expect(page.headers["permissions-policy"]).toContain("camera=()");
+    expect(page.headers["strict-transport-security"]).toBe("max-age=31536000");
+  });
+
+  it("replaces this browser's old login when it logs in again", async () => {
+    const first = await login();
+    const start = await app.inject({ method: "GET", url: "/auth/login" });
+    const state = new URL(start.headers.location).searchParams.get("state");
+    const stateCookie = start.cookies.find((cookie) => cookie.name === "rv_oauth_state");
+    await app.inject({
+      method: "GET",
+      url: `/auth/callback?code=abc&state=${state}`,
+      cookies: { ...first, rv_oauth_state: stateCookie.value },
+    });
+    expect((await app.inject({ method: "GET", url: "/api/me", cookies: first })).statusCode).toBe(401);
   });
 
   it("fills in the site's address for link previews and compresses what it sends", async () => {

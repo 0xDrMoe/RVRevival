@@ -855,6 +855,7 @@
   "backupReason_owner-only": "Only the server owner can restore this.",
   "backupReason_invalid": "It doesn't fit this server.",
   "backupReason_other-server": "It points at messages on the server the backup came from, so it's only restored there.",
+  "backupReason_unsigned": "It points at channels, roles or messages, so it's only restored from an unchanged backup made on this server.",
   "permTabs": "Permissions view",
   "permTab_simple": "Simple",
   "permTab_advanced": "Advanced",

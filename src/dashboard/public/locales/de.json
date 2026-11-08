@@ -855,6 +855,7 @@
   "backupReason_owner-only": "Nur der Serverbesitzer kann das wiederherstellen.",
   "backupReason_invalid": "Passt nicht zu diesem Server.",
   "backupReason_other-server": "Verweist auf Nachrichten des Ursprungsservers und wird nur dort wiederhergestellt.",
+  "backupReason_unsigned": "Es verweist auf Kanäle, Rollen oder Nachrichten und wird deshalb nur aus einer unveränderten Sicherung dieses Servers wiederhergestellt.",
   "permTabs": "Berechtigungsansicht",
   "permTab_simple": "Einfach",
   "permTab_advanced": "Erweitert",

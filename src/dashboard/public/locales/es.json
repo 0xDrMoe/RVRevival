@@ -855,6 +855,7 @@
   "backupReason_owner-only": "Solo el propietario del servidor puede restaurarlo.",
   "backupReason_invalid": "No encaja en este servidor.",
   "backupReason_other-server": "Apunta a mensajes del servidor de origen, así que solo se restaura allí.",
+  "backupReason_unsigned": "Apunta a canales, roles o mensajes, así que solo se restaura desde una copia sin modificar hecha en este servidor.",
   "permTabs": "Vista de permisos",
   "permTab_simple": "Simple",
   "permTab_advanced": "Avanzado",

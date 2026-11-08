@@ -274,10 +274,18 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     reply.header(
       "Content-Security-Policy",
       "default-src 'self'; img-src 'self' https: data:; style-src 'self'; script-src 'self'; " +
-        "connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
+        "connect-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
     );
     reply.header("X-Content-Type-Options", "nosniff");
     reply.header("Referrer-Policy", "same-origin");
+    // Older browsers ignore frame-ancestors.
+    reply.header("X-Frame-Options", "DENY");
+    reply.header("Cross-Origin-Opener-Policy", "same-origin");
+    reply.header("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=(), usb=()");
+    // Browsers only ever reach the site over HTTPS once they've seen it there.
+    if (secureCookies) {
+      reply.header("Strict-Transport-Security", "max-age=31536000");
+    }
     if (request.url.startsWith("/api/") || request.url.startsWith("/auth/")) {
       reply.header("Cache-Control", "no-store");
     }
@@ -335,6 +343,9 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
       logger.warn("Dashboard login failed", { error: loginError });
       return reply.redirect("/#/?login=failed");
     }
+    // Logging in again replaces this browser's old login instead of leaving it behind.
+    // (Its Discord token isn't revoked: Discord may end the new one with it.)
+    sessions.delete(request.cookies[SESSION_COOKIE]);
     const sessionToken = sessions.create({
       userId: user.id,
       username: user.global_name ?? user.username,
@@ -1866,7 +1877,7 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     }
     const { guildId, session } = access;
     const guild = await discord.guild(guildId);
-    const backup = buildBackup({ guildId, guildName: guild.name, settings: guildSettings.all(guildId) });
+    const backup = buildBackup({ guildId, guildName: guild.name, settings: guildSettings.all(guildId), secret: config.sessionSecret });
     await logAction(guildId, session, "**Settings backup downloaded**", []);
     const day = backup.exportedAt.slice(0, 10);
     return reply
@@ -1892,6 +1903,7 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
         isOwner: guild.owner_id === session.userId,
         canManagePermissions: await canManagePermissions(guild, session.userId),
         current: guildSettings.all(guildId),
+        secret: config.sessionSecret,
       });
     } catch (error) {
       if (error instanceof InvalidBackup) {
