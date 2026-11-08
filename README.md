@@ -1,6 +1,6 @@
-# Rumbleverse Revival Bot
+# Canopy
 
-The Discord bot for the Rumbleverse Revival server. It is built as a set of independent features, each one a group of slash commands, so new features can be added without touching the existing ones.
+Canopy is an all-in-one Discord bot and web dashboard by Cedar Tech Solutions, made to run in many servers at once. It is built as a set of independent features, each one a group of slash commands, so new features can be added without touching the existing ones.
 
 ## Features
 
@@ -40,7 +40,7 @@ The Discord bot for the Rumbleverse Revival server. It is built as a set of inde
 | [Leveling](#leveling) | `/rank`, `/leaderboard`, `/levels`, or the dashboard's Leveling page | Everyone (`/rank`, `/leaderboard`), Manage Server (`/levels`) |
 | [Country roles](#country-roles) | `/country`, `/country-staff`, `/country-help` | Everyone (`/country`), the staff role (`/country-staff`), Manage Server (`/country-help`) |
 | [Permissions](#permissions) | The dashboard's Permissions page | The server owner or whoever added the bot (log channels per kind: Manage Server) |
-| [Web dashboard](#web-dashboard) | https://rumbleverse.cedartechsolutions.ca | Manage Server, or a dashboard role |
+| [Web dashboard](#web-dashboard) | https://canopy.cedartechsolutions.ca | Manage Server, or a dashboard role |
 
 Every reply is translated into English, Spanish, German, French, Portuguese, Italian or Arabic (see [Languages](#languages)).
 
@@ -547,16 +547,16 @@ Every change made on the dashboard is listed on the **Activity** page and posted
 
 **How it works.** It's a second process (`npm run dashboard`, pm2 app `rv-dashboard`) that shares `data/bot.db` with the bot. It only listens on `127.0.0.1:3080`; nginx (or Caddy) puts it on the internet with HTTPS. Logging in uses Discord OAuth2 with the `identify` and `guilds` scopes only, so it can see your name, avatar and server list, nothing else. Permissions are re-checked against Discord on every request (your server list is re-read at most every 5 minutes, or when you press *Refresh list*). Logins last 7 days. The session cookie is HTTP-only and Secure, and changes are only accepted from the dashboard's own address.
 
-**Terms of Service and Privacy Policy.** The dashboard serves them at `/terms` and `/privacy` (sources in `src/dashboard/legal/`), linked from the landing page's footer. Discord asks for both before it verifies a bot: in the Developer Portal > your application > *General Information*, set **Terms of Service URL** to `https://rumbleverse.cedartechsolutions.ca/terms` and **Privacy Policy URL** to `https://rumbleverse.cedartechsolutions.ca/privacy`. The pages give `support@cedartechsolutions.ca` as the contact; set `LEGAL_CONTACT` in `.env` (an email address, a web address such as a Discord invite, or plain text) to show something else. The text was written from what the bot actually stores, but it's a template, not legal advice. When a feature starts storing something new, update the Privacy Policy and its date.
+**Terms of Service and Privacy Policy.** The dashboard serves them at `/terms` and `/privacy` (sources in `src/dashboard/legal/`), linked from the landing page's footer. Discord asks for both before it verifies a bot: in the Developer Portal > your application > *General Information*, set **Terms of Service URL** to `https://canopy.cedartechsolutions.ca/terms` and **Privacy Policy URL** to `https://canopy.cedartechsolutions.ca/privacy`. The pages give `support@cedartechsolutions.ca` as the contact; set `LEGAL_CONTACT` in `.env` (an email address, a web address such as a Discord invite, or plain text) to show something else. The text was written from what the bot actually stores, but it's a template, not legal advice. When a feature starts storing something new, update the Privacy Policy and its date.
 
 **Setting it up on the VPS** (once):
 
-1. **DNS.** At the DNS provider for `cedartechsolutions.ca`, add an `A` record: name `rumbleverse`, value the VPS's public IP address. (Add an `AAAA` record too if the VPS has IPv6.)
-2. **Discord.** In the [Developer Portal](https://discord.com/developers/applications) > your application > **OAuth2**: copy the **Client Secret** (Reset Secret if you don't have it), and under **Redirects** add `https://rumbleverse.cedartechsolutions.ca/auth/callback`, then save.
+1. **DNS.** At the DNS provider for `cedartechsolutions.ca`, add an `A` record: name `canopy`, value the VPS's public IP address. (Add an `AAAA` record too if the VPS has IPv6.)
+2. **Discord.** In the [Developer Portal](https://discord.com/developers/applications) > your application > **OAuth2**: copy the **Client Secret** (Reset Secret if you don't have it), and under **Redirects** add `https://canopy.cedartechsolutions.ca/auth/callback`, then save.
 3. **`.env`.** Add these lines to the bot's `.env` on the VPS:
    ```
    DISCORD_CLIENT_SECRET=<the client secret>
-   DASHBOARD_URL=https://rumbleverse.cedartechsolutions.ca
+   DASHBOARD_URL=https://canopy.cedartechsolutions.ca
    DASHBOARD_SESSION_SECRET=<output of: openssl rand -hex 32>
    ```
 4. **Start it** next to the bot:
@@ -565,12 +565,12 @@ Every change made on the dashboard is listed on the **Activity** page and posted
    pm2 save
    ```
 5. **HTTPS.** Ports 80 and 443 must be open (`sudo ufw allow 80,443/tcp` if ufw is on).
-   - **With nginx** (what the VPS uses): put this in `/etc/nginx/sites-available/rumbleverse`, run `sudo ln -s /etc/nginx/sites-available/rumbleverse /etc/nginx/sites-enabled/ && sudo nginx -t && sudo systemctl reload nginx`, then get the certificate with `sudo apt install -y certbot python3-certbot-nginx && sudo certbot --nginx -d rumbleverse.cedartechsolutions.ca`:
+   - **With nginx** (what the VPS uses): put this in `/etc/nginx/sites-available/canopy`, run `sudo ln -s /etc/nginx/sites-available/canopy /etc/nginx/sites-enabled/ && sudo nginx -t && sudo systemctl reload nginx`, then get the certificate with `sudo apt install -y certbot python3-certbot-nginx && sudo certbot --nginx -d canopy.cedartechsolutions.ca`:
      ```
      server {
          listen 80;
          listen [::]:80;
-         server_name rumbleverse.cedartechsolutions.ca;
+         server_name canopy.cedartechsolutions.ca;
 
          location / {
              proxy_pass http://127.0.0.1:3080;
@@ -584,12 +584,12 @@ Every change made on the dashboard is listed on the **Activity** page and posted
      ```
    - **With Caddy** (if nothing else uses ports 80 and 443): install it (see https://caddyserver.com/docs/install#debian-ubuntu-raspbian), put this in `/etc/caddy/Caddyfile` and run `sudo systemctl reload caddy`. Caddy gets and renews the certificate by itself.
      ```
-     rumbleverse.cedartechsolutions.ca {
+     canopy.cedartechsolutions.ca {
          encode gzip
          reverse_proxy 127.0.0.1:3080
      }
      ```
-6. Open https://rumbleverse.cedartechsolutions.ca and log in.
+6. Open https://canopy.cedartechsolutions.ca and log in.
 
 After that, updates are the usual `git pull && npm ci`, then `pm2 restart rv-bot rv-dashboard`.
 
@@ -768,7 +768,7 @@ Replies use each user's Discord language when it's supported, otherwise English.
 | Temporary bans aren't lifted | The bot needs **Ban Members**; it keeps retrying and warns once in the console. |
 | Dashboard login says "Invalid OAuth2 redirect_uri" | Add `<DASHBOARD_URL>/auth/callback` exactly under OAuth2 > Redirects in the Developer Portal. |
 | Dashboard login loops back to the login page | `DASHBOARD_URL` must match the address in the browser exactly (https, no trailing slash). |
-| The dashboard site doesn't load | Check `pm2 logs rv-dashboard`, that the DNS record points at the VPS (`dig rumbleverse.cedartechsolutions.ca`), and `sudo journalctl -u caddy` for certificate errors. |
+| The dashboard site doesn't load | Check `pm2 logs rv-dashboard`, that the DNS record points at the VPS (`dig canopy.cedartechsolutions.ca`), and `sudo journalctl -u caddy` for certificate errors. |
 | A server is missing from the dashboard | You need Manage Server there; press *Refresh list* after getting it. |
 
 Set `LOG_LEVEL=debug` for more detail.
