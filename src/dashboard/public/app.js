@@ -260,6 +260,7 @@ const state = {
 // How long a loaded server is reused before asking again.
 const GUILD_CACHE_MS = 15_000;
 const main = document.getElementById("main");
+const topnav = document.getElementById("topnav");
 
 // --- Storage -------------------------------------------------------------------
 
@@ -351,6 +352,10 @@ function svg(tag, attributes = {}, ...children) {
 }
 
 function show(...children) {
+  // The section links in the top bar belong to the landing page only.
+  if (!children[0]?.classList?.contains("landing")) {
+    topnav.hidden = true;
+  }
   if (!(children.length === 1 && children[0] === state.shell?.element)) {
     document.body.classList.remove("in-guild");
   }
@@ -677,7 +682,15 @@ function languageSelect() {
 function renderAccount() {
   const account = document.getElementById("account");
   if (!state.me) {
-    account.replaceChildren(languageSelect());
+    account.replaceChildren(
+      languageSelect(),
+      h(
+        "button",
+        { class: "icon-button", type: "button", "aria-label": t("appearanceTitle"), title: t("appearanceTitle"), onclick: openAppearance },
+        icon("palette"),
+      ),
+      h("a", { class: "button ghost small topbar-login", href: "/auth/login" }, t("topLogin")),
+    );
     return;
   }
   const { user } = state.me;
@@ -972,6 +985,26 @@ function showLanding(failedLogin = false) {
       t("landingAdd"),
     );
   const invites = [inviteButton(), inviteButton(), inviteButton(" landing-step-action")];
+  const topInvite = h(
+    "a",
+    { class: "button primary small topnav-invite", href: "https://discord.com/oauth2/authorize", target: "_blank", rel: "noopener", hidden: true },
+    icon("plus"),
+    t("landingAdd"),
+  );
+  invites.push(topInvite);
+  topnav.setAttribute("aria-label", t("landingFooterNav"));
+  topnav.replaceChildren(
+    h(
+      "div",
+      { class: "topnav-links" },
+      landingJump("features", t("landingNavFeatures")),
+      landingJump("steps", t("landingNavSteps")),
+      landingJump("dashboard", t("landingNavDashboard")),
+      landingJump("faq", t("landingNavFaq")),
+    ),
+    topInvite,
+  );
+  topnav.hidden = false;
   const login = () => h("a", { class: "button landing-login big", href: "/auth/login" }, icon("home"), t("landingDashboard"));
   const status = h("span", { class: "landing-status" }, t("loading"));
   const stats = h("div", { class: "landing-stats", "aria-busy": "true" }, Array.from({ length: 6 }, () => h("span", { class: "sk sk-stat" })));

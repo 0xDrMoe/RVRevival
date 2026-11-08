@@ -4888,6 +4888,76 @@ dialog textarea {
   }
 }
 
+/* --- Landing page links in the top bar ------------------------------------------- */
+
+.topnav {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1 1 auto;
+  margin-inline-start: 28px;
+  min-width: 0;
+}
+
+.topnav[hidden] {
+  display: none;
+}
+
+.topnav-links {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.topnav-links .link-button {
+  min-height: 34px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  color: var(--muted);
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.topnav-links .link-button:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.topbar-login,
+.topnav-invite {
+  min-height: 36px;
+  white-space: nowrap;
+}
+
+#account:has(.topbar-login) {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* The invite button sits next to the account controls on the far side. */
+.topnav-invite {
+  margin-inline-start: auto;
+  white-space: nowrap;
+}
+
+@media (max-width: 1000px) {
+  .topnav-links {
+    display: none;
+  }
+}
+
+@media (max-width: 600px) {
+  .topnav {
+    margin-inline-start: auto;
+  }
+
+  .topnav-invite {
+    display: none;
+  }
+}
+
 /* --- Rumble style ------------------------------------------------------------------
    An optional game-style look (Appearance > Style): chunky Lilita One headings,
    bold outlines, hard comic shadows and full-color page headers. Everything here
