@@ -53,6 +53,7 @@ import { AppealStatus, APPEAL_STATUSES, AppealStore } from "../appeals/appealSto
 import { appealQuestions, MAX_ANSWER_LENGTH, normalizeAppeals } from "../appeals/config.js";
 import { normalizeCategories } from "../tickets/categories.js";
 import { checkMessage, editableMessage, InvalidMessage, messageSummary, parseMessageLink } from "../messages/embedMessage.js";
+import { inviteLink } from "../guilds/invite.js";
 import { SentMessageStore } from "../messages/sentMessageStore.js";
 import { addFeed, FeedDuplicate, FeedError, FeedLimit, MAX_FEED_MESSAGE_LENGTH } from "../feeds/feeds.js";
 import { FEED_KINDS } from "../feeds/fetchFeed.js";
@@ -245,9 +246,7 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
   const feeds = new FeedStore(db);
   const stickies = new StickyStore(db);
   const botStats = new BotStatsStore(db);
-  const inviteUrl =
-    `https://discord.com/oauth2/authorize?client_id=${discord.clientId}` +
-    "&scope=bot+applications.commands&permissions=1461246356630";
+  const inviteUrl = inviteLink(discord.clientId);
   const secureCookies = config.url.startsWith("https://");
   const cookieOptions = { path: "/", httpOnly: true, secure: secureCookies, sameSite: "lax" };
 

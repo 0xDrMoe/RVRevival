@@ -26,7 +26,7 @@ Rabble is an all-in-one Discord bot and web dashboard by Cedar Tech Solutions, m
 | [Temporary roles](#temporary-roles) | `/temprole` | Manage Roles or the mod role |
 | [Quarantine](#quarantine) | `/quarantine` | Manage Roles or the mod role (`role`: Manage Server) |
 | [Anti-nuke](#anti-nuke) | `/antinuke`, or the dashboard's Anti-nuke page | The server owner (`status`: Administrator) |
-| [Embed builder](#embed-builder) | The dashboard's Embed builder page | Manage Server or a dashboard role that can change settings |
+| [Embed builder](#embed-builder) | The dashboard's Embed builder page, or `/embed` | Manage Server or a dashboard role that can change settings (`/embed`: Manage Messages or the mod role) |
 | [Feeds](#feeds) | `/feed`, or the dashboard's Feeds page | Manage Server or a dashboard role that can change settings |
 | [Server stats](#server-stats) | `/stats`, or the dashboard's Server stats page | Manage Server or a dashboard role that can change settings |
 | [Sticky messages](#sticky-messages) | `/sticky`, or the dashboard's Sticky messages page | Manage Messages (dashboard: Manage Server or a dashboard role that can change settings) |
@@ -36,6 +36,10 @@ Rabble is an all-in-one Discord bot and web dashboard by Cedar Tech Solutions, m
 | [Highlights](#highlights) | `/highlight` | Everyone |
 | [AFK](#afk) | `/afk` | Everyone |
 | [Server info](#server-info) | `/serverinfo` | Everyone |
+| [Member and role info](#member-and-role-info) | `/userinfo`, `/avatar`, `/roleinfo` | Everyone |
+| [Bot info](#bot-info) | `/botinfo`, `/ping` | Everyone |
+| [Fun commands](#fun-commands) | `/coinflip`, `/roll`, `/choose`, `/8ball` | Everyone |
+| [Mass roles](#mass-roles) | `/massrole` | Manage Roles or the mod role |
 | [Guide](#guide) | `/guide`, or the dashboard's Guide page | Everyone |
 | [Dashboard link](#guide) | `/dashboard` | Everyone |
 | [Ban appeals](#ban-appeals) | The dashboard's Ban appeals page | Manage Server or a dashboard role that can change settings (banned members fill in the form) |
@@ -379,6 +383,8 @@ The dashboard's **Embed builder** page writes announcements, rules and info post
 
 Discord's limits are checked before sending: 2,000 characters of text, 6,000 in the embed. The bot needs View Channel, Send Messages and Embed Links in the channel.
 
+From Discord, **`/embed post [channel]`** opens a quick form (title, description, colour, image link, footer; the colour starts as the server's Branding colour) and posts the embed, and **`/embed edit message`** opens the same form filled in with an embed the bot posted (paste its message link, or just its ID in the current channel) and saves the changes, keeping the fields, author, thumbnail and text the form doesn't show. It needs **Manage Messages** or the mod role, and the member must be able to post in that channel themselves. Embeds posted this way are added to the dashboard's list of sent messages.
+
 ### Feeds
 
 `/feed` (or the dashboard's **Feeds** page) posts new YouTube videos, Shorts and live streams, Twitch and Kick streams going live, Bluesky and Mastodon posts, subreddit posts, GitHub releases and blog or news articles in a channel.
@@ -465,6 +471,41 @@ If the bot may change your nickname (it has **Manage Nicknames** and a higher ro
 ### Server info
 
 **`/serverinfo [private]`** posts a card about the server: its name, icon, banner and description, the owner, when it was created, members (split into people and bots once the bot has loaded the member list), text and voice channels and categories, roles, emojis and stickers, boosts and boost level, the verification level, and notable Discord features such as Community, Partnered or a custom invite link. `private:True` shows it only to you. The card uses the server's embed colour from the dashboard's Branding page. To turn it off, hide it in **Server Settings → Integrations**.
+
+### Member and role info
+
+Everyone can use these. Each posts a card in the channel, or only to you with `private:True`. Mentions on the cards never ping.
+
+| Command | What it shows |
+| --- | --- |
+| `/userinfo [member] [private]` | Account creation date, when they joined, nickname, up to 20 roles (highest first), key permissions, and whether they own the server, are a bot, are boosting, are timed out or haven't accepted the rules yet. Works for someone who left too (pick them by ID). Leave out `member` for yourself. |
+| `/avatar [member] [private]` | Their profile picture, server picture (if set) and profile banner (if any), full size, with PNG, JPG, WebP and (when animated) GIF links. |
+| `/roleinfo role [private]` | Colour, member count, position from the top, creation date, whether it's shown separately or anyone can mention it, what manages it (a bot, boosts or an integration) and its key permissions. Counting loads the member list once every 10 minutes at most; if that times out the count shows as "at least". |
+
+### Bot info
+
+**`/botinfo [private]`** posts the bot's card: servers, members across them, number of commands, online since, gateway ping, memory and versions, with **Dashboard**, **Add to server** and **Privacy** buttons (Dashboard and Privacy only when `DASHBOARD_URL` is set). **`/ping`** replies privately with the round trip and the gateway ping.
+
+### Fun commands
+
+| Command | What it does |
+| --- | --- |
+| `/coinflip` | Heads or tails. |
+| `/roll [dice]` | Rolls dice written like `1d20`, `2d6+3` or just `20` (default `1d6`). Up to 100 dice with up to 1000 sides and a modifier up to ±1000. |
+| `/choose options` | Picks one of 2 to 25 options split by commas or `\|`. |
+| `/8ball question` | One of the 20 classic magic 8-ball answers. |
+
+Everyone can use them; answers are posted in the channel, use `crypto.randomInt`, and never ping. Keep them to one channel or turn them off on the dashboard's Permissions page.
+
+### Mass roles
+
+| Command | What it does |
+| --- | --- |
+| `/massrole add role who [has-role]` | Gives the role to every matching member who doesn't have it. `who` is **People (not bots)**, **Bots only** or **Everyone**; `has-role` limits it to members who also have that role. |
+| `/massrole remove role who [has-role]` | Takes the role from every matching member who has it. |
+| `/massrole cancel` | Stops the job running in this server; members already changed keep the change. |
+
+Needs **Manage Roles** or the mod role, with the same role rules as `/role` (not `@everyone` or a managed role, below the member's and the bot's highest role). Only the server owner can hand out a role with admin or moderator permissions (Administrator, Manage Server, Manage Roles, Manage Channels, Manage Webhooks, Ban, Kick, Timeout, Manage Messages, Mention Everyone) this way. One job runs per server, in memory: a restart stops it, and running it again skips members already done. Discord allows roughly one role change a second, so the reply shows progress and an estimate for its first 14 minutes, and the final count is posted in the mod-log channel. It needs the **Server Members Intent** to load the member list.
 
 ### Guide
 
@@ -727,6 +768,7 @@ src/
     cases.js             Moderation: /case, /modlogs, /clearwarns
     channelTools.js      Channel tools: /lock, /unlock, /slowmode
     memberTools.js       Member tools: /role, /nick
+    massRole.js          Mass roles: /massrole
     welcome.js           Community: /welcome
     rolePanel.js         Community: /rolepanel and its buttons
     rolePanelWizard.js   Community: the /rolepanel setup editor
@@ -748,6 +790,10 @@ src/
     stats.js             Server stats: /stats
     afk.js               AFK: /afk
     serverInfo.js        Server info: /serverinfo
+    infoCommands.js      Member and role info: /userinfo, /avatar, /roleinfo
+    botInfo.js           Bot info: /botinfo, /ping
+    fun.js               Fun: /coinflip, /roll, /choose, /8ball
+    embed.js             Quick embeds: /embed
     guide.js             Guide: /guide, its page buttons and menus
     dashboard.js         /dashboard: a private link button to the server's dashboard page
     sticky.js            Sticky messages: /sticky

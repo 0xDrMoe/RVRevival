@@ -37,6 +37,12 @@ import { createMediaOnlyCommand } from "./mediaOnly.js";
 import { createBirthdayCommand } from "./birthday.js";
 import { createWelcomeCommand } from "./welcome.js";
 import { createServerInfoCommand } from "./serverInfo.js";
+import { createInfoCommands } from "./infoCommands.js";
+import { createBotInfoCommands } from "./botInfo.js";
+import { createFunCommands } from "./fun.js";
+import { createEmbedCommand } from "./embed.js";
+import { createMassRoleCommand } from "./massRole.js";
+import { createMemberLoader } from "../guilds/memberCache.js";
 
 // Each command is { name, data, execute(interaction), autocomplete?(interaction),
 // components?, componentPrefixes? }. `components` maps a button, form or menu
@@ -61,6 +67,8 @@ import { createServerInfoCommand } from "./serverInfo.js";
 // to run /highlight, not to register them. `dashboardUrl` adds dashboard links
 // to /guide and /dashboard. `roleConfirmations` (roles/roleConfirmations.js)
 // makes role panels and the country picker ask before changing roles.
+// `sentMessages` (messages/sentMessageStore.js) lists /embed posts on the
+// dashboard's Embed builder page.
 export function createCommands({
   logger,
   guildSettings,
@@ -87,12 +95,15 @@ export function createCommands({
   stickies,
   highlightStore,
   highlights,
+  sentMessages,
   roleConfirmations = createRoleConfirmations({ guildSettings, store: new RoleConfirmStore(), forcedLanguage }),
   dashboardUrl,
 }) {
   // Shared, so /country and /country-staff can't change the same member at the same time.
   const roleService = new CountryRoleService(logger);
   const moderationOptions = { logger, guildSettings, forcedLanguage, moderation };
+  // Shared, so /roleinfo and /massrole load a server's member list only once.
+  const memberLoader = createMemberLoader();
   const commands = [
     createCountryCommand({ logger, guildSettings, forcedLanguage, roleService, confirmations: roleConfirmations }),
     createCountryStaffCommand({ logger, guildSettings, forcedLanguage, roleService }),
@@ -107,9 +118,11 @@ export function createCommands({
     createClearWarnsCommand({ moderation, modLog, forcedLanguage }),
     ...createChannelToolCommands({ guildSettings, modLog, forcedLanguage }),
     ...createMemberToolCommands({ guildSettings, modLog, forcedLanguage }),
+    createMassRoleCommand({ guildSettings, modLog, forcedLanguage, memberLoader }),
     createWelcomeCommand({ guildSettings, forcedLanguage }),
     createRolePanelCommand({ guildSettings, logger, forcedLanguage, confirmations: roleConfirmations }),
     ...createTagCommands({ guildSettings, forcedLanguage }),
+    createEmbedCommand({ guildSettings, forcedLanguage, sentMessages }),
     createRemindCommand({ reminders, forcedLanguage }),
     createGiveawayCommand({ giveaways, guildSettings, logger, forcedLanguage }),
     createStarboardCommand({ guildSettings, forcedLanguage }),
@@ -125,6 +138,9 @@ export function createCommands({
     createStatsCommand({ guildSettings, updater: statsUpdater, forcedLanguage, logger }),
     createAfkCommand({ afk, forcedLanguage }),
     createServerInfoCommand({ guildSettings, forcedLanguage }),
+    ...createInfoCommands({ guildSettings, forcedLanguage, memberLoader }),
+    ...createBotInfoCommands({ guildSettings, forcedLanguage, dashboardUrl, commandCount: () => commands.length }),
+    ...createFunCommands({ forcedLanguage }),
     createStickyCommand({ store: stickyStore, stickies, forcedLanguage }),
     createHighlightCommand({ store: highlightStore, highlights, forcedLanguage }),
     createMediaOnlyCommand({ guildSettings, forcedLanguage }),

@@ -44,6 +44,7 @@ import { createActionLog } from "./logs/actionLog.js";
 import { createLogChannelPoster } from "./logs/logChannel.js";
 import { RecentIds } from "./logs/recentIds.js";
 import { createServerLog } from "./logs/serverLog.js";
+import { SentMessageStore } from "./messages/sentMessageStore.js";
 import { MemberEvent, MemberEventStore } from "./members/memberEventStore.js";
 import { CaseStore } from "./moderation/caseStore.js";
 import { createExternalActionRecorder } from "./moderation/externalActions.js";
@@ -279,6 +280,7 @@ async function start() {
     levels,
     leveling,
     tempVoice: tempVoiceChannels,
+    sentMessages: new SentMessageStore(db),
     dashboardUrl: config.dashboardUrl,
   });
   const handleInteraction = createInteractionHandler({ commands, logger, forcedLanguage, actionLog, guildSettings });
