@@ -6,6 +6,8 @@
 //   /tickets add member:@x                bring someone into this ticket
 //   /tickets remove member:@x             take them out again
 //   /tickets list                         the open tickets
+//   /tickets log [channel:#…]             where the ticket log goes (empty: the mod log)
+//   /tickets log-event event:<…> enabled:<…>  switch one kind of ticket log entry off or on
 //
 // Categories (several buttons, each with its own questions and staff role) are
 // set on the dashboard's Tickets page; see tickets/categories.js.
@@ -15,10 +17,13 @@
 // member and the staff role in it, and a Close button that the member or staff
 // can press. Panel and off need Manage Server; the rest needs ticket staff
 // (see tickets/tickets.js). Tickets are saved in data/bot.db (tickets/ticketStore.js).
-// Closing a ticket saves its transcript and posts it in the mod log.
+// Closing a ticket saves its transcript. Everything that happens to a ticket,
+// here or in Discord itself (renaming, archiving, adding people by hand,
+// deleting the thread), goes in its history and the ticket log
+// (tickets/ticketLog.js).
 
 import {
-  AttachmentBuilder,
+  AuditLogEvent,
   ChannelType,
   InteractionContextType,
   LabelBuilder,
@@ -36,7 +41,6 @@ import { Setting } from "../settings/guildSettings.js";
 import {
   addStaff,
   buildPanelMessage,
-  buildTicketLogEmbed,
   buildTicketWelcome,
   CLOSE_BUTTON,
   FORM_ID,
@@ -60,7 +64,7 @@ import {
 } from "../tickets/tickets.js";
 import { findCategory, subjectFromAnswers } from "../tickets/categories.js";
 import { buildTicketTranscript, fetchThreadMessages } from "../tickets/transcript.js";
-import { noModLog } from "../moderation/modLog.js";
+import { noTicketLog, TICKET_EVENTS, TicketEvent } from "../tickets/ticketLog.js";
 import { isPermissionError } from "../utils/discordErrors.js";
 
 const COMMAND_NAME = "tickets";
@@ -70,6 +74,35 @@ function withDescription(builder, key) {
 }
 
 const memberOption = (option) => withDescription(option.setName("member"), "ticketsMemberOptionDescription").setRequired(true);
+
+// The /tickets log-event choices, named like "Opened" in each language.
+const eventNameKey = (event) => `ticketLogEvent${event[0].toUpperCase()}${event.slice(1)}`;
+export const TICKET_LOG_EVENT_CHOICES = TICKET_EVENTS.map((value) => ({
+  name: translate("en", eventNameKey(value)),
+  name_localizations: discordLocalizations(eventNameKey(value)),
+  value,
+}));
+
+// What the bot needs in the ticket log channel.
+const POST_LOGS = [
+  PermissionFlagsBits.ViewChannel,
+  PermissionFlagsBits.SendMessages,
+  PermissionFlagsBits.EmbedLinks,
+  PermissionFlagsBits.AttachFiles,
+];
+
+// Discord writes the audit log entry a moment after sending the event.
+const AUDIT_LOG_DELAY_MS = 1500;
+// Entries older than this belong to an earlier change.
+const AUDIT_LOG_MAX_AGE_MS = 30_000;
+// People who join a ticket this soon after it opens came with it (the member,
+// and the staff role brought in by the welcome message), so they aren't logged.
+export const OPEN_GRACE_MS = 60_000;
+// How long a change made with /tickets add or remove waits for Discord's event,
+// which is then skipped (the command already logged it, with who did it).
+const EXPECTED_CHANGE_MS = 30_000;
+
+const sleepFor = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export function buildTicketsCommandData() {
   const command = new SlashCommandBuilder()
@@ -101,6 +134,23 @@ export function buildTicketsCommandData() {
     .addSubcommand((sub) => withDescription(sub.setName("add"), "ticketsAddDescription").addUserOption(memberOption))
     .addSubcommand((sub) => withDescription(sub.setName("remove"), "ticketsRemoveDescription").addUserOption(memberOption))
     .addSubcommand((sub) => withDescription(sub.setName("list"), "ticketsListDescription"))
+    .addSubcommand((sub) =>
+      withDescription(sub.setName("log"), "ticketsLogDescription").addChannelOption((option) =>
+        withDescription(option.setName("channel"), "ticketsLogChannelOptionDescription").addChannelTypes(
+          ChannelType.GuildText,
+          ChannelType.GuildAnnouncement,
+        ),
+      ),
+    )
+    .addSubcommand((sub) =>
+      withDescription(sub.setName("log-event"), "ticketsLogEventDescription")
+        .addStringOption((option) =>
+          withDescription(option.setName("event"), "ticketsLogEventOptionDescription")
+            .setRequired(true)
+            .addChoices(...TICKET_LOG_EVENT_CHOICES),
+        )
+        .addBooleanOption((option) => withDescription(option.setName("enabled"), "ticketsLogEnabledOptionDescription").setRequired(true)),
+    )
     .toJSON();
 }
 
@@ -148,10 +198,58 @@ function categoryFor(interaction, guildSettings, prefix) {
 }
 
 // Options:
-//   tickets    the TicketStore (only needed to run the command, not to register it)
-//   modLog     where transcripts are posted (moderation/modLog.js)
-//   guildSettings, logger, forcedLanguage, now
-export function createTicketsCommand({ tickets, guildSettings, logger, forcedLanguage, modLog = noModLog, now = Date.now }) {
+//   tickets      the TicketStore (only needed to run the command, not to register it)
+//   ticketLog    saves and posts what happens to tickets (tickets/ticketLog.js)
+//   guildSettings, logger, forcedLanguage, now, sleep
+export function createTicketsCommand({
+  tickets,
+  guildSettings,
+  logger,
+  forcedLanguage,
+  ticketLog = noTicketLog,
+  now = Date.now,
+  sleep = sleepFor,
+}) {
+  // "<thread id>:<user id>" -> when a change made by a command stops being expected.
+  const expectedChanges = new Map();
+
+  function expectChange(threadId, userId) {
+    const at = now();
+    for (const [key, until] of expectedChanges) {
+      if (until < at) {
+        expectedChanges.delete(key);
+      }
+    }
+    expectedChanges.set(`${threadId}:${userId}`, at + EXPECTED_CHANGE_MS);
+  }
+
+  function wasExpected(threadId, userId) {
+    const key = `${threadId}:${userId}`;
+    const until = expectedChanges.get(key);
+    expectedChanges.delete(key);
+    return until !== undefined && until >= now();
+  }
+
+  // Who made a change in Discord itself, from the audit log (needs View Audit
+  // Log). null when it's unknown or nobody did (Discord archiving a quiet thread).
+  async function auditActor(guild, type, targetId, matches = () => true) {
+    if (!guild?.members?.me?.permissions?.has(PermissionFlagsBits.ViewAuditLog)) {
+      return null;
+    }
+    await sleep(AUDIT_LOG_DELAY_MS);
+    try {
+      const logs = await guild.fetchAuditLogs({ type, limit: 10 });
+      const entry = logs.entries.find(
+        (candidate) => candidate.targetId === targetId && now() - candidate.createdTimestamp < AUDIT_LOG_MAX_AGE_MS && matches(candidate),
+      );
+      return entry?.executorId ?? null;
+    } catch (error) {
+      logger.debug("Couldn't read the audit log for a ticket", { guildId: guild.id, error });
+      return null;
+    }
+  }
+  const changed = (key) => (entry) => entry.changes?.some((change) => change.key === key) ?? false;
+
   // Replies privately (or edits the deferred reply) and returns the log outcome.
   function answerer(interaction) {
     const language = pickLanguage(interaction.locale, forcedLanguage);
@@ -176,7 +274,8 @@ export function createTicketsCommand({ tickets, guildSettings, logger, forcedLan
   }
 
   // The member's open ticket, unless its thread is gone or archived (then it's
-  // closed on the spot, so they can open a new one).
+  // closed on the spot, so they can open a new one). Normally the thread's own
+  // events have closed it already; this catches what happened while the bot was offline.
   function liveTicket(guild, userId) {
     const ticket = tickets.openForUser(guild.id, userId);
     if (!ticket) {
@@ -186,12 +285,33 @@ export function createTicketsCommand({ tickets, guildSettings, logger, forcedLan
     if (thread && !thread.archived) {
       return ticket;
     }
-    tickets.close(ticket.id, { reason: "Thread archived or deleted", closedAt: now() });
+    // Closed right away; the transcript and log entry follow without holding up the member.
+    void closeQuietly(guild, ticket, { thread: thread || null, reason: thread ? "Thread archived" : "Thread deleted" });
     return undefined;
   }
 
-  // Saves the conversation and posts it in the mod log. Never throws: a ticket
-  // whose history can't be read still closes.
+  // Closes a ticket without a command (its thread was archived or is gone),
+  // saves what it can of the transcript and logs it. Closing happens before
+  // the first await, so callers needn't wait. Never throws.
+  async function closeQuietly(guild, ticket, { thread, closedBy = null, reason }) {
+    const closed = tickets.close(ticket.id, { closedBy, reason, closedAt: now() });
+    if (!closed) {
+      return undefined;
+    }
+    logger.info("Ticket closed", { guildId: ticket.guildId, ticket: ticket.number, reason });
+    const saved = thread ? await saveTranscript(thread, closed, guild) : undefined;
+    await ticketLog.record(guild, closed, {
+      event: TicketEvent.CLOSED,
+      actorId: closedBy,
+      detail: reason,
+      transcript: saved?.transcript,
+      messageCount: saved?.messageCount,
+    });
+    return closed;
+  }
+
+  // Saves the conversation. Returns { transcript, messageCount }, or undefined
+  // if it couldn't be read. Never throws: a ticket whose history can't be read still closes.
   async function saveTranscript(thread, ticket, guild) {
     try {
       const messages = await fetchThreadMessages(thread);
@@ -205,14 +325,10 @@ export function createTicketsCommand({ tickets, guildSettings, logger, forcedLan
       }
       const transcript = buildTicketTranscript({ ticket, guildName: guild.name, messages, names });
       tickets.setTranscript(ticket.id, transcript, messages.length);
-      await modLog.post(guild, ({ canAttach }) => ({
-        embed: buildTicketLogEmbed({ ticket, closedBy: ticket.closedBy, messageCount: messages.length }),
-        files: canAttach
-          ? [new AttachmentBuilder(Buffer.from(transcript, "utf8"), { name: `ticket-${String(ticket.number).padStart(4, "0")}.txt` })]
-          : [],
-      }));
+      return { transcript, messageCount: messages.length };
     } catch (error) {
       logger.warn("Couldn't save a ticket's transcript", { guildId: guild.id, ticket: ticket.number, error });
+      return undefined;
     }
   }
 
@@ -230,7 +346,14 @@ export function createTicketsCommand({ tickets, guildSettings, logger, forcedLan
       content: translate(language, reason ? "ticketClosedReason" : "ticketClosedMessage", values),
       allowedMentions: { parse: [] },
     });
-    await saveTranscript(interaction.channel, closed, interaction.guild);
+    const saved = await saveTranscript(interaction.channel, closed, interaction.guild);
+    await ticketLog.record(interaction.guild, closed, {
+      event: TicketEvent.CLOSED,
+      actorId: interaction.user.id,
+      detail: reason,
+      transcript: saved?.transcript,
+      messageCount: saved?.messageCount,
+    });
     await interaction.channel
       .edit({ locked: true, archived: true, reason: `Ticket #${ticket.number} closed by ${interaction.user.id}` })
       .catch((error) => logger.warn("Couldn't lock and archive a closed ticket", { guildId: ticket.guildId, ticket: ticket.number, error }));
@@ -246,6 +369,36 @@ export function createTicketsCommand({ tickets, guildSettings, logger, forcedLan
     const guild = interaction.guild;
     const guildId = interaction.guildId;
     const subcommand = interaction.options.getSubcommand();
+
+    if (["log", "log-event"].includes(subcommand)) {
+      if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
+        return answer(Status.REFUSED, "modNoPermission", { permission: text("permManageGuild") });
+      }
+      if (subcommand === "log") {
+        const picked = interaction.options.getChannel("channel");
+        if (!picked) {
+          await guildSettings.clear(guildId, Setting.TICKET_LOG_CHANNEL);
+          return answer(Status.SUCCESS, "ticketLogCleared");
+        }
+        const channel = guild.channels.cache.get(picked.id);
+        const me = guild.members.me;
+        if (![ChannelType.GuildText, ChannelType.GuildAnnouncement].includes(channel?.type) || !me || !channel.permissionsFor(me)?.has(POST_LOGS)) {
+          return answer(Status.FAILED, "ticketLogNeedsPermissions", { channel: `<#${picked.id}>` });
+        }
+        await guildSettings.set(guildId, Setting.TICKET_LOG_CHANNEL, channel.id);
+        return answer(Status.SUCCESS, "ticketLogSet", { channel: `<#${channel.id}>` });
+      }
+      const event = interaction.options.getString("event", true);
+      if (!TICKET_EVENTS.includes(event)) {
+        return answer(Status.FAILED, "unexpected");
+      }
+      const enabled = interaction.options.getBoolean("enabled", true);
+      const disabled = guildSettings.getList(guildId, Setting.DISABLED_TICKET_LOG_EVENTS);
+      if (disabled.includes(event) === enabled) {
+        await guildSettings.toggleInList(guildId, Setting.DISABLED_TICKET_LOG_EVENTS, event);
+      }
+      return answer(Status.SUCCESS, enabled ? "ticketLogEventOn" : "ticketLogEventOff", { event: text(eventNameKey(event)) });
+    }
 
     if (subcommand === "panel" || subcommand === "off") {
       if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
@@ -345,6 +498,7 @@ export function createTicketsCommand({ tickets, guildSettings, logger, forcedLan
     const user = interaction.options.getUser("member", true);
     const values = { member: `<@${user.id}>`, number: ticket.number };
     if (subcommand === "add") {
+      expectChange(ticket.threadId, user.id);
       try {
         await interaction.channel.members.add(user.id);
       } catch (error) {
@@ -352,13 +506,18 @@ export function createTicketsCommand({ tickets, guildSettings, logger, forcedLan
         logger.debug("Couldn't add someone to a ticket", { guildId, ticket: ticket.number, error });
         return answer(Status.FAILED, "ticketCannotAdd", values);
       }
-      return answer(Status.SUCCESS, "ticketAdded", values);
+      const outcome = await answer(Status.SUCCESS, "ticketAdded", values);
+      await ticketLog.record(guild, ticket, { event: TicketEvent.MEMBER_ADDED, actorId: interaction.user.id, userIds: [user.id] });
+      return outcome;
     }
     if (user.id === ticket.userId) {
       return answer(Status.REFUSED, "ticketCannotRemoveOwner");
     }
+    expectChange(ticket.threadId, user.id);
     await interaction.channel.members.remove(user.id);
-    return answer(Status.SUCCESS, "ticketRemoved", values);
+    const outcome = await answer(Status.SUCCESS, "ticketRemoved", values);
+    await ticketLog.record(guild, ticket, { event: TicketEvent.MEMBER_REMOVED, actorId: interaction.user.id, userIds: [user.id] });
+    return outcome;
   }
 
   // "Open a ticket" on the panel: asks what they need help with.
@@ -456,6 +615,11 @@ export function createTicketsCommand({ tickets, guildSettings, logger, forcedLan
     const outcome = await answer(Status.SUCCESS, "ticketOpened", { thread: `<#${thread.id}>`, number: ticket.number });
     // After answering, since it can take a while on a big staff team.
     await addStaff({ thread, guild, staffRoleId, logger });
+    await ticketLog.record(guild, { ...ticket, threadId: thread.id }, {
+      event: TicketEvent.OPENED,
+      actorId: interaction.user.id,
+      detail: ticket.categoryLabel,
+    });
     return outcome;
   }
 
@@ -472,11 +636,76 @@ export function createTicketsCommand({ tickets, guildSettings, logger, forcedLan
     return closeTicket(interaction, ticket, null);
   }
 
-  // A deleted ticket thread closes its ticket.
-  function threadDeleted(thread) {
+  // A deleted ticket thread closes its ticket. The transcript can't be read
+  // any more, so only what was saved before is kept.
+  async function threadDeleted(thread) {
     const ticket = tickets.byThread(thread.id);
-    if (ticket && tickets.close(ticket.id, { reason: "Thread deleted", closedAt: now() })) {
+    if (!ticket) {
+      return;
+    }
+    const closed = tickets.close(ticket.id, { reason: "Thread deleted", closedAt: now() });
+    if (closed) {
       logger.info("Ticket closed because its thread was deleted", { guildId: ticket.guildId, ticket: ticket.number });
+    }
+    const guild = thread.guild;
+    if (!guild) {
+      return;
+    }
+    const actorId = await auditActor(guild, AuditLogEvent.ThreadDelete, thread.id);
+    await ticketLog.record(guild, closed ?? ticket, {
+      event: TicketEvent.DELETED,
+      actorId,
+      detail: closed ? "The ticket was still open, so it was closed." : null,
+    });
+  }
+
+  // A ticket's thread changed in Discord: renamed, archived (by staff, or by
+  // Discord after a quiet week), or unarchived (which reopens the ticket).
+  async function threadUpdated(oldThread, newThread) {
+    const ticket = tickets.byThread(newThread.id);
+    const guild = newThread.guild;
+    if (!ticket || !oldThread || !guild || ticket.guildId !== guild.id) {
+      return;
+    }
+    if (oldThread.name && newThread.name && oldThread.name !== newThread.name) {
+      const actorId = await auditActor(guild, AuditLogEvent.ThreadUpdate, newThread.id, changed("name"));
+      await ticketLog.record(guild, ticket, { event: TicketEvent.RENAMED, actorId, detail: `${oldThread.name} → ${newThread.name}` });
+    }
+    if (!oldThread.archived && newThread.archived && ticket.closedAt === null) {
+      // Closed with /tickets close or the button already has closedAt set, so this is someone else.
+      const actorId = await auditActor(guild, AuditLogEvent.ThreadUpdate, newThread.id, changed("archived"));
+      await closeQuietly(guild, ticket, { thread: newThread, closedBy: actorId, reason: "Thread archived" });
+    } else if (oldThread.archived && !newThread.archived && ticket.closedAt !== null) {
+      const reopened = tickets.reopen(ticket.id);
+      if (!reopened) {
+        // The member has opened another ticket since; this one stays closed.
+        return;
+      }
+      logger.info("Ticket reopened", { guildId: guild.id, ticket: ticket.number });
+      const actorId = await auditActor(guild, AuditLogEvent.ThreadUpdate, newThread.id, changed("archived"));
+      await ticketLog.record(guild, reopened, { event: TicketEvent.REOPENED, actorId, detail: "Thread unarchived" });
+    }
+  }
+
+  // People joined or left a ticket's thread in Discord itself (mentioned,
+  // added by hand, left). Changes made with /tickets add and remove were
+  // logged already, with who made them.
+  async function threadMembersUpdated(added, removed, thread) {
+    const ticket = tickets.byThread(thread.id);
+    const guild = thread.guild;
+    if (!ticket || !guild || ticket.guildId !== guild.id) {
+      return;
+    }
+    const botId = guild.members?.me?.id ?? thread.client?.user?.id;
+    const people = (members) => [...(members?.keys() ?? [])].filter((id) => id !== botId && !wasExpected(thread.id, id));
+    // Check every ID either way, so expected changes are used up.
+    const addedIds = people(added);
+    const removedIds = people(removed);
+    if (addedIds.length > 0 && now() - ticket.createdAt >= OPEN_GRACE_MS) {
+      await ticketLog.record(guild, ticket, { event: TicketEvent.MEMBER_ADDED, userIds: addedIds, detail: "Added in Discord (mentioned or added by hand)" });
+    }
+    if (removedIds.length > 0) {
+      await ticketLog.record(guild, ticket, { event: TicketEvent.MEMBER_REMOVED, userIds: removedIds, detail: "Left, or removed in Discord" });
     }
   }
 
@@ -485,6 +714,8 @@ export function createTicketsCommand({ tickets, guildSettings, logger, forcedLan
     data: buildTicketsCommandData(),
     execute,
     threadDeleted,
+    threadUpdated,
+    threadMembersUpdated,
     components: {
       [OPEN_BUTTON]: { label: "Open ticket button", handle: handleOpenButton },
       [FORM_ID]: { label: "Ticket form", handle: handleForm },

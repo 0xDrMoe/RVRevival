@@ -7,7 +7,7 @@
 //   #/g/<id>/activity      every change made on the dashboard (?before=)
 //   #/g/<id>/cases         moderation cases (?q=&action=&user=&moderator=&from=&to=)
 //   #/g/<id>/members       find a member (?q=), or one member's history (?user=)
-//   #/g/<id>/tickets       support tickets (?status=&user=), or one ticket's transcript (?ticket=)
+//   #/g/<id>/tickets       support tickets (?status=&user=), or one ticket's history and transcript (?ticket=)
 //   #/g/<id>/automod       automod rules, punishments and exemptions
 //   #/g/<id>/antinuke      anti-nuke limits, punishment and trusted people (owner only)
 //   #/g/<id>/raid          the new-account gate, join alerts and a running lockdown
@@ -32,6 +32,8 @@ import { GUIDE } from "./guide.js";
 
 const LANGUAGES = { en: "English", es: "Español", de: "Deutsch", fr: "Français", pt: "Português", it: "Italiano", ar: "العربية" };
 const LOG_EVENTS = ["messageEdit", "messageDelete", "bulkDelete", "memberJoin", "memberLeave", "memberUpdate"];
+// What the ticket log records (tickets/ticketLog.js).
+const TICKET_EVENTS = ["opened", "closed", "reopened", "memberAdded", "memberRemoved", "renamed", "deleted"];
 const CASE_ACTIONS = ["ban", "softban", "unban", "kick", "timeout", "untimeout", "warn", "note"];
 const AUTOMOD_RULES = ["bannedWords", "invites", "links", "mentions", "spam", "duplicates", "caps"];
 const AUTOMOD_ACTIONS = ["delete", "warn", "timeout"];
@@ -1971,6 +1973,16 @@ async function showLogging(guildId) {
     eventSwitches[0].dispatchEvent(new Event("change", { bubbles: true }));
   };
 
+  const ticketsOff = new Set(data.settings.disabledTicketLogEvents ?? []);
+  const ticketSwitches = TICKET_EVENTS.map((event) =>
+    h(
+      "label",
+      { class: "switch-card" },
+      h("span", { class: "switch-text" }, h("strong", {}, t(`ticketEvent_${event}`)), h("span", { class: "help" }, t(`ticketEventHelp_${event}`))),
+      h("span", { class: "switch" }, h("input", { type: "checkbox", name: "ticketLogEvent", value: event, checked: !ticketsOff.has(event), role: "switch" })),
+    ),
+  );
+
   const ignorable = data.channels
     .filter((channel) => [CHANNEL.TEXT, CHANNEL.ANNOUNCEMENT, CHANNEL.FORUM, CHANNEL.VOICE, CHANNEL.CATEGORY].includes(channel.type))
     .map((channel) => channelItem(channel, data.channels));
@@ -2001,6 +2013,14 @@ async function showLogging(guildId) {
         h("div", { class: "switch-grid" }, eventSwitches),
       ),
       card(
+        t("sectionTicketLog"),
+        "ticket",
+        "cyan",
+        field("ticketLogChannel", "ticketLogChannelHelp", channelPicker("ticketLogChannelId")),
+        h("p", { class: "help" }, t("ticketLogEventsHelp")),
+        h("div", { class: "switch-grid" }, ticketSwitches),
+      ),
+      card(
         t("ignoredChannels"),
         "eyeOff",
         "gray",
@@ -2016,6 +2036,11 @@ async function showLogging(guildId) {
         return off.length > 0 ? off : null;
       },
       logIgnoredChannels: checkedList("ignore"),
+      ticketLogChannelId: selectValue("ticketLogChannelId"),
+      disabledTicketLogEvents: (form) => {
+        const off = [...form.querySelectorAll('input[name="ticketLogEvent"]')].filter((box) => !box.checked).map((box) => box.value);
+        return off.length > 0 ? off : null;
+      },
     },
   });
 }
@@ -5122,8 +5147,40 @@ async function showTicketList(guildId, data, query) {
   await load();
 }
 
+// One ticket's history, oldest first: what happened, who did it, and when.
+function ticketHistory(guildId, events) {
+  if (events.length === 0) {
+    return h("p", { class: "muted empty" }, t("ticketsHistoryNone"));
+  }
+  return h(
+    "ul",
+    { class: "timeline" },
+    events.map((entry) =>
+      h(
+        "li",
+        { class: `tk-${entry.event}` },
+        h("span", { class: "timeline-dot", "aria-hidden": "true" }),
+        h(
+          "div",
+          { class: "timeline-body" },
+          h("div", { class: "timeline-head" }, h("strong", {}, t(`ticketEvent_${entry.event}`)), h("span", { class: "muted" }, formatDate(entry.at))),
+          entry.people.length > 0
+            ? h("p", { class: "timeline-reason" }, entry.people.flatMap((person, index) => [index > 0 ? ", " : null, ticketPerson(guildId, person.id, person.name)]))
+            : null,
+          entry.detail ? h("p", { class: "timeline-reason" }, entry.detail) : null,
+          h(
+            "span",
+            { class: "muted timeline-by" },
+            entry.actorId ? [t("ticketsHistoryBy"), " ", ticketPerson(guildId, entry.actorId, entry.actorName)] : t("ticketsHistoryAutomatic"),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
 async function showTicket(guildId, data, number) {
-  const { ticket, transcript } = await api(`/api/guilds/${guildId}/tickets/${number}`);
+  const { ticket, transcript, events = [] } = await api(`/api/guilds/${guildId}/tickets/${number}`);
   const facts = [
     [t("ticketsOpenedBy"), ticketPerson(guildId, ticket.userId, ticket.userName)],
     [t("ticketsOpened"), formatDate(ticket.createdAt)],
@@ -5152,6 +5209,7 @@ async function showTicket(guildId, data, number) {
         h("dl", { class: "facts" }, facts.flatMap(([label, value]) => [h("dt", {}, label), h("dd", {}, value)])),
         actions,
       ),
+      card(t("ticketsHistory"), "clock", "purple", ticketHistory(guildId, events)),
       card(
         t("ticketsTranscript"),
         "file",

@@ -874,6 +874,10 @@ describe("dashboard", () => {
       }
     }
     ticketStore.setTranscript(ticketStore.byNumber(GUILD_ID, 1).id, "Ticket #1 · Rumbleverse Revival\nhello", 2);
+    const firstTicket = ticketStore.byNumber(GUILD_ID, 1);
+    ticketStore.addEvent(firstTicket, { event: "opened", actorId: firstTicket.userId, createdAt: 0 });
+    ticketStore.addEvent(firstTicket, { event: "memberAdded", actorId: USER_ID, userIds: [MEMBER_ID], createdAt: 50 });
+    ticketStore.addEvent(firstTicket, { event: "closed", actorId: USER_ID, detail: "Done", createdAt: 100 });
     discord.member.mockImplementation(async (guildId, userId) =>
       userId === MEMBER_ID ? { nick: "Champ", roles: [], user: { id: MEMBER_ID, username: "rumbler" } } : null,
     );
@@ -896,6 +900,9 @@ describe("dashboard", () => {
     const one = (await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}/tickets/1`, cookies })).json();
     expect(one.ticket).toMatchObject({ number: 1, closeReason: "Done", hasTranscript: true, messageCount: 2 });
     expect(one.transcript).toContain("hello");
+    expect(one.events.map((event) => event.event)).toEqual(["opened", "memberAdded", "closed"]);
+    expect(one.events[1]).toMatchObject({ actorId: USER_ID, people: [{ id: MEMBER_ID, name: "Champ" }], detail: null, at: 50 });
+    expect(one.events[2]).toMatchObject({ detail: "Done" });
     const file = await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}/tickets/1?download=1`, cookies });
     expect(file.headers["content-disposition"]).toBe('attachment; filename="ticket-0001.txt"');
     expect(file.body).toContain("hello");
@@ -1348,6 +1355,11 @@ describe("dashboard helpers", () => {
       disabledLogEvents: ["messageEdit", "memberJoin"],
     });
     expect(checkSettingChanges({ logIgnoredChannels: [] }, server)).toEqual({ logIgnoredChannels: null });
+    expect(checkSettingChanges({ disabledTicketLogEvents: ["renamed", "opened"], ticketLogChannelId: TEXT_ID }, server)).toEqual({
+      disabledTicketLogEvents: ["opened", "renamed"],
+      ticketLogChannelId: TEXT_ID,
+    });
+    expect(() => checkSettingChanges({ disabledTicketLogEvents: ["memberJoin"] }, server)).toThrow(InvalidSetting);
     expect(() => checkSettingChanges([], server)).toThrow(InvalidSetting);
   });
 

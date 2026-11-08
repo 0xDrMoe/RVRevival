@@ -1,6 +1,7 @@
 // Stores support tickets (/tickets) in the bot's SQLite database. Each ticket
 // is a private thread; the row remembers who opened it, why, how it ended, and
-// the conversation (saved as a transcript when it's closed).
+// the conversation (saved as a transcript when it's closed). Each ticket's
+// history (opened, closed, people added…) is kept in ticket_events.
 
 import { inTransaction, openDatabase } from "../storage/database.js";
 
@@ -25,6 +26,22 @@ function toTicket(row) {
     : undefined;
 }
 
+// More would only come from someone renaming a thread over and over.
+export const MAX_EVENTS_PER_TICKET = 200;
+
+const splitIds = (text) => (text ? text.split(" ").filter(Boolean) : []);
+
+function toEvent(row) {
+  return {
+    id: row.id,
+    event: row.event,
+    actorId: row.actor_id ?? null,
+    userIds: splitIds(row.user_ids),
+    detail: row.detail ?? null,
+    createdAt: row.created_at,
+  };
+}
+
 export class TicketStore {
   #db;
   #statements;
@@ -46,6 +63,14 @@ export class TicketStore {
       close: this.#db.prepare(`
         UPDATE tickets SET closed_at = ?, closed_by = ?, close_reason = ? WHERE id = ? AND closed_at IS NULL RETURNING *`),
       delete: this.#db.prepare("DELETE FROM tickets WHERE id = ?"),
+      deleteEvents: this.#db.prepare("DELETE FROM ticket_events WHERE ticket_id = ?"),
+      reopen: this.#db.prepare(`
+        UPDATE tickets SET closed_at = NULL, closed_by = NULL, close_reason = NULL WHERE id = ? AND closed_at IS NOT NULL RETURNING *`),
+      countEvents: this.#db.prepare("SELECT COUNT(*) AS total FROM ticket_events WHERE ticket_id = ?"),
+      addEvent: this.#db.prepare(`
+        INSERT INTO ticket_events (guild_id, ticket_id, event, actor_id, user_ids, detail, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING *`),
+      events: this.#db.prepare("SELECT * FROM ticket_events WHERE ticket_id = ? ORDER BY id"),
       listForUser: this.#db.prepare("SELECT * FROM tickets WHERE guild_id = ? AND user_id = ? ORDER BY number DESC LIMIT ?"),
       byNumber: this.#db.prepare("SELECT * FROM tickets WHERE guild_id = ? AND number = ?"),
       setTranscript: this.#db.prepare("UPDATE tickets SET transcript = ?, message_count = ? WHERE id = ?"),
@@ -128,8 +153,48 @@ export class TicketStore {
     return toTicket(this.#statements.close.get(closedAt, closedBy, reason, id));
   }
 
+  // Opens a closed ticket again. Returns it, or undefined if it was open
+  // already or its member has opened another one since (one at a time).
+  reopen(id) {
+    return inTransaction(this.#db, () => {
+      const ticket = toTicket(this.#statements.get.get(id));
+      if (!ticket || ticket.closedAt === null || this.#statements.openForUser.get(ticket.guildId, ticket.userId)) {
+        return undefined;
+      }
+      return toTicket(this.#statements.reopen.get(id));
+    });
+  }
+
   // For a ticket whose thread couldn't be made.
   delete(id) {
-    this.#statements.delete.run(id);
+    inTransaction(this.#db, () => {
+      this.#statements.deleteEvents.run(id);
+      this.#statements.delete.run(id);
+    });
+  }
+
+  // Adds to a ticket's history. Returns the event, or undefined once the
+  // ticket has MAX_EVENTS_PER_TICKET.
+  addEvent(ticket, { event, actorId = null, userIds = [], detail = null, createdAt = Date.now() }) {
+    return inTransaction(this.#db, () => {
+      if (Number(this.#statements.countEvents.get(ticket.id).total) >= MAX_EVENTS_PER_TICKET) {
+        return undefined;
+      }
+      const row = this.#statements.addEvent.get(
+        ticket.guildId,
+        ticket.id,
+        event,
+        actorId,
+        userIds.length > 0 ? userIds.join(" ") : null,
+        detail,
+        createdAt,
+      );
+      return toEvent(row);
+    });
+  }
+
+  // A ticket's history, oldest first.
+  events(ticketId) {
+    return this.#statements.events.all(ticketId).map(toEvent);
   }
 }

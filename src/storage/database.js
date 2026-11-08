@@ -383,6 +383,23 @@ const MIGRATIONS = [
     online_ms  INTEGER NOT NULL
   ) WITHOUT ROWID;
   `,
+  // 27: what happened in each ticket (tickets/ticketLog.js): opened, closed,
+  // reopened, people added or removed, renamed, deleted. actor_id is who did
+  // it (NULL when unknown or automatic); user_ids are the people it was about,
+  // space-separated; detail is a reason, a category or "old name → new name".
+  `
+  CREATE TABLE ticket_events (
+    id          INTEGER PRIMARY KEY,
+    guild_id    TEXT    NOT NULL,
+    ticket_id   INTEGER NOT NULL,
+    event       TEXT    NOT NULL,
+    actor_id    TEXT,
+    user_ids    TEXT,
+    detail      TEXT,
+    created_at  INTEGER NOT NULL
+  );
+  CREATE INDEX ticket_events_by_ticket ON ticket_events (ticket_id, id);
+  `,
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS.length;

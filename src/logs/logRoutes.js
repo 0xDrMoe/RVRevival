@@ -12,7 +12,7 @@ export const LogRoute = Object.freeze({
   BOT_DELETIONS: "botDeletions", // messages the bot deleted, like in the /country channel (logs channel)
   DASHBOARD: "dashboard", // changes made on the dashboard (logs channel)
   CASES: "cases", // moderation cases (mod-log channel)
-  MOD_ACTIONS: "modActions", // locks, purges, role changes, quarantines, tickets (mod-log channel)
+  MOD_ACTIONS: "modActions", // locks, purges, role changes, quarantines, tickets without a ticket log channel (mod-log channel)
   AUTOMOD: "automod", // messages automod deleted (mod-log channel)
   PROTECTION: "protection", // raid alerts and anti-nuke (mod-log channel)
   // The server-log events, named like serverLog.js's LogEvent.

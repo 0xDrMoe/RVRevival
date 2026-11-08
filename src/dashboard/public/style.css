@@ -107,6 +107,15 @@
 .act-warn { --act: var(--c-warn); }
 .act-note { --act: var(--c-note); }
 
+/* Ticket history dots (tickets/ticketLog.js events). */
+.tk-opened { --act: var(--c-unban); }
+.tk-closed { --act: #5865f2; }
+.tk-reopened { --act: var(--c-warn); }
+.tk-memberAdded { --act: #10b981; }
+.tk-memberRemoved { --act: var(--c-kick); }
+.tk-renamed { --act: var(--c-note); }
+.tk-deleted { --act: var(--c-ban); }
+
 /* --- Base --------------------------------------------------------------------- */
 
 * {

@@ -1,10 +1,12 @@
 import { ChannelType, MessageFlags, PermissionFlagsBits } from "discord.js";
 import { describe, expect, it, vi } from "vitest";
-import { buildTicketsCommandData, createTicketsCommand } from "../src/commands/tickets.js";
+import { buildTicketsCommandData, createTicketsCommand, OPEN_GRACE_MS } from "../src/commands/tickets.js";
 import { Status } from "../src/logs/actionLog.js";
 import { GuildSettings, Setting } from "../src/settings/guildSettings.js";
 import { CLOSE_BUTTON, FORM_ID, MAX_OPEN_TICKETS, OPEN_BUTTON, threadName } from "../src/tickets/tickets.js";
-import { TicketStore } from "../src/tickets/ticketStore.js";
+import { TicketStore, MAX_EVENTS_PER_TICKET } from "../src/tickets/ticketStore.js";
+import { createTicketLog, TicketEvent } from "../src/tickets/ticketLog.js";
+import { LogRoute } from "../src/logs/logRoutes.js";
 import { buildTicketTranscript, fetchThreadMessages, MAX_TRANSCRIPT_MESSAGES } from "../src/tickets/transcript.js";
 
 const GUILD_ID = "900000000000000001";
@@ -13,6 +15,8 @@ const OTHER_CHANNEL_ID = "800000000000000002";
 const ADMIN_ID = "300000000000000001";
 const MEMBER_ID = "300000000000000002";
 const STRANGER_ID = "300000000000000003";
+const BOT_ID = "300000000000000099";
+const LOG_CHANNEL_ID = "800000000000000003";
 const STAFF_ROLE_ID = "700000000000000001";
 const MOD_ROLE_ID = "700000000000000002";
 
@@ -86,9 +90,17 @@ function setup({ canPost = true, mentionable = true, staffMembers = [], threadMe
   let clock = 1_000_000;
   const guildSettings = new GuildSettings();
   const tickets = new TicketStore();
-  const modLogPosts = [];
-  const modLog = { post: vi.fn(async (_guild, build) => modLogPosts.push(build({ canAttach }))) };
-  const command = createTicketsCommand({ tickets, guildSettings, logger, forcedLanguage: undefined, modLog, now: () => clock });
+  // Every ticket log entry: the embed's JSON, its files, and where it was sent.
+  const logPosts = [];
+  const poster = {
+    post: vi.fn(async (_guild, settings, build, options) => {
+      const { embed, files } = build({ canAttach });
+      logPosts.push({ ...embed.toJSON(), files, settings, route: options.route });
+      return {};
+    }),
+  };
+  const ticketLog = createTicketLog({ tickets, poster, guildSettings, logger, now: () => clock });
+  const command = createTicketsCommand({ tickets, guildSettings, logger, forcedLanguage: undefined, ticketLog, now: () => clock, sleep: async () => {} });
 
   function interaction({
     subcommand,
@@ -123,6 +135,7 @@ function setup({ canPost = true, mentionable = true, staffMembers = [], threadMe
         getChannel: (name) => options[name] ?? null,
         getRole: (name) => options[name] ?? null,
         getUser: (name) => options[name] ?? null,
+        getBoolean: (name) => options[name] ?? null,
       },
       fields: { getTextInputValue: () => subject },
       reply: vi.fn(async () => {
@@ -159,7 +172,7 @@ function setup({ canPost = true, mentionable = true, staffMembers = [], threadMe
     guildSettings,
     tickets,
     command,
-    modLogPosts,
+    logPosts,
     interaction,
     lastText,
     postPanel,
@@ -173,7 +186,7 @@ describe("tickets", () => {
     const data = buildTicketsCommandData();
     expect(data.name).toBe("tickets");
     expect(data.default_member_permissions).toBe(String(PermissionFlagsBits.ManageGuild));
-    expect(data.options.map((option) => option.name)).toEqual(["panel", "off", "close", "add", "remove", "list"]);
+    expect(data.options.map((option) => option.name)).toEqual(["panel", "off", "close", "add", "remove", "list", "log", "log-event"]);
   });
 
   it("posts the panel and saves it", async () => {
@@ -352,7 +365,7 @@ describe("tickets", () => {
     expect((await t.command.components[CLOSE_BUTTON].handle(twice)).key).toBe("ticketAlreadyClosed");
   });
 
-  it("saves the transcript when a ticket closes and posts it in the mod log", async () => {
+  it("saves the transcript when a ticket closes and posts it in the ticket log", async () => {
     const t = setup();
     await t.postPanel({ "staff-role": { id: STAFF_ROLE_ID } });
     await t.openTicket();
@@ -370,8 +383,10 @@ describe("tickets", () => {
     // Oldest first.
     expect(transcript.indexOf("message 1")).toBeLessThan(transcript.indexOf("message 3"));
 
-    const [post] = t.modLogPosts;
-    expect(post.embed.data.title).toBe("🎫 Ticket #1 closed");
+    const post = t.logPosts.at(-1);
+    expect(post.title).toBe("🎫 Ticket #1 closed");
+    expect(post.fields).toContainEqual({ name: "Reason", value: "Fixed", inline: false });
+    expect(post.fields).toContainEqual({ name: "Messages", value: "3", inline: true });
     expect(post.files[0].name).toBe("ticket-0001.txt");
     // Saved before the thread is archived.
     expect(thread.edit).toHaveBeenCalledWith(expect.objectContaining({ archived: true }));
@@ -389,7 +404,8 @@ describe("tickets", () => {
     expect(await t.command.components[CLOSE_BUTTON].handle(owner)).toMatchObject({ key: "ticketClosedLog" });
     expect(t.tickets.byNumber(GUILD_ID, 1)).toMatchObject({ hasTranscript: false });
     expect(thread.edit).toHaveBeenCalledWith(expect.objectContaining({ locked: true, archived: true }));
-    expect(t.modLogPosts).toEqual([]);
+    // Still logged, just without a transcript.
+    expect(t.logPosts.at(-1)).toMatchObject({ title: "🎫 Ticket #1 closed", files: [] });
   });
 
   it("closes with a reason from the command, for staff", async () => {
@@ -451,6 +467,163 @@ describe("tickets", () => {
   });
 });
 
+describe("ticket log", () => {
+  // The audit log says `executorId` made this change to the thread just now.
+  function withAuditLog(t, entries) {
+    t.guild.members.me = { id: BOT_ID, permissions: { has: (bit) => bit === PermissionFlagsBits.ViewAuditLog } };
+    t.guild.fetchAuditLogs = vi.fn(async () => ({ entries }));
+  }
+  const history = (t, number = 1) => t.tickets.events(t.tickets.byNumber(GUILD_ID, number).id);
+
+  it("records every step of a ticket, with who did it", async () => {
+    const t = setup();
+    await t.postPanel({ "staff-role": { id: STAFF_ROLE_ID } });
+    await t.openTicket();
+    const [thread] = t.threads;
+    const staff = (subcommand, userId) =>
+      t.interaction({ subcommand, manageThreads: true, channelId: thread.id, options: { member: { id: userId } } });
+    t.advance(OPEN_GRACE_MS);
+    await t.command.execute(staff("add", STRANGER_ID));
+    // Discord reports the change too; the command logged it already.
+    await t.command.threadMembersUpdated(new Map([[STRANGER_ID, {}]]), new Map(), { id: thread.id, guild: t.guild });
+    await t.command.execute(staff("remove", STRANGER_ID));
+    await t.command.threadMembersUpdated(new Map(), new Map([[STRANGER_ID, {}]]), { id: thread.id, guild: t.guild });
+    await t.command.execute(t.interaction({ subcommand: "close", manageThreads: true, channelId: thread.id, options: { reason: "Sorted" } }));
+
+    expect(history(t).map(({ event, actorId, userIds, detail }) => ({ event, actorId, userIds, detail }))).toEqual([
+      { event: TicketEvent.OPENED, actorId: MEMBER_ID, userIds: [], detail: null },
+      { event: TicketEvent.MEMBER_ADDED, actorId: ADMIN_ID, userIds: [STRANGER_ID], detail: null },
+      { event: TicketEvent.MEMBER_REMOVED, actorId: ADMIN_ID, userIds: [STRANGER_ID], detail: null },
+      { event: TicketEvent.CLOSED, actorId: ADMIN_ID, userIds: [], detail: "Sorted" },
+    ]);
+    expect(t.logPosts.map((post) => post.title)).toEqual([
+      "🎫 Ticket #1 opened",
+      "🎫 Ticket #1 people added",
+      "🎫 Ticket #1 people removed",
+      "🎫 Ticket #1 closed",
+    ]);
+    const opened = t.logPosts[0];
+    expect(opened.description).toBe(`<#${thread.id}>`);
+    expect(opened.fields).toContainEqual({ name: "Subject", value: "My game crashes on start", inline: false });
+    expect(t.logPosts[1].fields).toContainEqual({ name: "People", value: `<@${STRANGER_ID}>`, inline: false });
+
+  });
+
+  it("goes to the ticket log channel, else the mod log, and skips kinds that are switched off", async () => {
+    const t = setup();
+    t.guild.channels.cache.set(LOG_CHANNEL_ID, { ...t.channel, id: LOG_CHANNEL_ID });
+    await t.postPanel();
+    await t.openTicket();
+    expect(t.logPosts[0]).toMatchObject({ route: LogRoute.MOD_ACTIONS, settings: [Setting.TICKET_LOG_CHANNEL, Setting.MOD_LOG_CHANNEL, Setting.LOGS_CHANNEL] });
+
+    const notAdmin = t.interaction({ subcommand: "log", manageThreads: true, options: { channel: { id: LOG_CHANNEL_ID } } });
+    expect((await t.command.execute(notAdmin)).key).toBe("modNoPermission");
+    const set = t.interaction({ subcommand: "log", manageGuild: true, options: { channel: { id: LOG_CHANNEL_ID } } });
+    expect((await t.command.execute(set)).key).toBe("ticketLogSet");
+    expect(t.guildSettings.get(GUILD_ID, Setting.TICKET_LOG_CHANNEL)).toBe(LOG_CHANNEL_ID);
+
+    const off = t.interaction({ subcommand: "log-event", manageGuild: true, options: { event: TicketEvent.CLOSED, enabled: false } });
+    expect(await t.command.execute(off)).toMatchObject({ key: "ticketLogEventOff" });
+    expect(t.lastText(off)).toContain("Ticket closed");
+    const close = t.interaction({ customId: CLOSE_BUTTON, userId: MEMBER_ID, channelId: t.threads[0].id });
+    await t.command.components[CLOSE_BUTTON].handle(close);
+    // Not posted, but still in the history.
+    expect(t.logPosts).toHaveLength(1);
+    expect(history(t).map(({ event }) => event)).toEqual([TicketEvent.OPENED, TicketEvent.CLOSED]);
+
+    await t.command.execute(t.interaction({ subcommand: "log-event", manageGuild: true, options: { event: TicketEvent.CLOSED, enabled: true } }));
+    expect(t.guildSettings.get(GUILD_ID, Setting.DISABLED_TICKET_LOG_EVENTS)).toBeUndefined();
+    await t.openTicket();
+    expect(t.logPosts.at(-1)).toMatchObject({ title: "🎫 Ticket #2 opened", route: undefined });
+
+    expect((await t.command.execute(t.interaction({ subcommand: "log", manageGuild: true }))).key).toBe("ticketLogCleared");
+    expect(t.guildSettings.get(GUILD_ID, Setting.TICKET_LOG_CHANNEL)).toBeUndefined();
+  });
+
+  it("refuses a ticket log channel the bot can't post in", async () => {
+    const t = setup({ canPost: false });
+    const set = t.interaction({ subcommand: "log", manageGuild: true, options: { channel: { id: CHANNEL_ID } } });
+    expect((await t.command.execute(set)).key).toBe("ticketLogNeedsPermissions");
+    expect(t.guildSettings.get(GUILD_ID, Setting.TICKET_LOG_CHANNEL)).toBeUndefined();
+  });
+
+  it("logs renames, archiving and unarchiving done in Discord, with who did it from the audit log", async () => {
+    const t = setup();
+    await t.postPanel();
+    await t.openTicket();
+    const [thread] = t.threads;
+    const audit = [];
+    withAuditLog(t, audit);
+    const update = (before, after) => t.command.threadUpdated({ ...thread, ...before }, Object.assign(thread, { guild: t.guild }, after));
+
+    audit.unshift({ targetId: thread.id, executorId: STRANGER_ID, createdTimestamp: 1_000_000, changes: [{ key: "name" }] });
+    await update({ name: "🎫 0001 · Player 2" }, { name: "crash on start" });
+    // Staff archive it: the ticket closes and its transcript is saved.
+    audit.unshift({ targetId: thread.id, executorId: ADMIN_ID, createdTimestamp: 1_000_000, changes: [{ key: "archived" }] });
+    await update({ archived: false }, { archived: true });
+    expect(t.tickets.byNumber(GUILD_ID, 1)).toMatchObject({ closedBy: ADMIN_ID, closeReason: "Thread archived", hasTranscript: true });
+    expect(t.logPosts.at(-1).files[0].name).toBe("ticket-0001.txt");
+    // Unarchived again: it's open again.
+    await update({ archived: true }, { archived: false });
+    expect(t.tickets.openForUser(GUILD_ID, MEMBER_ID)).toMatchObject({ number: 1, closedAt: null });
+
+    expect(history(t).map(({ event, actorId, detail }) => [event, actorId, detail])).toEqual([
+      [TicketEvent.OPENED, MEMBER_ID, null],
+      [TicketEvent.RENAMED, STRANGER_ID, "🎫 0001 · Player 2 → crash on start"],
+      [TicketEvent.CLOSED, ADMIN_ID, "Thread archived"],
+      [TicketEvent.REOPENED, ADMIN_ID, "Thread unarchived"],
+    ]);
+  });
+
+  it("closes a ticket Discord archived after a quiet week, and doesn't reopen it over a newer ticket", async () => {
+    const t = setup();
+    await t.postPanel();
+    await t.openTicket();
+    const [thread] = t.threads;
+    thread.guild = t.guild;
+    await t.command.threadUpdated({ ...thread, archived: false }, { ...thread, archived: true });
+    expect(history(t).at(-1)).toMatchObject({ event: TicketEvent.CLOSED, actorId: null, detail: "Thread archived" });
+    expect(t.logPosts.at(-1).fields).toContainEqual({ name: "By", value: "Unknown or automatic", inline: true });
+
+    await t.openTicket();
+    await t.command.threadUpdated({ ...thread, archived: true }, { ...thread, archived: false });
+    expect(t.tickets.byNumber(GUILD_ID, 1).closedAt).not.toBeNull();
+    expect(history(t).at(-1).event).toBe(TicketEvent.CLOSED);
+  });
+
+  it("logs people joining or leaving in Discord, but not the staff who arrive with a new ticket", async () => {
+    const t = setup();
+    await t.postPanel({ "staff-role": { id: STAFF_ROLE_ID } });
+    await t.openTicket();
+    const thread = { id: t.threads[0].id, guild: t.guild };
+    t.guild.members.me = { id: BOT_ID, permissions: { has: () => false } };
+
+    await t.command.threadMembersUpdated(new Map([["300000000000000077", {}], [BOT_ID, {}]]), new Map(), thread);
+    expect(history(t)).toHaveLength(1);
+
+    t.advance(OPEN_GRACE_MS);
+    await t.command.threadMembersUpdated(new Map([[STRANGER_ID, {}]]), new Map([["300000000000000077", {}]]), thread);
+    expect(history(t).slice(1).map(({ event, actorId, userIds }) => [event, actorId, userIds])).toEqual([
+      [TicketEvent.MEMBER_ADDED, null, [STRANGER_ID]],
+      [TicketEvent.MEMBER_REMOVED, null, ["300000000000000077"]],
+    ]);
+    // Threads that aren't tickets are ignored.
+    await t.command.threadMembersUpdated(new Map([[STRANGER_ID, {}]]), new Map(), { id: "819999999999999999", guild: t.guild });
+    expect(history(t)).toHaveLength(3);
+  });
+
+  it("logs a deleted ticket thread", async () => {
+    const t = setup();
+    await t.postPanel();
+    await t.openTicket();
+    withAuditLog(t, [{ targetId: t.threads[0].id, executorId: ADMIN_ID, createdTimestamp: 1_000_000 }]);
+    await t.command.threadDeleted({ id: t.threads[0].id, guild: t.guild });
+    expect(history(t).at(-1)).toMatchObject({ event: TicketEvent.DELETED, actorId: ADMIN_ID });
+    expect(t.logPosts.at(-1)).toMatchObject({ title: "🎫 Ticket #1 thread deleted" });
+    expect(t.logPosts.at(-1).description).toBeUndefined();
+  });
+});
+
 describe("ticket store", () => {
   it("numbers tickets per server and lists a member's tickets", () => {
     const store = new TicketStore();
@@ -487,6 +660,37 @@ describe("ticket store", () => {
     store.setTranscript(store.byNumber(GUILD_ID, 1).id, "hello", 1);
     expect(store.transcript(GUILD_ID, 1)).toBe("hello");
     expect(store.transcript(GUILD_ID, 2)).toBeUndefined();
+  });
+});
+
+describe("ticket history", () => {
+  it("keeps each ticket's events in order, up to a limit, and forgets them with the ticket", () => {
+    const store = new TicketStore();
+    const ticket = store.open({ guildId: GUILD_ID, userId: MEMBER_ID, subject: "a", createdAt: 1 });
+    store.addEvent(ticket, { event: TicketEvent.OPENED, actorId: MEMBER_ID, createdAt: 1 });
+    store.addEvent(ticket, { event: TicketEvent.MEMBER_ADDED, userIds: [STRANGER_ID, ADMIN_ID], createdAt: 2 });
+    expect(store.events(ticket.id)).toEqual([
+      { id: 1, event: "opened", actorId: MEMBER_ID, userIds: [], detail: null, createdAt: 1 },
+      { id: 2, event: "memberAdded", actorId: null, userIds: [STRANGER_ID, ADMIN_ID], detail: null, createdAt: 2 },
+    ]);
+    for (let index = 2; index < MAX_EVENTS_PER_TICKET; index += 1) {
+      store.addEvent(ticket, { event: TicketEvent.RENAMED, detail: String(index) });
+    }
+    expect(store.addEvent(ticket, { event: TicketEvent.RENAMED })).toBeUndefined();
+    expect(store.events(ticket.id)).toHaveLength(MAX_EVENTS_PER_TICKET);
+    store.delete(ticket.id);
+    expect(store.events(ticket.id)).toEqual([]);
+  });
+
+  it("reopens a closed ticket unless its member has another one open", () => {
+    const store = new TicketStore();
+    const first = store.open({ guildId: GUILD_ID, userId: MEMBER_ID, subject: "a" });
+    expect(store.reopen(first.id)).toBeUndefined();
+    store.close(first.id, { closedBy: ADMIN_ID, reason: "done" });
+    expect(store.reopen(first.id)).toMatchObject({ closedAt: null, closedBy: null, closeReason: null });
+    store.close(first.id, {});
+    store.open({ guildId: GUILD_ID, userId: MEMBER_ID, subject: "b" });
+    expect(store.reopen(first.id)).toBeUndefined();
   });
 });
 
