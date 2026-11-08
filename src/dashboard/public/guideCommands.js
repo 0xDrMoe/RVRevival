@@ -1569,6 +1569,25 @@ export const COMMAND_PARTS = [
         tips: ["While you're away the bot adds \"[AFK] \" to your nickname, if it can."],
       },
       {
+        id: "cmdserverinfo",
+        command: "/serverinfo",
+        title: "/serverinfo",
+        icon: "home",
+        tone: "blue",
+        related: "serverinfo",
+        summary: "Shows a card about this server: owner, age, members, channels, roles, boosts, verification level and features.",
+        who: "Everyone.",
+        usages: [
+          {
+            usage: "/serverinfo [private]",
+            what: "Posts the card in the channel.",
+            options: [["private", "`True` shows the card only to you."]],
+          },
+        ],
+        example: ["/serverinfo", "/serverinfo private:True"],
+        tips: ["The card uses the server's embed colour from the dashboard's **Branding** page."],
+      },
+      {
         id: "cmdhighlight",
         command: "/highlight",
         title: "/highlight",

@@ -34,6 +34,7 @@ import { createHighlightCommand } from "./highlight.js";
 import { createMediaOnlyCommand } from "./mediaOnly.js";
 import { createBirthdayCommand } from "./birthday.js";
 import { createWelcomeCommand } from "./welcome.js";
+import { createServerInfoCommand } from "./serverInfo.js";
 
 // Each command is { name, data, execute(interaction), autocomplete?(interaction),
 // components?, componentPrefixes? }. `components` maps a button, form or menu
@@ -118,6 +119,7 @@ export function createCommands({
     createFeedCommand({ store: feeds, twitch, forcedLanguage, logger }),
     createStatsCommand({ guildSettings, updater: statsUpdater, forcedLanguage, logger }),
     createAfkCommand({ afk, forcedLanguage }),
+    createServerInfoCommand({ guildSettings, forcedLanguage }),
     createStickyCommand({ store: stickyStore, stickies, forcedLanguage }),
     createHighlightCommand({ store: highlightStore, highlights, forcedLanguage }),
     createMediaOnlyCommand({ guildSettings, forcedLanguage }),

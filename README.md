@@ -35,6 +35,7 @@ Rabble is an all-in-one Discord bot and web dashboard by Cedar Tech Solutions, m
 | [Settings backup](#settings-backup) | The dashboard's Backup page | Manage Server or a dashboard role that can change settings (anti-nuke: the server owner) |
 | [Highlights](#highlights) | `/highlight` | Everyone |
 | [AFK](#afk) | `/afk` | Everyone |
+| [Server info](#server-info) | `/serverinfo` | Everyone |
 | [Guide](#guide) | `/guide`, or the dashboard's Guide page | Everyone |
 | [Ban appeals](#ban-appeals) | The dashboard's Ban appeals page | Manage Server or a dashboard role that can change settings (banned members fill in the form) |
 | [Join-to-create voice](#join-to-create-voice) | `/voice` | Manage Server (`setup`, `off`), the channel's owner (`lock`, `unlock`), anyone in the channel (`claim`) |
@@ -449,6 +450,10 @@ The DM shows the message and a link to it. It matches whole words only ("cat" do
 
 If the bot may change your nickname (it has **Manage Nicknames** and a higher role than yours), it adds "[AFK] " in front of it while you're away and takes it off when you're back. Mentions in AFK messages never ping anyone. To turn `/afk` off, hide it in **Server Settings → Integrations**.
 
+### Server info
+
+**`/serverinfo [private]`** posts a card about the server: its name, icon, banner and description, the owner, when it was created, members (split into people and bots once the bot has loaded the member list), text and voice channels and categories, roles, emojis and stickers, boosts and boost level, the verification level, and notable Discord features such as Community, Partnered or a custom invite link. `private:True` shows it only to you. The card uses the server's embed colour from the dashboard's Branding page. To turn it off, hide it in **Server Settings → Integrations**.
+
 ### Guide
 
 **`/guide [topic]`** shows the dashboard's Guide in Discord, privately, so members can read it without logging in. It opens on the contents (a line per part); **Previous** and **Next** page through every part and topic in order, and two menus jump to a part or to a topic in it. `topic` (with suggestions as you type) opens a part or topic straight away. When `DASHBOARD_URL` is set, **Open on the dashboard** links to the same page there. The text is the same English as on the dashboard (it comes from `src/dashboard/public/guide.js`); the buttons and menus follow the user's language. Paging isn't logged; running `/guide` is, like every command.
@@ -728,6 +733,7 @@ src/
     feed.js              Feeds: /feed
     stats.js             Server stats: /stats
     afk.js               AFK: /afk
+    serverInfo.js        Server info: /serverinfo
     guide.js             Guide: /guide, its page buttons and menus
     sticky.js            Sticky messages: /sticky
     highlight.js         Highlights: /highlight
