@@ -5891,9 +5891,33 @@ async function showEmbeds(guildId) {
 
 // --- Feeds ---------------------------------------------------------------------------
 
-const FEED_KINDS = ["youtube", "twitch", "bluesky", "mastodon", "reddit", "rss"];
-const FEED_TONES = { youtube: "red", twitch: "purple", bluesky: "cyan", mastodon: "purple", reddit: "amber", rss: "blue" };
-const FEED_ICONS = { youtube: "image", twitch: "mic", bluesky: "message", mastodon: "message", reddit: "message", rss: "rss" };
+const FEED_KINDS = ["youtube", "youtube_shorts", "youtube_live", "twitch", "kick", "bluesky", "mastodon", "reddit", "github", "rss"];
+const FEED_TONES = {
+  youtube: "red",
+  youtube_shorts: "red",
+  youtube_live: "red",
+  twitch: "purple",
+  kick: "green",
+  bluesky: "cyan",
+  mastodon: "purple",
+  reddit: "amber",
+  github: "gray",
+  rss: "blue",
+};
+const FEED_ICONS = {
+  youtube: "image",
+  youtube_shorts: "image",
+  youtube_live: "mic",
+  twitch: "mic",
+  kick: "mic",
+  bluesky: "message",
+  mastodon: "message",
+  reddit: "message",
+  github: "download",
+  rss: "rss",
+};
+// Kinds that need keys on the bot's server; the message shown without them.
+const FEED_KEYS_OFF = { twitch: "feedsTwitchOff", kick: "feedsKickOff" };
 
 function feedRow(guildId, feed, data, onRemoved) {
   const channel = data.channels.find((item) => item.id === feed.channelId);
@@ -5947,14 +5971,14 @@ async function showFeeds(guildId) {
   const empty = h("p", { class: "muted empty" }, t("feedsNone"));
   const countPill = h("span", { class: "count-pill" });
   let kind = "youtube";
-  // Set by load(): whether the bot has Twitch keys.
-  let twitchReady = true;
+  // Set by load(): which of Twitch and Kick have keys.
+  let liveReady = {};
   const sourceHelp = h("span", { class: "help" });
   const sourceInput = h("input", { id: "feedSource", type: "text", required: true, maxLength: 500 });
   const showKind = () => {
     sourceInput.placeholder = t(`feedsSourcePlaceholder_${kind}`);
-    const off = kind === "twitch" && !twitchReady;
-    sourceHelp.textContent = off ? t("feedsTwitchOff") : t(`feedsSourceHelp_${kind}`);
+    const off = kind in FEED_KEYS_OFF && liveReady[kind] === false;
+    sourceHelp.textContent = off ? t(FEED_KEYS_OFF[kind]) : t(`feedsSourceHelp_${kind}`);
     sourceHelp.classList.toggle("danger-text", off);
   };
   const roles = data.roles.filter((role) => role.id !== guildId && !role.managed).map((role) => roleItem(role));
@@ -5967,7 +5991,7 @@ async function showFeeds(guildId) {
     empty.hidden = result.feeds.length > 0;
     countPill.textContent = t("tagsCount", { count: result.feeds.length, max: result.max });
     add.disabled = result.feeds.length >= result.max;
-    twitchReady = result.twitch !== false;
+    liveReady = result.live ?? {};
     showKind();
   }
 
@@ -6004,14 +6028,16 @@ async function showFeeds(guildId) {
     field(
       "feedsKind",
       null,
-      segmented(
-        t("feedsKind"),
-        FEED_KINDS.map((value) => ({ value, text: t(`feedsKind_${value}`) })),
-        kind,
-        (value) => {
-          kind = value;
-          showKind();
+      h(
+        "select",
+        {
+          id: "feedKind",
+          onchange: (event) => {
+            kind = event.currentTarget.value;
+            showKind();
+          },
         },
+        FEED_KINDS.map((value) => h("option", { value, selected: value === kind }, t(`feedsKind_${value}`))),
       ),
     ),
     h("label", { class: "field" }, h("span", { class: "field-label" }, t("feedsSource")), sourceInput, sourceHelp),

@@ -9,15 +9,19 @@ import { parseFeed } from "./parseFeed.js";
 
 export const FeedKind = Object.freeze({
   YOUTUBE: "youtube",
+  YOUTUBE_SHORTS: "youtube_shorts",
+  YOUTUBE_LIVE: "youtube_live",
   TWITCH: "twitch",
+  KICK: "kick",
   BLUESKY: "bluesky",
   MASTODON: "mastodon",
   REDDIT: "reddit",
+  GITHUB: "github",
   RSS: "rss",
 });
 export const FEED_KINDS = Object.values(FeedKind);
-// Kinds checked through an API (feeds/twitchPoller.js), not read as a feed.
-export const LIVE_KINDS = Object.freeze([FeedKind.TWITCH]);
+// Kinds checked through a platform's API (feeds/livePoller.js), not read as a feed.
+export const LIVE_KINDS = Object.freeze([FeedKind.TWITCH, FeedKind.KICK]);
 
 const MAX_BYTES = 2 * 1024 * 1024;
 const TIMEOUT_MS = 10_000;
@@ -27,7 +31,8 @@ const USER_AGENT = "RabbleBot/1.0 (Discord bot feed reader)";
 export class FeedError extends Error {
   name = "FeedError";
   // `reason` is one of: bad-source, blocked, unreachable, not-a-feed,
-  // no-account (Twitch has no such channel), not-configured (no Twitch keys)
+  // no-account (Twitch or Kick has no such channel), not-configured (no keys
+  // for that platform)
   constructor(reason, message) {
     super(message);
     this.reason = reason;
@@ -72,8 +77,9 @@ async function checkHost(url, lookup) {
   }
 }
 
-// GETs a public URL and returns its text. Options are for tests.
-export async function safeFetchText(link, { fetchImpl = fetch, lookup = dnsLookup } = {}) {
+// GETs a public URL and returns its text. `headers` are added to the request;
+// fetchImpl and lookup are for tests.
+export async function safeFetchText(link, { fetchImpl = fetch, lookup = dnsLookup, headers = {} } = {}) {
   let url;
   try {
     url = new URL(link);
@@ -86,7 +92,7 @@ export async function safeFetchText(link, { fetchImpl = fetch, lookup = dnsLooku
     try {
       response = await fetchImpl(url, {
         redirect: "manual",
-        headers: { "User-Agent": USER_AGENT, Accept: "application/atom+xml, application/rss+xml, application/xml, text/xml, text/html;q=0.8, */*;q=0.5" },
+        headers: { "User-Agent": USER_AGENT, Accept: "application/atom+xml, application/rss+xml, application/xml, text/xml, text/html;q=0.8, */*;q=0.5", ...headers },
         signal: AbortSignal.timeout(TIMEOUT_MS),
       });
     } catch {
@@ -131,11 +137,29 @@ const YOUTUBE_CHANNEL = /^UC[\w-]{22}$/;
 const SUBREDDIT = /^[A-Za-z0-9_]{2,21}$/;
 const DOMAIN = /^(?=.{4,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9-]{0,61}[a-z0-9]$/;
 const TWITCH_LOGIN = /^[a-z0-9_]{3,25}$/;
+const KICK_SLUG = /^[a-z0-9_-]{3,25}$/;
+const GITHUB_OWNER = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/;
+const GITHUB_REPO = /^[A-Za-z0-9._-]{1,100}$/;
 
 // name, twitch.tv/name or a full twitch.tv link → the login, lowercase.
 export function twitchLogin(text) {
   const login = text.match(/^(?:(?:https?:\/\/)?(?:www\.|m\.)?twitch\.tv\/)?@?([A-Za-z0-9_]+)\/?$/i)?.[1]?.toLowerCase();
   return login && TWITCH_LOGIN.test(login) ? login : null;
+}
+
+// name, kick.com/name or a full kick.com link → the channel's slug, lowercase.
+export function kickSlug(text) {
+  const slug = text.match(/^(?:(?:https?:\/\/)?(?:www\.)?kick\.com\/)?@?([A-Za-z0-9_-]+)\/?$/i)?.[1]?.toLowerCase();
+  return slug && KICK_SLUG.test(slug) ? slug : null;
+}
+
+// owner/repo or a github.com link to the repository (or its releases).
+function githubRepository(text) {
+  const match = text.match(/^(?:(?:https?:\/\/)?(?:www\.)?github\.com\/)?([^/\s]+)\/([^/\s]+?)(?:\.git)?(?:\/releases(?:\/.*)?)?\/?$/i);
+  if (!match || !GITHUB_OWNER.test(match[1]) || !GITHUB_REPO.test(match[2]) || /^\.+$/.test(match[2])) {
+    return null;
+  }
+  return `${match[1]}/${match[2]}`;
 }
 
 // @name.bsky.social, name.bsky.social, a bsky.app profile link or a did:plc ID.
@@ -160,9 +184,28 @@ function mastodonAccount(text) {
   return host && DOMAIN.test(host) ? { user, server: host } : null;
 }
 
+// YouTube keeps each channel's uploads in automatic playlists: UU… all of
+// them, UULF… long videos, UUSH… Shorts, UULV… live streams. Videos and Shorts
+// are read from those playlists' feeds; the channel feed (all uploads) is the
+// fallback for videos and gives the name. Live is checked on the channel's
+// /live page (feeds/youtubeLive.js), which shows a stream only while it's on.
+function youtubeSource(kind, channelId) {
+  const rest = channelId.slice(2);
+  const channelFeed = `https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`;
+  const playlist = (prefix) => `https://www.youtube.com/feeds/videos.xml?playlist_id=${prefix}${rest}`;
+  if (kind === FeedKind.YOUTUBE_SHORTS) {
+    return { url: playlist("UUSH"), name: null, channelFeed };
+  }
+  if (kind === FeedKind.YOUTUBE_LIVE) {
+    return { url: `https://www.youtube.com/channel/${channelId}/live`, name: null, channelFeed };
+  }
+  return { url: playlist("UULF"), name: null, channelFeed, fallbackUrl: channelFeed };
+}
+
 // What the user typed → the feed's address and a display name.
-// YouTube: a channel ID, a /channel/ link or an @handle (looked up on YouTube).
-// Twitch: a channel name or link (checked on Twitch when added, feeds.js).
+// YouTube (videos, Shorts or live): a channel ID, a /channel/ link or an
+// @handle (looked up on YouTube). Twitch and Kick: a channel name or link
+// (checked on the platform when added, feeds.js). GitHub: owner/repo.
 // Bluesky: a handle or profile link. Mastodon: @name@server or a profile link.
 // Reddit: r/name, name or a subreddit link. RSS: any public link.
 export async function resolveSource(kind, input, options = {}) {
@@ -177,7 +220,7 @@ export async function resolveSource(kind, input, options = {}) {
     }
     return { url: `https://www.reddit.com/r/${name}/new/.rss`, name: `r/${name}` };
   }
-  if (kind === FeedKind.YOUTUBE) {
+  if (kind === FeedKind.YOUTUBE || kind === FeedKind.YOUTUBE_SHORTS || kind === FeedKind.YOUTUBE_LIVE) {
     let channelId = YOUTUBE_CHANNEL.test(text) ? text : text.match(/youtube\.com\/channel\/(UC[\w-]{22})/)?.[1];
     if (!channelId) {
       const handle = text.match(/^(?:https?:\/\/(?:www\.|m\.)?youtube\.com\/)?(@[\w.-]{3,30})\/?$/)?.[1];
@@ -190,7 +233,21 @@ export async function resolveSource(kind, input, options = {}) {
         throw new FeedError("not-a-feed", `Couldn't find the YouTube channel ${handle}.`);
       }
     }
-    return { url: `https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`, name: null };
+    return youtubeSource(kind, channelId);
+  }
+  if (kind === FeedKind.KICK) {
+    const login = kickSlug(text);
+    if (!login) {
+      throw new FeedError("bad-source", "Type a Kick channel, like kick.com/name.");
+    }
+    return { url: `https://kick.com/${login}`, name: null, login };
+  }
+  if (kind === FeedKind.GITHUB) {
+    const repository = githubRepository(text);
+    if (!repository) {
+      throw new FeedError("bad-source", "Type a GitHub repository, like owner/name.");
+    }
+    return { url: `https://github.com/${repository}/releases.atom`, name: repository };
   }
   if (kind === FeedKind.TWITCH) {
     const login = twitchLogin(text);
@@ -225,7 +282,7 @@ export async function resolveSource(kind, input, options = {}) {
     }
     return { url: url.href, name: null };
   }
-  throw new FeedError("bad-source", "Pick YouTube, Twitch, Bluesky, Mastodon, Reddit or RSS.");
+  throw new FeedError("bad-source", `Pick one of: ${FEED_KINDS.join(", ")}.`);
 }
 
 // Fetches and reads a feed. Throws FeedError when it isn't one.

@@ -1,7 +1,7 @@
 // Followed feeds (/feed and the dashboard's Feeds page) in data/bot.db, table
 // feeds. `seen` holds the newest item IDs already posted (or there when the
 // feed was added), so restarts never post anything twice. For Twitch the IDs
-// are stream IDs, and `source` is the channel's login.
+// and Kick the IDs are broadcasts, and `source` is the channel's login.
 
 import { openDatabase } from "../storage/database.js";
 
@@ -53,8 +53,13 @@ export class FeedStore {
       list: this.#db.prepare("SELECT * FROM feeds WHERE guild_id = ? ORDER BY id"),
       count: this.#db.prepare("SELECT COUNT(*) AS total FROM feeds WHERE guild_id = ?"),
       byUrl: this.#db.prepare("SELECT * FROM feeds WHERE guild_id = ? AND url = ? AND channel_id = ?"),
-      // Twitch is checked all at once by feeds/twitchPoller.js, not here.
-      due: this.#db.prepare("SELECT * FROM feeds WHERE kind <> 'twitch' AND (checked_at IS NULL OR checked_at <= ?) ORDER BY checked_at LIMIT ?"),
+      // Twitch and Kick are checked all at once by feeds/livePoller.js, not
+      // here. YouTube live is due sooner than other feeds.
+      due: this.#db.prepare(`
+        SELECT * FROM feeds
+        WHERE kind NOT IN ('twitch', 'kick')
+          AND (checked_at IS NULL OR checked_at <= CASE WHEN kind = 'youtube_live' THEN ? ELSE ? END)
+        ORDER BY checked_at LIMIT ?`),
       byKind: this.#db.prepare("SELECT * FROM feeds WHERE kind = ? ORDER BY id"),
       checked: this.#db.prepare("UPDATE feeds SET seen = ?, checked_at = ?, posted_at = COALESCE(?, posted_at), last_error = NULL, failures = 0 WHERE id = ?"),
       failed: this.#db.prepare("UPDATE feeds SET checked_at = ?, last_error = ?, failures = failures + 1 WHERE id = ?"),
@@ -86,9 +91,10 @@ export class FeedStore {
     return toFeed(this.#statements.byUrl.get(guildId, url, channelId));
   }
 
-  // Feeds last checked at or before `before`, the longest-waiting first.
-  due(before, limit = 25) {
-    return this.#statements.due.all(before, limit).map(toFeed);
+  // Feeds last checked at or before `before` (YouTube live: `liveBefore`),
+  // the longest-waiting first.
+  due(before, limit = 25, liveBefore = before) {
+    return this.#statements.due.all(liveBefore, before, limit).map(toFeed);
   }
 
   // Every feed of one kind, in every server.

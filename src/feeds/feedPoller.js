@@ -1,18 +1,20 @@
 // Checks followed feeds and posts what's new. Every minute it looks at the
-// feeds that weren't checked for CHECK_EVERY_MS, one at a time. At most
+// feeds that weren't checked for CHECK_EVERY_MS (YouTube live:
+// LIVE_CHECK_EVERY_MS), one at a time. Twitch and Kick are feeds/livePoller.js. At most
 // MAX_POSTS new items are posted per check, so a feed that suddenly lists
 // fifty "new" items can't flood a channel.
 
 import { pickLanguage } from "../i18n/i18n.js";
-import { buildFeedPost } from "./feeds.js";
-import { fetchFeed as defaultFetchFeed } from "./fetchFeed.js";
+import { buildFeedPost, readFeed } from "./feeds.js";
 
 export const CHECK_EVERY_MS = 10 * 60 * 1000;
+export const LIVE_CHECK_EVERY_MS = 3 * 60 * 1000;
 const MAX_POSTS = 3;
-const PER_TICK = 10;
+const PER_TICK = 20;
 
-// Options: client, store (FeedStore), logger, forcedLanguage, fetchFeed, now
-export function createFeedPoller({ client, store, logger, forcedLanguage, fetchFeed = defaultFetchFeed, intervalMs = 60_000, now = Date.now }) {
+// Options: client, store (FeedStore), logger, forcedLanguage, fetchFeed
+// ((url, kind) → { title, items }, for tests), now
+export function createFeedPoller({ client, store, logger, forcedLanguage, fetchFeed = readFeed, intervalMs = 60_000, now = Date.now }) {
   let timer;
   let running = false;
 
@@ -24,7 +26,7 @@ export function createFeedPoller({ client, store, logger, forcedLanguage, fetchF
     }
     let items;
     try {
-      ({ items } = await fetchFeed(feed.url));
+      ({ items } = await fetchFeed(feed.url, feed.kind));
     } catch (error) {
       logger.debug("Couldn't read a feed", { guildId: feed.guildId, feedId: feed.id, error });
       store.failed(feed.id, { error: error.message ?? error, checkedAt: now() });
@@ -64,7 +66,7 @@ export function createFeedPoller({ client, store, logger, forcedLanguage, fetchF
     }
     running = true;
     try {
-      for (const feed of store.due(now() - CHECK_EVERY_MS, PER_TICK)) {
+      for (const feed of store.due(now() - CHECK_EVERY_MS, PER_TICK, now() - LIVE_CHECK_EVERY_MS)) {
         await check(feed).catch((error) => logger.error("Checking a feed crashed", { feedId: feed.id, error }));
       }
     } finally {
