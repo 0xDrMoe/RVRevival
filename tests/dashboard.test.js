@@ -1259,7 +1259,7 @@ describe("dashboard", () => {
     expect((await add({})).statusCode).toBe(409);
 
     const list = await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}/feeds`, cookies });
-    expect(list.json()).toMatchObject({ max: 20, twitch: false, feeds: [{ id: 1, kind: "rss", channelId: TEXT_ID }] });
+    expect(list.json()).toMatchObject({ max: 20, live: { twitch: false, kick: false }, feeds: [{ id: 1, kind: "rss", channelId: TEXT_ID }] });
     expect((await write(cookies, "DELETE", `/api/guilds/${GUILD_ID}/feeds/2`)).statusCode).toBe(404);
     expect((await write(cookies, "DELETE", `/api/guilds/${GUILD_ID}/feeds/1`)).statusCode).toBe(200);
     expect((await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}/feeds`, cookies })).json().feeds).toEqual([]);

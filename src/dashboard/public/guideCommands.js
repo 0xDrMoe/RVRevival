@@ -1796,21 +1796,21 @@ export const COMMAND_PARTS = [
         tone: "amber",
         page: "feeds",
         related: "feeds",
-        summary: "Posts new YouTube videos, Twitch streams going live, Bluesky and Mastodon posts, subreddit posts and blog or news articles in a channel.",
+        summary: "Posts new YouTube videos, Shorts and live streams, Twitch and Kick streams going live, Bluesky and Mastodon posts, subreddit posts, GitHub releases and blog or news articles in a channel.",
         who: "Admins (**Manage Server**).",
         usages: [
           {
             usage: "/feed add type source channel [role] [message]",
             what: "Follows something. Only items that appear after you add it are posted. Up to 20 feeds.",
             options: [
-              ["type", "A YouTube or Twitch channel, a Bluesky or Mastodon account, a subreddit, or an RSS or Atom feed."],
+              ["type", "YouTube videos, Shorts or live streams, a Twitch or Kick channel, a Bluesky or Mastodon account, a subreddit, GitHub releases, or an RSS or Atom feed."],
               [
                 "source",
-                "The YouTube link (`youtube.com/@name`), Twitch channel (`twitch.tv/name`), Bluesky handle (`name.bsky.social`), Mastodon account (`@name@mastodon.social`), subreddit (`r/name`) or feed link, up to 500 characters.",
+                "The YouTube link (`youtube.com/@name`), Twitch or Kick channel (`twitch.tv/name`, `kick.com/name`), Bluesky handle (`name.bsky.social`), Mastodon account (`@name@mastodon.social`), subreddit (`r/name`), GitHub repository (`owner/name`) or feed link, up to 500 characters.",
               ],
               ["channel", "Where new posts go."],
               ["role", "A role to ping with each post."],
-              ["message", "Your own message, up to 500 characters. Use `{title}`, `{link}`, `{author}`, `{feed}` and, for Twitch, `{game}`."],
+              ["message", "Your own message, up to 500 characters. Use `{title}`, `{link}`, `{author}`, `{feed}` and, for Twitch and Kick, `{game}`."],
             ],
           },
           {
@@ -1825,13 +1825,15 @@ export const COMMAND_PARTS = [
           },
         ],
         example: [
-          "/feed add type:YouTube channel source:https://youtube.com/@yourchannel channel:#news role:@Video pings",
+          "/feed add type:YouTube videos source:https://youtube.com/@yourchannel channel:#news role:@Video pings",
+          "/feed add type:YouTube Shorts source:https://youtube.com/@yourchannel channel:#shorts",
           "/feed add type:Twitch channel (goes live) source:twitch.tv/yourchannel channel:#live role:@Stream pings",
-          "/feed add type:Subreddit source:r/discordapp channel:#reddit",
+          "/feed add type:GitHub releases source:discord/discord-api-docs channel:#updates",
         ],
         tips: [
-          "Feeds are checked every 10 minutes and Twitch every 2. At most three new items are posted at a time.",
-          "Twitch needs Twitch keys on the bot's server; until then it says so. Each broadcast is announced once.",
+          "Feeds are checked every 10 minutes, YouTube live every 3, and Twitch and Kick every 2. At most three new items are posted at a time.",
+          "YouTube videos skips Shorts and live streams; they have their own types. YouTube live reads the channel's public live page, so it needs no keys.",
+          "Twitch and Kick need keys on the bot's server; until then they say so. Each broadcast is announced once.",
           "X (Twitter), TikTok and Instagram can't be followed directly: they don't let bots read posts for free. An RSS link for the account works as RSS.",
         ],
       },

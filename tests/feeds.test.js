@@ -138,12 +138,15 @@ describe("resolveSource", () => {
   });
 
   it("finds YouTube channels by ID, link or handle", async () => {
-    const feed = `https://www.youtube.com/feeds/videos.xml?channel_id=${CHANNEL}`;
-    expect(await resolveSource("youtube", CHANNEL)).toEqual({ url: feed, name: null });
-    expect(await resolveSource("youtube", `https://www.youtube.com/channel/${CHANNEL}/videos`)).toEqual({ url: feed, name: null });
+    const channelFeed = `https://www.youtube.com/feeds/videos.xml?channel_id=${CHANNEL}`;
+    const feed = { url: `https://www.youtube.com/feeds/videos.xml?playlist_id=UULF${CHANNEL.slice(2)}`, name: null, channelFeed, fallbackUrl: channelFeed };
+    expect(await resolveSource("youtube", CHANNEL)).toEqual(feed);
+    expect(await resolveSource("youtube", `https://www.youtube.com/channel/${CHANNEL}/videos`)).toEqual(feed);
     const net = fakeNet({ "https://www.youtube.com/@rumble": `<script>{"externalId":"${CHANNEL}"}</script>`, "https://www.youtube.com/@empty": "<html></html>" });
-    expect(await resolveSource("youtube", "https://youtube.com/@rumble", net)).toEqual({ url: feed, name: null });
-    expect(await resolveSource("youtube", "@rumble", net)).toEqual({ url: feed, name: null });
+    expect(await resolveSource("youtube", "https://youtube.com/@rumble", net)).toEqual(feed);
+    expect(await resolveSource("youtube", "@rumble", net)).toEqual(feed);
+    expect(await resolveSource("youtube_shorts", "@rumble", net)).toEqual({ url: `https://www.youtube.com/feeds/videos.xml?playlist_id=UUSH${CHANNEL.slice(2)}`, name: null, channelFeed });
+    expect(await resolveSource("youtube_live", CHANNEL)).toEqual({ url: `https://www.youtube.com/channel/${CHANNEL}/live`, name: null, channelFeed });
     await expect(resolveSource("youtube", "@empty", net)).rejects.toMatchObject({ reason: "not-a-feed" });
     await expect(resolveSource("youtube", "some words")).rejects.toMatchObject({ reason: "bad-source" });
   });

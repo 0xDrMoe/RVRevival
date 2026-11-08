@@ -1,13 +1,15 @@
-// Posts new YouTube videos, Twitch streams going live, Bluesky and Mastodon
-// posts, subreddit posts and RSS items in a channel.
+// Posts new YouTube videos, Shorts and live streams, Twitch and Kick streams
+// going live, Bluesky and Mastodon posts, subreddit posts, GitHub releases and
+// RSS items in a channel.
 //
 //   /feed add type source channel [role] [message]   follow something (up to 20 per server)
 //   /feed remove id                                   stop following it
 //   /feed list                                        what the server follows
 //
-// Needs Manage Server. The bot checks every 10 minutes (Twitch every 2) and
+// Needs Manage Server. The bot checks every 10 minutes (YouTube live every 3,
+// Twitch and Kick every 2) and
 // posts only items that appear after the feed was added (feeds/feedPoller.js,
-// feeds/twitchPoller.js). Also on the dashboard's Feeds page.
+// feeds/livePoller.js). Also on the dashboard's Feeds page.
 
 import { ChannelType, InteractionContextType, MessageFlags, PermissionFlagsBits, SlashCommandBuilder } from "discord.js";
 import { discordLocalizations, pickLanguage, translate } from "../i18n/i18n.js";
@@ -18,7 +20,18 @@ import { MAX_FEEDS } from "../feeds/feedStore.js";
 import { withDescription } from "./moderation.js";
 
 const COMMAND_NAME = "feed";
-const KIND_ICONS = { youtube: "📺", twitch: "🟣", bluesky: "🦋", mastodon: "🐘", reddit: "🟠", rss: "📰" };
+const KIND_ICONS = {
+  youtube: "📺",
+  youtube_shorts: "📱",
+  youtube_live: "🔴",
+  twitch: "🟣",
+  kick: "🟢",
+  bluesky: "🦋",
+  mastodon: "🐘",
+  reddit: "🟠",
+  github: "📦",
+  rss: "📰",
+};
 
 export function buildFeedCommandData() {
   const command = new SlashCommandBuilder()
@@ -54,15 +67,20 @@ const FEED_ERROR_KEYS = {
   blocked: "feedErrorBlocked",
   unreachable: "feedErrorUnreachable",
   "not-a-feed": "feedErrorNotAFeed",
-  "no-account": "feedErrorNoTwitchAccount",
-  "not-configured": "feedErrorTwitchOff",
+  "no-shorts": "feedErrorNoShorts",
+};
+
+// Errors that name the platform: Twitch or Kick.
+const LIVE_ERROR_KEYS = {
+  twitch: { "no-account": "feedErrorNoTwitchAccount", "not-configured": "feedErrorTwitchOff" },
+  kick: { "no-account": "feedErrorNoKickAccount", "not-configured": "feedErrorKickOff" },
 };
 
 const POSTING = [ChannelType.GuildText, ChannelType.GuildAnnouncement];
 
-// Options: store (FeedStore), twitch (feeds/twitch.js, when the bot has Twitch
-// keys), forcedLanguage, fetchOptions (tests), now
-export function createFeedCommand({ store, twitch, forcedLanguage, fetchOptions, logger, now = Date.now }) {
+// Options: store (FeedStore), live (feeds/liveApis.js: the Twitch and Kick
+// APIs that have keys), forcedLanguage, fetchOptions (tests), now
+export function createFeedCommand({ store, live = {}, forcedLanguage, fetchOptions, logger, now = Date.now }) {
   async function add(interaction, answer) {
     const guild = interaction.guild;
     const kind = interaction.options.getString("type", true);
@@ -91,7 +109,7 @@ export function createFeedCommand({ store, twitch, forcedLanguage, fetchOptions,
         message: interaction.options.getString("message"),
         createdBy: interaction.user.id,
         fetchOptions,
-        twitch,
+        live,
         now,
       });
     } catch (error) {
@@ -102,7 +120,7 @@ export function createFeedCommand({ store, twitch, forcedLanguage, fetchOptions,
         return answer(Status.REFUSED, "feedDuplicate", values);
       }
       if (error instanceof FeedError) {
-        return answer(Status.FAILED, FEED_ERROR_KEYS[error.reason] ?? "feedErrorUnreachable");
+        return answer(Status.FAILED, LIVE_ERROR_KEYS[kind]?.[error.reason] ?? FEED_ERROR_KEYS[error.reason] ?? "feedErrorUnreachable");
       }
       throw error;
     }

@@ -44,18 +44,21 @@ function botLanguage(env) {
   return language;
 }
 
-// Optional: Twitch app keys for Twitch live notifications (/feed). Both or neither.
-function twitchCredentials(env) {
-  const clientId = env.TWITCH_CLIENT_ID?.trim();
-  const clientSecret = env.TWITCH_CLIENT_SECRET?.trim();
+// Optional: app keys for Twitch or Kick live notifications (/feed), from
+// <PREFIX>_CLIENT_ID and <PREFIX>_CLIENT_SECRET. Both or neither.
+function appCredentials(env, prefix, platform) {
+  const clientId = env[`${prefix}_CLIENT_ID`]?.trim();
+  const clientSecret = env[`${prefix}_CLIENT_SECRET`]?.trim();
   if (!clientId && !clientSecret) {
     return undefined;
   }
   if (!clientId || !clientSecret) {
-    throw new ConfigError("Set both TWITCH_CLIENT_ID and TWITCH_CLIENT_SECRET for Twitch notifications, or leave both empty.");
+    throw new ConfigError(`Set both ${prefix}_CLIENT_ID and ${prefix}_CLIENT_SECRET for ${platform} notifications, or leave both empty.`);
   }
   return { clientId, clientSecret };
 }
+
+const liveCredentials = (env) => ({ twitch: appCredentials(env, "TWITCH", "Twitch"), kick: appCredentials(env, "KICK", "Kick") });
 
 // Settings for running the bot.
 export function loadBotConfig(env = process.env) {
@@ -64,7 +67,8 @@ export function loadBotConfig(env = process.env) {
     forcedLanguage: botLanguage(env),
     // Optional for the bot: used for the ban-appeal link in ban DMs.
     dashboardUrl: optionalDashboardUrl(env),
-    twitch: twitchCredentials(env),
+    // Keys for Twitch and Kick live notifications; undefined when not set.
+    live: liveCredentials(env),
   };
 }
 
@@ -136,7 +140,7 @@ export function loadDashboardConfig(env = process.env) {
     forcedLanguage: botLanguage(env),
     // How to reach the bot's team, shown on the Terms and Privacy pages.
     legalContact: env.LEGAL_CONTACT?.trim() || DEFAULT_LEGAL_CONTACT,
-    // Lets the Feeds page add Twitch channels.
-    twitch: twitchCredentials(env),
+    // Lets the Feeds page add Twitch and Kick channels.
+    live: liveCredentials(env),
   };
 }

@@ -7,7 +7,7 @@ const GUILD_ID = "223456789012345678";
 
 describe("loadBotConfig", () => {
   it("reads the token and trims whitespace", () => {
-    expect(loadBotConfig({ DISCORD_TOKEN: ` ${TOKEN} ` })).toEqual({ token: TOKEN, forcedLanguage: undefined });
+    expect(loadBotConfig({ DISCORD_TOKEN: ` ${TOKEN} ` })).toEqual({ token: TOKEN, forcedLanguage: undefined, live: {} });
   });
 
   it("requires a token and never repeats a malformed one", () => {
@@ -27,10 +27,12 @@ describe("loadBotConfig", () => {
     expect(() => loadBotConfig({ DISCORD_TOKEN: TOKEN, BOT_LANGUAGE: "klingon" })).toThrow(/BOT_LANGUAGE/);
   });
 
-  it("takes both Twitch keys or neither", () => {
-    expect(loadBotConfig({ DISCORD_TOKEN: TOKEN, TWITCH_CLIENT_ID: "", TWITCH_CLIENT_SECRET: " " }).twitch).toBeUndefined();
-    expect(loadBotConfig({ DISCORD_TOKEN: TOKEN, TWITCH_CLIENT_ID: " id ", TWITCH_CLIENT_SECRET: "secret" }).twitch).toEqual({ clientId: "id", clientSecret: "secret" });
+  it("takes both Twitch or Kick keys or neither", () => {
+    expect(loadBotConfig({ DISCORD_TOKEN: TOKEN, TWITCH_CLIENT_ID: "", TWITCH_CLIENT_SECRET: " " }).live).toEqual({ twitch: undefined, kick: undefined });
+    expect(loadBotConfig({ DISCORD_TOKEN: TOKEN, TWITCH_CLIENT_ID: " id ", TWITCH_CLIENT_SECRET: "secret" }).live.twitch).toEqual({ clientId: "id", clientSecret: "secret" });
+    expect(loadBotConfig({ DISCORD_TOKEN: TOKEN, KICK_CLIENT_ID: "kid", KICK_CLIENT_SECRET: "ks" }).live).toEqual({ twitch: undefined, kick: { clientId: "kid", clientSecret: "ks" } });
     expect(() => loadBotConfig({ DISCORD_TOKEN: TOKEN, TWITCH_CLIENT_ID: "id" })).toThrow(/TWITCH_CLIENT_SECRET/);
+    expect(() => loadBotConfig({ DISCORD_TOKEN: TOKEN, KICK_CLIENT_SECRET: "s" })).toThrow(/KICK_CLIENT_ID/);
   });
 });
 

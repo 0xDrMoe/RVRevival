@@ -1,11 +1,15 @@
 import { describe, expect, it, vi } from "vitest";
 import { createFeedCommand } from "../src/commands/feed.js";
 import { FeedStore } from "../src/feeds/feedStore.js";
+import { createFeedPoller, LIVE_CHECK_EVERY_MS as YOUTUBE_LIVE_EVERY_MS } from "../src/feeds/feedPoller.js";
 import { addFeed, buildFeedPost } from "../src/feeds/feeds.js";
-import { resolveSource, twitchLogin } from "../src/feeds/fetchFeed.js";
+import { kickSlug, resolveSource, twitchLogin } from "../src/feeds/fetchFeed.js";
+import { createKickApi } from "../src/feeds/kick.js";
+import { createLiveApis } from "../src/feeds/liveApis.js";
+import { createLivePoller, LIVE_CHECK_EVERY_MS } from "../src/feeds/livePoller.js";
 import { parseFeed } from "../src/feeds/parseFeed.js";
 import { createTwitchApi } from "../src/feeds/twitch.js";
-import { createTwitchPoller, TWITCH_CHECK_EVERY_MS } from "../src/feeds/twitchPoller.js";
+import { readLivePage } from "../src/feeds/youtubeLive.js";
 import { Status } from "../src/logs/actionLog.js";
 import { fakeLogger } from "./helpers/fakes.js";
 
@@ -85,20 +89,20 @@ describe("Twitch API", () => {
         return json({ message: "Invalid OAuth token" }, 401);
       }
       const logins = new URL(link).searchParams.getAll("user_login");
-      return json({ data: logins.map((login) => ({ id: `s-${login}`, user_login: login, type: "live", auth: init.headers.Authorization })) });
+      return json({ data: logins.map((login) => ({ id: `s-${login}`, user_login: login, user_name: init.headers.Authorization, type: "live" })) });
     });
     const twitch = createTwitchApi({ clientId: "client", clientSecret: "secret", fetchImpl, now: () => time });
 
     const [a, b] = await Promise.all([twitch.streams(["one"]), twitch.streams(["two"])]);
     expect(tokens).toBe(1);
-    expect(a[0]).toMatchObject({ id: "s-one", auth: "Bearer token1" });
-    expect(b[0].auth).toBe("Bearer token1");
+    expect(a[0]).toMatchObject({ id: "s-one", login: "one", name: "Bearer token1" });
+    expect(b[0].name).toBe("Bearer token1");
 
     rejectNext = true;
-    expect((await twitch.streams(["one"]))[0].auth).toBe("Bearer token2");
+    expect((await twitch.streams(["one"]))[0].name).toBe("Bearer token2");
 
     time += 3600 * 1000;
-    expect((await twitch.streams(["one"]))[0].auth).toBe("Bearer token3");
+    expect((await twitch.streams(["one"]))[0].name).toBe("Bearer token3");
   });
 
   it("asks for 100 logins at a time, once each, and keeps only live streams", async () => {
@@ -120,7 +124,7 @@ describe("Twitch API", () => {
 
   it("reports refused keys and outages without the secret", async () => {
     const refused = createTwitchApi({ clientId: "c", clientSecret: "hunter2", fetchImpl: async () => json({}, 403) });
-    const error = await refused.users(["x"]).catch((caught) => caught);
+    const error = await refused.channels(["x"]).catch((caught) => caught);
     expect(error).toMatchObject({ reason: "unreachable" });
     expect(error.message).not.toContain("hunter2");
     const down = createTwitchApi({
@@ -134,12 +138,45 @@ describe("Twitch API", () => {
   });
 });
 
-// A Twitch API with the given channels, and who's live right now.
+describe("Kick API", () => {
+  it("reads channels and live streams, 50 slugs at a time", async () => {
+    const asked = [];
+    const fetchImpl = vi.fn(async (url, init) => {
+      if (String(url) === "https://id.kick.com/oauth/token") {
+        return json({ access_token: "kick-token", expires_in: 3600 });
+      }
+      expect(init.headers.Authorization).toBe("Bearer kick-token");
+      const slugs = new URL(String(url)).searchParams.getAll("slug");
+      asked.push(slugs.length);
+      return json({
+        data: slugs.map((slug, index) => ({
+          broadcaster_user_id: 1000 + index,
+          slug: slug === "rabble" ? "Rabble" : slug,
+          stream_title: "Speedruns",
+          category: { name: "Just Chatting" },
+          stream: { is_live: slug === "rabble", start_time: "2026-11-08T10:00:00Z" },
+        })),
+      });
+    });
+    const kick = createKickApi({ clientId: "c", clientSecret: "s", fetchImpl });
+    expect(await kick.channels(["rabble"])).toEqual([{ login: "rabble", name: "Rabble" }]);
+    const slugs = ["rabble", ...Array.from({ length: 60 }, (_, i) => `user${i}`)];
+    expect(await kick.streams(slugs)).toEqual([{ id: "1000:2026-11-08T10:00:00Z", login: "rabble", name: "Rabble", title: "Speedruns", game: "Just Chatting" }]);
+    expect(asked).toEqual([1, 50, 11]);
+  });
+
+  it("only creates the APIs that have keys", () => {
+    expect(Object.keys(createLiveApis({}))).toEqual([]);
+    expect(Object.keys(createLiveApis({ kick: { clientId: "a", clientSecret: "b" } }))).toEqual(["kick"]);
+  });
+});
+
+// A Twitch or Kick API with the given channels, and who's live right now.
 function fakeTwitch(users, live = {}) {
   return {
     live,
-    users: vi.fn(async (logins) => logins.filter((login) => users.includes(login)).map((login) => ({ id: `u-${login}`, login, display_name: login.toUpperCase() }))),
-    streams: vi.fn(async (logins) => logins.filter((login) => live[login]).map((login) => ({ id: live[login], user_login: login, user_name: login.toUpperCase(), title: "Ranked grind", game_name: "Chess", type: "live" }))),
+    channels: vi.fn(async (logins) => logins.filter((login) => users.includes(login)).map((login) => ({ login, name: login.toUpperCase() }))),
+    streams: vi.fn(async (logins) => logins.filter((login) => live[login]).map((login) => ({ id: live[login], login, name: login.toUpperCase(), title: "Ranked grind", game: "Chess" }))),
   };
 }
 
@@ -150,8 +187,9 @@ describe("adding Twitch channels", () => {
     const store = new FeedStore();
     await expect(addFeed({ ...base, store, kind: "twitch", source: "shroud" })).rejects.toMatchObject({ reason: "not-configured" });
     const twitch = fakeTwitch(["shroud"], { shroud: "stream-1" });
-    await expect(addFeed({ ...base, store, kind: "twitch", source: "nobody_here", twitch })).rejects.toMatchObject({ reason: "no-account" });
-    const feed = await addFeed({ ...base, store, kind: "twitch", source: "https://twitch.tv/Shroud", twitch });
+    await expect(addFeed({ ...base, store, kind: "twitch", source: "nobody_here", live: { twitch } })).rejects.toMatchObject({ reason: "no-account" });
+    await expect(addFeed({ ...base, store, kind: "kick", source: "shroud", live: { twitch } })).rejects.toMatchObject({ reason: "not-configured" });
+    const feed = await addFeed({ ...base, store, kind: "twitch", source: "https://twitch.tv/Shroud", live: { twitch } });
     expect(feed).toMatchObject({ kind: "twitch", source: "shroud", url: "https://www.twitch.tv/shroud", name: "SHROUD", seen: ["stream-1"] });
   });
 
@@ -169,7 +207,7 @@ function fakeClient(channel) {
   return { guilds: { cache: new Map([[GUILD_ID, guild]]) } };
 }
 
-describe("Twitch poller", () => {
+describe("live poller", () => {
   it("announces each stream once, in every server that follows it", async () => {
     let time = 1000;
     const store = new FeedStore();
@@ -179,21 +217,21 @@ describe("Twitch poller", () => {
     add(OTHER_GUILD, "shroud"); // the bot isn't in this server any more
     const twitch = fakeTwitch(["shroud", "quiet"], {});
     const channel = { isTextBased: () => true, send: vi.fn(async () => {}) };
-    const poller = createTwitchPoller({ client: fakeClient(channel), store, twitch, logger: fakeLogger(), now: () => time });
+    const poller = createLivePoller({ client: fakeClient(channel), store, providers: { twitch }, logger: fakeLogger(), now: () => time });
 
     await poller.tick();
     expect(channel.send).not.toHaveBeenCalled();
     expect(twitch.streams).toHaveBeenCalledWith(["shroud", "quiet"]);
 
     twitch.live.shroud = "stream-1";
-    time += TWITCH_CHECK_EVERY_MS;
+    time += LIVE_CHECK_EVERY_MS;
     await poller.tick();
     expect(channel.send).toHaveBeenCalledTimes(1);
     expect(channel.send.mock.calls[0][0].content).toBe("🔴 **SHROUD** is live on Twitch: **Ranked grind**\nhttps://www.twitch.tv/shroud");
     expect(store.get(1)).toMatchObject({ seen: ["stream-1"], postedAt: time });
 
     // Still the same stream: nothing new.
-    time += TWITCH_CHECK_EVERY_MS;
+    time += LIVE_CHECK_EVERY_MS;
     await poller.tick();
     expect(channel.send).toHaveBeenCalledTimes(1);
 
@@ -212,7 +250,7 @@ describe("Twitch poller", () => {
     store.add({ ...base, kind: "twitch", source: "shroud", url: "https://www.twitch.tv/shroud", name: "shroud", createdAt: 0 });
     const twitch = fakeTwitch(["shroud"], {});
     twitch.streams.mockRejectedValueOnce(new Error("Twitch answered 503."));
-    const poller = createTwitchPoller({ client: fakeClient(null), store, twitch, logger: fakeLogger() });
+    const poller = createLivePoller({ client: fakeClient(null), store, providers: { twitch }, logger: fakeLogger() });
 
     await poller.tick();
     expect(store.get(1)).toMatchObject({ lastError: "Twitch answered 503.", failures: 1 });
@@ -227,11 +265,23 @@ describe("Twitch poller", () => {
     expect(store.get(1).lastError).toContain("Couldn't post");
   });
 
-  it("leaves Twitch out of the feed poller's list", () => {
+  it("checks Kick with its own API", async () => {
+    const store = new FeedStore();
+    store.add({ ...base, kind: "kick", source: "rabble", url: "https://kick.com/rabble", name: "rabble", createdAt: 0 });
+    const kick = fakeTwitch(["rabble"], { rabble: "1:start" });
+    const channel = { isTextBased: () => true, send: vi.fn(async () => {}) };
+    await createLivePoller({ client: fakeClient(channel), store, providers: { kick }, logger: fakeLogger() }).tick();
+    expect(channel.send.mock.calls[0][0].content).toBe("🟢 **RABBLE** is live on Kick: **Ranked grind**\nhttps://kick.com/rabble");
+  });
+
+  it("leaves Twitch and Kick out of the feed poller's list, and checks YouTube live sooner", () => {
     const store = new FeedStore();
     store.add({ ...base, kind: "twitch", source: "shroud", url: "https://www.twitch.tv/shroud", name: "shroud", createdAt: 0 });
-    store.add({ ...base, kind: "rss", source: "https://example.com/rss", url: "https://example.com/rss", name: "News", createdAt: 0 });
-    expect(store.due(10).map((feed) => feed.kind)).toEqual(["rss"]);
+    store.add({ ...base, kind: "kick", source: "rabble", url: "https://kick.com/rabble", name: "rabble", createdAt: 0 });
+    store.add({ ...base, kind: "rss", source: "https://example.com/rss", url: "https://example.com/rss", name: "News", createdAt: 100 });
+    store.add({ ...base, kind: "youtube_live", source: "x", url: "https://www.youtube.com/channel/UCx/live", name: "Live", createdAt: 100 });
+    expect(store.due(1000).map((feed) => feed.kind)).toEqual(["rss", "youtube_live"]);
+    expect(store.due(50, 25, 100).map((feed) => feed.kind)).toEqual(["youtube_live"]);
     expect(store.listKind("twitch").map((feed) => feed.id)).toEqual([1]);
   });
 });
@@ -263,8 +313,117 @@ describe("/feed add for Twitch", () => {
   it("says when Twitch isn't set up or the channel doesn't exist", async () => {
     const off = createFeedCommand({ store: new FeedStore() });
     expect(await off.execute(interaction({ type: "twitch", source: "shroud" }))).toMatchObject({ status: Status.FAILED, key: "feedErrorTwitchOff" });
-    const on = createFeedCommand({ store: new FeedStore(), twitch: fakeTwitch(["shroud"]) });
+    const on = createFeedCommand({ store: new FeedStore(), live: { twitch: fakeTwitch(["shroud"]) } });
     expect(await on.execute(interaction({ type: "twitch", source: "ghost_channel" }))).toMatchObject({ key: "feedErrorNoTwitchAccount" });
     expect(await on.execute(interaction({ type: "twitch", source: "shroud" }))).toMatchObject({ status: Status.SUCCESS, key: "feedAdded" });
+    expect(await on.execute(interaction({ type: "kick", source: "shroud" }))).toMatchObject({ key: "feedErrorKickOff" });
+    const kickOn = createFeedCommand({ store: new FeedStore(), live: { kick: fakeTwitch([]) } });
+    expect(await kickOn.execute(interaction({ type: "kick", source: "ghost_channel" }))).toMatchObject({ key: "feedErrorNoKickAccount" });
+  });
+});
+
+describe("Kick and GitHub sources", () => {
+  it("reads Kick channel names and links", async () => {
+    expect(kickSlug("https://kick.com/Rabble_Live/")).toBe("rabble_live");
+    expect(kickSlug("kick.com/some-name")).toBe("some-name");
+    expect(kickSlug("ab")).toBeNull();
+    expect(await resolveSource("kick", "Rabble")).toEqual({ url: "https://kick.com/rabble", name: null, login: "rabble" });
+    await expect(resolveSource("kick", "https://evil.example/rabble")).rejects.toMatchObject({ reason: "bad-source" });
+  });
+
+  it("turns a GitHub repository into its releases feed", async () => {
+    const feed = { url: "https://github.com/0xDrMoe/RVRevival/releases.atom", name: "0xDrMoe/RVRevival" };
+    for (const input of ["0xDrMoe/RVRevival", "https://github.com/0xDrMoe/RVRevival", "github.com/0xDrMoe/RVRevival/releases", "https://github.com/0xDrMoe/RVRevival.git", "https://github.com/0xDrMoe/RVRevival/releases/tag/v1"]) {
+      expect(await resolveSource("github", input)).toEqual(feed);
+    }
+    for (const bad of ["RVRevival", "https://gitlab.com/a/b", "a/b/c", "-bad/repo", "owner/.."]) {
+      await expect(resolveSource("github", bad)).rejects.toMatchObject({ reason: "bad-source" });
+    }
+  });
+});
+
+const CHANNEL = "UC" + "a".repeat(22);
+const REST = CHANNEL.slice(2);
+const atom = (title, ids) => `<?xml version="1.0"?><feed xmlns:yt="http://www.youtube.com/xml/schemas/2015" xmlns="http://www.w3.org/2005/Atom"><title>${title}</title>
+  ${ids.map((id) => `<entry><id>yt:video:${id}</id><yt:videoId>${id}</yt:videoId><title>Video ${id}</title><link rel="alternate" href="https://www.youtube.com/watch?v=${id}"/><author><name>Rabble</name></author></entry>`).join("")}</feed>`;
+
+// A fetch that answers from a map of URLs, and DNS that says everything is public.
+function fakeNet(pages) {
+  return {
+    fetchImpl: vi.fn(async (url) => {
+      const page = pages[String(url)];
+      return page === undefined ? new Response("nope", { status: 404 }) : new Response(page, { status: 200 });
+    }),
+    lookup: vi.fn(async () => [{ address: "93.184.216.34" }]),
+  };
+}
+
+const livePage = (videoId, { live = true } = {}) => `<html><head><link rel="canonical" href="https://www.youtube.com/watch?v=${videoId}"><meta name="title" content="Finals &amp; chill"></head>
+  <script>var ytInitialPlayerResponse = {"videoDetails":{"videoId":"${videoId}","title":"Finals & chill","author":"Rabble"},"microformat":{"playerMicroformatRenderer":{"ownerChannelName":"Rabble \\u0026 Co","liveBroadcastDetails":{"isLiveNow":${live}}}}};</script></html>`;
+
+describe("YouTube videos, Shorts and live", () => {
+  const channelFeed = `https://www.youtube.com/feeds/videos.xml?channel_id=${CHANNEL}`;
+
+  it("follows long videos, falling back to all uploads, and names the feed after the channel", async () => {
+    const store = new FeedStore();
+    const videos = `https://www.youtube.com/feeds/videos.xml?playlist_id=UULF${REST}`;
+    const net = fakeNet({ [videos]: atom("Videos", ["v1"]), [channelFeed]: atom("Rabble", ["v1", "s1"]) });
+    const feed = await addFeed({ ...base, store, kind: "youtube", source: CHANNEL, fetchOptions: net });
+    expect(feed).toMatchObject({ url: videos, name: "Rabble", seen: ["v1"] });
+
+    const fallback = await addFeed({ ...base, store, guildId: OTHER_GUILD, kind: "youtube", source: CHANNEL, fetchOptions: fakeNet({ [channelFeed]: atom("Rabble", ["v1", "s1"]) }) });
+    expect(fallback).toMatchObject({ url: channelFeed, name: "Rabble", seen: ["v1", "s1"] });
+    // The same channel's uploads in the same channel: a duplicate either way.
+    await expect(addFeed({ ...base, store, guildId: OTHER_GUILD, kind: "youtube", source: CHANNEL, fetchOptions: net })).rejects.toThrow(/already posts/);
+  });
+
+  it("follows Shorts, and says when a channel has none", async () => {
+    const store = new FeedStore();
+    const shorts = `https://www.youtube.com/feeds/videos.xml?playlist_id=UUSH${REST}`;
+    const feed = await addFeed({ ...base, store, kind: "youtube_shorts", source: CHANNEL, fetchOptions: fakeNet({ [shorts]: atom("Shorts", ["s1"]), [channelFeed]: atom("Rabble", []) }) });
+    expect(feed).toMatchObject({ url: shorts, name: "Rabble", seen: ["s1"] });
+    await expect(addFeed({ ...base, store, guildId: OTHER_GUILD, kind: "youtube_shorts", source: CHANNEL, fetchOptions: fakeNet({}) })).rejects.toMatchObject({ reason: "no-shorts" });
+  });
+
+  it("reads the /live page", () => {
+    expect(readLivePage(livePage("abcdefghijk"))).toEqual({
+      title: "Rabble & Co",
+      items: [{ id: "abcdefghijk", title: "Finals & chill", link: "https://www.youtube.com/watch?v=abcdefghijk", author: "Rabble & Co", publishedAt: null }],
+    });
+    expect(readLivePage(livePage("abcdefghijk", { live: false })).items).toEqual([]);
+    expect(readLivePage("<html>channel page</html>").items).toEqual([]);
+    expect(readLivePage(undefined).items).toEqual([]);
+  });
+
+  it("announces each YouTube stream once, every 3 minutes", async () => {
+    const store = new FeedStore();
+    const liveUrl = `https://www.youtube.com/channel/${CHANNEL}/live`;
+    const pages = { [liveUrl]: "<html>not live</html>", [channelFeed]: atom("Rabble", []) };
+    const net = fakeNet(pages);
+    const feed = await addFeed({ ...base, store, kind: "youtube_live", source: CHANNEL, fetchOptions: net, now: () => 0 });
+    expect(feed).toMatchObject({ url: liveUrl, name: "Rabble", seen: [] });
+    // The page is fetched with the consent cookie.
+    expect(net.fetchImpl.mock.calls.find(([url]) => String(url) === liveUrl)[1].headers.Cookie).toContain("SOCS");
+
+    let time = 0;
+    const channel = { isTextBased: () => true, send: vi.fn(async () => {}) };
+    const read = vi.fn(async (url, kind) => (kind === "youtube_live" ? readLivePage(pages[url]) : { title: "", items: [] }));
+    const poller = createFeedPoller({ client: fakeClient(channel), store, logger: fakeLogger(), fetchFeed: read, now: () => time });
+
+    pages[liveUrl] = livePage("abcdefghijk");
+    time += YOUTUBE_LIVE_EVERY_MS - 1;
+    await poller.tick();
+    expect(read).not.toHaveBeenCalled();
+    time += 1;
+    await poller.tick();
+    expect(channel.send.mock.calls[0][0].content).toBe("🔴 **Rabble & Co** is live on YouTube: **Finals & chill**\nhttps://www.youtube.com/watch?v=abcdefghijk");
+    time += YOUTUBE_LIVE_EVERY_MS;
+    await poller.tick();
+    expect(channel.send).toHaveBeenCalledTimes(1);
+  });
+
+  it("posts GitHub releases with their own default message", () => {
+    const post = buildFeedPost({ kind: "github", name: "0xDrMoe/RVRevival", message: null }, { id: "1", title: "v2.0", link: "https://github.com/0xDrMoe/RVRevival/releases/tag/v2.0" }, "en");
+    expect(post.content).toBe("📦 New release of **0xDrMoe/RVRevival**: **v2.0**\nhttps://github.com/0xDrMoe/RVRevival/releases/tag/v2.0");
   });
 });

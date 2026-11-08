@@ -21,8 +21,8 @@ import { createRolePersistence } from "./members/rolePersistence.js";
 import { TempRoleStore } from "./tempRoles/tempRoleStore.js";
 import { FeedStore } from "./feeds/feedStore.js";
 import { createFeedPoller } from "./feeds/feedPoller.js";
-import { createTwitchApi } from "./feeds/twitch.js";
-import { createTwitchPoller } from "./feeds/twitchPoller.js";
+import { createLiveApis, liveSecrets } from "./feeds/liveApis.js";
+import { createLivePoller } from "./feeds/livePoller.js";
 import { BotStatsStore, HEARTBEAT_MS } from "./stats/botStats.js";
 import { createStatsUpdater } from "./stats/statsUpdater.js";
 import { createAfk } from "./afk/afk.js";
@@ -108,8 +108,8 @@ const PARTIALS = [Partials.Message, Partials.Channel, Partials.GuildMember, Part
 async function start() {
   const config = loadBotConfig();
   registerSecret(config.token);
-  if (config.twitch) {
-    registerSecret(config.twitch.clientSecret);
+  for (const secret of liveSecrets(config.live)) {
+    registerSecret(secret);
   }
 
   // Settings and moderation cases live in data/bot.db (SQLite).
@@ -191,10 +191,11 @@ async function start() {
   const quarantine = createQuarantine({ guildSettings, store: savedRoles, modLog, logger });
   // Roles that end by themselves (/temprole).
   const tempRoles = new TempRoleStore(db);
-  // YouTube and Twitch channels, Bluesky and Mastodon accounts, subreddits and
-  // RSS feeds followed with /feed. Twitch needs keys in .env.
+  // YouTube, Twitch and Kick channels, Bluesky and Mastodon accounts,
+  // subreddits, GitHub releases and RSS feeds followed with /feed. Twitch and
+  // Kick need keys in .env.
   const feeds = new FeedStore(db);
-  const twitch = config.twitch ? createTwitchApi(config.twitch) : undefined;
+  const live = createLiveApis(config.live);
   // Server stats channels (/stats): voice channels named after live counts.
   const statsUpdater = createStatsUpdater({ guildSettings, logger });
   // Members who are away (/afk).
@@ -248,7 +249,7 @@ async function start() {
     quarantine,
     tempRoles,
     feeds,
-    twitch,
+    live,
     statsUpdater,
     afk,
     stickyStore,
@@ -307,7 +308,7 @@ async function start() {
   let birthdays;
   let tempRoleScheduler;
   let feedPoller;
-  let twitchPoller;
+  let livePoller;
 
   function connect(intents) {
     client = new Client({ intents, partials: PARTIALS });
@@ -345,10 +346,10 @@ async function start() {
       feedPoller?.stop();
       feedPoller = createFeedPoller({ client: readyClient, store: feeds, logger, forcedLanguage });
       feedPoller.start();
-      twitchPoller?.stop();
-      if (twitch) {
-        twitchPoller = createTwitchPoller({ client: readyClient, store: feeds, twitch, logger, forcedLanguage });
-        twitchPoller.start();
+      livePoller?.stop();
+      if (Object.keys(live).length > 0) {
+        livePoller = createLivePoller({ client: readyClient, store: feeds, providers: live, logger, forcedLanguage });
+        livePoller.start();
       }
       statsUpdater.start(readyClient);
       countSafely("start time", () => botStats.started());
@@ -550,7 +551,7 @@ async function start() {
       birthdays?.stop();
       tempRoleScheduler?.stop();
       feedPoller?.stop();
-      twitchPoller?.stop();
+      livePoller?.stop();
       statsUpdater.stop();
       leveling.stopVoiceXp();
       automod.stop();

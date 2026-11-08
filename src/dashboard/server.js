@@ -7,6 +7,7 @@ import { CaseStore } from "../moderation/caseStore.js";
 import { GuildSettings } from "../settings/guildSettings.js";
 import { closeDatabase, DEFAULT_DATABASE_FILE, openDatabase } from "../storage/database.js";
 import { logger, registerSecret } from "../utils/logger.js";
+import { liveSecrets } from "../feeds/liveApis.js";
 import { buildDashboard } from "./app.js";
 import { createDiscordApi } from "./discordApi.js";
 
@@ -15,8 +16,8 @@ async function start() {
   registerSecret(config.token);
   registerSecret(config.clientSecret);
   registerSecret(config.sessionSecret);
-  if (config.twitch) {
-    registerSecret(config.twitch.clientSecret);
+  for (const secret of liveSecrets(config.live)) {
+    registerSecret(secret);
   }
 
   const db = openDatabase(DEFAULT_DATABASE_FILE);

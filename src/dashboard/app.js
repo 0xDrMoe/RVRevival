@@ -57,7 +57,7 @@ import { SentMessageStore } from "../messages/sentMessageStore.js";
 import { addFeed, FeedDuplicate, FeedError, FeedLimit } from "../feeds/feeds.js";
 import { FEED_KINDS } from "../feeds/fetchFeed.js";
 import { FeedStore, MAX_FEEDS } from "../feeds/feedStore.js";
-import { createTwitchApi } from "../feeds/twitch.js";
+import { createLiveApis } from "../feeds/liveApis.js";
 import { normalizeMediaOnly } from "../community/mediaOnly.js";
 import { buildBackup, InvalidBackup, planRestore, settingLabel } from "./backup.js";
 import { MAX_STICKIES, MAX_STICKY_LENGTH, StickyStore } from "../sticky/stickyStore.js";
@@ -226,9 +226,9 @@ const sameText = (a, b) =>
 //   guildSettings   GuildSettings on the same database
 //   store           CaseStore on the same database
 //   logger
-// `feedFetchOptions` replaces fetch and DNS for feeds in tests, `twitch` the Twitch API.
-export async function buildDashboard({ config, db, discord, guildSettings, store, logger, feedFetchOptions, twitch: twitchApi }) {
-  const twitch = twitchApi ?? (config.twitch ? createTwitchApi(config.twitch) : undefined);
+// `feedFetchOptions` replaces fetch and DNS for feeds in tests, `live` the Twitch and Kick APIs.
+export async function buildDashboard({ config, db, discord, guildSettings, store, logger, feedFetchOptions, live: liveApis }) {
+  const live = liveApis ?? createLiveApis(config.live);
   const sessions = new SessionStore(db, { secret: config.sessionSecret });
   const memberEvents = new MemberEventStore(db);
   const tickets = new TicketStore(db);
@@ -1752,7 +1752,7 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     if (!access) {
       return reply;
     }
-    return { feeds: feeds.list(access.guildId).map(feedJson), max: MAX_FEEDS, twitch: Boolean(twitch) };
+    return { feeds: feeds.list(access.guildId).map(feedJson), max: MAX_FEEDS, live: { twitch: Boolean(live.twitch), kick: Boolean(live.kick) } };
   });
 
   // Adding reads the feed once, which can take a few seconds.
@@ -1778,7 +1778,7 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     }
     let feed;
     try {
-      feed = await addFeed({ store: feeds, guildId, kind, source, channelId, roleId, message, createdBy: session.userId, fetchOptions: feedFetchOptions, twitch });
+      feed = await addFeed({ store: feeds, guildId, kind, source, channelId, roleId, message, createdBy: session.userId, fetchOptions: feedFetchOptions, live });
     } catch (error) {
       if (error instanceof FeedLimit || error instanceof FeedDuplicate) {
         return reply.code(409).send({ error: "feed-refused", message: error.message });
