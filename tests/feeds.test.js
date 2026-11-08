@@ -1,4 +1,4 @@
-import { ChannelType } from "discord.js";
+import { ChannelType, PermissionFlagsBits } from "discord.js";
 import { describe, expect, it, vi } from "vitest";
 import { buildFeedCommandData, createFeedCommand } from "../src/commands/feed.js";
 import { createFeedPoller, CHECK_EVERY_MS } from "../src/feeds/feedPoller.js";
@@ -230,6 +230,11 @@ describe("adding feeds", () => {
     const post = buildFeedPost(sample({ roleId: ROLE_ID, message: "{feed} by {author}: {title} {link} {other}" }), item, "en");
     expect(post).toEqual({ content: `<@&${ROLE_ID}> Patch News by Patch News: Season 2 https://example.com/s2 {other}`, allowedMentions: { parse: [], roles: [ROLE_ID] } });
   });
+
+  it("pings @everyone as plain text, since Discord won't ping it as a role mention", () => {
+    const item = { id: "1", title: "Season 2", link: "https://example.com/s2", author: "" };
+    expect(buildFeedPost(sample({ roleId: GUILD_ID, message: "{title}" }), item, "en")).toEqual({ content: "@everyone Season 2", allowedMentions: { parse: ["everyone"], roles: [] } });
+  });
 });
 
 function fakeClient(channel) {
@@ -280,15 +285,16 @@ describe("feed poller", () => {
   });
 });
 
-function interaction(subcommand, options = {}, { canPost = true } = {}) {
-  const channel = { id: CHANNEL_ID, type: ChannelType.GuildText, permissionsFor: () => ({ has: () => canPost }) };
+function interaction(subcommand, options = {}, { canPost = true, memberEveryone = true, botEveryone = true } = {}) {
+  const everyone = PermissionFlagsBits.MentionEveryone;
+  const channel = { id: CHANNEL_ID, type: ChannelType.GuildText, permissionsFor: () => ({ has: (flags) => (flags === everyone ? botEveryone : canPost) }) };
   const replyState = {};
   return {
     locale: "en-US",
     guildId: GUILD_ID,
     guild: { id: GUILD_ID, members: { me: { id: "bot" } }, channels: { cache: new Map([[CHANNEL_ID, channel]]) } },
     user: { id: USER_ID },
-    memberPermissions: { has: () => true },
+    memberPermissions: { has: (flag) => (flag === everyone ? memberEveryone : true) },
     inCachedGuild: () => true,
     options: {
       getSubcommand: () => subcommand,
@@ -321,7 +327,6 @@ describe("/feed", () => {
     expect(await command.execute(interaction("add", { type: "rss", source: "https://example.com/rss" }))).toMatchObject({ key: "feedDuplicate" });
     expect(await command.execute(interaction("add", { type: "rss", source: "https://example.com/missing" }))).toMatchObject({ status: Status.FAILED, key: "feedErrorUnreachable" });
     expect(await command.execute(interaction("add", { type: "rss", source: "http://10.0.0.1/" }))).toMatchObject({ key: "feedErrorBlocked" });
-    expect(await command.execute(interaction("add", { type: "rss", source: "https://example.com/rss", role: { id: GUILD_ID } }))).toMatchObject({ key: "feedRoleEveryone" });
     expect(await command.execute(interaction("add", { type: "rss", source: "https://example.com/rss" }, { canPost: false }))).toMatchObject({ key: "feedCannotPost" });
 
     const list = interaction("list");
@@ -331,5 +336,29 @@ describe("/feed", () => {
     expect(await command.execute(interaction("remove", { id: 9 }))).toMatchObject({ key: "feedNoSuch" });
     expect(await command.execute(interaction("remove", { id: 1 }))).toMatchObject({ key: "feedRemoved" });
     expect(await command.execute(interaction("list"))).toMatchObject({ key: "feedListEmpty" });
+  });
+
+  it("pings @everyone only for people who may, and warns when the bot can't", async () => {
+    const store = new FeedStore();
+    const command = createFeedCommand({ store, fetchOptions: fakeNet({ "https://example.com/rss": RSS }) });
+    const everyone = { type: "rss", source: "https://example.com/rss", role: { id: GUILD_ID } };
+    expect(await command.execute(interaction("add", everyone, { memberEveryone: false }))).toMatchObject({ status: Status.REFUSED, key: "feedRoleEveryone" });
+    expect(store.count(GUILD_ID)).toBe(0);
+
+    const added = interaction("add", everyone, { botEveryone: false });
+    expect(await command.execute(added)).toMatchObject({ status: Status.SUCCESS, key: "feedAdded" });
+    expect(added.editReply.mock.calls[0][0].content).toContain("Mention @everyone");
+    expect(store.list(GUILD_ID)[0].roleId).toBe(GUILD_ID);
+
+    const list = interaction("list");
+    await command.execute(list);
+    expect(list.reply.mock.calls[0][0].content).toContain("· @everyone");
+  });
+
+  it("adds without a warning when the bot can ping @everyone", async () => {
+    const command = createFeedCommand({ store: new FeedStore(), fetchOptions: fakeNet({ "https://example.com/rss": RSS }) });
+    const added = interaction("add", { type: "rss", source: "https://example.com/rss", role: { id: GUILD_ID } });
+    await command.execute(added);
+    expect(added.editReply.mock.calls[0][0].content).not.toContain("Mention @everyone");
   });
 });

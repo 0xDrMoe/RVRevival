@@ -54,7 +54,7 @@ import { appealQuestions, MAX_ANSWER_LENGTH, normalizeAppeals } from "../appeals
 import { normalizeCategories } from "../tickets/categories.js";
 import { checkMessage, editableMessage, InvalidMessage, messageSummary, parseMessageLink } from "../messages/embedMessage.js";
 import { SentMessageStore } from "../messages/sentMessageStore.js";
-import { addFeed, FeedDuplicate, FeedError, FeedLimit } from "../feeds/feeds.js";
+import { addFeed, FeedDuplicate, FeedError, FeedLimit, MAX_FEED_MESSAGE_LENGTH } from "../feeds/feeds.js";
 import { FEED_KINDS } from "../feeds/fetchFeed.js";
 import { FeedStore, MAX_FEEDS } from "../feeds/feedStore.js";
 import { createLiveApis } from "../feeds/liveApis.js";
@@ -1764,6 +1764,8 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
 
   // --- Feeds ------------------------------------------------------------------
 
+  const mentionText = (guildId, roleId) => (!roleId ? "nobody" : roleId === guildId ? "@everyone" : `<@&${roleId}>`);
+
   const feedJson = (feed) => ({
     id: feed.id,
     kind: feed.kind,
@@ -1777,6 +1779,30 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     postedAt: feed.postedAt,
     lastError: feed.lastError,
   });
+
+  // Checks where a feed posts, who it pings and its message, and answers 400
+  // when one is wrong. @everyone (the role with the server's ID) only for
+  // people who may ping it themselves.
+  async function refuseFeedSettings(reply, guildId, session, { channelId, roleId, message }) {
+    const [guild, channels] = await Promise.all([discord.guild(guildId), discord.channels(guildId)]);
+    if (typeof channelId !== "string" || !channels.some((channel) => channel.id === channelId && POSTABLE.has(channel.type))) {
+      reply.code(400).send({ error: "bad-channel", message: "Pick a text or announcement channel." });
+      return true;
+    }
+    if (roleId !== null && (typeof roleId !== "string" || !guild.roles.some((role) => role.id === roleId))) {
+      reply.code(400).send({ error: "bad-role", message: "Pick a role from this server." });
+      return true;
+    }
+    if (roleId === guildId && !(await canMentionEveryone(guild, session.userId))) {
+      reply.code(403).send({ error: "no-everyone", message: "Only people who can ping @everyone in this server can pick it." });
+      return true;
+    }
+    if (message !== null && (typeof message !== "string" || message.length > MAX_FEED_MESSAGE_LENGTH)) {
+      reply.code(400).send({ error: "bad-message", message: `The message is at most ${MAX_FEED_MESSAGE_LENGTH} characters.` });
+      return true;
+    }
+    return false;
+  }
 
   app.get("/api/guilds/:id/feeds", async (request, reply) => {
     const access = await requireGuild(request, reply, { manage: true });
@@ -1797,15 +1823,8 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     if (!FEED_KINDS.includes(kind) || typeof source !== "string") {
       return reply.code(400).send({ error: "bad-feed", message: "Pick what kind of feed it is and type what to follow." });
     }
-    const [guild, channels] = await Promise.all([discord.guild(guildId), discord.channels(guildId)]);
-    if (!channels.some((channel) => channel.id === channelId && POSTABLE.has(channel.type))) {
-      return reply.code(400).send({ error: "bad-channel", message: "Pick a text or announcement channel." });
-    }
-    if (roleId !== null && (roleId === guildId || !guild.roles.some((role) => role.id === roleId))) {
-      return reply.code(400).send({ error: "bad-role", message: "Pick a role from this server (not @everyone)." });
-    }
-    if (message !== null && (typeof message !== "string" || message.length > 500)) {
-      return reply.code(400).send({ error: "bad-message", message: "The message is at most 500 characters." });
+    if (await refuseFeedSettings(reply, guildId, session, { channelId, roleId, message })) {
+      return reply;
     }
     let feed;
     try {
@@ -1821,6 +1840,41 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     }
     await logAction(guildId, session, `**Feed added:** ${feed.name} → <#${channelId}>`, [feed.url]);
     return { feed: feedJson(feed) };
+  });
+
+  // Changes where a feed posts, who it pings and its message. What it
+  // follows can't change: remove it and add another.
+  app.patch("/api/guilds/:id/feeds/:feedId", async (request, reply) => {
+    const access = await requireGuild(request, reply, { manage: true });
+    if (!access) {
+      return reply;
+    }
+    const { guildId, session } = access;
+    const id = Number.parseInt(request.params.feedId, 10);
+    const feed = Number.isInteger(id) ? feeds.get(id) : undefined;
+    if (!feed || feed.guildId !== guildId) {
+      return reply.code(404).send({ error: "not-found" });
+    }
+    const body = request.body ?? {};
+    const channelId = body.channelId ?? feed.channelId;
+    const roleId = body.roleId === undefined ? feed.roleId : body.roleId;
+    const message = body.message === undefined ? feed.message : typeof body.message === "string" ? body.message.trim() || null : body.message;
+    // Someone who can't ping @everyone may still edit a feed that already does.
+    const pingsEveryoneAlready = roleId === guildId && feed.roleId === guildId;
+    if (await refuseFeedSettings(reply, guildId, session, { channelId, roleId: pingsEveryoneAlready ? null : roleId, message })) {
+      return reply;
+    }
+    if (channelId !== feed.channelId && feeds.find(guildId, feed.url, channelId)) {
+      return reply.code(409).send({ error: "feed-refused", message: "That feed already posts in that channel." });
+    }
+    const updated = feeds.update(guildId, id, { channelId, roleId, message });
+    const changes = [
+      channelId !== feed.channelId ? `Channel: <#${feed.channelId}> → <#${channelId}>` : null,
+      roleId !== feed.roleId ? `Ping: ${mentionText(guildId, feed.roleId)} → ${mentionText(guildId, roleId)}` : null,
+      message !== feed.message ? "Message changed" : null,
+    ].filter(Boolean);
+    await logAction(guildId, session, `**Feed edited:** ${feed.name}`, changes.length ? changes : ["No changes"]);
+    return { feed: feedJson(updated) };
   });
 
   app.delete("/api/guilds/:id/feeds/:feedId", async (request, reply) => {

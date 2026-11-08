@@ -1809,7 +1809,7 @@ export const COMMAND_PARTS = [
                 "The YouTube link (`youtube.com/@name`), Twitch or Kick channel (`twitch.tv/name`, `kick.com/name`), Bluesky handle (`name.bsky.social`), Mastodon account (`@name@mastodon.social`), subreddit (`r/name`), GitHub repository (`owner/name`) or feed link, up to 500 characters.",
               ],
               ["channel", "Where new posts go."],
-              ["role", "A role to ping with each post."],
+              ["role", "A role to ping with each post, or @everyone (needs Mention @everyone, for you and Rabble)."],
               ["message", "Your own message, up to 500 characters. Use `{title}`, `{link}`, `{author}`, `{feed}` and, for Twitch and Kick, `{game}`."],
             ],
           },

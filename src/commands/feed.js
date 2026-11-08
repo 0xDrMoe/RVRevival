@@ -93,7 +93,9 @@ export function createFeedCommand({ store, live = {}, forcedLanguage, fetchOptio
     if (!usable || !POSTING.includes(usable.type) || !usable.permissionsFor(me)?.has([PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages])) {
       return answer(Status.REFUSED, "feedCannotPost", values);
     }
-    if (role?.id === guild.id) {
+    // @everyone (the role with the server's ID) only for people who may ping it.
+    const everyone = role?.id === guild.id;
+    if (everyone && !interaction.memberPermissions.has(PermissionFlagsBits.MentionEveryone)) {
       return answer(Status.REFUSED, "feedRoleEveryone");
     }
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
@@ -125,14 +127,17 @@ export function createFeedCommand({ store, live = {}, forcedLanguage, fetchOptio
       throw error;
     }
     logger?.info("Feed added", { guildId: guild.id, feedId: feed.id, kind });
-    return answer(Status.SUCCESS, "feedAdded", { ...values, name: feed.name, id: feed.id });
+    // Without Mention Everyone the post still goes out, it just pings no one.
+    const note = everyone && !usable.permissionsFor(me)?.has(PermissionFlagsBits.MentionEveryone) ? "feedEveryoneBotCantPing" : undefined;
+    return answer(Status.SUCCESS, "feedAdded", { ...values, name: feed.name, id: feed.id }, note);
   }
 
   async function execute(interaction) {
     const language = pickLanguage(interaction.locale, forcedLanguage);
     const text = (key, values) => translate(language, key, values);
-    const answer = async (status, key, values = {}) => {
-      const payload = { content: text(key, values), allowedMentions: { parse: [] } };
+    const answer = async (status, key, values = {}, noteKey) => {
+      const content = noteKey ? `${text(key, values)}\n${text(noteKey, values)}` : text(key, values);
+      const payload = { content, allowedMentions: { parse: [] } };
       if (interaction.deferred || interaction.replied) {
         await interaction.editReply(payload);
       } else {
@@ -160,7 +165,7 @@ export function createFeedCommand({ store, live = {}, forcedLanguage, fetchOptio
         }
         const lines = feeds.map(
           (feed) =>
-            `\`${feed.id}\` ${KIND_ICONS[feed.kind] ?? "📰"} **${feed.name}** → <#${feed.channelId}>${feed.roleId ? ` · <@&${feed.roleId}>` : ""}${feed.lastError ? ` · ⚠️ ${feed.lastError.slice(0, 80)}` : ""}`,
+            `\`${feed.id}\` ${KIND_ICONS[feed.kind] ?? "📰"} **${feed.name}** → <#${feed.channelId}>${feed.roleId ? ` · ${feed.roleId === interaction.guildId ? "@everyone" : `<@&${feed.roleId}>`}` : ""}${feed.lastError ? ` · ⚠️ ${feed.lastError.slice(0, 80)}` : ""}`,
         );
         return answer(Status.SUCCESS, "feedList", { count: feeds.length, max: MAX_FEEDS, list: lines.join("\n") });
       }

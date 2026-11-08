@@ -830,7 +830,7 @@ const FEATURE_PARTS = [
         summary: "Posts new YouTube videos, Shorts and live streams, Twitch and Kick streams going live, Bluesky and Mastodon posts, subreddit posts, GitHub releases and blog or news articles in a channel.",
         who: "Admins.",
         commands: [
-          ["/feed add type source channel [role] [message]", "Follows something. `type` is YouTube videos, Shorts or live streams, Twitch, Kick, Bluesky, Mastodon, Reddit, GitHub releases or RSS. `role` is pinged with each post."],
+          ["/feed add type source channel [role] [message]", "Follows something. `type` is YouTube videos, Shorts or live streams, Twitch, Kick, Bluesky, Mastodon, Reddit, GitHub releases or RSS. `role` is pinged with each post (it can be @everyone)."],
           ["/feed remove id", "Stops following it."],
           ["/feed list", "Shows every feed, with the problem next to any that can't be read or posted."],
         ],
@@ -846,6 +846,8 @@ const FEATURE_PARTS = [
           "Twitch and Kick post once each time the channel goes live. Each works once the bot's owner adds its keys.",
           "X (Twitter), TikTok and Instagram don't let bots read posts for free. If you have an RSS link for an account (from a feed service), add it as RSS.",
           "`message` can use `{title}`, `{link}`, `{author}`, `{feed}` and, for Twitch and Kick, `{game}`.",
+          "To change where a feed posts, who it pings or its message, press **Edit** next to it on the **Feeds** page. To follow something else, remove it and add a new one.",
+          "Pinging @everyone needs **Mention @everyone**: you need it to pick it, and Rabble needs it in the channel or the post goes out without pinging anyone.",
         ],
       },
       {

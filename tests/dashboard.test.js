@@ -1274,7 +1274,9 @@ describe("dashboard", () => {
 
     expect((await add({ kind: "tiktok" })).statusCode).toBe(400);
     expect((await add({ channelId: VOICE_ID })).statusCode).toBe(400);
-    expect((await add({ roleId: GUILD_ID })).statusCode).toBe(400);
+    // @everyone only for people who may ping it.
+    expect((await add({ roleId: GUILD_ID })).json()).toMatchObject({ error: "no-everyone" });
+    expect((await add({ roleId: "700000000000000099" })).statusCode).toBe(400);
     expect((await add({ message: "x".repeat(501) })).statusCode).toBe(400);
     expect((await add({ source: "http://127.0.0.1/" })).json()).toMatchObject({ error: "blocked" });
     const added = await add({ roleId: ROLE_ID, message: "New: {title}" });
@@ -1284,7 +1286,28 @@ describe("dashboard", () => {
 
     const list = await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}/feeds`, cookies });
     expect(list.json()).toMatchObject({ max: 20, live: { twitch: false, kick: false }, feeds: [{ id: 1, kind: "rss", channelId: TEXT_ID }] });
-    expect((await write(cookies, "DELETE", `/api/guilds/${GUILD_ID}/feeds/2`)).statusCode).toBe(404);
+
+    const edit = (id, body) => write(cookies, "PATCH", `/api/guilds/${GUILD_ID}/feeds/${id}`, body);
+    expect((await edit(2, { channelId: LOGS_ID })).statusCode).toBe(404);
+    expect((await edit(1, { channelId: VOICE_ID })).statusCode).toBe(400);
+    expect((await edit(1, { message: "y".repeat(501) })).statusCode).toBe(400);
+    expect((await edit(1, { roleId: GUILD_ID })).statusCode).toBe(403);
+    const edited = await edit(1, { channelId: LOGS_ID, roleId: null, message: "  " });
+    expect(edited.statusCode).toBe(200);
+    expect(edited.json().feed).toMatchObject({ id: 1, name: "Patch News", channelId: LOGS_ID, roleId: null, message: null });
+
+    // The owner may ping @everyone; another manager may still edit that feed after.
+    const base = discord.guild.getMockImplementation();
+    discord.guild.mockImplementation(async (id) => ({ ...(await base(id)), owner_id: USER_ID }));
+    expect((await edit(1, { roleId: GUILD_ID })).json().feed.roleId).toBe(GUILD_ID);
+    discord.guild.mockImplementation(base);
+    expect((await edit(1, { message: "Live: {title}" })).json().feed).toMatchObject({ roleId: GUILD_ID, message: "Live: {title}" });
+
+    // Moving it next to the same feed in another channel is refused.
+    expect((await add({})).statusCode).toBe(200);
+    expect((await edit(1, { channelId: TEXT_ID })).statusCode).toBe(409);
+    expect((await write(cookies, "DELETE", `/api/guilds/${GUILD_ID}/feeds/3`)).statusCode).toBe(404);
+    expect((await write(cookies, "DELETE", `/api/guilds/${GUILD_ID}/feeds/2`)).statusCode).toBe(200);
     expect((await write(cookies, "DELETE", `/api/guilds/${GUILD_ID}/feeds/1`)).statusCode).toBe(200);
     expect((await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}/feeds`, cookies })).json().feeds).toEqual([]);
   });
