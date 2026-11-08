@@ -59,7 +59,7 @@ const FEATURE_PARTS = [
         table: {
           head: ["Who", "Can use"],
           rows: [
-            ["**Everyone**", "`/country`, `/tag`, `/remind`, `/afk`, `/highlight`, `/rank`, `/leaderboard`, `/birthday set` `remove` `show` `upcoming`, `/voice` in their own channel, the **Open a ticket** button and the role panel buttons."],
+            ["**Everyone**", "`/country`, `/tag`, `/remind`, `/afk`, `/highlight`, `/serverinfo`, `/rank`, `/leaderboard`, `/birthday set` `remove` `show` `upcoming`, `/voice` in their own channel, the **Open a ticket** button and the role panel buttons."],
             ["**Mod role**", "`/warn` `/note` `/timeout` `/untimeout` `/kick` `/softban` `/ban` `/unban` `/purge`, `/modlogs` `/case view` `/case reason`, `/lock` `/unlock` `/slowmode` `/role` `/nick`, `/temprole`, `/quarantine add` `release` `list`, `/tags`, `/giveaway`, `/raid lockdown` `end` `status`."],
             ["**Staff role**", "`/country-staff`."],
             ["**Ticket staff**", "`/tickets close` `add` `remove` `list`. That's the panel's staff role, the mod role, or anyone with Manage Threads."],
@@ -714,6 +714,21 @@ const FEATURE_PARTS = [
         tips: [
           "While you're AFK the bot adds \"[AFK] \" to your nickname if it can.",
           "Highlights match whole words, are private, and send at most one DM per channel every 5 minutes, none while you're chatting there. Your DMs need to be open.",
+        ],
+      },
+      {
+        id: "serverinfo",
+        title: "Server info",
+        icon: "home",
+        tone: "blue",
+        summary: "A card about the server: owner, age, members, channels, roles, boosts and features.",
+        who: "Everyone.",
+        commands: [["/serverinfo [private]", "Posts the card in the channel. `private:True` shows it only to you."]],
+        example: ["/serverinfo", "/serverinfo private:True"],
+        tips: [
+          "The card uses the server's embed colour from the dashboard's **Branding** page.",
+          "The people and bots split shows once the bot has loaded the member list; until then only the total shows.",
+          "To turn `/serverinfo` off, hide it in **Server Settings → Integrations**.",
         ],
       },
     ],
