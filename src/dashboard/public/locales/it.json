@@ -2,6 +2,7 @@
   "loading": "Caricamento…",
   "logout": "Esci",
   "topLogin": "Accedi",
+  "topHome": "Pagina iniziale",
   "loginTitle": "Pannello di Rabble",
   "loginIntro": "Accedi con Discord per gestire il bot nei server in cui hai Gestire il server.",
   "loginButton": "Accedi con Discord",
