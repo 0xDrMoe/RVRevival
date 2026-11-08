@@ -407,7 +407,7 @@ The dashboard's **Backup** page saves every setting of a server to a `.json` fil
 
 - **Download backup** gets the file. It has every setting on the dashboard's pages, plus `/rolepanel` panels, the ticket panel, join-to-create voice and server stats. It doesn't hold cases, tickets, levels, feeds, stickies or anyone's personal data.
 - **Restore a backup:** pick a file and the page lists what would change and what's skipped, with the reason, before anything is saved. Press **Restore** to save it. Settings missing from the file stay as they are.
-- Each setting is checked against the server it goes to: a channel or role that doesn't exist there is skipped. Role panels, the ticket panel and join-to-create voice point at messages and channels of their own server, so they're only restored there. Stats counters get new channels on another server. Anti-nuke is only restored by the server owner.
+- Each setting is checked against the server it goes to: a channel or role that doesn't exist there is skipped. Role panels, the ticket panel, join-to-create voice and the posted country guide point at messages, channels and roles of their own server, so they're only restored there, and only from an unchanged file: every backup is signed (with a key made from `DASHBOARD_SESSION_SECRET`), and an edited file, or one made before signing or with another secret, skips them. Stats counters get new channels on another server or from such a file. Anti-nuke is only restored by the server owner.
 - Downloads and restores are listed on the Activity page and in the logs channel.
 
 ### Highlights

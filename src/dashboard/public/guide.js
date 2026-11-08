@@ -889,7 +889,7 @@ export const GUIDE = [
         ],
         tips: [
           "Settings missing from the file stay as they are.",
-          "Role panels, the ticket panel and join-to-create voice only restore on the same server.",
+          "Role panels, the ticket panel and join-to-create voice only restore on the same server, from a file nobody has edited.",
           "Download one before big changes.",
         ],
       },

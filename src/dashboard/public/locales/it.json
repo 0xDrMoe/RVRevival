@@ -847,6 +847,7 @@
   "backupReason_owner-only": "Solo il proprietario del server può ripristinarla.",
   "backupReason_invalid": "Non è adatta a questo server.",
   "backupReason_other-server": "Fa riferimento a messaggi del server di origine, quindi viene ripristinata solo lì.",
+  "backupReason_unsigned": "Punta a canali, ruoli o messaggi, quindi viene ripristinato solo da un backup non modificato creato su questo server.",
   "permTabs": "Vista dei permessi",
   "permTab_simple": "Semplice",
   "permTab_advanced": "Avanzata",

@@ -3,7 +3,14 @@
 // setting against the server it goes to, the same way the settings pages do,
 // and skips what doesn't fit (a channel that doesn't exist there, say).
 // Settings missing from the backup stay as they are.
+//
+// Settings with no form (panels, posted messages, stats counter channels) hold
+// raw channel, message and role IDs that the settings check can't vet. They're
+// only restored from a file this dashboard made for this same server: each
+// backup carries an HMAC signature over its server ID and settings, so a
+// hand-edited file can't point them at other channels, roles or servers.
 
+import { createHmac, hkdfSync, timingSafeEqual } from "node:crypto";
 import { Setting } from "../settings/guildSettings.js";
 import { normalizeCounters } from "../stats/statsCounters.js";
 import { checkSettingChanges, InvalidSetting, SETTING_RULES } from "./settingsRules.js";
@@ -29,12 +36,31 @@ export class InvalidBackup extends Error {
   name = "InvalidBackup";
 }
 
+// The signature for a backup's server and settings, made with a key from
+// DASHBOARD_SESSION_SECRET (so a new secret makes older backups unsigned).
+function signature(secret, guildId, settings) {
+  const key = Buffer.from(hkdfSync("sha256", secret, "rv-dashboard", "settings-backup", 32));
+  return createHmac("sha256", key).update(JSON.stringify([BACKUP_FORMAT, BACKUP_VERSION, guildId, settings])).digest("base64url");
+}
+
+// Whether `backup` is unchanged since this dashboard made it for `guildId`.
+function signedFor(backup, guildId, secret) {
+  if (!secret || typeof backup.signature !== "string" || backup.guild?.id !== guildId) {
+    return false;
+  }
+  const expected = Buffer.from(signature(secret, guildId, backup.settings));
+  const given = Buffer.from(backup.signature);
+  return expected.length === given.length && timingSafeEqual(expected, given);
+}
+
 export const settingLabel = (setting) => SETTING_RULES[setting]?.label ?? SAME_SERVER_LABELS[setting] ?? setting;
 
 // The backup file's contents.
-export function buildBackup({ guildId, guildName, settings, now = Date.now() }) {
+// `secret` signs it (see signature); without one the file is unsigned.
+export function buildBackup({ guildId, guildName, settings, secret, now = Date.now() }) {
   const saved = Object.fromEntries(Object.entries(settings).filter(([setting, value]) => KNOWN.has(setting) && !NOT_BACKED_UP.has(setting) && value !== undefined && value !== null));
-  return { format: BACKUP_FORMAT, version: BACKUP_VERSION, exportedAt: new Date(now).toISOString(), guild: { id: guildId, name: guildName }, settings: saved };
+  const backup = { format: BACKUP_FORMAT, version: BACKUP_VERSION, exportedAt: new Date(now).toISOString(), guild: { id: guildId, name: guildName }, settings: saved };
+  return secret ? { ...backup, signature: signature(secret, guildId, saved) } : backup;
 }
 
 // A saved value the way the settings check writes it (tags sorted, say), so
@@ -54,9 +80,10 @@ function normalized(setting, value, server) {
 }
 
 // What restoring `backup` would do: { apply: { setting: value | null }, skipped: [{ setting, reason, message }], unchanged }.
-// `server` is { guildId, channels, roles, isOwner, canManagePermissions, current }
-// (current: the saved settings now; canManagePermissions: the owner or whoever added the bot).
-export function planRestore(backup, { guildId, channels, roles, isOwner, canManagePermissions = isOwner, current }) {
+// `server` is { guildId, channels, roles, isOwner, canManagePermissions, current, secret }
+// (current: the saved settings now; canManagePermissions: the owner or whoever
+// added the bot; secret: what buildBackup signed with).
+export function planRestore(backup, { guildId, channels, roles, isOwner, canManagePermissions = isOwner, current, secret }) {
   if (!backup || typeof backup !== "object" || backup.format !== BACKUP_FORMAT) {
     throw new InvalidBackup("That isn't a settings backup from this bot.");
   }
@@ -66,7 +93,9 @@ export function planRestore(backup, { guildId, channels, roles, isOwner, canMana
   if (!backup.settings || typeof backup.settings !== "object" || Array.isArray(backup.settings)) {
     throw new InvalidBackup("That backup has no settings.");
   }
-  const sameServer = backup.guild?.id === guildId;
+  // Only a signed file proves it came from this server.
+  const sameServer = signedFor(backup, guildId, secret);
+  const claimsSameServer = backup.guild?.id === guildId;
   const apply = {};
   const skipped = [];
   let unchanged = 0;
@@ -101,7 +130,7 @@ export function planRestore(backup, { guildId, channels, roles, isOwner, canMana
     } else if (sameServer) {
       checked = value;
     } else {
-      skipped.push({ setting, reason: "other-server" });
+      skipped.push({ setting, reason: claimsSameServer ? "unsigned" : "other-server" });
       continue;
     }
     if (JSON.stringify(checked ?? null) === JSON.stringify(normalized(setting, current[setting], { guildId, channels, roles }) ?? null)) {

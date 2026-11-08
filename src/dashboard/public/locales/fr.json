@@ -847,6 +847,7 @@
   "backupReason_owner-only": "Seul le propriétaire du serveur peut restaurer ceci.",
   "backupReason_invalid": "Ne convient pas à ce serveur.",
   "backupReason_other-server": "Fait référence à des messages du serveur d'origine, donc n'est restauré que là-bas.",
+  "backupReason_unsigned": "Il pointe vers des salons, des rôles ou des messages, donc il n'est restauré que depuis une sauvegarde non modifiée faite sur ce serveur.",
   "permTabs": "Vue des permissions",
   "permTab_simple": "Simple",
   "permTab_advanced": "Avancé",

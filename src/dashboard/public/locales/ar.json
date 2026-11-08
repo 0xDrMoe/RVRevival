@@ -847,6 +847,7 @@
   "backupReason_owner-only": "مالك الخادم فقط يمكنه استعادة هذا.",
   "backupReason_invalid": "لا يناسب هذا الخادم.",
   "backupReason_other-server": "يشير إلى رسائل في الخادم الأصلي، لذا يُستعاد هناك فقط.",
+  "backupReason_unsigned": "يشير إلى قنوات أو أدوار أو رسائل، لذلك لا تتم استعادته إلا من نسخة احتياطية غير معدّلة أُنشئت على هذا الخادم.",
   "permTabs": "عرض الصلاحيات",
   "permTab_simple": "بسيط",
   "permTab_advanced": "متقدم",
