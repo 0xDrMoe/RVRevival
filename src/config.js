@@ -44,6 +44,19 @@ function botLanguage(env) {
   return language;
 }
 
+// Optional: Twitch app keys for Twitch live notifications (/feed). Both or neither.
+function twitchCredentials(env) {
+  const clientId = env.TWITCH_CLIENT_ID?.trim();
+  const clientSecret = env.TWITCH_CLIENT_SECRET?.trim();
+  if (!clientId && !clientSecret) {
+    return undefined;
+  }
+  if (!clientId || !clientSecret) {
+    throw new ConfigError("Set both TWITCH_CLIENT_ID and TWITCH_CLIENT_SECRET for Twitch notifications, or leave both empty.");
+  }
+  return { clientId, clientSecret };
+}
+
 // Settings for running the bot.
 export function loadBotConfig(env = process.env) {
   return {
@@ -51,6 +64,7 @@ export function loadBotConfig(env = process.env) {
     forcedLanguage: botLanguage(env),
     // Optional for the bot: used for the ban-appeal link in ban DMs.
     dashboardUrl: optionalDashboardUrl(env),
+    twitch: twitchCredentials(env),
   };
 }
 
@@ -122,5 +136,7 @@ export function loadDashboardConfig(env = process.env) {
     forcedLanguage: botLanguage(env),
     // How to reach the bot's team, shown on the Terms and Privacy pages.
     legalContact: env.LEGAL_CONTACT?.trim() || DEFAULT_LEGAL_CONTACT,
+    // Lets the Feeds page add Twitch channels.
+    twitch: twitchCredentials(env),
   };
 }

@@ -1,12 +1,13 @@
-// Posts new YouTube videos, subreddit posts and RSS items in a channel.
+// Posts new YouTube videos, Twitch streams going live, Bluesky and Mastodon
+// posts, subreddit posts and RSS items in a channel.
 //
-//   /feed add type source channel [role] [message]   follow something (up to 10 per server)
+//   /feed add type source channel [role] [message]   follow something (up to 20 per server)
 //   /feed remove id                                   stop following it
 //   /feed list                                        what the server follows
 //
-// Needs Manage Server. The bot checks every 10 minutes and posts only items
-// that appear after the feed was added (feeds/feedPoller.js). Also on the
-// dashboard's Feeds page.
+// Needs Manage Server. The bot checks every 10 minutes (Twitch every 2) and
+// posts only items that appear after the feed was added (feeds/feedPoller.js,
+// feeds/twitchPoller.js). Also on the dashboard's Feeds page.
 
 import { ChannelType, InteractionContextType, MessageFlags, PermissionFlagsBits, SlashCommandBuilder } from "discord.js";
 import { discordLocalizations, pickLanguage, translate } from "../i18n/i18n.js";
@@ -17,7 +18,7 @@ import { MAX_FEEDS } from "../feeds/feedStore.js";
 import { withDescription } from "./moderation.js";
 
 const COMMAND_NAME = "feed";
-const KIND_ICONS = { youtube: "📺", reddit: "🟠", rss: "📰" };
+const KIND_ICONS = { youtube: "📺", twitch: "🟣", bluesky: "🦋", mastodon: "🐘", reddit: "🟠", rss: "📰" };
 
 export function buildFeedCommandData() {
   const command = new SlashCommandBuilder()
@@ -53,12 +54,15 @@ const FEED_ERROR_KEYS = {
   blocked: "feedErrorBlocked",
   unreachable: "feedErrorUnreachable",
   "not-a-feed": "feedErrorNotAFeed",
+  "no-account": "feedErrorNoTwitchAccount",
+  "not-configured": "feedErrorTwitchOff",
 };
 
 const POSTING = [ChannelType.GuildText, ChannelType.GuildAnnouncement];
 
-// Options: store (FeedStore), forcedLanguage, fetchOptions (tests), now
-export function createFeedCommand({ store, forcedLanguage, fetchOptions, logger, now = Date.now }) {
+// Options: store (FeedStore), twitch (feeds/twitch.js, when the bot has Twitch
+// keys), forcedLanguage, fetchOptions (tests), now
+export function createFeedCommand({ store, twitch, forcedLanguage, fetchOptions, logger, now = Date.now }) {
   async function add(interaction, answer) {
     const guild = interaction.guild;
     const kind = interaction.options.getString("type", true);
@@ -87,6 +91,7 @@ export function createFeedCommand({ store, forcedLanguage, fetchOptions, logger,
         message: interaction.options.getString("message"),
         createdBy: interaction.user.id,
         fetchOptions,
+        twitch,
         now,
       });
     } catch (error) {

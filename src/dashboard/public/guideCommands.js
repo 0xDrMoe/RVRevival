@@ -1742,18 +1742,21 @@ export const COMMAND_PARTS = [
         tone: "amber",
         page: "feeds",
         related: "feeds",
-        summary: "Posts new YouTube videos, subreddit posts and blog or news articles in a channel.",
+        summary: "Posts new YouTube videos, Twitch streams going live, Bluesky and Mastodon posts, subreddit posts and blog or news articles in a channel.",
         who: "Admins (**Manage Server**).",
         usages: [
           {
             usage: "/feed add type source channel [role] [message]",
-            what: "Follows something. Only items that appear after you add it are posted. Up to 10 feeds.",
+            what: "Follows something. Only items that appear after you add it are posted. Up to 20 feeds.",
             options: [
-              ["type", "A YouTube channel, a subreddit, or an RSS or Atom feed."],
-              ["source", "The channel link (`youtube.com/@name`), the subreddit (`r/name`) or the feed's link, up to 500 characters."],
+              ["type", "A YouTube or Twitch channel, a Bluesky or Mastodon account, a subreddit, or an RSS or Atom feed."],
+              [
+                "source",
+                "The YouTube link (`youtube.com/@name`), Twitch channel (`twitch.tv/name`), Bluesky handle (`name.bsky.social`), Mastodon account (`@name@mastodon.social`), subreddit (`r/name`) or feed link, up to 500 characters.",
+              ],
               ["channel", "Where new posts go."],
               ["role", "A role to ping with each post."],
-              ["message", "Your own message, up to 500 characters. Use `{title}`, `{link}`, `{author}` and `{feed}`."],
+              ["message", "Your own message, up to 500 characters. Use `{title}`, `{link}`, `{author}`, `{feed}` and, for Twitch, `{game}`."],
             ],
           },
           {
@@ -1767,8 +1770,16 @@ export const COMMAND_PARTS = [
             options: [],
           },
         ],
-        example: ["/feed add type:YouTube channel source:https://youtube.com/@yourchannel channel:#news role:@Video pings", "/feed add type:Subreddit source:r/discordapp channel:#reddit"],
-        tips: ["Feeds are checked every 10 minutes, and at most three new items are posted at a time."],
+        example: [
+          "/feed add type:YouTube channel source:https://youtube.com/@yourchannel channel:#news role:@Video pings",
+          "/feed add type:Twitch channel (goes live) source:twitch.tv/yourchannel channel:#live role:@Stream pings",
+          "/feed add type:Subreddit source:r/discordapp channel:#reddit",
+        ],
+        tips: [
+          "Feeds are checked every 10 minutes and Twitch every 2. At most three new items are posted at a time.",
+          "Twitch needs Twitch keys on the bot's server; until then it says so. Each broadcast is announced once.",
+          "X (Twitter), TikTok and Instagram can't be followed directly: they don't let bots read posts for free. An RSS link for the account works as RSS.",
+        ],
       },
       {
         id: "cmdsticky",

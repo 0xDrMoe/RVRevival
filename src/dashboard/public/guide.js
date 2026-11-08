@@ -801,15 +801,24 @@ const FEATURE_PARTS = [
         icon: "rss",
         tone: "amber",
         page: "feeds",
-        summary: "Posts new YouTube videos, subreddit posts and blog or news articles in a channel.",
+        summary: "Posts new YouTube videos, Twitch streams going live, Bluesky and Mastodon posts, subreddit posts and blog or news articles in a channel.",
         who: "Admins.",
         commands: [
-          ["/feed add type source channel [role] [message]", "Follows something. `type` is YouTube, Reddit or RSS. `role` is pinged with each post."],
+          ["/feed add type source channel [role] [message]", "Follows something. `type` is YouTube, Twitch, Bluesky, Mastodon, Reddit or RSS. `role` is pinged with each post."],
           ["/feed remove id", "Stops following it."],
           ["/feed list", "Shows every feed, with the problem next to any that can't be read or posted."],
         ],
-        example: ["/feed add type:YouTube source:https://youtube.com/@yourchannel channel:#news", "/feed add type:Reddit source:r/discordapp channel:#reddit"],
-        tips: ["Checked every 10 minutes. Only new items, at most three at a time, up to 10 feeds.", "`message` can use `{title}`, `{link}`, `{author}` and `{feed}`."],
+        example: [
+          "/feed add type:YouTube source:https://youtube.com/@yourchannel channel:#news",
+          "/feed add type:Twitch source:twitch.tv/yourchannel channel:#live role:@Stream pings",
+          "/feed add type:Bluesky source:yourname.bsky.social channel:#socials",
+        ],
+        tips: [
+          "Checked every 10 minutes, Twitch every 2. Only new items, at most three at a time, up to 20 feeds.",
+          "Twitch posts once each time the channel goes live. It works once the bot's owner adds Twitch keys.",
+          "X (Twitter), TikTok and Instagram don't let bots read posts for free. If you have an RSS link for an account (from a feed service), add it as RSS.",
+          "`message` can use `{title}`, `{link}`, `{author}`, `{feed}` and, for Twitch, `{game}`.",
+        ],
       },
       {
         id: "sticky",

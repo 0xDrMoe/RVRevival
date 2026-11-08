@@ -5831,8 +5831,9 @@ async function showEmbeds(guildId) {
 
 // --- Feeds ---------------------------------------------------------------------------
 
-const FEED_KINDS = ["youtube", "reddit", "rss"];
-const FEED_TONES = { youtube: "red", reddit: "amber", rss: "blue" };
+const FEED_KINDS = ["youtube", "twitch", "bluesky", "mastodon", "reddit", "rss"];
+const FEED_TONES = { youtube: "red", twitch: "purple", bluesky: "cyan", mastodon: "purple", reddit: "amber", rss: "blue" };
+const FEED_ICONS = { youtube: "image", twitch: "mic", bluesky: "message", mastodon: "message", reddit: "message", rss: "rss" };
 
 function feedRow(guildId, feed, data, onRemoved) {
   const channel = data.channels.find((item) => item.id === feed.channelId);
@@ -5845,7 +5846,7 @@ function feedRow(guildId, feed, data, onRemoved) {
   const row = h(
     "li",
     { class: "sent-row" },
-    iconChip(feed.kind === "rss" ? "rss" : feed.kind === "youtube" ? "image" : "message", FEED_TONES[feed.kind], "sm"),
+    iconChip(FEED_ICONS[feed.kind] ?? "rss", FEED_TONES[feed.kind], "sm"),
     h(
       "span",
       { class: "ticket-main" },
@@ -5886,11 +5887,15 @@ async function showFeeds(guildId) {
   const empty = h("p", { class: "muted empty" }, t("feedsNone"));
   const countPill = h("span", { class: "count-pill" });
   let kind = "youtube";
+  // Set by load(): whether the bot has Twitch keys.
+  let twitchReady = true;
   const sourceHelp = h("span", { class: "help" });
   const sourceInput = h("input", { id: "feedSource", type: "text", required: true, maxLength: 500 });
   const showKind = () => {
     sourceInput.placeholder = t(`feedsSourcePlaceholder_${kind}`);
-    sourceHelp.textContent = t(`feedsSourceHelp_${kind}`);
+    const off = kind === "twitch" && !twitchReady;
+    sourceHelp.textContent = off ? t("feedsTwitchOff") : t(`feedsSourceHelp_${kind}`);
+    sourceHelp.classList.toggle("danger-text", off);
   };
   const roles = data.roles.filter((role) => role.id !== guildId && !role.managed).map((role) => roleItem(role));
   const add = h("button", { class: "primary", type: "submit" }, icon("plus", "icon small"), t("feedsAdd"));
@@ -5902,6 +5907,8 @@ async function showFeeds(guildId) {
     empty.hidden = result.feeds.length > 0;
     countPill.textContent = t("tagsCount", { count: result.feeds.length, max: result.max });
     add.disabled = result.feeds.length >= result.max;
+    twitchReady = result.twitch !== false;
+    showKind();
   }
 
   const form = h(
@@ -5948,6 +5955,7 @@ async function showFeeds(guildId) {
       ),
     ),
     h("label", { class: "field" }, h("span", { class: "field-label" }, t("feedsSource")), sourceInput, sourceHelp),
+    h("p", { class: "help" }, t("feedsOtherSites")),
     h(
       "div",
       { class: "embed-grid" },

@@ -1,10 +1,11 @@
 // Followed feeds (/feed and the dashboard's Feeds page) in data/bot.db, table
 // feeds. `seen` holds the newest item IDs already posted (or there when the
-// feed was added), so restarts never post anything twice.
+// feed was added), so restarts never post anything twice. For Twitch the IDs
+// are stream IDs, and `source` is the channel's login.
 
 import { openDatabase } from "../storage/database.js";
 
-export const MAX_FEEDS = 10;
+export const MAX_FEEDS = 20;
 export const SEEN_KEEP = 100;
 
 function parseSeen(text) {
@@ -52,7 +53,9 @@ export class FeedStore {
       list: this.#db.prepare("SELECT * FROM feeds WHERE guild_id = ? ORDER BY id"),
       count: this.#db.prepare("SELECT COUNT(*) AS total FROM feeds WHERE guild_id = ?"),
       byUrl: this.#db.prepare("SELECT * FROM feeds WHERE guild_id = ? AND url = ? AND channel_id = ?"),
-      due: this.#db.prepare("SELECT * FROM feeds WHERE checked_at IS NULL OR checked_at <= ? ORDER BY checked_at LIMIT ?"),
+      // Twitch is checked all at once by feeds/twitchPoller.js, not here.
+      due: this.#db.prepare("SELECT * FROM feeds WHERE kind <> 'twitch' AND (checked_at IS NULL OR checked_at <= ?) ORDER BY checked_at LIMIT ?"),
+      byKind: this.#db.prepare("SELECT * FROM feeds WHERE kind = ? ORDER BY id"),
       checked: this.#db.prepare("UPDATE feeds SET seen = ?, checked_at = ?, posted_at = COALESCE(?, posted_at), last_error = NULL, failures = 0 WHERE id = ?"),
       failed: this.#db.prepare("UPDATE feeds SET checked_at = ?, last_error = ?, failures = failures + 1 WHERE id = ?"),
       delete: this.#db.prepare("DELETE FROM feeds WHERE guild_id = ? AND id = ?"),
@@ -86,6 +89,11 @@ export class FeedStore {
   // Feeds last checked at or before `before`, the longest-waiting first.
   due(before, limit = 25) {
     return this.#statements.due.all(before, limit).map(toFeed);
+  }
+
+  // Every feed of one kind, in every server.
+  listKind(kind) {
+    return this.#statements.byKind.all(kind).map(toFeed);
   }
 
   checked(id, { seen, checkedAt = Date.now(), postedAt = null }) {
