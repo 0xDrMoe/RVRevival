@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { buildTicketsCommandData, createTicketsCommand, OPEN_GRACE_MS } from "../src/commands/tickets.js";
 import { Status } from "../src/logs/actionLog.js";
 import { GuildSettings, Setting } from "../src/settings/guildSettings.js";
-import { CLOSE_BUTTON, FORM_ID, MAX_OPEN_TICKETS, OPEN_BUTTON, threadName } from "../src/tickets/tickets.js";
+import { CLOSE_BUTTON, FORM_ID, MAX_OPEN_TICKETS, MENU_ID, OPEN_BUTTON, threadName } from "../src/tickets/tickets.js";
 import { TicketStore, MAX_EVENTS_PER_TICKET } from "../src/tickets/ticketStore.js";
 import { createTicketLog, TicketEvent } from "../src/tickets/ticketLog.js";
 import { LogRoute } from "../src/logs/logRoutes.js";
@@ -725,5 +725,176 @@ describe("ticket transcripts", () => {
     expect(text).toContain("[embed] Subject: Help");
     expect(text).toContain("[file: clip.mp4 https://cdn.example/clip.mp4]");
     expect(text).not.toContain("Closed by");
+  });
+});
+
+describe("customized ticket panels", () => {
+  const BUGS_ROLE_ID = "700000000000000099";
+  const bugs = { id: "bugs", label: "Bug report", emoji: "🐞", description: "Something broken", staffRoleId: BUGS_ROLE_ID, questions: [] };
+
+  it("draws the panel from the saved look: embed parts, colour and the single button", async () => {
+    const t = setup();
+    await t.guildSettings.set(GUILD_ID, Setting.TICKET_PANEL, {
+      title: "Help desk",
+      description: "We're here.",
+      color: 0x00ff00,
+      authorName: "Rabble support",
+      authorIconUrl: "https://example.com/a.png",
+      imageUrl: "https://example.com/banner.png",
+      thumbnailUrl: "https://example.com/t.png",
+      footer: "Replies within a day",
+      buttonLabel: "Get help",
+      buttonEmoji: "🆘",
+      buttonStyle: "success",
+    });
+    await t.postPanel();
+    const panel = t.channel.send.mock.calls[0][0];
+    expect(panel.embeds[0].toJSON()).toMatchObject({
+      title: "Help desk",
+      description: "We're here.",
+      color: 0x00ff00,
+      author: { name: "Rabble support", icon_url: "https://example.com/a.png" },
+      image: { url: "https://example.com/banner.png" },
+      thumbnail: { url: "https://example.com/t.png" },
+      footer: { text: "Replies within a day" },
+    });
+    expect(panel.components[0].toJSON().components[0]).toMatchObject({ custom_id: OPEN_BUTTON, label: "Get help", style: 3, emoji: { name: "🆘" } });
+  });
+
+  it("keeps a title or message given to /tickets panel in the look, and keeps the saved one otherwise", async () => {
+    const t = setup();
+    await t.guildSettings.set(GUILD_ID, Setting.TICKET_PANEL, { title: "Old", footer: "Kept" });
+    await t.postPanel({ title: "New title" });
+    expect(t.guildSettings.get(GUILD_ID, Setting.TICKET_PANEL)).toMatchObject({ title: "New title", footer: "Kept" });
+    await t.postPanel();
+    const second = t.channel.send.mock.calls[1][0].embeds[0].toJSON();
+    expect(second).toMatchObject({ title: "New title", footer: { text: "Kept" } });
+    expect(t.guildSettings.get(GUILD_ID, Setting.TICKETS)).toMatchObject({ title: "New title", message: null });
+  });
+
+  it("uses the title and text of a panel set up before the look was saved", async () => {
+    const t = setup();
+    await t.guildSettings.set(GUILD_ID, Setting.TICKETS, { channelId: CHANNEL_ID, messageId: "1", staffRoleId: null, title: "Legacy", message: "Old text" });
+    await t.postPanel();
+    expect(t.channel.send.mock.calls[0][0].embeds[0].toJSON()).toMatchObject({ title: "Legacy", description: "Old text" });
+  });
+
+  it("puts buttons five to a row with each category's colour", async () => {
+    const t = setup();
+    const styles = ["primary", "secondary", "success", "danger"];
+    await t.guildSettings.set(
+      GUILD_ID,
+      Setting.TICKET_CATEGORIES,
+      Array.from({ length: 7 }, (_, index) => ({ id: `c${index}`, label: `Type ${index}`, style: styles[index % 4] })),
+    );
+    await t.postPanel();
+    const rows = t.channel.send.mock.calls[0][0].components.map((row) => row.toJSON().components);
+    expect(rows.map((row) => row.length)).toEqual([5, 2]);
+    expect(rows[0].map((button) => button.style)).toEqual([1, 2, 3, 4, 1]);
+  });
+
+  it("offers categories in a dropdown, which opens the picked one's form and resets itself", async () => {
+    const t = setup();
+    t.guild.roles.cache.set(BUGS_ROLE_ID, { id: BUGS_ROLE_ID, mentionable: true, members: new Map() });
+    await t.guildSettings.set(GUILD_ID, Setting.TICKET_CATEGORIES, [bugs, { id: "other", label: "Other", description: "x".repeat(150) }]);
+    await t.guildSettings.set(GUILD_ID, Setting.TICKET_PANEL, { layout: "menu", menuPlaceholder: "What do you need?" });
+    await t.postPanel();
+    const panel = t.channel.send.mock.calls[0][0];
+    // The dropdown shows the descriptions, so the embed doesn't list them.
+    expect(panel.embeds[0].toJSON().fields).toBeUndefined();
+    const menu = panel.components[0].toJSON().components[0];
+    expect(menu).toMatchObject({ custom_id: MENU_ID, placeholder: "What do you need?" });
+    expect(menu.options.map((option) => option.value)).toEqual(["bugs", "other"]);
+    expect(menu.options[0]).toMatchObject({ label: "Bug report", description: "Something broken", emoji: { name: "🐞" } });
+    expect(menu.options[1].description).toHaveLength(100);
+
+    const pick = t.interaction({ customId: MENU_ID, userId: MEMBER_ID });
+    pick.values = ["bugs"];
+    pick.message = { edit: vi.fn(async () => ({})) };
+    await t.command.components[MENU_ID].handle(pick);
+    expect(pick.showModal.mock.calls[0][0].toJSON().custom_id).toBe("tk:form:bugs");
+    expect(pick.message.edit.mock.calls[0][0].components[0].toJSON().components[0].custom_id).toBe(MENU_ID);
+
+    const gone = t.interaction({ customId: MENU_ID, userId: MEMBER_ID });
+    gone.values = ["removed"];
+    gone.message = { edit: vi.fn(async () => ({})) };
+    expect((await t.command.components[MENU_ID].handle(gone)).key).toBe("ticketCategoryGone");
+    expect(gone.message.edit).toHaveBeenCalled();
+  });
+
+  it("asks each question the way it's set up", async () => {
+    const t = setup();
+    await t.guildSettings.set(GUILD_ID, Setting.TICKET_CATEGORIES, [
+      {
+        ...bugs,
+        questions: [
+          { label: "Platform", placeholder: "PC, Xbox…", style: "short", required: false, minLength: 2, maxLength: 20 },
+          "What happened?",
+        ],
+      },
+    ]);
+    await t.postPanel();
+    const click = t.interaction({ customId: "tk:open:bugs", userId: MEMBER_ID });
+    await t.command.componentPrefixes["tk:open:"].handle(click);
+    const [platform, happened] = click.showModal.mock.calls[0][0].toJSON().components.map((label) => label.component);
+    expect(platform).toMatchObject({ style: 1, required: false, min_length: 2, max_length: 20, placeholder: "PC, Xbox…" });
+    expect(happened).toMatchObject({ style: 2, required: true, max_length: 1000 });
+    expect(happened.min_length).toBeUndefined();
+
+    const form = t.interaction({ customId: "tk:form:bugs", userId: MEMBER_ID });
+    const answers = { q0: "", q1: "It crashed" };
+    form.fields = { getTextInputValue: (id) => answers[id] };
+    await t.command.componentPrefixes["tk:form:"].handle(form);
+    expect(t.tickets.openForUser(GUILD_ID, MEMBER_ID).subject).toBe("**Platform**\n—\n\n**What happened?**\nIt crashed");
+  });
+
+  it("starts a ticket with the category's intro and thread name, falling back to the panel's", async () => {
+    const t = setup();
+    t.guild.roles.cache.set(BUGS_ROLE_ID, { id: BUGS_ROLE_ID, mentionable: true, members: new Map() });
+    await t.guildSettings.set(GUILD_ID, Setting.TICKET_PANEL, { intro: "Welcome {user} to {server}!", nameFormat: "{category}-{number}" });
+    await t.guildSettings.set(GUILD_ID, Setting.TICKET_CATEGORIES, [
+      { ...bugs, intro: "{staff}: {username} found a bug ({category}, #{number}).", nameFormat: "🐞 {user}" },
+      { id: "other", label: "Other" },
+    ]);
+    await t.postPanel({ "staff-role": { id: STAFF_ROLE_ID } });
+
+    const open = async (categoryId, userId) => {
+      await t.command.componentPrefixes["tk:open:"].handle(t.interaction({ customId: `tk:open:${categoryId}`, userId }));
+      const form = t.interaction({ customId: `tk:form:${categoryId}`, userId, subject: "Help" });
+      return t.command.componentPrefixes["tk:form:"].handle(form);
+    };
+    await open("bugs", MEMBER_ID);
+    expect(t.threads[0].options.name).toBe("🐞 Player 2");
+    const bugWelcome = t.threads[0].send.mock.calls[0][0];
+    expect(bugWelcome.content).toBe(`<@&${BUGS_ROLE_ID}>: user2 found a bug (Bug report, #1).`);
+    expect(bugWelcome.allowedMentions).toEqual({ users: [MEMBER_ID], roles: [BUGS_ROLE_ID] });
+
+    await open("other", STRANGER_ID);
+    expect(t.threads[1].options.name).toBe("Other-0002");
+    const otherWelcome = t.threads[1].send.mock.calls[0][0];
+    // The panel's intro doesn't mention staff, so the ping goes on its own line.
+    expect(otherWelcome.content).toBe(`Welcome <@${STRANGER_ID}> to Rumbleverse Revival!\n<@&${STAFF_ROLE_ID}>`);
+  });
+
+  it("adds staff without a ping when pinging is off", async () => {
+    const t = setup({ staffMembers: ["300000000000000077"] });
+    await t.guildSettings.set(GUILD_ID, Setting.TICKET_PANEL, { pingStaff: false });
+    await t.postPanel({ "staff-role": { id: STAFF_ROLE_ID } });
+    await t.openTicket();
+    const welcome = t.threads[0].send.mock.calls[0][0];
+    expect(welcome.allowedMentions.roles).toEqual([]);
+    // The default text still names the role, it just doesn't ping it.
+    expect(welcome.content).toContain(`<@&${STAFF_ROLE_ID}>`);
+    expect(t.threads[0].members.add.mock.calls.map(([id]) => id)).toEqual([MEMBER_ID, "300000000000000077"]);
+  });
+
+  it("lets a category ping when the panel doesn't", async () => {
+    const t = setup();
+    await t.guildSettings.set(GUILD_ID, Setting.TICKET_PANEL, { pingStaff: false });
+    await t.guildSettings.set(GUILD_ID, Setting.TICKET_CATEGORIES, [{ id: "urgent", label: "Urgent", pingStaff: true }]);
+    await t.postPanel({ "staff-role": { id: STAFF_ROLE_ID } });
+    await t.command.componentPrefixes["tk:open:"].handle(t.interaction({ customId: "tk:open:urgent", userId: MEMBER_ID }));
+    await t.command.componentPrefixes["tk:form:"].handle(t.interaction({ customId: "tk:form:urgent", userId: MEMBER_ID, subject: "Now!" }));
+    expect(t.threads[0].send.mock.calls[0][0].allowedMentions.roles).toEqual([STAFF_ROLE_ID]);
   });
 });

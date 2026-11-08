@@ -63,7 +63,8 @@ import { buildBackup, InvalidBackup, planRestore, settingLabel } from "./backup.
 import { MAX_STICKIES, MAX_STICKY_LENGTH, StickyStore } from "../sticky/stickyStore.js";
 import { BotStatsStore } from "../stats/botStats.js";
 import { checkTemplate, COUNTER_PRESETS, InvalidCounter, MAX_COUNTERS, newCounterId, normalizeCounters } from "../stats/statsCounters.js";
-import { buildPanelButtons, buildPanelMessage } from "../tickets/tickets.js";
+import { buildPanelComponents, buildPanelMessage, panelLook, TICKET_COLOR } from "../tickets/tickets.js";
+import { DEFAULT_NAME_FORMAT, normalizeLook } from "../tickets/panel.js";
 import { buildPostedGuide, buildPostedRows, guideText } from "../commands/countryHelp.js";
 import { ScheduledMessageStore } from "../scheduled/scheduledMessageStore.js";
 import { MAX_DELAY_MS, MAX_INTERVAL_MS, MAX_SCHEDULED, MAX_SCHEDULED_LENGTH, MIN_INTERVAL_MS } from "../scheduled/scheduler.js";
@@ -110,6 +111,8 @@ const CASES_PAGE = 50;
 const EXPORT_LIMIT = 10_000;
 const LEADERBOARD_PAGE = 25;
 const TICKETS_PAGE = 25;
+// Settings the posted ticket panel is drawn from.
+const TICKET_PANEL_SETTINGS = [Setting.TICKET_PANEL, Setting.TICKET_CATEGORIES];
 const MAX_TICKET_NAMES = 40;
 const TICKET_STATUSES = ["open", "closed", "all"];
 const MAX_LEADERBOARD_PAGE = 400;
@@ -497,6 +500,8 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     [Setting.ANTI_NUKE]: normalizeAntiNuke(guildSettings.get(guildId, Setting.ANTI_NUKE)),
     [Setting.APPEALS]: normalizeAppeals(guildSettings.get(guildId, Setting.APPEALS)),
     [Setting.MEDIA_ONLY]: normalizeMediaOnly(guildSettings.get(guildId, Setting.MEDIA_ONLY)),
+    // With the title and text of panels set up before the look was saved on its own.
+    [Setting.TICKET_PANEL]: panelLook(guildSettings, guildId),
   });
 
   // Settings saved in a fuller form than the dashboard sends, made comparable.
@@ -511,6 +516,7 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     [Setting.APPEALS]: normalizeAppeals,
     [Setting.MEDIA_ONLY]: normalizeMediaOnly,
     [Setting.COMMAND_RULES]: rulesOrNull,
+    [Setting.TICKET_PANEL]: (saved) => (saved ? normalizeLook(saved) : null),
   };
   const savedValue = (guildId, setting) => {
     const saved = guildSettings.get(guildId, setting);
@@ -522,6 +528,7 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
   // the log lines for those that changed.
   async function saveSettings(guildId, guild, changes) {
     const lines = [];
+    let ticketPanelChanged = false;
     for (const [setting, value] of Object.entries(changes)) {
       // Unsaved automod, leveling or anti-nuke means the defaults, which is what the page was shown.
       const before = savedValue(guildId, setting);
@@ -534,19 +541,22 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
         await guildSettings.set(guildId, setting, value);
       }
       lines.push(`**${SETTING_RULES[setting].label}:** ${describeValue(setting, before)} → ${describeValue(setting, value)}`);
-      if (setting === Setting.TICKET_CATEGORIES && !(await redrawTicketPanel(guildId, guild))) {
-        lines.push("The ticket panel couldn't be updated; post it again with `/tickets panel`.");
-      }
+      ticketPanelChanged ||= TICKET_PANEL_SETTINGS.includes(setting);
       if ((setting === Setting.COUNTRY_GUIDE || setting === Setting.COUNTRY_CHANNEL) && !(await redrawCountryGuide(guildId, guild))) {
         lines.push("The posted country guide couldn't be updated; post it again from the Country page.");
       }
     }
+    // Once, after both the look and the categories are saved.
+    if (ticketPanelChanged && !(await redrawTicketPanel(guildId, guild))) {
+      lines.push("The ticket panel couldn't be updated; post it again with `/tickets panel`.");
+    }
     return lines;
   }
 
-  // Gives the ticket panel's message the current category buttons. Panels
-  // posted before titles were saved keep their text and only get new buttons.
-  // Returns false if Discord refused (the message was deleted, say).
+  // Gives the posted ticket panel the current look and categories. Panels
+  // posted before titles were saved keep their text and only get new
+  // buttons, until a look is saved. Returns false if Discord refused (the
+  // message was deleted, say).
   async function redrawTicketPanel(guildId, guild) {
     const panel = guildSettings.get(guildId, Setting.TICKETS);
     if (!panel?.channelId) {
@@ -554,17 +564,13 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     }
     const language = pickLanguage(guild.preferred_locale, config.forcedLanguage);
     const categories = normalizeCategories(guildSettings.get(guildId, Setting.TICKET_CATEGORIES));
+    const look = panelLook(guildSettings, guildId);
     let payload;
-    if ("title" in panel) {
-      const message = buildPanelMessage(language, {
-        title: panel.title,
-        message: panel.message,
-        categories,
-        color: brandingOf(guildSettings, guildId).color ?? undefined,
-      });
+    if ("title" in panel || guildSettings.get(guildId, Setting.TICKET_PANEL)) {
+      const message = buildPanelMessage(language, { look, categories, color: brandingOf(guildSettings, guildId).color ?? undefined });
       payload = { embeds: message.embeds.map((embed) => embed.toJSON()), components: message.components.map((row) => row.toJSON()) };
     } else {
-      payload = { components: [buildPanelButtons(language, categories).toJSON()] };
+      payload = { components: buildPanelComponents(language, { look, categories }).map((row) => row.toJSON()) };
     }
     try {
       await discord.editMessage(panel.channelId, panel.messageId, payload);
@@ -574,6 +580,30 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
       return false;
     }
   }
+
+  // What the ticket panel and new tickets say when the look leaves it empty,
+  // in the server's language, for the Tickets page's placeholders and preview.
+  const ticketDefaults = (guildId, guild) => {
+    const language = pickLanguage(guild.preferred_locale, config.forcedLanguage);
+    const text = (key) => translate(language, key);
+    return {
+      title: text("ticketPanelDefaultTitle"),
+      description: text("ticketPanelDefaultMessage"),
+      buttonLabel: text("ticketOpenButton"),
+      menuPlaceholder: text("ticketMenuPlaceholder"),
+      intro: text("ticketWelcome"),
+      introNoStaff: text("ticketWelcomeNoStaff"),
+      staffWord: text("ticketStaffWord"),
+      subject: text("ticketSubject"),
+      closeButton: text("ticketCloseButton"),
+      nameFormat: DEFAULT_NAME_FORMAT,
+      // The colour panels use when neither the look nor Branding sets one.
+      color: brandingOf(guildSettings, guildId).color ?? TICKET_COLOR,
+      brandColor: brandingOf(guildSettings, guildId).color,
+      staffRoleId: guildSettings.get(guildId, Setting.TICKETS)?.staffRoleId ?? null,
+      posted: Boolean(guildSettings.get(guildId, Setting.TICKETS)?.channelId),
+    };
+  };
 
   // The country guide's built-in text and its fixed buttons, in the server's
   // language, for the Country page's form and preview.
@@ -740,6 +770,7 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
       // What the bot posts when no welcome or leave message is set, in the server's language.
       communityDefaults: manage ? communityDefaults(guild) : null,
       countryGuide: manage ? countryGuideInfo(guildId, guild) : null,
+      ticketDefaults: manage ? ticketDefaults(guildId, guild) : null,
     };
   });
 
@@ -2042,7 +2073,7 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
         await guildSettings.set(guildId, setting, value);
       }
     }
-    if (Setting.TICKET_CATEGORIES in plan.apply) {
+    if (TICKET_PANEL_SETTINGS.some((setting) => setting in plan.apply)) {
       await redrawTicketPanel(guildId, guild);
     }
     await logAction(

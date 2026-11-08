@@ -16,6 +16,7 @@ import { checkRolePersist, InvalidRolePersist } from "../members/rolePersistence
 import { checkMediaOnly, describeMediaOnly, InvalidMediaOnly } from "../community/mediaOnly.js";
 import { checkAppeals, InvalidAppeals } from "../appeals/config.js";
 import { checkCategories, describeCategories, InvalidCategories } from "../tickets/categories.js";
+import { checkLook, describeLook, InvalidPanel } from "../tickets/panel.js";
 import { checkJoinGate, InvalidJoinGate } from "../raid/raid.js";
 import { checkGuide, describeGuide, InvalidGuide } from "../countries/guide.js";
 import { LogEvent } from "../logs/serverLog.js";
@@ -81,6 +82,7 @@ export const SETTING_RULES = Object.freeze({
   [Setting.ROLE_PERSIST]: { kind: "rolePersist", label: "Roles on rejoin" },
   [Setting.APPEALS]: { kind: "appeals", types: POSTING_CHANNELS, label: "Ban appeals" },
   [Setting.TAGS]: { kind: "tags", label: "Custom commands" },
+  [Setting.TICKET_PANEL]: { kind: "ticketPanel", label: "Ticket panel look" },
   [Setting.TICKET_CATEGORIES]: { kind: "ticketCategories", label: "Ticket categories" },
   [Setting.TICKET_LOG_CHANNEL]: { kind: "channel", types: POSTING_CHANNELS, label: "Ticket log channel" },
   [Setting.DISABLED_TICKET_LOG_EVENTS]: { kind: "ticketEvents", label: "Switched-off ticket log events" },
@@ -250,6 +252,15 @@ function checkValue(setting, value, { guildId, channels, roles }) {
         return checkResponders(value, (id) => channelOk(id, rule.types));
       } catch (error) {
         if (error instanceof InvalidResponders) {
+          throw new InvalidSetting(setting, error.message);
+        }
+        throw error;
+      }
+    case "ticketPanel":
+      try {
+        return checkLook(value);
+      } catch (error) {
+        if (error instanceof InvalidPanel) {
           throw new InvalidSetting(setting, error.message);
         }
         throw error;
@@ -442,6 +453,8 @@ export function describeValue(setting, value) {
       return describeCommandRules(value);
     case "ticketCategories":
       return describeCategories(value);
+    case "ticketPanel":
+      return describeLook(value);
     case "appeals":
       return `${value.enabled ? "open" : "closed"} · ${value.channelId ? `<#${value.channelId}>` : "mod-log channel"} · ${value.questions.length} question(s) · wait ${value.cooldownDays} days after a denial`;
     case "countryGuide":

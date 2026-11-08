@@ -1202,6 +1202,30 @@ describe("dashboard", () => {
     expect(bad.statusCode).toBe(400);
   });
 
+  it("saves the ticket panel's look with its types and redraws the posted panel once", async () => {
+    const cookies = await login();
+    // A panel set up before the look had its own setting: its title shows in the editor.
+    await guildSettings.set(GUILD_ID, Setting.TICKETS, { channelId: TEXT_ID, messageId: "600000000000000001", staffRoleId: null, title: "Help desk", message: null });
+    const before = (await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}`, cookies })).json();
+    expect(before.settings.ticketPanel).toMatchObject({ title: "Help desk", layout: "buttons", pingStaff: true });
+    expect(before.ticketDefaults).toMatchObject({ buttonLabel: "Open a ticket", nameFormat: "🎫 {number} · {user}", posted: true });
+
+    const ticketPanel = { ...before.settings.ticketPanel, layout: "menu", imageUrl: "https://example.com/banner.png", footer: "Replies within a day", pingStaff: false };
+    const ticketCategories = [
+      { id: "bugs", label: "Bug report", emoji: "🐞", description: "Broken things", staffRoleId: ROLE_ID, style: "danger", intro: "Hi {user}", nameFormat: "bug-{number}", pingStaff: true, questions: [{ label: "Platform", style: "short", required: false }] },
+    ];
+    const saved = await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, { ticketPanel, ticketCategories });
+    expect(saved.statusCode).toBe(200);
+    expect(discord.editMessage).toHaveBeenCalledTimes(1);
+    const payload = discord.editMessage.mock.calls[0][2];
+    expect(payload.embeds[0]).toMatchObject({ title: "Help desk", image: { url: "https://example.com/banner.png" }, footer: { text: "Replies within a day" } });
+    expect(payload.components[0].components[0]).toMatchObject({ custom_id: "tk:menu", options: [expect.objectContaining({ value: "bugs" })] });
+    expect(guildSettings.get(GUILD_ID, Setting.TICKET_CATEGORIES)[0]).toMatchObject({ style: "danger", pingStaff: true, questions: [{ label: "Platform", style: "short", required: false }] });
+
+    const bad = await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, { ticketPanel: { imageUrl: "not a link" } });
+    expect(bad.statusCode).toBe(400);
+  });
+
   it("posts and edits the bot's messages from the embed builder", async () => {
     const posted = new Map();
     discord.postMessage = vi.fn(async (channelId, body) => {

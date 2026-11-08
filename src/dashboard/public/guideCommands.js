@@ -563,12 +563,12 @@ export const COMMAND_PARTS = [
         usages: [
           {
             usage: "/tickets panel channel [staff-role] [title] [message]",
-            what: "Posts the panel with its button. Running it again replaces the old panel. **Admins.**",
+            what: "Posts the panel, with the look and ticket types saved on the **Tickets** page. Running it again replaces the old panel. **Admins.**",
             options: [
               ["channel", "Where the button goes. Tickets open as private threads in this channel."],
               ["staff-role", "Who answers tickets and is pinged when one opens. Defaults to the mod role."],
-              ["title", "The panel's title, up to 100 characters."],
-              ["message", "The panel's text, up to 1000 characters."],
+              ["title", "The panel's title, up to 100 characters. It's saved with the panel's look, so you can leave it out next time."],
+              ["message", "The panel's text, up to 1000 characters. Saved the same way. The Tickets page allows up to 4096."],
             ],
           },
           {
@@ -614,7 +614,7 @@ export const COMMAND_PARTS = [
         tips: [
           "The ticket log also records changes made in Discord itself: renaming or archiving a thread, mentioning someone into it, people leaving. Give the bot **View Audit Log** to show who did them.",
           "Archiving a ticket's thread closes it; unarchiving reopens it (unless the member has opened another).",
-          "Several kinds of ticket (each with its own button, questions and staff role) are set up on the **Tickets** page.",
+          "Everything else is set up on the **Tickets** page, with a live preview: the embed (colour, author, image, thumbnail, footer), buttons or a dropdown, up to 25 ticket types with their own questions, staff role, intro message and thread name, and whether staff are pinged. Saving updates the posted panel.",
           "One open ticket per member, up to 50 per server.",
           "**Don't delete ticket threads**, or the transcript is lost. Close them instead.",
         ],
