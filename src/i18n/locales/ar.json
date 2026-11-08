@@ -1152,6 +1152,7 @@
   "highlightCleared": "أُزيلت كل كلماتك ({count}).",
   "highlightDm": "🔔 ذُكرت `{word}` في {channel} على **{server}**:",
   "highlightJump": "اذهب إلى الرسالة",
+  "highlightNoContent": "التنبيهات متوقفة الآن: لا يستطيع البوت قراءة نص الرسائل لأن Message Content Intent غير مفعّل. يجب على مالك البوت تفعيله في Discord Developer Portal ثم إعادة تشغيل البوت.",
 
   "leaderboardPeriodOptionDescription": "منذ البداية، أو نقاط آخر 7 أو 30 يومًا فقط",
   "leaderboardPeriod_all": "منذ البداية",
