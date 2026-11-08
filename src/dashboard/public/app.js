@@ -1010,7 +1010,8 @@ function showLanding(failedLogin = false) {
       landingJump("faq", t("landingNavFaq")),
     ),
     topInvite,
-    state.me ? h("a", { class: "button ghost small topnav-dashboard", href: "#/servers" }, icon("layers"), t("landingDashboard")) : null,
+    // replaceChildren would print a null as "null", so only add the button when logged in.
+    ...(state.me ? [h("a", { class: "button ghost small topnav-dashboard", href: "#/servers" }, icon("layers"), t("landingDashboard"))] : []),
   );
   topnav.hidden = false;
   const dashboardHref = state.me ? "#/servers" : "/auth/login";
