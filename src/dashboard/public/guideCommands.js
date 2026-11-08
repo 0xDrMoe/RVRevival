@@ -1160,7 +1160,7 @@ export const COMMAND_PARTS = [
         tips: [
           "The editor is only visible to you and closes after 30 minutes without use (or when the bot restarts). Saving checks every role again.",
           "Moving a panel to another channel with **Channel** posts it there and deletes the old message when you save.",
-          "Members click once to get the role and again to take it off.",
+          "Members click once to get the role and again to take it off. By default they're asked to **Confirm** first; see **Role pick confirmations** to change that.",
           "A panel message deleted by accident comes back on the next `add` or `remove`.",
           "Country roles stay on the country guide, never on a panel.",
           "On a Community server, Discord's **Onboarding** can do this before members even see a channel.",
@@ -1828,6 +1828,8 @@ export const COMMAND_PARTS = [
           "/feed add type:YouTube videos source:https://youtube.com/@yourchannel channel:#news role:@Video pings",
           "/feed add type:YouTube Shorts source:https://youtube.com/@yourchannel channel:#shorts",
           "/feed add type:Twitch channel (goes live) source:twitch.tv/yourchannel channel:#live role:@Stream pings",
+          "/feed add type:Kick channel (goes live) source:kick.com/yourchannel channel:#live",
+          "/feed add type:Bluesky account source:yourname.bsky.social channel:#socials",
           "/feed add type:GitHub releases source:discord/discord-api-docs channel:#updates",
         ],
         tips: [
@@ -1835,6 +1837,7 @@ export const COMMAND_PARTS = [
           "YouTube videos skips Shorts and live streams; they have their own types. YouTube live reads the channel's public live page, so it needs no keys.",
           "Twitch and Kick need keys on the bot's server; until then they say so. Each broadcast is announced once.",
           "X (Twitter), TikTok and Instagram can't be followed directly: they don't let bots read posts for free. An RSS link for the account works as RSS.",
+          "To change a feed's channel, ping or message, press **Edit** next to it on the **Feeds** page. There's no command for that.",
         ],
       },
       {
