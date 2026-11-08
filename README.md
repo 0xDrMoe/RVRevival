@@ -21,7 +21,7 @@ Rabble is an all-in-one Discord bot and web dashboard by Cedar Tech Solutions, m
 | [Reminders](#reminders) | `/remind` | Everyone |
 | [Giveaways](#giveaways) | `/giveaway` | Manage Server or the mod role (members click Enter) |
 | [Starboard](#starboard) | `/starboard`, or the dashboard's Starboard page | Manage Server (everyone stars messages) |
-| [Support tickets](#support-tickets) | `/tickets` | Manage Server (`panel`, `off`), ticket staff (the rest); members click Open a ticket |
+| [Support tickets](#support-tickets) | `/tickets` | Manage Server (`panel`, `off`, `log`, `log-event`), ticket staff (the rest); members click Open a ticket |
 | [Raid protection](#raid-protection) | `/raid`, or the dashboard's Raid protection page | Manage Channels or the mod role (`lockdown`, `end`, `status`), Manage Server (`gate`, `gate-off`, `alert`) |
 | [Temporary roles](#temporary-roles) | `/temprole` | Manage Roles or the mod role |
 | [Quarantine](#quarantine) | `/quarantine` | Manage Roles or the mod role (`role`: Manage Server) |
@@ -284,9 +284,12 @@ Members open a private ticket with a button, and only they and the staff can see
 - The member or staff close it with the button or `/tickets close [reason]`. The thread is locked and archived, so staff can still read it afterwards.
 - `/tickets add member:@x` and `/tickets remove member:@x` bring someone in or take them out (never the person who opened it). `/tickets list` shows the open tickets. `/tickets off` removes the button; open tickets stay open.
 - One open ticket per member and 50 per server. A ticket whose thread was deleted or archived counts as closed. Each member's tickets show on their dashboard **Members** page.
-- **Transcripts:** closing a ticket saves the whole conversation (up to the newest 1,000 messages, with embeds and file links) and posts it as a `.txt` file in the mod-log channel (or the logs channel). The dashboard's **Tickets** page shows every ticket with its transcript. Tickets closed by deleting their thread have no transcript, since the messages are gone.
+- **Transcripts:** closing a ticket saves the whole conversation (up to the newest 1,000 messages, with embeds and file links) and posts it as a `.txt` file in the ticket log. The dashboard's **Tickets** page shows every ticket with its transcript. Tickets closed by deleting their thread have no transcript, since the messages are gone.
+- **Ticket log:** every ticket opened, closed (with the transcript), reopened, renamed, people added or removed, and thread deleted is posted with who did it and when. It goes to the ticket log channel (`/tickets log channel:#ticket-log`, or the dashboard's **Logging** page), else the mod-log channel (or a channel picked for mod actions on the Permissions page), else the logs channel. `/tickets log` without a channel goes back to the mod log. `/tickets log-event event:<kind> enabled:False` (or the switches on the Logging page) stops posting one kind; it's still saved.
+  - Changes made in Discord itself count too: renaming a ticket's thread, archiving it (which closes the ticket and saves its transcript; Discord also archives threads after a quiet week), unarchiving it (which reopens the ticket, unless the member has opened another since), someone mentioned into it or leaving it, and deleting it. With **View Audit Log** the bot shows who renamed, archived, unarchived or deleted a thread; otherwise it says "Unknown or automatic". People who join in the first minute (the member and the pinged staff) aren't logged.
+  - Each ticket's page on the dashboard has a **History** timeline with everything above, up to 200 events per ticket. Tickets from before the ticket log have no history.
 
-`panel` and `off` need **Manage Server**. Closing any ticket, `add`, `remove` and `list` need **Manage Threads**, Manage Server, the panel's staff role or the mod role (or, inside a ticket, its type's staff role). The bot needs View Channel, Send Messages, Embed Links, Create Private Threads, Send Messages in Threads and Manage Threads in the ticket channel (plus Read Message History and Attach Files in the mod-log channel and ticket channel for transcripts), and members need **Send Messages in Threads** there (they don't need Send Messages, so the channel can stay read-only apart from the threads).
+`panel`, `off`, `log` and `log-event` need **Manage Server**. Closing any ticket, `add`, `remove` and `list` need **Manage Threads**, Manage Server, the panel's staff role or the mod role (or, inside a ticket, its type's staff role). The bot needs View Channel, Send Messages, Embed Links, Create Private Threads, Send Messages in Threads and Manage Threads in the ticket channel (plus Read Message History and Attach Files in the ticket log channel and ticket channel for transcripts), and members need **Send Messages in Threads** there (they don't need Send Messages, so the channel can stay read-only apart from the threads).
 
 ### Raid protection
 
@@ -537,7 +540,7 @@ A website where admins log in with Discord and manage the bot without slash comm
 - **Activity:** every change made on the dashboard, newest first, with who made it and what changed. Kept even when there's no logs channel (the newest 500 per server).
 - **Cases:** every moderation case, newest first. Search reasons and names, pick one or more actions, and filter by member ID, moderator ID and date range; clicking a name shows only their cases. Active filters show as chips you can remove. **Export CSV** downloads the filtered list (up to 10,000 cases). Reasons can be edited (the mod-log post is updated too) and cases deleted.
 - **Members:** find someone by the start of their username or nickname, or paste a user ID to find someone who left. Each person's page shows when their account was made (flagged if under 7 days old), when they joined, how many times they joined, their roles, a timeout or temporary ban in progress, Discord's ban reason if they're banned, every case as a timeline, their support tickets (with links to the threads), their level and leaderboard place, and their recent joins and leaves (the bot keeps the newest 50 per person). Each case in **Cases** has a *History* link to it.
-- **Tickets:** every support ticket, newest first, filtered by open or closed and by member ID. Each ticket shows who opened and closed it, the reason, a link to its thread, and its transcript (also as a `.txt` download).
+- **Tickets:** every support ticket, newest first, filtered by open or closed and by member ID. Each ticket shows who opened and closed it, the reason, a link to its thread, its history (everything the ticket log recorded) and its transcript (also as a `.txt` download).
 - **Automod:** the main switch, each rule with its action and numbers, banned words and allowed websites (one per line), timeout length and escalation, and exempt roles and channels (see [Automod](#automod)).
 - **Anti-nuke:** the main switch, what happens to someone who goes over a limit, each limit, and trusted people. Only the server owner can change it (see [Anti-nuke](#anti-nuke)).
 - **Raid protection:** the new-account gate, join-wave alerts, and a running lockdown (see [Raid protection](#raid-protection)).
@@ -551,7 +554,7 @@ A website where admins log in with Discord and manage the bot without slash comm
 - **Auto-responders:** each trigger, match, channel and reply (see [Auto-responders](#auto-responders)).
 - **Scheduled:** schedule a message (channel, first post in your own time zone, repeat), and see or delete the upcoming ones (see [Scheduled messages](#scheduled-messages)).
 - **Staff roles:** staff and mod roles, the quarantine role, and the mod-log channel.
-- **Logging:** the logs and server-log channels, a switch for each server-log event, and ignored channels or categories (with a filter).
+- **Logging:** the logs and server-log channels, a switch for each server-log event, ignored channels or categories (with a filter), and the ticket log channel with a switch for each kind of ticket entry.
 - **Backup:** download every setting as a file, or restore one after seeing what would change (see [Settings backup](#settings-backup)).
 - **Permissions:** premade setups (Simple), or roles, command rules and a log channel per kind (Advanced), plus a table of every role with its color, its strongest permissions and what the bot uses it for (see [Permissions](#permissions)).
 
@@ -723,7 +726,7 @@ src/
   channels/              Country roles: keeps the /country channel clean
   community/             Community: welcome and leave messages, autoroles (welcome.js), role panels (rolePanels.js), custom commands (tags.js), auto-responders (autoResponders.js), the starboard (starboard.js, starboardStore.js), media-only channels (mediaOnly.js)
   giveaways/             Giveaways: saved in SQLite (giveawayStore.js), drawing winners (giveaways.js), ended on time (giveawayScheduler.js)
-  tickets/               Support tickets: saved in SQLite (ticketStore.js), the panel, staff and messages (tickets.js), transcripts (transcript.js)
+  tickets/               Support tickets: saved in SQLite (ticketStore.js), the panel, staff and messages (tickets.js), transcripts (transcript.js), the ticket log and history (ticketLog.js)
   raid/                  Raid protection: lockdown planning and restoring, the new-account gate and join alerts (raid.js), anti-nuke (antiNuke.js)
   permissions/           Who can use what: per-command rules (commandRules.js), the premade setups (presets.js), the command list for the dashboard (catalog.js)
   tempRoles/             Temporary roles: saved in SQLite (tempRoleStore.js), taken away when due (tempRoleScheduler.js)

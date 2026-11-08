@@ -19,6 +19,7 @@ import { checkCategories, describeCategories, InvalidCategories } from "../ticke
 import { checkJoinGate, InvalidJoinGate } from "../raid/raid.js";
 import { checkGuide, describeGuide, InvalidGuide } from "../countries/guide.js";
 import { LogEvent } from "../logs/serverLog.js";
+import { TICKET_EVENTS } from "../tickets/ticketLog.js";
 import { checkLogRoutes, describeLogRoutes, InvalidLogRoutes } from "../logs/logRoutes.js";
 import { botCommandCatalog } from "../permissions/catalog.js";
 import { checkCommandRules, describeCommandRules, InvalidCommandRules } from "../permissions/commandRules.js";
@@ -80,6 +81,8 @@ export const SETTING_RULES = Object.freeze({
   [Setting.APPEALS]: { kind: "appeals", types: POSTING_CHANNELS, label: "Ban appeals" },
   [Setting.TAGS]: { kind: "tags", label: "Custom commands" },
   [Setting.TICKET_CATEGORIES]: { kind: "ticketCategories", label: "Ticket categories" },
+  [Setting.TICKET_LOG_CHANNEL]: { kind: "channel", types: POSTING_CHANNELS, label: "Ticket log channel" },
+  [Setting.DISABLED_TICKET_LOG_EVENTS]: { kind: "ticketEvents", label: "Switched-off ticket log events" },
   [Setting.STARBOARD]: { kind: "starboard", types: POSTING_CHANNELS, label: "Starboard" },
   [Setting.LEVELING]: { kind: "leveling", label: "Leveling" },
   [Setting.JOIN_GATE]: { kind: "joinGate", label: "Raid protection" },
@@ -125,6 +128,13 @@ function checkValue(setting, value, { guildId, channels, roles }) {
         throw new InvalidSetting(setting, "Unknown log event.");
       }
       const events = LOG_EVENTS.filter((event) => value.includes(event));
+      return events.length > 0 ? events : null;
+    }
+    case "ticketEvents": {
+      if (!Array.isArray(value) || !value.every((event) => TICKET_EVENTS.includes(event))) {
+        throw new InvalidSetting(setting, "Unknown ticket log event.");
+      }
+      const events = TICKET_EVENTS.filter((event) => value.includes(event));
       return events.length > 0 ? events : null;
     }
     case "setupSteps": {

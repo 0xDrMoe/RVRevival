@@ -44,7 +44,7 @@ import { createWelcomeCommand } from "./welcome.js";
 // are only needed to run the moderation commands, `reminders`
 // (reminders/reminderStore.js) to run /remind, `giveaways`
 // (giveaways/giveawayStore.js) to run /giveaway, `tickets`
-// (tickets/ticketStore.js) to run /tickets, and `levels` (leveling/levelStore.js)
+// (tickets/ticketStore.js) with `ticketLog` (tickets/ticketLog.js) to run /tickets, and `levels` (leveling/levelStore.js)
 // with `leveling` (leveling/leveling.js) to run /rank, /leaderboard and /levels,
 // `tempVoice` (voice/tempVoiceStore.js) to run /voice, `scheduledMessages`
 // (scheduled/scheduledMessageStore.js) to run /schedule, `birthdays`
@@ -67,6 +67,7 @@ export function createCommands({
   reminders,
   giveaways,
   tickets,
+  ticketLog,
   levels,
   leveling,
   tempVoice,
@@ -106,7 +107,7 @@ export function createCommands({
     createRemindCommand({ reminders, forcedLanguage }),
     createGiveawayCommand({ giveaways, guildSettings, logger, forcedLanguage }),
     createStarboardCommand({ guildSettings, forcedLanguage }),
-    createTicketsCommand({ tickets, guildSettings, logger, forcedLanguage, modLog }),
+    createTicketsCommand({ tickets, guildSettings, logger, forcedLanguage, ticketLog }),
     createRaidCommand({ guildSettings, modLog, forcedLanguage }),
     createAntiNukeCommand({ guildSettings, forcedLanguage }),
     createQuarantineCommand({ guildSettings, quarantine, forcedLanguage }),

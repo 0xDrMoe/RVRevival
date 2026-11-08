@@ -45,6 +45,8 @@ export const Setting = Object.freeze({
   LEVELING: "leveling", // leveling and XP, an object (see leveling/config.js)
   TICKETS: "tickets", // the ticket panel, { channelId, messageId, staffRoleId, title, message } (see tickets/tickets.js)
   TICKET_CATEGORIES: "ticketCategories", // the panel's buttons, [{ id, label, emoji, description, staffRoleId, questions }] (see tickets/categories.js)
+  TICKET_LOG_CHANNEL: "ticketLogChannelId", // where ticket events are posted; unset = the mod-log channel (see tickets/ticketLog.js)
+  DISABLED_TICKET_LOG_EVENTS: "disabledTicketLogEvents", // ticket events not posted, a list of names (they're still saved)
   JOIN_GATE: "joinGate", // new-account gate and join alerts, an object (see raid/raid.js)
   LOCKDOWN: "lockdown", // a running /raid lockdown and what to restore, an object (see raid/raid.js)
   TEMP_VOICE: "tempVoice", // join-to-create voice, { hubChannelId, categoryId, nameTemplate, userLimit } (see voice/tempVoice.js)

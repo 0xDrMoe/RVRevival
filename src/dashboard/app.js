@@ -15,7 +15,7 @@
 //   GET  /api/guilds/:id/members/:user    one person's history: cases, tickets, joins, leaves, roles, level
 //   GET  /api/guilds/:id/levels           the XP leaderboard (?page=&period=all|week|month)
 //   GET  /api/guilds/:id/tickets          support tickets (?status=open|closed|all&user=&before=)
-//   GET  /api/guilds/:id/tickets/:number  one ticket and its transcript (?download=1 for a .txt file)
+//   GET  /api/guilds/:id/tickets/:number  one ticket, its history and transcript (?download=1 for a .txt file)
 //   POST /api/guilds/:id/permissions/preset  preview or apply a premade permission setup
 //
 // Two levels of access to a server the bot is in:
@@ -109,6 +109,7 @@ const CASES_PAGE = 50;
 const EXPORT_LIMIT = 10_000;
 const LEADERBOARD_PAGE = 25;
 const TICKETS_PAGE = 25;
+const MAX_TICKET_NAMES = 40;
 const TICKET_STATUSES = ["open", "closed", "all"];
 const MAX_LEADERBOARD_PAGE = 400;
 const MAX_SEARCH_LENGTH = 100;
@@ -1085,8 +1086,22 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
         .header("Content-Disposition", `attachment; filename="ticket-${String(number).padStart(4, "0")}.txt"`)
         .send(transcript);
     }
-    const names = await peopleNames(guildId, [ticket.userId, ticket.closedBy]);
-    return { ticket: ticketJson(ticket, names), transcript };
+    const events = tickets.events(ticket.id);
+    // Names for the first people only, so a busy ticket can't make hundreds of Discord requests.
+    const people = [...new Set([ticket.userId, ticket.closedBy, ...events.flatMap((event) => [event.actorId, ...event.userIds])].filter(Boolean))];
+    const names = await peopleNames(guildId, people.slice(0, MAX_TICKET_NAMES));
+    return {
+      ticket: ticketJson(ticket, names),
+      transcript,
+      events: events.map((event) => ({
+        event: event.event,
+        actorId: event.actorId,
+        actorName: names[event.actorId] ?? null,
+        people: event.userIds.map((id) => ({ id, name: names[id] ?? null })),
+        detail: event.detail,
+        at: event.createdAt,
+      })),
+    };
   });
 
   // --- Leveling ------------------------------------------------------------

@@ -57,6 +57,7 @@ import { createBirthdays } from "./birthdays/birthdays.js";
 import { BirthdayStore } from "./birthdays/birthdayStore.js";
 import { GuildSettings, Setting } from "./settings/guildSettings.js";
 import { TicketStore } from "./tickets/ticketStore.js";
+import { createTicketLog } from "./tickets/ticketLog.js";
 import { closeDatabase, DEFAULT_DATABASE_FILE, openDatabase } from "./storage/database.js";
 import { logger, registerSecret } from "./utils/logger.js";
 import { withoutChannel } from "./logs/logRoutes.js";
@@ -168,6 +169,8 @@ async function start() {
   // Posts cases in the mod-log channel, and server events in the server-log channel.
   const modLog = createModLog({ poster, store });
   const serverLog = createServerLog({ poster, botDeletions, guildSettings });
+  // Saves and posts everything that happens to tickets (/tickets log).
+  const ticketLog = createTicketLog({ tickets, poster, guildSettings, logger });
   // Anti-nuke (/antinuke) counts bans and kicks done through the bot as well.
   let antiNuke;
   const moderation = createModerationService({
@@ -254,6 +257,7 @@ async function start() {
     highlights,
     giveaways,
     tickets,
+    ticketLog,
     levels,
     leveling,
     tempVoice: tempVoiceChannels,
@@ -269,6 +273,7 @@ async function start() {
     [Setting.LOGS_CHANNEL, "The logs channel was deleted; set a new one with /settings logs-channel"],
     [Setting.MOD_LOG_CHANNEL, "The mod-log channel was deleted; cases go to the logs channel until a new one is set"],
     [Setting.SERVER_LOG_CHANNEL, "The server-log channel was deleted; set a new one with /settings server-log-channel"],
+    [Setting.TICKET_LOG_CHANNEL, "The ticket log channel was deleted; ticket entries go to the mod-log channel until a new one is set"],
     [Setting.WELCOME_CHANNEL, "The welcome channel was deleted; set a new one with /welcome channel"],
     [Setting.LEAVE_CHANNEL, "The leave channel was deleted; set a new one with /welcome leave-channel"],
   ];
@@ -442,6 +447,11 @@ async function start() {
     client.on(Events.GuildBanRemove, safely("an unban", (ban) => externalActions.onUnban(ban)));
 
     client.on(Events.ThreadDelete, safely("a deleted thread", (thread) => commands.get("tickets").threadDeleted(thread)));
+    client.on(Events.ThreadUpdate, safely("a changed thread", (before, after) => commands.get("tickets").threadUpdated(before, after)));
+    client.on(
+      Events.ThreadMembersUpdate,
+      safely("people joining or leaving a thread", (added, removed, thread) => commands.get("tickets").threadMembersUpdated(added, removed, thread)),
+    );
     client.on(Events.VoiceStateUpdate, safely("join-to-create voice", (before, after) => tempVoice.voiceStateUpdate(before, after)));
 
     client.on(Events.WebhooksUpdate, (channel) => poster.webhooksChanged(channel.id));

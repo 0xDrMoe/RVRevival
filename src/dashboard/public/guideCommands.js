@@ -559,7 +559,7 @@ export const COMMAND_PARTS = [
         page: "tickets",
         related: "tickets",
         summary: "Posts the **Open a ticket** button, and handles tickets: private threads between a member and the staff.",
-        who: "`panel` and `off` need an admin (**Manage Server**). The rest needs ticket staff: the panel's staff role, the mod role, or **Manage Threads**. Members can close their own ticket.",
+        who: "`panel`, `off`, `log` and `log-event` need an admin (**Manage Server**). The rest needs ticket staff: the panel's staff role, the mod role, or **Manage Threads**. Members can close their own ticket.",
         usages: [
           {
             usage: "/tickets panel channel [staff-role] [title] [message]",
@@ -578,7 +578,7 @@ export const COMMAND_PARTS = [
           },
           {
             usage: "/tickets close [reason]",
-            what: "Closes the ticket you're in: saves a transcript to the mod log, then locks and archives the thread. The 🔒 button in the ticket does the same.",
+            what: "Closes the ticket you're in: saves a transcript to the ticket log, then locks and archives the thread. The 🔒 button in the ticket does the same.",
             options: [["reason", "Why it's closed, up to 300 characters. Shown in the ticket and the log."]],
           },
           {
@@ -596,9 +596,24 @@ export const COMMAND_PARTS = [
             what: "Shows the open tickets, with links.",
             options: [],
           },
+          {
+            usage: "/tickets log [channel]",
+            what: "Picks the channel for the ticket log: every ticket opened, closed (with its transcript), reopened, renamed, people added or removed and thread deleted, with who did it. **Admins.**",
+            options: [["channel", "The ticket log channel. Leave it out to send ticket entries to the mod log again. The bot needs to post, embed and attach files there."]],
+          },
+          {
+            usage: "/tickets log-event event enabled",
+            what: "Switches one kind of ticket log entry off or back on. Switched-off kinds are still kept in each ticket's history on the dashboard. **Admins.**",
+            options: [
+              ["event", "The kind of entry: opened, closed, reopened, people added, people removed, renamed or thread deleted."],
+              ["enabled", "`True` posts it, `False` stops posting it."],
+            ],
+          },
         ],
-        example: ["/tickets panel channel:#support staff-role:@Mods title:Need help?", "/tickets close reason:Report handled, warning given", "/tickets add member:@Witness"],
+        example: ["/tickets panel channel:#support staff-role:@Mods title:Need help?", "/tickets close reason:Report handled, warning given", "/tickets add member:@Witness", "/tickets log channel:#ticket-log", "/tickets log-event event:Ticket renamed enabled:False"],
         tips: [
+          "The ticket log also records changes made in Discord itself: renaming or archiving a thread, mentioning someone into it, people leaving. Give the bot **View Audit Log** to show who did them.",
+          "Archiving a ticket's thread closes it; unarchiving reopens it (unless the member has opened another).",
           "Several kinds of ticket (each with its own button, questions and staff role) are set up on the **Tickets** page.",
           "One open ticket per member, up to 50 per server.",
           "**Don't delete ticket threads**, or the transcript is lost. Close them instead.",
