@@ -1125,5 +1125,11 @@
   "guideSteps": "Passos",
   "guideCommands": "Comandos",
   "guideExample": "Exemplo",
-  "guideGoodToKnow": "Bom saber"
+  "guideGoodToKnow": "Bom saber",
+
+  "joinTitle": "Obrigado por adicionar o Canopy!",
+  "joinIntro": "O Canopy traz moderação, automod, registros, tickets, mensagens de boas-vindas, níveis e muito mais. Tudo começa desligado, então nada muda até você configurar.",
+  "joinDashboard": "**Configure no painel:** {url}",
+  "joinGuide": "**Prefere o Discord?** Use `/guide` para conhecer cada recurso, ou `/settings` para o básico.",
+  "joinCountriesOff": "Os cargos de país (`/country`) estão desligados. Ative-os na página Permissões do painel se quiser."
 }

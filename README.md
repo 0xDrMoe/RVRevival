@@ -458,6 +458,8 @@ The dashboard's **Leveling** page has all the same settings plus the full leader
 
 Members pick the country they live in and get a role named after it. They can only pick once; after that, only staff can change it.
 
+Country roles are **off in servers that add the bot for the first time**: `/country`, `/country-help` and `/country-staff` start disabled. Turn them on from the dashboard's Permissions page. Servers that already had settings keep them.
+
 - **The guide's buttons** (the easy way, no slash command). `/country-help` posts the guide with one button per continent (Africa, Asia, Europe, North America, South America, Oceania) and a **Type my country** button.
   - A continent button privately shows that continent's countries in A–Z lists (25 per list, Discord's limit, so Africa is split into three). The member picks theirs and gets the role. Central America and the Caribbean are under North America. Every country is under exactly one continent (`src/countries/continents.js`).
   - **Type my country** opens a small form with one box. An exact match (`Germany`, `USA`, `Deutschland`) gives the role right away. Otherwise the bot shows a list of close matches to pick from, and never guesses. If nothing is close, it shows a *Try again* button.
@@ -507,6 +509,10 @@ Applying a setup keeps commands you turned off, blocked roles and channel limits
 - **Log channels per kind:** send command uses, messages the bot deleted, dashboard changes, cases, other moderation actions, automod deletions, raid and anti-nuke alerts, and each server-log event to its own channel. Anything left on *Usual* goes where it always did. A deleted channel goes back to *Usual* by itself.
 
 Discord's own *Server Settings > Integrations* page can also limit a command to roles and channels, and hides it from everyone else; use it when hiding is all you need. The bot's rules are for giving a command to a role without the permission, blocking roles, or turning a command off.
+
+### Joining a server
+
+When the bot is added to a server it posts a short setup message (a dashboard link, `/guide` and `/settings`) in the server's system channel, or the first text channel it can post in. A brand-new server also gets the country role commands switched off (see [Country roles](#country-roles)).
 
 ### Web dashboard
 
@@ -637,6 +643,8 @@ After that, updates are the usual `git pull && npm ci`, then `pm2 restart rv-bot
    ```
 
    Re-run `npm run register` whenever a command is added, removed, or its name, description or options change.
+
+   **Public bot (many servers):** register globally with `npm run register -- --global` instead, then run `npm run register -- --clear-guild` once so your test server doesn't show every command twice. Global changes can take up to an hour to show up.
 
 ## Scripts
 
