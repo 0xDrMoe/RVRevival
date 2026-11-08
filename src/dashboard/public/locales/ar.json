@@ -875,8 +875,6 @@
   "brandingProfile": "الملف الشخصي في هذا الخادم",
   "brandingNickname": "اللقب",
   "brandingNicknameHelp": "حتى 32 حرفًا. اتركه فارغًا لاستخدام اسم البوت الأصلي.",
-  "brandingBio": "نبذة عني",
-  "brandingBioHelp": "تظهر في ملف البوت الشخصي في هذا الخادم. حتى 190 حرفًا.",
   "brandingAvatar": "الصورة الرمزية",
   "brandingAvatarHelp": "تُقص إلى مربع وتُصغَّر إلى 512×512. الصور المتحركة تصبح ثابتة.",
   "brandingBanner": "بانر الملف الشخصي",

@@ -1613,8 +1613,8 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
 
   // --- Branding ---------------------------------------------------------------
 
-  // The bot's nickname, avatar, banner and bio in this server are Discord's
-  // per-server profile; the embed colour and bio are also saved here (see
+  // The bot's nickname, avatar and banner in this server are Discord's
+  // per-server profile; the embed colour is saved here (see
   // branding/branding.js).
   const CDN = "https://cdn.discordapp.com";
   const imageUrl = (hash, path) => (hash ? `${CDN}/${path}/${hash}.${hash.startsWith("a_") ? "gif" : "png"}?size=512` : null);
@@ -1671,8 +1671,8 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
           return profileRefused(reply, error);
         }
       }
-      const saved = { color: plan.saved.color ?? null, bio: plan.saved.bio ?? null };
-      if (saved.color === null && saved.bio === null) {
+      const saved = { color: plan.saved.color ?? null };
+      if (saved.color === null) {
         await guildSettings.clear(guildId, Setting.BRANDING);
       } else {
         await guildSettings.set(guildId, Setting.BRANDING, saved);
@@ -1681,7 +1681,6 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
         plan.profile.nick !== undefined && (plan.profile.nick === null ? "Nickname reset" : `Nickname: ${plan.profile.nick}`),
         plan.profile.avatar !== undefined && (plan.profile.avatar === null ? "Avatar reset" : "New avatar"),
         plan.profile.banner !== undefined && (plan.profile.banner === null ? "Banner reset" : "New banner"),
-        plan.profile.bio !== undefined && (plan.profile.bio ? "New bio" : "Bio reset"),
         saved.color !== before.color && (saved.color === null ? "Embed colour reset" : `Embed colour: #${saved.color.toString(16).padStart(6, "0")}`),
       ].filter(Boolean);
       await logAction(guildId, session, "**Bot branding changed**", changed);

@@ -875,8 +875,6 @@
   "brandingProfile": "Profile in this server",
   "brandingNickname": "Nickname",
   "brandingNicknameHelp": "Up to 32 characters. Leave it empty to use the bot's own name.",
-  "brandingBio": "About me",
-  "brandingBioHelp": "Shown on the bot's profile in this server. Up to 190 characters.",
   "brandingAvatar": "Avatar",
   "brandingAvatarHelp": "Cropped to a square and shrunk to 512×512. Animated images become still.",
   "brandingBanner": "Profile banner",

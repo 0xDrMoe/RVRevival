@@ -421,7 +421,7 @@ Other messages are deleted, with a note that deletes itself after a few seconds 
 
 The dashboard's **Branding** page gives the bot its own look in one server, using Discord's per-server bot profile.
 
-- **Nickname, avatar, banner and About me** are set on Discord (`PATCH /guilds/:id/members/@me`). The page crops and shrinks images in the browser (avatar 512×512, banner 960×384) so the request stays under nginx's default 1 MB body limit. Discord keeps the images; the bot doesn't store them. **Use default**, or an empty field, puts the bot's own back.
+- **Nickname, avatar and banner** are set on Discord (`PATCH /guilds/:id/members/@me`). The page crops and shrinks images in the browser (avatar 512×512, banner 960×384) so the request stays under nginx's default 1 MB body limit. Discord keeps the images; the bot doesn't store them. **Use default**, or an empty field, puts the bot's own back.
 - **Embed colour** is saved with the server's settings and used on role panels, the ticket panel and ticket threads, `/rank` and `/leaderboard`. Logs, cases, the starboard and giveaways keep their own colours because the colour means something there. Panels already posted pick it up the next time they're updated.
 - Log entries posted through the bot's webhook use its nickname and avatar in that server.
 - Discord has no per-server version of the app's name and icon in the slash command list, the APP badge or DMs, so those stay as the main bot. A fully separate bot for one server would need its own token (a possible later premium tier).
@@ -756,7 +756,7 @@ src/
   scheduled/             Scheduled messages: saved in SQLite (scheduledMessageStore.js), posted when due (scheduler.js)
   reminders/             Reminders: saved in SQLite (reminderStore.js), sent when due (reminderScheduler.js)
   automod/               Automod: settings (config.js), what each rule matches (rules.js), acting on messages
-  branding/              Branding: the per-server embed colour and bio, and checks for the Branding page's changes
+  branding/              Branding: the per-server embed colour, and checks for the Branding page's changes
   logs/                  Logs channel, server log, posting to log channels, and a channel per kind of entry (logRoutes.js)
   moderation/            Moderation: cases (SQLite), checks, actions, mod log, temporary bans
   settings/              Per-server settings (saved in data/bot.db)

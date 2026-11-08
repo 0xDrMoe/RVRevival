@@ -875,8 +875,6 @@
   "brandingProfile": "Perfil en este servidor",
   "brandingNickname": "Apodo",
   "brandingNicknameHelp": "Hasta 32 caracteres. Déjalo vacío para usar el nombre propio del bot.",
-  "brandingBio": "Sobre mí",
-  "brandingBioHelp": "Se muestra en el perfil del bot en este servidor. Hasta 190 caracteres.",
   "brandingAvatar": "Avatar",
   "brandingAvatarHelp": "Se recorta en cuadrado y se reduce a 512×512. Las imágenes animadas quedan fijas.",
   "brandingBanner": "Banner del perfil",

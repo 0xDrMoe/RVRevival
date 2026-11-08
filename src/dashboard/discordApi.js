@@ -270,7 +270,7 @@ export function createDiscordApi({ config, fetch = globalThis.fetch, rest }) {
     // The bot's member in a server: its nickname, avatar and banner there.
     // Not cached, so the Branding page always shows what Discord has now.
     botMember: (guildId) => bot.get(Routes.guildMember(guildId, config.clientId)),
-    // Changes the bot's own profile in one server: { nick, avatar, banner, bio },
+    // Changes the bot's own profile in one server: { nick, avatar, banner },
     // images as data: URLs and null for the bot's default. Returns the member.
     async editBotProfile(guildId, profile, reason) {
       const member = await bot.patch(Routes.guildMember(guildId, "@me"), { body: profile, reason });
