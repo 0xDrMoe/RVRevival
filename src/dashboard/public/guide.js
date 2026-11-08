@@ -85,7 +85,10 @@ const FEATURE_PARTS = [
         icon: "bot",
         tone: "cyan",
         summary: "Things that are the same for every command. The **Commands** parts of this guide have a page for each command, with every option.",
-        commands: [["/guide [topic]", "This guide in Discord, just for you. Page through it with the buttons, or pick a part or topic from the menus."]],
+        commands: [
+          ["/guide [topic]", "This guide in Discord, just for you. Page through it with the buttons, or pick a part or topic from the menus."],
+          ["/dashboard", "A private link to this server's page on the dashboard. Anyone can ask for it; the dashboard checks what they may see."],
+        ],
         table: {
           head: ["", ""],
           rows: [

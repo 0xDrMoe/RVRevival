@@ -37,6 +37,7 @@ Rabble is an all-in-one Discord bot and web dashboard by Cedar Tech Solutions, m
 | [AFK](#afk) | `/afk` | Everyone |
 | [Server info](#server-info) | `/serverinfo` | Everyone |
 | [Guide](#guide) | `/guide`, or the dashboard's Guide page | Everyone |
+| [Dashboard link](#guide) | `/dashboard` | Everyone |
 | [Ban appeals](#ban-appeals) | The dashboard's Ban appeals page | Manage Server or a dashboard role that can change settings (banned members fill in the form) |
 | [Join-to-create voice](#join-to-create-voice) | `/voice` | Manage Server (`setup`, `off`), the channel's owner (`lock`, `unlock`), anyone in the channel (`claim`) |
 | [Leveling](#leveling) | `/rank`, `/leaderboard`, `/levels`, or the dashboard's Leveling page | Everyone (`/rank`, `/leaderboard`), Manage Server (`/levels`) |
@@ -458,6 +459,8 @@ If the bot may change your nickname (it has **Manage Nicknames** and a higher ro
 
 **`/guide [topic]`** shows the dashboard's Guide in Discord, privately, so members can read it without logging in. It opens on the contents (a line per part); **Previous** and **Next** page through every part and topic in order, and two menus jump to a part or to a topic in it. `topic` (with suggestions as you type) opens a part or topic straight away. When `DASHBOARD_URL` is set, **Open on the dashboard** links to the same page there. The text is the same English as on the dashboard (it comes from `src/dashboard/public/guide.js`); the buttons and menus follow the user's language. Paging isn't logged; running `/guide` is, like every command.
 
+**`/dashboard`** replies privately with an **Open dashboard** button that links to the server's page (`DASHBOARD_URL/#/g/<server id>`). Anyone can run it; the dashboard still decides what they may open (owner, Manage Server, or a dashboard role). Without `DASHBOARD_URL` it says the dashboard isn't set up.
+
 ### Ban appeals
 
 Lets banned members ask to be unbanned without a second account or a DM to a moderator. Turn it on in the dashboard's **Ban appeals** page (off by default), then:
@@ -544,7 +547,7 @@ Discord's own *Server Settings > Integrations* page can also limit a command to 
 
 ### Joining a server
 
-When the bot is added to a server it posts a short setup message (a dashboard link, `/guide` and `/settings`) in the server's system channel, or the first text channel it can post in. A brand-new server also gets the country role commands switched off (see [Country roles](#country-roles)).
+When the bot is added to a server it posts a short setup message (a dashboard link and **Open dashboard** button, `/guide` and `/settings`) in the server's system channel, or the first text channel it can post in. A brand-new server also gets the country role commands switched off (see [Country roles](#country-roles)).
 
 ### Web dashboard
 
@@ -735,6 +738,7 @@ src/
     afk.js               AFK: /afk
     serverInfo.js        Server info: /serverinfo
     guide.js             Guide: /guide, its page buttons and menus
+    dashboard.js         /dashboard: a private link button to the server's dashboard page
     sticky.js            Sticky messages: /sticky
     highlight.js         Highlights: /highlight
     mediaOnly.js         Media-only channels: /mediaonly

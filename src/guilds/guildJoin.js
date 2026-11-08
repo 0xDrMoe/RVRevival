@@ -12,6 +12,7 @@
 // minutes.
 
 import { ChannelType, EmbedBuilder, PermissionFlagsBits } from "discord.js";
+import { dashboardButtonRow } from "../commands/dashboard.js";
 import { pickLanguage, translate } from "../i18n/i18n.js";
 import { Setting } from "../settings/guildSettings.js";
 
@@ -83,6 +84,7 @@ export function createGuildJoinHandler({ guildSettings, logger, dashboardUrl, fo
     const base = dashboardUrl ? `${dashboardUrl}/#/g/${guild.id}` : undefined;
     await channel.send({
       embeds: [introEmbed({ language, dashboardUrl: base, countriesOff })],
+      components: base ? [dashboardButtonRow(base, translate(language, "dashboardOpen"))] : [],
       allowedMentions: { parse: [] },
     });
   }

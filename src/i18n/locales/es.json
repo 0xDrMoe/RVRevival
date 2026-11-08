@@ -1217,6 +1217,11 @@
   "joinTitle": "¡Gracias por añadir Rabble!",
   "joinIntro": "Rabble trae moderación, automod, registros, tickets, mensajes de bienvenida, niveles y más. Todo empieza desactivado, así que nada cambia hasta que lo configures.",
   "joinDashboard": "**Configúralo en el panel:** {url}",
+  "dashboardCommandDescription": "Obtén un enlace al panel de este servidor",
+  "dashboardLink": "Configura y gestiona **{server}** en el panel: ajustes, casos, registros y la guía completa.\nInicia sesión con Discord. Cambiar ajustes requiere **Gestionar servidor** (o un rol del panel para una vista limitada).",
+  "dashboardOpen": "Abrir panel",
+  "dashboardThisServer": "este servidor",
+  "dashboardNotSetUp": "El panel aún no está configurado para este bot.",
   "joinGuide": "**¿Prefieres Discord?** Usa `/guide` para ver cada función, o `/settings` para lo básico.",
   "joinCountriesOff": "Los roles de país (`/country`) están desactivados. Actívalos en la página Permisos del panel si los quieres.",
 

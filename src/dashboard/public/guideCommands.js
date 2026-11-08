@@ -627,7 +627,7 @@ export const COMMAND_PARTS = [
     group: "Command reference",
     icon: "shield",
     tone: "purple",
-    about: "Every setup and protection command, one page each: /settings (with automod), raid protection, anti-nuke, media-only channels and /guide.",
+    about: "Every setup and protection command, one page each: /settings (with automod), raid protection, anti-nuke, media-only channels, /guide and /dashboard.",
     sections: [
       {
         id: "cmdsettings",
@@ -925,6 +925,26 @@ export const COMMAND_PARTS = [
         ],
         example: ["/guide", "/guide topic:ban"],
         tips: ["The guide is in English; the buttons and menus follow your Discord language.", "Only you see it, so it's safe to use in any channel."],
+      },
+      {
+        id: "cmddashboard",
+        command: "/dashboard",
+        title: "/dashboard",
+        icon: "home",
+        tone: "pink",
+        page: "overview",
+        related: "dashboard",
+        summary: "Gives you a link straight to this server's page on the dashboard.",
+        who: "Everyone. Only people with **Manage Server**, the owner, or a dashboard role can open the server's pages.",
+        usages: [
+          {
+            usage: "/dashboard",
+            what: "Replies privately with an **Open dashboard** button for this server. Log in with Discord and you land on its Overview.",
+            options: [],
+          },
+        ],
+        example: ["/dashboard"],
+        tips: ["The setup message the bot posts when it joins a server has the same button.", "Pin the link in a staff channel so the team can find it."],
       },
     ],
   },

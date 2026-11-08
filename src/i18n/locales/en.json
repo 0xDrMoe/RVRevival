@@ -1217,6 +1217,11 @@
   "joinTitle": "Thanks for adding Rabble!",
   "joinIntro": "Rabble brings moderation, automod, logs, tickets, welcome messages, leveling and more. Everything starts switched off, so nothing changes until you set it up.",
   "joinDashboard": "**Set it up on the dashboard:** {url}",
+  "dashboardCommandDescription": "Get a link to this server's dashboard",
+  "dashboardLink": "Set up and manage **{server}** on the dashboard: settings, cases, logs and the full guide.\nLog in with Discord. Changing settings needs **Manage Server** (or a dashboard role for a limited view).",
+  "dashboardOpen": "Open dashboard",
+  "dashboardThisServer": "this server",
+  "dashboardNotSetUp": "The dashboard isn't set up for this bot yet.",
   "joinGuide": "**Prefer Discord?** Run `/guide` for a tour of every feature, or `/settings` for the basics.",
   "joinCountriesOff": "Country roles (`/country`) are off. Turn them on from the dashboard's Permissions page if you want them.",
 

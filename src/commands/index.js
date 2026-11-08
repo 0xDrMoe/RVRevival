@@ -9,6 +9,7 @@ import { createCountryHelpCommand } from "./countryHelp.js";
 import { createCountryStaffCommand } from "./countryStaff.js";
 import { createGiveawayCommand } from "./giveaway.js";
 import { createGuideCommand } from "./guide.js";
+import { createDashboardCommand } from "./dashboard.js";
 import { createLevelCommands } from "./levels.js";
 import { createMemberToolCommands } from "./memberTools.js";
 import { createModerationCommands } from "./moderation.js";
@@ -57,7 +58,7 @@ import { createServerInfoCommand } from "./serverInfo.js";
 // (sticky/stickies.js) to run /sticky, `highlightStore`
 // (highlights/highlightStore.js) with `highlights` (highlights/highlights.js)
 // to run /highlight, not to register them. `dashboardUrl` adds dashboard links
-// to /guide.
+// to /guide and /dashboard.
 export function createCommands({
   logger,
   guildSettings,
@@ -95,6 +96,7 @@ export function createCommands({
     createCountryHelpCommand({ guildSettings, forcedLanguage }),
     createSettingsCommand({ guildSettings, forcedLanguage }),
     createGuideCommand({ forcedLanguage, dashboardUrl }),
+    createDashboardCommand({ forcedLanguage, dashboardUrl }),
     ...createModerationCommands(moderationOptions),
     createPurgeCommand({ guildSettings, forcedLanguage, modLog, botDeletions }),
     createCaseCommand(moderationOptions),

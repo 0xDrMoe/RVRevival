@@ -86,3 +86,20 @@ describe("guildJoined", () => {
     expect(guildSettings.all(GUILD_ID)).toEqual({});
   });
 });
+
+describe("setup message dashboard button", () => {
+  it("links the button to the server's dashboard page", async () => {
+    const { join } = handler();
+    const channel = fakeChannel("1");
+    await join.guildJoined(fakeGuild({ systemChannel: channel }));
+    const [row] = channel.send.mock.calls[0][0].components.map((component) => component.toJSON());
+    expect(row.components[0].url).toBe(`https://rabble.example.com/#/g/${GUILD_ID}`);
+  });
+
+  it("leaves the button out without a dashboard", async () => {
+    const join = createGuildJoinHandler({ guildSettings: new GuildSettings(), logger, now: () => NOW });
+    const channel = fakeChannel("1");
+    await join.guildJoined(fakeGuild({ systemChannel: channel }));
+    expect(channel.send.mock.calls[0][0].components).toEqual([]);
+  });
+});
