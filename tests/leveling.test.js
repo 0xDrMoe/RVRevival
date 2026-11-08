@@ -250,6 +250,19 @@ describe("earning XP", () => {
     });
   });
 
+  it("skips the database for messages inside the cooldown", async () => {
+    const t = setup();
+    const award = vi.spyOn(t.store, "award");
+    await t.leveling.handleMessage(t.message());
+    await t.leveling.handleMessage(t.message());
+    await t.leveling.handleMessage(t.message());
+    expect(award).toHaveBeenCalledTimes(1);
+    t.advance(XP_COOLDOWN_MS);
+    await t.leveling.handleMessage(t.message());
+    expect(award).toHaveBeenCalledTimes(2);
+    expect(t.store.get(GUILD_ID, MEMBER_ID).xp).toBe(50);
+  });
+
   it("does nothing when leveling is off, for bots, or in no-XP channels and roles", async () => {
     const off = setup({ config: { enabled: false } });
     expect(await off.leveling.handleMessage(off.message())).toBeUndefined();

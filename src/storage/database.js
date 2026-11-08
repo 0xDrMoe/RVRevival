@@ -410,6 +410,46 @@ const MIGRATIONS = [
     PRIMARY KEY (guild_id, user_id)
   ) WITHOUT ROWID;
   `,
+  // 29: which servers' settings changed, so the bot and the dashboard re-read
+  // only those instead of every setting of every server (settings/guildSettings.js).
+  // Every write to guild_settings bumps settings_version and stamps the server
+  // with it. (Not INSERT OR REPLACE: the upsert that fires these triggers would
+  // override its conflict handling.) The leveling prune also gets an index on
+  // the day alone.
+  `
+  CREATE TABLE settings_version (
+    id       INTEGER PRIMARY KEY CHECK (id = 1),
+    version  INTEGER NOT NULL
+  );
+  INSERT INTO settings_version (id, version) VALUES (1, 0);
+  CREATE TABLE settings_changes (
+    guild_id  TEXT    PRIMARY KEY,
+    version   INTEGER NOT NULL
+  ) WITHOUT ROWID;
+  CREATE INDEX settings_changes_by_version ON settings_changes (version);
+  CREATE TRIGGER guild_settings_inserted AFTER INSERT ON guild_settings BEGIN
+    UPDATE settings_version SET version = version + 1 WHERE id = 1;
+    UPDATE settings_changes SET version = (SELECT version FROM settings_version WHERE id = 1) WHERE guild_id = NEW.guild_id;
+    INSERT INTO settings_changes (guild_id, version)
+      SELECT NEW.guild_id, version FROM settings_version
+      WHERE id = 1 AND NOT EXISTS (SELECT 1 FROM settings_changes WHERE guild_id = NEW.guild_id);
+  END;
+  CREATE TRIGGER guild_settings_updated AFTER UPDATE ON guild_settings BEGIN
+    UPDATE settings_version SET version = version + 1 WHERE id = 1;
+    UPDATE settings_changes SET version = (SELECT version FROM settings_version WHERE id = 1) WHERE guild_id = NEW.guild_id;
+    INSERT INTO settings_changes (guild_id, version)
+      SELECT NEW.guild_id, version FROM settings_version
+      WHERE id = 1 AND NOT EXISTS (SELECT 1 FROM settings_changes WHERE guild_id = NEW.guild_id);
+  END;
+  CREATE TRIGGER guild_settings_deleted AFTER DELETE ON guild_settings BEGIN
+    UPDATE settings_version SET version = version + 1 WHERE id = 1;
+    UPDATE settings_changes SET version = (SELECT version FROM settings_version WHERE id = 1) WHERE guild_id = OLD.guild_id;
+    INSERT INTO settings_changes (guild_id, version)
+      SELECT OLD.guild_id, version FROM settings_version
+      WHERE id = 1 AND NOT EXISTS (SELECT 1 FROM settings_changes WHERE guild_id = OLD.guild_id);
+  END;
+  CREATE INDEX xp_daily_by_day_only ON xp_daily (day);
+  `,
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS.length;
@@ -434,8 +474,19 @@ export function openDatabase(file = ":memory:") {
     mkdirSync(dirname(file), { recursive: true });
   }
   const db = new DatabaseSync(file);
-  // WAL lets another process (the future dashboard) read while the bot writes.
-  db.exec("PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000;");
+  // WAL lets the dashboard read while the bot writes. With WAL, synchronous =
+  // NORMAL is still crash-safe (the database never corrupts); a power cut can
+  // only lose the last moment of writes, and each write no longer waits for
+  // the disk, which matters with XP saved on every chat message.
+  // journal_size_limit stops the WAL file staying huge after a busy spell.
+  db.exec(`
+    PRAGMA journal_mode = WAL;
+    PRAGMA busy_timeout = 5000;
+    PRAGMA synchronous = NORMAL;
+    PRAGMA temp_store = MEMORY;
+    PRAGMA cache_size = -16000;
+    PRAGMA journal_size_limit = 67108864;
+  `);
   const { user_version: version } = db.prepare("PRAGMA user_version").get();
   if (version > MIGRATIONS.length) {
     db.close();
@@ -447,10 +498,23 @@ export function openDatabase(file = ":memory:") {
       db.exec(`PRAGMA user_version = ${next + 1}`);
     });
   }
+  // Lets SQLite refresh its query planner statistics where they're stale.
+  optimizeDatabase(db, { firstRun: true });
   return db;
 }
 
+// Cheap housekeeping: run now and then (index.js does it every few hours) and
+// on close. `firstRun` also looks at tables never analysed before.
+export function optimizeDatabase(db, { firstRun = false } = {}) {
+  try {
+    db.exec(firstRun ? "PRAGMA optimize = 0x10002" : "PRAGMA optimize");
+  } catch {
+    // Busy or closed: it's only housekeeping.
+  }
+}
+
 export function closeDatabase(db) {
+  optimizeDatabase(db);
   try {
     db.close();
   } catch {

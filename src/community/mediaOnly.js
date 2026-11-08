@@ -6,7 +6,7 @@
 
 import { PermissionFlagsBits } from "discord.js";
 import { pickLanguage, translate } from "../i18n/i18n.js";
-import { Setting } from "../settings/guildSettings.js";
+import { derivedSetting, Setting } from "../settings/guildSettings.js";
 
 export const MAX_MEDIA_CHANNELS = 10;
 const NOTE_LIFETIME_MS = 6_000;
@@ -73,7 +73,7 @@ export function createMediaOnly({ guildSettings, logger, forcedLanguage, botDele
       if (!message.inGuild?.() || message.author?.bot || message.webhookId || message.system) {
         return false;
       }
-      const config = normalizeMediaOnly(guildSettings.get(message.guildId, Setting.MEDIA_ONLY));
+      const config = derivedSetting(guildSettings, message.guildId, Setting.MEDIA_ONLY, normalizeMediaOnly);
       if (!config.channelIds.includes(message.channelId) || isMedia(message, config)) {
         return false;
       }

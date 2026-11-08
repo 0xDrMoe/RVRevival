@@ -237,9 +237,9 @@ describe("adding feeds", () => {
   });
 });
 
-function fakeClient(channel) {
-  const guild = { id: GUILD_ID, preferredLocale: "en-US", channels: { cache: new Map(channel ? [[CHANNEL_ID, channel]] : []) } };
-  return { guilds: { cache: new Map([[GUILD_ID, guild]]) } };
+function fakeClient(channel, guildIds = [GUILD_ID]) {
+  const guild = (id) => ({ id, preferredLocale: "en-US", channels: { cache: new Map(channel ? [[CHANNEL_ID, channel]] : []) } });
+  return { guilds: { cache: new Map(guildIds.map((id) => [id, guild(id)])) } };
 }
 
 describe("feed poller", () => {
@@ -267,6 +267,27 @@ describe("feed poller", () => {
     time += CHECK_EVERY_MS;
     await poller.tick();
     expect(channel.send).toHaveBeenCalledTimes(3);
+  });
+
+  it("downloads a feed several servers follow once, and checks many feeds a minute", async () => {
+    const OTHER_GUILD = "900000000000000099";
+    let time = 0;
+    const store = new FeedStore();
+    store.add(sample({ createdAt: 0 }));
+    store.add(sample({ guildId: OTHER_GUILD, createdAt: 0 }));
+    for (let index = 0; index < 50; index += 1) {
+      store.add(sample({ url: `https://example.com/${index}.rss`, source: `https://example.com/${index}.rss`, createdAt: 0 }));
+    }
+    const channel = { isTextBased: () => true, send: vi.fn(async () => {}) };
+    const fetchFeed = vi.fn(async () => ({ title: "x", items: [{ id: "new", title: "New", link: "", author: "" }] }));
+    const poller = createFeedPoller({ client: fakeClient(channel, [GUILD_ID, OTHER_GUILD]), store, logger: fakeLogger(), fetchFeed, now: () => time });
+
+    time = CHECK_EVERY_MS;
+    await poller.tick();
+    expect(fetchFeed.mock.calls.filter(([url]) => url === "https://example.com/rss")).toHaveLength(1);
+    expect(fetchFeed).toHaveBeenCalledTimes(51);
+    expect(channel.send).toHaveBeenCalledTimes(52);
+    expect(store.list(OTHER_GUILD)[0]).toMatchObject({ seen: ["new"], checkedAt: time });
   });
 
   it("records failures without posting a backlog later", async () => {

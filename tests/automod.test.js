@@ -121,6 +121,17 @@ describe("automod", () => {
     expect(member.user.send).toHaveBeenCalled();
   });
 
+  it("looks up a repeated invite once, even when it arrives in a burst", async () => {
+    await use(automodWith({ invites: {} }));
+    const fetchInvite = vi.fn(async () => ({ guild: { id: GUILD_ID } }));
+    const client = { user: { id: BOT_ID, tag: "RV Bot#0001" }, fetchInvite };
+    const burst = [message("discord.gg/home", { client }), message("discord.gg/home", { client }), message("discord.gg/home", { client })];
+    await Promise.all(burst.map((sent) => automod.handleMessage(sent)));
+    await automod.handleMessage(message("discord.gg/home again", { client }));
+    expect(fetchInvite).toHaveBeenCalledTimes(1);
+    expect(burst.every((sent) => !sent.delete.mock.calls.length)).toBe(true);
+  });
+
   it("allows invites to the same server", async () => {
     await use(automodWith({ invites: {} }));
     const sent = message("discord.gg/home");

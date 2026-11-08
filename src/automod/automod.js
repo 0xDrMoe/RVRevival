@@ -18,7 +18,7 @@ import { codeBlock } from "../logs/actionLog.js";
 import { CaseAction } from "../moderation/caseStore.js";
 import { moderatorRoleId } from "../moderation/checks.js";
 import { buildActionLogEmbed, noModLog } from "../moderation/modLog.js";
-import { Setting } from "../settings/guildSettings.js";
+import { derivedSetting, Setting } from "../settings/guildSettings.js";
 import { getDiscordErrorCode } from "../utils/discordErrors.js";
 import {
   activeRules,
@@ -45,6 +45,17 @@ const MAX_REASON_EXCERPT = 120;
 
 // Rules that look at more than one message. They aren't checked on edits.
 const HISTORY_RULES = new Set([AutomodRule.SPAM, AutomodRule.DUPLICATES]);
+
+// The server's automod config, or null when automod is off or has no rules on.
+// Worked out once per settings change (GuildSettings.derived), not per message.
+function automodPlan(saved) {
+  const config = normalizeAutomod(saved);
+  const rules = activeRules(config);
+  return config.enabled && rules.length > 0 ? { config, rules, needsHistory: rules.some((rule) => HISTORY_RULES.has(rule)) } : null;
+}
+
+// Invite codes remembered at most; past this the oldest are forgotten.
+const MAX_CACHED_INVITES = 5000;
 
 const excerpt = (text) => {
   const flat = String(text ?? "").replace(/\s+/g, " ").trim();
@@ -99,10 +110,7 @@ export function createAutomod({
   }, 60_000);
   sweep.unref?.();
 
-  function settingsFor(guildId) {
-    const config = normalizeAutomod(guildSettings.get(guildId, Setting.AUTOMOD));
-    return config.enabled && activeRules(config).length > 0 ? config : undefined;
-  }
+  const planFor = (guildId) => derivedSetting(guildSettings, guildId, Setting.AUTOMOD, automodPlan) ?? undefined;
 
   function isExempt(message, member, config) {
     const channel = message.channel;
@@ -122,21 +130,32 @@ export function createAutomod({
     return Boolean(roles && [modRole, ...config.exemptRoleIds].some((id) => id && roles.has(id)));
   }
 
+  // invite code -> the lookup in progress, so a burst of the same invite asks Discord once.
+  const lookups = new Map();
+
   // Which server an invite is for, or undefined if it doesn't work.
   async function inviteGuildId(client, code) {
     const cached = invites.get(code);
     if (cached && cached.at >= now() - INVITE_CACHE_MS) {
       return cached.guildId;
     }
-    let guildId;
-    try {
-      const invite = await client.fetchInvite(code);
-      guildId = invite?.guild?.id;
-    } catch {
-      guildId = undefined;
+    if (lookups.has(code)) {
+      return lookups.get(code);
     }
-    invites.set(code, { guildId, at: now() });
-    return guildId;
+    const lookup = client
+      .fetchInvite(code)
+      .then((invite) => invite?.guild?.id, () => undefined)
+      .then((guildId) => {
+        if (invites.size >= MAX_CACHED_INVITES) {
+          // Maps keep insertion order, so the first key is the oldest.
+          invites.delete(invites.keys().next().value);
+        }
+        invites.set(code, { guildId, at: now() });
+        return guildId;
+      })
+      .finally(() => lookups.delete(code));
+    lookups.set(code, lookup);
+    return lookup;
   }
 
   // Remembers the message and returns the member's recent messages, oldest first.
@@ -152,10 +171,10 @@ export function createAutomod({
 
   // The first rule `message` breaks, as { rule, detail, messages }, or
   // undefined. `messages` lists every message to delete ({ id, channelId }).
-  async function findViolation(message, config, { recent }) {
+  async function findViolation(message, config, { recent, rules = activeRules(config) }) {
     const content = message.content ?? "";
     const only = [{ id: message.id, channelId: message.channelId }];
-    for (const rule of activeRules(config)) {
+    for (const rule of rules) {
       const settings = config.rules[rule];
       switch (rule) {
         case AutomodRule.BANNED_WORDS: {
@@ -357,17 +376,17 @@ export function createAutomod({
       if (ignored(message)) {
         return;
       }
-      const config = settingsFor(message.guildId);
-      if (!config) {
+      const plan = planFor(message.guildId);
+      if (!plan) {
         return;
       }
+      const { config, rules } = plan;
       const member = await memberOf(message);
       if (!member || isExempt(message, member, config)) {
         return;
       }
-      const needsHistory = activeRules(config).some((rule) => HISTORY_RULES.has(rule));
-      const recent = needsHistory ? remember(message) : undefined;
-      const violation = await findViolation(message, config, { recent });
+      const recent = plan.needsHistory ? remember(message) : undefined;
+      const violation = await findViolation(message, config, { recent, rules });
       if (violation) {
         await enforce(message, member, config, violation);
         return true;
@@ -380,15 +399,16 @@ export function createAutomod({
       if (newMessage.partial || ignored(newMessage) || (!oldMessage.partial && oldMessage.content === newMessage.content)) {
         return;
       }
-      const config = settingsFor(newMessage.guildId);
-      if (!config) {
+      const plan = planFor(newMessage.guildId);
+      if (!plan) {
         return;
       }
+      const { config, rules } = plan;
       const member = await memberOf(newMessage);
       if (!member || isExempt(newMessage, member, config)) {
         return;
       }
-      const violation = await findViolation(newMessage, config, { recent: undefined });
+      const violation = await findViolation(newMessage, config, { recent: undefined, rules });
       if (violation) {
         await enforce(newMessage, member, config, violation);
       }

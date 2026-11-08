@@ -1,8 +1,10 @@
-// Checks followed feeds and posts what's new. Every minute it looks at the
-// feeds that weren't checked for CHECK_EVERY_MS (YouTube live:
-// LIVE_CHECK_EVERY_MS), one at a time. Twitch and Kick are feeds/livePoller.js. At most
-// MAX_POSTS new items are posted per check, so a feed that suddenly lists
-// fifty "new" items can't flood a channel.
+// Checks followed feeds and posts what's new. Every minute it looks at up to
+// PER_TICK feeds that weren't checked for CHECK_EVERY_MS (YouTube live:
+// LIVE_CHECK_EVERY_MS). Servers following the same feed share one download,
+// and up to FETCH_CONCURRENCY downloads run at once, so one slow site doesn't
+// hold up the rest. Twitch and Kick are feeds/livePoller.js. At most MAX_POSTS
+// new items are posted per check, so a feed that suddenly lists fifty "new"
+// items can't flood a channel.
 
 import { pickLanguage } from "../i18n/i18n.js";
 import { buildFeedPost, readFeed } from "./feeds.js";
@@ -10,7 +12,22 @@ import { buildFeedPost, readFeed } from "./feeds.js";
 export const CHECK_EVERY_MS = 10 * 60 * 1000;
 export const LIVE_CHECK_EVERY_MS = 3 * 60 * 1000;
 const MAX_POSTS = 3;
-const PER_TICK = 20;
+// 200 a minute keeps up with 2,000 feeds checked every 10 minutes.
+export const PER_TICK = 200;
+export const FETCH_CONCURRENCY = 6;
+
+// Runs work(item) for every item, at most `limit` at a time.
+async function forEachLimited(items, limit, work) {
+  let next = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (next < items.length) {
+      const item = items[next];
+      next += 1;
+      await work(item);
+    }
+  });
+  await Promise.all(workers);
+}
 
 // Options: client, store (FeedStore), logger, forcedLanguage, fetchFeed
 // ((url, kind) → { title, items }, for tests), now
@@ -18,7 +35,8 @@ export function createFeedPoller({ client, store, logger, forcedLanguage, fetchF
   let timer;
   let running = false;
 
-  async function check(feed) {
+  // `read` is the download, shared by every server following the same feed.
+  async function check(feed, read = () => fetchFeed(feed.url, feed.kind)) {
     const guild = client.guilds.cache.get(feed.guildId);
     if (!guild) {
       store.checked(feed.id, { seen: feed.seen, checkedAt: now() });
@@ -26,7 +44,7 @@ export function createFeedPoller({ client, store, logger, forcedLanguage, fetchF
     }
     let items;
     try {
-      ({ items } = await fetchFeed(feed.url, feed.kind));
+      ({ items } = await read());
     } catch (error) {
       logger.debug("Couldn't read a feed", { guildId: feed.guildId, feedId: feed.id, error });
       store.failed(feed.id, { error: error.message ?? error, checkedAt: now() });
@@ -66,9 +84,19 @@ export function createFeedPoller({ client, store, logger, forcedLanguage, fetchF
     }
     running = true;
     try {
+      const bySource = new Map();
       for (const feed of store.due(now() - CHECK_EVERY_MS, PER_TICK, now() - LIVE_CHECK_EVERY_MS)) {
-        await check(feed).catch((error) => logger.error("Checking a feed crashed", { feedId: feed.id, error }));
+        const key = `${feed.kind} ${feed.url}`;
+        bySource.set(key, [...(bySource.get(key) ?? []), feed]);
       }
+      await forEachLimited([...bySource.values()], FETCH_CONCURRENCY, async (group) => {
+        let download;
+        // Only downloaded if a server in the group still has the bot.
+        const read = () => (download ??= fetchFeed(group[0].url, group[0].kind));
+        for (const feed of group) {
+          await check(feed, read).catch((error) => logger.error("Checking a feed crashed", { feedId: feed.id, error }));
+        }
+      });
     } finally {
       running = false;
     }

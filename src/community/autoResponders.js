@@ -7,7 +7,7 @@
 // it to one channel or category (null = everywhere). Managed with
 // /autoresponder or on the dashboard's Custom commands page.
 
-import { Setting } from "../settings/guildSettings.js";
+import { derivedSetting, Setting } from "../settings/guildSettings.js";
 
 export const MAX_RESPONDERS = 25;
 // Short enough to fit in the /autoresponder form's custom ID.
@@ -38,21 +38,28 @@ export const cleanReply = (text) => String(text ?? "").replace(/\r\n?/g, "\n").t
 const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 // Whether `content` (already cleaned) sets off this auto-responder.
-export function matchesTrigger(responder, content) {
+// A test for one responder's trigger: (cleaned message text) => boolean.
+export function triggerMatcher(responder) {
   const trigger = cleanTrigger(responder.trigger);
   if (!trigger) {
-    return false;
+    return () => false;
   }
   switch (responder.match) {
     case Match.EXACT:
-      return content === trigger;
+      return (content) => content === trigger;
     case Match.STARTS:
-      return content.startsWith(trigger);
-    case Match.WORD:
-      return new RegExp(`(?<![\\p{L}\\p{N}_])${escapeRegExp(trigger)}(?![\\p{L}\\p{N}_])`, "u").test(content);
+      return (content) => content.startsWith(trigger);
+    case Match.WORD: {
+      const pattern = new RegExp(`(?<![\\p{L}\\p{N}_])${escapeRegExp(trigger)}(?![\\p{L}\\p{N}_])`, "u");
+      return (content) => pattern.test(content);
+    }
     default:
-      return content.includes(trigger);
+      return (content) => content.includes(trigger);
   }
+}
+
+export function matchesTrigger(responder, content) {
+  return triggerMatcher(responder)(content);
 }
 
 // The server's auto-responders, with anything malformed dropped.
@@ -68,6 +75,12 @@ export function respondersOf(guildSettings, guildId) {
           channelId: typeof responder.channelId === "string" ? responder.channelId : null,
         }))
     : [];
+}
+
+// The server's responders with their triggers compiled, worked out once per
+// settings change (GuildSettings.derived) instead of on every message.
+function compiledResponders(saved) {
+  return respondersOf({ get: () => saved }).map((responder) => ({ ...responder, matches: triggerMatcher(responder) }));
 }
 
 export const sortResponders = (responders) => [...responders].sort((a, b) => a.trigger.localeCompare(b.trigger));
@@ -153,12 +166,12 @@ export function createAutoResponder({ guildSettings, logger, now = Date.now }) {
       if (!message.inGuild?.() || message.author?.bot || message.webhookId || message.system || !message.content) {
         return false;
       }
-      const responders = respondersOf(guildSettings, message.guildId);
+      const responders = derivedSetting(guildSettings, message.guildId, Setting.AUTO_RESPONDERS, compiledResponders);
       if (responders.length === 0) {
         return false;
       }
       const content = cleanTrigger(message.content);
-      const responder = responders.find((entry) => appliesTo(entry, message.channel) && matchesTrigger(entry, content));
+      const responder = responders.find((entry) => appliesTo(entry, message.channel) && entry.matches(content));
       if (!responder || coolingDown(`${message.channelId}:${responder.trigger}`)) {
         return false;
       }

@@ -17,6 +17,8 @@ const API = "https://discord.com/api/v10";
 // their server list (with their permissions in each).
 const SCOPES = ["identify", "guilds"];
 const CACHE_MS = 30_000;
+// Logins and server lists go straight to Discord; give up on a hung request.
+const OAUTH_TIMEOUT_MS = 15_000;
 // Expired cache entries are cleared out once a cache holds this many.
 const CACHE_SWEEP_SIZE = 1000;
 const MEMBER_SEARCH_LIMIT = 10;
@@ -43,24 +45,46 @@ export class DiscordApiError extends Error {
   }
 }
 
-// A value kept for CACHE_MS, then fetched again.
+// A value kept for CACHE_MS, then fetched again. A page asks for several
+// things at once, so requests for a key already being fetched share that one
+// request instead of each asking Discord (and using up the rate limit).
 function cached(load) {
   const entries = new Map();
+  const loading = new Map();
   return {
     async get(key) {
       const entry = entries.get(key);
       if (entry && entry.expiresAt > Date.now()) {
         return entry.value;
       }
-      const value = await load(key);
-      if (entries.size >= CACHE_SWEEP_SIZE) {
-        const now = Date.now();
-        entries.forEach((old, oldKey) => old.expiresAt <= now && entries.delete(oldKey));
+      if (loading.has(key)) {
+        return loading.get(key);
       }
-      entries.set(key, { value, expiresAt: Date.now() + CACHE_MS });
-      return value;
+      const request = Promise.resolve()
+        .then(() => load(key))
+        .then((value) => {
+          // forget() during the request means the answer may already be out of date.
+          if (loading.get(key) === request) {
+            if (entries.size >= CACHE_SWEEP_SIZE) {
+              const now = Date.now();
+              entries.forEach((old, oldKey) => old.expiresAt <= now && entries.delete(oldKey));
+            }
+            entries.set(key, { value, expiresAt: Date.now() + CACHE_MS });
+          }
+          return value;
+        })
+        .finally(() => {
+          if (loading.get(key) === request) {
+            loading.delete(key);
+          }
+        });
+      loading.set(key, request);
+      return request;
     },
-    forget: (key) => entries.delete(key),
+    forget: (key) => {
+      loading.delete(key);
+      entries.delete(key);
+    },
   };
 }
 
@@ -89,7 +113,7 @@ export function createDiscordApi({ config, fetch = globalThis.fetch, rest }) {
   const redirectUri = `${config.url}/auth/callback`;
 
   async function oauthRequest(path, init) {
-    const response = await fetch(`${API}${path}`, init);
+    const response = await fetch(`${API}${path}`, { signal: AbortSignal.timeout(OAUTH_TIMEOUT_MS), ...init });
     if (!response.ok) {
       throw new DiscordApiError(response.status, `Discord answered ${response.status} to ${path}`);
     }

@@ -9,8 +9,13 @@
 //
 // Settings are also kept in memory, so reading one never touches the disk. The
 // dashboard changes them from another process, so call reloadIfChanged() now
-// and then to pick those changes up. Without a database (as in tests and
-// `npm run register`) nothing is saved.
+// and then to pick those changes up: it re-reads only the servers whose
+// settings changed (table settings_changes, kept up to date by triggers).
+// Without a database (as in tests and `npm run register`) nothing is saved.
+//
+// Values handed out are shared, so never change one in place: build a new
+// value and set() it. derived() caches what's worked out from a setting (such
+// as a normalized config) until the setting changes.
 
 import { readFile, rename } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
@@ -73,6 +78,23 @@ export const Setting = Object.freeze({
 
 const KNOWN_SETTINGS = new Set(Object.values(Setting));
 
+// guildSettings.derived(), or a plain derive(get()) for stand-ins without it (tests).
+export function derivedSetting(guildSettings, guildId, setting, derive) {
+  return typeof guildSettings?.derived === "function"
+    ? guildSettings.derived(guildId, setting, derive)
+    : derive(guildSettings?.get(guildId, setting));
+}
+
+function deepFreeze(value) {
+  if (value && typeof value === "object" && !Object.isFrozen(value)) {
+    Object.freeze(value);
+    for (const child of Object.values(value)) {
+      deepFreeze(child);
+    }
+  }
+  return value;
+}
+
 // Parsed JSON, or undefined if the file doesn't exist. A corrupted file throws,
 // so the bot refuses to start instead of silently dropping settings.
 async function readJson(file) {
@@ -95,6 +117,10 @@ export class GuildSettings {
   #dataVersion;
   // server ID -> { setting: value }
   #guilds = new Map();
+  // settings_version when the settings were last read.
+  #settingsVersion = 0;
+  // derive function -> "<server>:<setting>" -> { raw, value }
+  #derived = new Map();
 
   // `db` is an open database (see storage/database.js), or undefined to keep
   // settings in memory only.
@@ -108,29 +134,86 @@ export class GuildSettings {
           ON CONFLICT (guild_id, key) DO UPDATE SET value = excluded.value`),
         delete: db.prepare("DELETE FROM guild_settings WHERE guild_id = ? AND key = ?"),
         count: db.prepare("SELECT COUNT(*) AS total FROM guild_settings"),
+        guild: db.prepare("SELECT key, value FROM guild_settings WHERE guild_id = ?"),
         // Changes whenever another connection (the dashboard) writes to the database.
         dataVersion: db.prepare("PRAGMA data_version"),
+        // Changes whenever anyone writes a setting (database.js migration 29).
+        settingsVersion: db.prepare("SELECT version FROM settings_version WHERE id = 1"),
+        changedSince: db.prepare("SELECT guild_id FROM settings_changes WHERE version > ?"),
       };
       this.#readAll();
     }
   }
 
+  #currentSettingsVersion() {
+    return Number(this.#statements.settingsVersion.get()?.version ?? 0);
+  }
+
   #readAll() {
     this.#dataVersion = this.#statements.dataVersion.get().data_version;
+    this.#settingsVersion = this.#currentSettingsVersion();
     this.#guilds.clear();
     for (const row of this.#statements.all.all()) {
       this.#remember(row.guild_id, row.key, JSON.parse(row.value));
     }
   }
 
-  // Re-reads the settings if another process changed the database since the
-  // last read. Cheap enough to call before every request. Returns whether it re-read.
+  #readGuild(guildId) {
+    const values = {};
+    for (const row of this.#statements.guild.all(guildId)) {
+      values[row.key] = JSON.parse(row.value);
+    }
+    if (Object.keys(values).length > 0) {
+      this.#guilds.set(guildId, values);
+    } else {
+      this.#guilds.delete(guildId);
+    }
+  }
+
+  // Re-reads the servers whose settings another process changed since the last
+  // read. Cheap enough to call before every request: when nothing else wrote to
+  // the database it's one PRAGMA, and when only other tables changed (XP,
+  // logins) it's one more tiny query. Returns whether any settings were re-read.
   reloadIfChanged() {
-    if (!this.#statements || this.#statements.dataVersion.get().data_version === this.#dataVersion) {
+    if (!this.#statements) {
       return false;
     }
-    this.#readAll();
-    return true;
+    const dataVersion = this.#statements.dataVersion.get().data_version;
+    if (dataVersion === this.#dataVersion) {
+      return false;
+    }
+    this.#dataVersion = dataVersion;
+    const settingsVersion = this.#currentSettingsVersion();
+    if (settingsVersion === this.#settingsVersion) {
+      return false;
+    }
+    const changed = this.#statements.changedSince.all(this.#settingsVersion);
+    this.#settingsVersion = settingsVersion;
+    for (const { guild_id: guildId } of changed) {
+      this.#readGuild(guildId);
+    }
+    return changed.length > 0;
+  }
+
+  // What `derive(value)` gives for this server's setting, worked out once and
+  // kept until the setting changes. For hot paths such as automod, which would
+  // otherwise normalize the same config on every message. The result is frozen,
+  // since every caller shares it.
+  derived(guildId, setting, derive) {
+    const raw = this.get(guildId, setting);
+    let cache = this.#derived.get(derive);
+    if (!cache) {
+      cache = new Map();
+      this.#derived.set(derive, cache);
+    }
+    const key = `${guildId}:${setting}`;
+    const entry = cache.get(key);
+    if (entry && entry.raw === raw) {
+      return entry.value;
+    }
+    const value = deepFreeze(derive(raw));
+    cache.set(key, { raw, value });
+    return value;
   }
 
   // Every setting of one server, as { setting: value }.
@@ -214,9 +297,12 @@ export class GuildSettings {
     }
   }
 
+  // Keeps a copy, as read back from JSON, so the caller changing its own object
+  // later can't change the saved setting behind derived()'s back.
   #write(guildId, setting, value) {
-    this.#statements?.upsert.run(guildId, setting, JSON.stringify(value));
-    this.#remember(guildId, setting, value);
+    const json = JSON.stringify(value);
+    this.#statements?.upsert.run(guildId, setting, json);
+    this.#remember(guildId, setting, json === undefined ? value : JSON.parse(json));
   }
 
   #remember(guildId, setting, value) {
