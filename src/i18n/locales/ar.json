@@ -490,6 +490,7 @@
   "rolePanelWizardHome": "لدى هذا الخادم {count} من {max} لوحات رتب. اختر لوحة لتغييرها أو أنشئ لوحة جديدة. لا يُنشر شيء حتى تضغط **حفظ**.",
   "rolePanelWizardHomeFull": "لدى هذا الخادم {count} من {max} لوحات رتب، وهو الحد الأقصى. اختر لوحة لتغييرها أو احذف واحدة لإفساح المجال.",
   "rolePanelWizardPickPlaceholder": "اختر لوحة لتغييرها",
+  "rolePanelWizardDeletePickPlaceholder": "اختر لوحة لحذفها",
   "rolePanelWizardPickOption": "{count} رتب في #{channel}",
   "rolePanelWizardNewButton": "إنشاء لوحة جديدة",
   "rolePanelWizardCloseButton": "إغلاق",
