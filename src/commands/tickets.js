@@ -1,6 +1,6 @@
 // The /tickets command and the ticket buttons.
 //
-//   /tickets panel channel:#support [staff-role:@Support] [title:…] [message:…]
+//   /tickets panel channel:#support [staff-role:@Support] [title:…] [message:…]   (title and message are saved with the panel's look)
 //   /tickets off                          remove the button (open tickets stay)
 //   /tickets close [reason:…]             close the ticket you're in
 //   /tickets add member:@x                bring someone into this ticket
@@ -9,8 +9,10 @@
 //   /tickets log [channel:#…]             where the ticket log goes (empty: the mod log)
 //   /tickets log-event event:<…> enabled:<…>  switch one kind of ticket log entry off or on
 //
-// Categories (several buttons, each with its own questions and staff role) are
-// set on the dashboard's Tickets page; see tickets/categories.js.
+// The panel's look (embed, buttons or dropdown, intro message, thread names)
+// and its categories (each with its own questions, staff role, intro and
+// thread name) are set on the dashboard's Tickets page; see tickets/panel.js
+// and tickets/categories.js.
 //
 // Members open a ticket with the panel's button, which asks what they need
 // help with. The ticket is a private thread in the panel's channel with the
@@ -40,6 +42,7 @@ import { result, Status } from "../logs/actionLog.js";
 import { Setting } from "../settings/guildSettings.js";
 import {
   addStaff,
+  buildPanelComponents,
   buildPanelMessage,
   buildTicketWelcome,
   CLOSE_BUTTON,
@@ -52,16 +55,19 @@ import {
   MAX_SUBJECT_LENGTH,
   MAX_TITLE_LENGTH,
   FORM_PREFIX,
+  MENU_ID,
   OPEN_BUTTON,
   OPEN_PREFIX,
+  panelLook,
   questionInput,
   serverLanguage,
-  threadName,
   TICKET_PERMISSIONS,
   ticketCategories,
   ticketSettings,
   ticketStaffRoleId,
+  ticketThreadName,
 } from "../tickets/tickets.js";
+import { isDefaultLook } from "../tickets/panel.js";
 import { findCategory, subjectFromAnswers } from "../tickets/categories.js";
 import { buildTicketTranscript, fetchThreadMessages } from "../tickets/transcript.js";
 import { noTicketLog, TICKET_EVENTS, TicketEvent } from "../tickets/ticketLog.js";
@@ -160,19 +166,21 @@ const timestamp = (ms, style) => `<t:${Math.floor(ms / 1000)}:${style}>`;
 // The form a ticket opens with: the category's questions, or "What do you
 // need help with?".
 function buildTicketForm(language, category) {
-  const answerInput = (customId) =>
-    new TextInputBuilder()
+  const answerInput = (customId, question = {}) => {
+    const input = new TextInputBuilder()
       .setCustomId(customId)
-      .setStyle(TextInputStyle.Paragraph)
-      .setRequired(true)
-      .setMaxLength(MAX_SUBJECT_LENGTH)
-      .setPlaceholder(translate(language, "ticketFormPlaceholder"));
+      .setStyle(question.style === "short" ? TextInputStyle.Short : TextInputStyle.Paragraph)
+      .setRequired(question.required ?? true)
+      .setMaxLength(Math.min(question.maxLength ?? MAX_SUBJECT_LENGTH, MAX_SUBJECT_LENGTH))
+      .setPlaceholder(question.placeholder ?? translate(language, "ticketFormPlaceholder"));
+    return question.minLength ? input.setMinLength(question.minLength) : input;
+  };
   const form = new ModalBuilder()
     .setCustomId(category ? `${FORM_PREFIX}${category.id}` : FORM_ID)
     .setTitle((category?.label ?? translate(language, "ticketFormTitle")).slice(0, 45));
   if (category?.questions.length > 0) {
     return form.addLabelComponents(
-      category.questions.map((question, index) => new LabelBuilder().setLabel(question).setTextInputComponent(answerInput(questionInput(index)))),
+      category.questions.map((question, index) => new LabelBuilder().setLabel(question.label).setTextInputComponent(answerInput(questionInput(index), question))),
     );
   }
   return form.addLabelComponents(new LabelBuilder().setLabel(translate(language, "ticketFormLabel")).setTextInputComponent(answerInput(FORM_INPUT)));
@@ -433,11 +441,12 @@ export function createTicketsCommand({
         return answer(Status.REFUSED, "ticketStaffEveryone");
       }
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+      // A title or message given here is kept in the look; left out, the saved one stays.
       const title = interaction.options.getString("title")?.trim() || null;
       const message = interaction.options.getString("message")?.trim() || null;
+      const look = { ...panelLook(guildSettings, guildId), ...(title ? { title } : {}), ...(message ? { description: message } : {}) };
       const panel = buildPanelMessage(serverLanguage(guild, forcedLanguage), {
-        title,
-        message,
+        look,
         categories: ticketCategories(guildSettings, guildId),
         color: accentColor(guildSettings, guildId),
       });
@@ -451,8 +460,18 @@ export function createTicketsCommand({
         throw error;
       }
       await removeOldPanel();
-      // The title and message are kept so the dashboard can redraw the panel when categories change.
-      await guildSettings.set(guildId, Setting.TICKETS, { channelId: channel.id, messageId: posted.id, staffRoleId: role?.id ?? null, title, message });
+      if (!isDefaultLook(look)) {
+        await guildSettings.set(guildId, Setting.TICKET_PANEL, look);
+      }
+      // The title and message are kept with the panel too, which tells the
+      // dashboard this panel's whole message may be redrawn.
+      await guildSettings.set(guildId, Setting.TICKETS, {
+        channelId: channel.id,
+        messageId: posted.id,
+        staffRoleId: role?.id ?? null,
+        title: look.title,
+        message: look.description,
+      });
       const staffRoleId = ticketStaffRoleId(guildSettings, guildId);
       return answer(Status.SUCCESS, staffRoleId ? "ticketPanelPosted" : "ticketPanelPostedNoStaff", {
         channel: `<#${channel.id}>`,
@@ -526,13 +545,38 @@ export function createTicketsCommand({
     return outcome;
   }
 
-  // "Open a ticket" on the panel: asks what they need help with.
+  // "Open a ticket" (or a category's button) on the panel: asks what they need help with.
   async function handleOpenButton(interaction) {
+    return showForm(interaction, () => categoryFor(interaction, guildSettings, OPEN_PREFIX));
+  }
+
+  // The panel's dropdown: the same, for the category picked. The menu is
+  // redrawn afterwards so it doesn't stay on that choice (Discord would
+  // otherwise not let the same member pick it again).
+  async function handleMenu(interaction) {
+    try {
+      return await showForm(interaction, () => findCategory(ticketCategories(guildSettings, interaction.guildId), interaction.values?.[0]) ?? null);
+    } finally {
+      await resetMenu(interaction);
+    }
+  }
+
+  async function resetMenu(interaction) {
+    if (!interaction.inCachedGuild() || typeof interaction.message?.edit !== "function") {
+      return;
+    }
+    const guildId = interaction.guildId;
+    await interaction.message
+      .edit({ components: buildPanelComponents(serverLanguage(interaction.guild, forcedLanguage), { look: panelLook(guildSettings, guildId), categories: ticketCategories(guildSettings, guildId) }) })
+      .catch((error) => logger.debug("Couldn't reset the ticket panel's dropdown", { guildId, error }));
+  }
+
+  async function showForm(interaction, pickCategory) {
     const { language, answer } = answerer(interaction);
     if (!interaction.inCachedGuild() || !ticketSettings(guildSettings, interaction.guildId)) {
       return answer(Status.REFUSED, "ticketsOff");
     }
-    const category = categoryFor(interaction, guildSettings, OPEN_PREFIX);
+    const category = pickCategory();
     if (category === null) {
       return answer(Status.REFUSED, "ticketCategoryGone");
     }
@@ -575,7 +619,7 @@ export function createTicketsCommand({
         ? category.questions
             .map((question, index) => {
               const value = formValue(interaction, questionInput(index));
-              return value === undefined ? null : { question, answer: cleanAnswer(value) || "—" };
+              return value === undefined ? null : { question: question.label, answer: cleanAnswer(value) || "—" };
             })
             .filter(Boolean)
         : [{ question: null, answer: cleanAnswer(formValue(interaction, FORM_INPUT)) || "—" }];
@@ -592,11 +636,18 @@ export function createTicketsCommand({
     }
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
+    const look = panelLook(guildSettings, guild.id);
     const name = interaction.member.displayName ?? interaction.user.username;
     let thread;
     try {
       thread = await channel.threads.create({
-        name: threadName(ticket.number, name),
+        name: ticketThreadName(category?.nameFormat ?? look.nameFormat, {
+          number: ticket.number,
+          displayName: name,
+          username: interaction.user.username,
+          category: category?.label,
+          server: guild.name,
+        }),
         type: ChannelType.PrivateThread,
         invitable: false,
         autoArchiveDuration: ThreadAutoArchiveDuration.OneWeek,
@@ -612,15 +663,21 @@ export function createTicketsCommand({
     tickets.setThread(ticket.id, thread.id);
 
     const staffRoleId = category?.staffRoleId ?? settings.staffRoleId ?? ticketStaffRoleId(guildSettings, guild.id);
+    const ping = category?.pingStaff ?? look.pingStaff;
     await thread.members.add(interaction.user.id);
-    await thread.send({
-      ...buildTicketWelcome(serverLanguage(guild, forcedLanguage), { ticket, staffRoleId, color: accentColor(guildSettings, guild.id) }),
-      allowedMentions: { users: [interaction.user.id], roles: staffRoleId ? [staffRoleId] : [] },
+    const welcome = buildTicketWelcome(serverLanguage(guild, forcedLanguage), {
+      ticket: { ...ticket, userName: interaction.user.username },
+      staffRoleId,
+      color: accentColor(guildSettings, guild.id),
+      intro: category?.intro ?? look.intro,
+      ping,
+      server: guild.name,
     });
+    await thread.send(welcome);
     logger.info("Ticket opened", { guildId: guild.id, ticket: ticket.number });
     const outcome = await answer(Status.SUCCESS, "ticketOpened", { thread: `<#${thread.id}>`, number: ticket.number });
     // After answering, since it can take a while on a big staff team.
-    await addStaff({ thread, guild, staffRoleId, logger });
+    await addStaff({ thread, guild, staffRoleId, logger, pinged: welcome.allowedMentions.roles.length > 0 });
     await ticketLog.record(guild, { ...ticket, threadId: thread.id }, {
       event: TicketEvent.OPENED,
       actorId: interaction.user.id,
@@ -726,6 +783,7 @@ export function createTicketsCommand({
       [OPEN_BUTTON]: { label: "Open ticket button", handle: handleOpenButton },
       [FORM_ID]: { label: "Ticket form", handle: handleForm },
       [CLOSE_BUTTON]: { label: "Close ticket button", handle: handleCloseButton },
+      [MENU_ID]: { label: "Ticket panel dropdown", handle: handleMenu },
     },
     componentPrefixes: {
       [OPEN_PREFIX]: { label: "Open ticket category button", handle: handleOpenButton },

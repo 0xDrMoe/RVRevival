@@ -5008,54 +5008,301 @@ function ticketRow(guildId, ticket) {
   );
 }
 
-const MAX_TICKET_CATEGORIES = 5;
+// --- Ticket panel editor ------------------------------------------------------------
+//
+// The panel's look (tickets/panel.js) and its categories (tickets/categories.js),
+// edited together with a live preview of the panel and of a new ticket's first
+// message. Saving updates the posted panel in place.
+
+const MAX_TICKET_CATEGORIES = 25;
 const MAX_CATEGORY_QUESTIONS = 5;
+const TICKET_BUTTON_STYLES = ["primary", "secondary", "success", "danger"];
+const TICKET_PLACEHOLDERS = "{user} {username} {number} {staff} {category} {server}";
 const newCategoryId = () => Math.random().toString(36).slice(2, 10) || "c1";
 
-function categoryRow(category, roles, onRemove) {
-  const value = category ?? { id: newCategoryId(), label: "", emoji: null, description: null, staffRoleId: null, questions: [] };
+// Saved questions used to be plain text.
+const ticketQuestion = (question) =>
+  typeof question === "string"
+    ? { label: question, placeholder: null, style: "paragraph", required: true, minLength: null, maxLength: null }
+    : { placeholder: null, style: "paragraph", required: true, minLength: null, maxLength: null, ...question };
+
+const ticketStyleSelect = (className, value, keyPrefix) =>
+  h(
+    "select",
+    { class: className },
+    TICKET_BUTTON_STYLES.map((style) => h("option", { value: style, selected: style === (value ?? "primary") }, t(`${keyPrefix}${style}`))),
+  );
+
+const ticketField = (labelKey, control, extraClass = "") =>
+  h("label", { class: `field ${extraClass}`.trim() }, h("span", { class: "field-label" }, t(labelKey)), control);
+
+function ticketQuestionRow(question, onRemove) {
+  const value = ticketQuestion(question ?? { label: "" });
+  const number = (className, current, min) => h("input", { class: className, type: "number", min, max: 1000, step: 1, value: current ?? "", placeholder: "—" });
   const row = h(
     "div",
-    { class: "category-row", "data-id": value.id },
+    { class: "question-row" },
+    h(
+      "div",
+      { class: "question-grid" },
+      ticketField("ticketQuestionLabel", h("input", { class: "question-label", type: "text", maxLength: 45, required: true, value: value.label, placeholder: t("ticketQuestionLabelPlaceholder") })),
+      ticketField("ticketQuestionHint", h("input", { class: "question-hint", type: "text", maxLength: 100, value: value.placeholder ?? "", placeholder: t("ticketFormHintDefault") })),
+      ticketField(
+        "ticketQuestionSize",
+        h(
+          "select",
+          { class: "question-style" },
+          h("option", { value: "short", selected: value.style === "short" }, t("ticketQuestionShort")),
+          h("option", { value: "paragraph", selected: value.style !== "short" }, t("ticketQuestionParagraph")),
+        ),
+      ),
+      ticketField("ticketQuestionMin", number("question-min", value.minLength, 0), "question-number"),
+      ticketField("ticketQuestionMax", number("question-max", value.maxLength, 1), "question-number"),
+    ),
+    h(
+      "div",
+      { class: "toolbar" },
+      h("label", { class: "switch" }, h("input", { class: "question-required", type: "checkbox", checked: value.required }), h("span", {}, t("ticketQuestionRequired"))),
+      h("span", { class: "grow" }),
+      h("button", { class: "ghost small", type: "button", onclick: () => onRemove(row) }, t("tagRemove")),
+    ),
+  );
+  return row;
+}
+
+function readTicketQuestions(container) {
+  const number = (input) => (input.value.trim() === "" ? null : Number(input.value));
+  return [...container.querySelectorAll(".question-row")].map((row) => ({
+    label: row.querySelector(".question-label").value.trim(),
+    placeholder: row.querySelector(".question-hint").value.trim() || null,
+    style: row.querySelector(".question-style").value,
+    required: row.querySelector(".question-required").checked,
+    minLength: number(row.querySelector(".question-min")),
+    maxLength: number(row.querySelector(".question-max")),
+  }));
+}
+
+function categoryRow(category, roles, onRemove) {
+  const value = category ?? { id: newCategoryId(), label: "", emoji: null, description: null, staffRoleId: null, style: "primary", intro: null, nameFormat: null, pingStaff: null, questions: [] };
+  const questions = editableList({
+    items: (value.questions ?? []).map(ticketQuestion),
+    max: MAX_CATEGORY_QUESTIONS,
+    makeRow: ticketQuestionRow,
+    focus: ".question-label",
+    emptyKey: "ticketQuestionsNone",
+    addKey: "ticketQuestionAdd",
+  });
+  const ping = value.pingStaff === true ? "on" : value.pingStaff === false ? "off" : "";
+  const staff = picker({ id: `staff-${value.id}`, options: roles, value: value.staffRoleId, emptyLabel: t("ticketCategoryStaffDefault") });
+  staff.classList.add("category-staff");
+  const row = h(
+    "details",
+    { class: "category-row", "data-id": value.id, open: !category },
+    h(
+      "summary",
+      {},
+      h("span", { class: "category-title" }, value.emoji ? `${value.emoji} ` : "", value.label || t("ticketCategoryNew")),
+      h("span", { class: "muted" }, t("ticketCategoryQuestionCount", { count: (value.questions ?? []).length })),
+    ),
     h(
       "div",
       { class: "category-grid" },
-      h("label", { class: "field" }, h("span", { class: "field-label" }, t("ticketCategoryLabel")), h("input", { class: "category-label", type: "text", maxLength: 80, required: true, value: value.label, placeholder: t("ticketCategoryLabelPlaceholder") })),
-      h("label", { class: "field category-emoji-field" }, h("span", { class: "field-label" }, t("ticketCategoryEmoji")), h("input", { class: "category-emoji", type: "text", maxLength: 64, value: value.emoji ?? "", placeholder: "🐞" })),
-      h("label", { class: "field" }, h("span", { class: "field-label" }, t("ticketCategoryStaff")), picker({ id: `staff-${value.id}`, options: roles, value: value.staffRoleId, emptyLabel: t("ticketCategoryStaffDefault") })),
-      h("label", { class: "field" }, h("span", { class: "field-label" }, t("ticketCategoryDescription")), h("input", { class: "category-description", type: "text", maxLength: 200, value: value.description ?? "", placeholder: t("ticketCategoryDescriptionPlaceholder") })),
+      ticketField("ticketCategoryLabel", h("input", { class: "category-label", type: "text", maxLength: 80, required: true, value: value.label, placeholder: t("ticketCategoryLabelPlaceholder") })),
+      ticketField("ticketCategoryEmoji", h("input", { class: "category-emoji", type: "text", maxLength: 64, value: value.emoji ?? "", placeholder: "🐞" }), "category-emoji-field"),
+      ticketField("ticketCategoryStyle", ticketStyleSelect("category-style", value.style, "ticketButtonStyle_")),
+      ticketField("ticketCategoryStaff", staff),
     ),
+    ticketField("ticketCategoryDescription", h("input", { class: "category-description", type: "text", maxLength: 200, value: value.description ?? "", placeholder: t("ticketCategoryDescriptionPlaceholder") })),
+    ticketField("ticketCategoryIntro", h("textarea", { class: "category-intro", rows: 2, maxLength: 1500, placeholder: t("ticketCategoryFollowPanel") }, value.intro ?? "")),
     h(
-      "label",
-      { class: "field" },
-      h("span", { class: "field-label" }, t("ticketCategoryQuestions")),
-      h("textarea", { class: "category-questions", rows: 3, placeholder: t("ticketCategoryQuestionsPlaceholder") }, value.questions.join("\n")),
-      h("span", { class: "help" }, t("ticketCategoryQuestionsHelp", { max: MAX_CATEGORY_QUESTIONS })),
+      "div",
+      { class: "category-grid" },
+      ticketField("ticketCategoryNameFormat", h("input", { class: "category-name-format", type: "text", maxLength: 90, value: value.nameFormat ?? "", placeholder: t("ticketCategoryFollowPanel") })),
+      ticketField(
+        "ticketCategoryPing",
+        h(
+          "select",
+          { class: "category-ping" },
+          h("option", { value: "", selected: ping === "" }, t("ticketCategoryPingPanel")),
+          h("option", { value: "on", selected: ping === "on" }, t("ticketCategoryPingOn")),
+          h("option", { value: "off", selected: ping === "off" }, t("ticketCategoryPingOff")),
+        ),
+      ),
     ),
-    h("div", { class: "toolbar" }, h("span", { class: "grow" }), h("button", { class: "ghost small", type: "button", onclick: () => onRemove(row) }, t("tagRemove"))),
+    h("div", { class: "toolbar" }, h("strong", { class: "grow" }, t("ticketCategoryQuestions")), questions.count, questions.addButton),
+    h("p", { class: "help" }, t("ticketCategoryQuestionsHelp", { max: MAX_CATEGORY_QUESTIONS })),
+    questions.empty,
+    h("div", { class: "question-list" }, questions.list),
+    h("div", { class: "toolbar" }, h("span", { class: "grow" }), h("button", { class: "ghost small danger-text", type: "button", onclick: () => onRemove(row) }, t("ticketCategoryRemove"))),
   );
-  row.querySelector("select").classList.add("category-staff");
+  // The summary follows the label as it's typed.
+  row.addEventListener("input", () => {
+    const emoji = row.querySelector(".category-emoji").value.trim();
+    const label = row.querySelector(".category-label").value.trim();
+    row.querySelector(".category-title").textContent = `${emoji ? `${emoji} ` : ""}${label || t("ticketCategoryNew")}`;
+    row.querySelector("summary .muted").textContent = t("ticketCategoryQuestionCount", { count: row.querySelectorAll(".question-row").length });
+  });
   return row;
 }
 
 function readTicketCategories(form) {
-  const categories = [...form.querySelectorAll(".category-row")].map((row) => ({
-    id: row.dataset.id,
-    label: row.querySelector(".category-label").value.trim(),
-    emoji: row.querySelector(".category-emoji").value.trim() || null,
-    description: row.querySelector(".category-description").value.trim() || null,
-    staffRoleId: row.querySelector(".category-staff").value || null,
-    questions: row
-      .querySelector(".category-questions")
-      .value.split("\n")
-      .map((line) => line.trim())
-      .filter(Boolean),
-  }));
+  const categories = [...form.querySelectorAll(".category-row")].map((row) => {
+    const ping = row.querySelector(".category-ping").value;
+    return {
+      id: row.dataset.id,
+      label: row.querySelector(".category-label").value.trim(),
+      emoji: row.querySelector(".category-emoji").value.trim() || null,
+      description: row.querySelector(".category-description").value.trim() || null,
+      staffRoleId: row.querySelector(".category-staff").value || null,
+      style: row.querySelector(".category-style").value,
+      intro: row.querySelector(".category-intro").value.trim() || null,
+      nameFormat: row.querySelector(".category-name-format").value.trim() || null,
+      pingStaff: ping === "on" ? true : ping === "off" ? false : null,
+      questions: readTicketQuestions(row),
+    };
+  });
   return categories.length > 0 ? categories : null;
 }
 
-// The panel's buttons ("ticket types"), for people who can change settings.
-function ticketCategoriesCard(guildId, data) {
+function readTicketLook(form) {
+  const value = (id) => form.querySelector(`#${id}`).value.trim() || null;
+  return {
+    title: value("tkTitle"),
+    description: value("tkDescription"),
+    color: form.querySelector("#tkUseColor").checked ? colorNumber(form.querySelector("#tkColor").value) : null,
+    authorName: value("tkAuthor"),
+    authorIconUrl: value("tkAuthorIcon"),
+    imageUrl: value("tkImage"),
+    thumbnailUrl: value("tkThumbnail"),
+    footer: value("tkFooter"),
+    layout: form.querySelector("#tkLayout").value,
+    menuPlaceholder: value("tkMenuPlaceholder"),
+    buttonLabel: value("tkButtonLabel"),
+    buttonEmoji: value("tkButtonEmoji"),
+    buttonStyle: form.querySelector("#tkButtonStyle").value,
+    intro: value("tkIntro"),
+    nameFormat: value("tkNameFormat"),
+    pingStaff: form.querySelector("#tkPingStaff").checked,
+  };
+}
+
+// Fills {user}, {number}… with example values, for the preview.
+function ticketSample(text, values) {
+  return text.replace(/\{(user|username|number|staff|category|server)\}/g, (match, key) => values[key] ?? match);
+}
+
+const ticketPreviewButton = (style, emoji, label) =>
+  h("span", { class: `discord-button ${style}` }, emoji ? h("span", { "aria-hidden": "true" }, emoji.startsWith("<") ? "🙂" : emoji) : null, label);
+
+// The posted panel as Discord would show it.
+function ticketPanelPreview(look, categories, data, defaults) {
+  const described = look.layout === "menu" && categories.length > 0 ? [] : categories.filter((category) => category.description);
+  const message = embedPreview(
+    {
+      content: "",
+      embed: {
+        title: look.title || defaults.title,
+        url: "",
+        description: look.description || defaults.description,
+        color: look.color ?? defaults.color,
+        author: { name: look.authorName ?? "", icon_url: look.authorIconUrl ?? "" },
+        footer: { text: look.footer ?? "" },
+        image: { url: look.imageUrl ?? "" },
+        thumbnail: { url: look.thumbnailUrl ?? "" },
+        fields: described.map((category) => ({ name: `${category.emoji ? `${category.emoji} ` : ""}${category.label || t("ticketCategoryNew")}`, value: category.description, inline: false })),
+      },
+    },
+    data,
+  );
+  let components;
+  if (categories.length === 0) {
+    components = h("div", { class: "discord-button-row" }, ticketPreviewButton(look.buttonStyle, look.buttonEmoji ?? "🎫", look.buttonLabel || defaults.buttonLabel));
+  } else if (look.layout === "menu") {
+    components = h(
+      "div",
+      { class: "discord-select" },
+      h("span", { class: "discord-select-box" }, h("span", {}, look.menuPlaceholder || defaults.menuPlaceholder), icon("chevronDown", "icon small")),
+      h(
+        "ul",
+        { class: "discord-select-options" },
+        categories.map((category) =>
+          h(
+            "li",
+            {},
+            category.emoji ? h("span", { class: "discord-select-emoji", "aria-hidden": "true" }, category.emoji.startsWith("<") ? "🙂" : category.emoji) : null,
+            h("span", {}, h("strong", {}, category.label || t("ticketCategoryNew")), category.description ? h("span", { class: "muted" }, category.description.slice(0, 100)) : null),
+          ),
+        ),
+      ),
+    );
+  } else {
+    const rows = [];
+    for (let index = 0; index < categories.length; index += 5) {
+      rows.push(
+        h(
+          "div",
+          { class: "discord-button-row" },
+          categories.slice(index, index + 5).map((category) => ticketPreviewButton(category.style, category.emoji, category.label || t("ticketCategoryNew"))),
+        ),
+      );
+    }
+    components = rows;
+  }
+  message.querySelector(".discord-body").append(h("div", { class: "discord-buttons" }, components));
+  return message;
+}
+
+// A new ticket's first message, for the first category (or the single button).
+function ticketWelcomePreview(look, category, data, defaults) {
+  const staffRoleId = category?.staffRoleId ?? defaults.staffRoleId ?? data.settings.modRoleId ?? data.settings.staffRoleId ?? null;
+  const values = {
+    user: `@${t("ticketSampleUsername")}`,
+    username: t("ticketSampleUsername"),
+    number: "7",
+    staff: staffRoleId ? `<@&${staffRoleId}>` : defaults.staffWord,
+    category: category?.label ?? "",
+    server: data.guild.name,
+  };
+  const intro = category?.intro || look.intro;
+  const ping = category?.pingStaff ?? look.pingStaff;
+  let content = intro ? ticketSample(intro, values) : ticketSample(staffRoleId ? defaults.intro : defaults.introNoStaff, values);
+  if (ping && staffRoleId && !content.includes(values.staff)) {
+    content = `${content}\n${values.staff}`;
+  }
+  const questions = (category?.questions ?? []).filter((question) => question.label);
+  const subject = questions.length > 0 ? questions.map((question, index) => `**${question.label}**\n${index === 0 ? t("ticketSampleAnswer") : "…"}`).join("\n\n") : t("ticketSampleAnswer");
+  const thread = ticketSample(category?.nameFormat || look.nameFormat || defaults.nameFormat, { ...values, user: t("ticketSampleUsername"), number: "0007", category: category?.label || "ticket" }).slice(0, 100);
+  const message = embedPreview(
+    {
+      content,
+      embed: {
+        title: category?.label || defaults.subject,
+        url: "",
+        description: subject,
+        color: defaults.brandColor ?? defaults.color,
+        author: { name: "", icon_url: "" },
+        footer: { text: "" },
+        image: { url: "" },
+        thumbnail: { url: "" },
+        fields: [],
+      },
+    },
+    data,
+  );
+  message.querySelector(".discord-body").append(h("div", { class: "discord-buttons" }, h("div", { class: "discord-button-row" }, ticketPreviewButton("secondary", "🔒", defaults.closeButton))));
+  return h(
+    "div",
+    {},
+    h("p", { class: "discord-thread-name" }, icon("hash", "icon small"), h("span", {}, thread)),
+    message,
+    h("p", { class: "help" }, ping && staffRoleId ? t("ticketPreviewPings") : t("ticketPreviewNoPing")),
+  );
+}
+
+// The Tickets page's editor, for people who can change settings.
+function ticketPanelEditor(guildId, data) {
+  const defaults = data.ticketDefaults;
+  const look = data.settings.ticketPanel ?? {};
   const roles = data.roles.filter((role) => role.id !== guildId && !role.managed).map((role) => roleItem(role));
   const categories = editableList({
     items: data.settings.ticketCategories ?? [],
@@ -5065,20 +5312,72 @@ function ticketCategoriesCard(guildId, data) {
     emptyKey: "ticketCategoriesNone",
     addKey: "ticketCategoriesAdd",
   });
+  const input = (id, current, attributes = {}) => h("input", { id, type: "text", value: current ?? "", ...attributes });
+
+  const startColor = look.color ?? defaults.color;
+  const colorInput = h("input", { id: "tkColor", type: "color", value: hexColor(startColor), "aria-label": t("embedColor") });
+  const useColor = h("input", { id: "tkUseColor", type: "checkbox", checked: look.color !== null && look.color !== undefined });
+  const swatches = EMBED_SWATCHES.map((swatch) => {
+    const button = h("button", {
+      type: "button",
+      class: "swatch",
+      title: swatch,
+      "aria-label": swatch,
+      onclick: () => {
+        colorInput.value = swatch;
+        useColor.checked = true;
+        refresh();
+      },
+    });
+    button.style.setProperty("--swatch", swatch);
+    return button;
+  });
+  const layout = h(
+    "select",
+    { id: "tkLayout" },
+    h("option", { value: "buttons", selected: look.layout !== "menu" }, t("ticketLayoutButtons")),
+    h("option", { value: "menu", selected: look.layout === "menu" }, t("ticketLayoutMenu")),
+  );
+  const menuField = field("ticketMenuPlaceholder", null, input("tkMenuPlaceholder", look.menuPlaceholder, { maxLength: 150, placeholder: defaults.menuPlaceholder }));
+  const singleButton = h(
+    "div",
+    { class: "category-grid" },
+    ticketField("ticketButtonLabel", input("tkButtonLabel", look.buttonLabel, { maxLength: 80, placeholder: defaults.buttonLabel })),
+    ticketField("ticketCategoryEmoji", input("tkButtonEmoji", look.buttonEmoji, { maxLength: 64, placeholder: "🎫" }), "category-emoji-field"),
+    ticketField("ticketCategoryStyle", (() => {
+      const select = ticketStyleSelect("", look.buttonStyle, "ticketButtonStyle_");
+      select.id = "tkButtonStyle";
+      return select;
+    })()),
+  );
+  const singleHelp = h("p", { class: "help" }, t("ticketSingleButtonHelp"));
+  const pingStaff = h("input", { id: "tkPingStaff", type: "checkbox", role: "switch", checked: look.pingStaff !== false, "aria-label": t("ticketPingStaff") });
+
+  const panelPreview = h("div", { class: "embed-preview" });
+  const welcomePreview = h("div", { class: "embed-preview" });
   const save = h("button", { class: "primary", type: "submit" }, t("save"));
-  const summaryCount = h("span", { class: "muted" }, t("ticketCategoriesSummary", { count: (data.settings.ticketCategories ?? []).length }));
+  const summaryCount = h("span", { class: "muted" });
+  const section = (titleKey, iconName, tone, ...children) => h("div", { class: "editor-section" }, h("h3", { class: "editor-section-title" }, iconChip(iconName, tone, "sm"), t(titleKey)), ...children);
+
   const form = h(
     "form",
     {
+      class: "ticket-editor",
+      oninput: () => refresh(),
+      onchange: () => refresh(),
       onsubmit: async (event) => {
         event.preventDefault();
         save.disabled = true;
         try {
-          const result = await api(`/api/guilds/${guildId}/settings`, { method: "PUT", body: { ticketCategories: readTicketCategories(form) } });
+          const result = await api(`/api/guilds/${guildId}/settings`, {
+            method: "PUT",
+            body: { ticketPanel: readTicketLook(form), ticketCategories: readTicketCategories(form) },
+          });
           data.settings = result.settings;
           state.cache = { guildId, data, at: Date.now() };
-          summaryCount.textContent = t("ticketCategoriesSummary", { count: (data.settings.ticketCategories ?? []).length });
-          toast(t("ticketCategoriesSaved"));
+          state.unsaved = false;
+          refresh(false);
+          toast(t(defaults.posted ? "ticketPanelSavedPosted" : "ticketPanelSaved"));
         } catch (error) {
           failed(error);
         } finally {
@@ -5086,17 +5385,95 @@ function ticketCategoriesCard(guildId, data) {
         }
       },
     },
-    h("div", { class: "toolbar" }, h("p", { class: "help grow" }, t("ticketCategoriesHelp")), categories.count, categories.addButton),
-    categories.empty,
-    categories.list,
-    h("div", { class: "toolbar" }, h("span", { class: "grow" }), save),
+    section(
+      "ticketSectionPanel",
+      "image",
+      "purple",
+      h(
+        "div",
+        { class: "embed-color-row" },
+        h("label", { class: "switch" }, useColor, h("span", {}, t("ticketOwnColor"))),
+        colorInput,
+        h("div", { class: "swatches" }, swatches),
+      ),
+      h("p", { class: "help" }, t("ticketColorHelp")),
+      h("div", { class: "embed-grid" }, field("embedAuthor", null, input("tkAuthor", look.authorName, { maxLength: 256 })), field("embedAuthorIcon", null, input("tkAuthorIcon", look.authorIconUrl, { placeholder: "https://…" }))),
+      field("embedTitle", null, input("tkTitle", look.title, { maxLength: 256, placeholder: defaults.title })),
+      field("embedDescription", "embedDescriptionHelp", h("textarea", { id: "tkDescription", rows: 4, maxLength: 4096, placeholder: defaults.description }, look.description ?? "")),
+      h("div", { class: "embed-grid" }, field("embedImage", null, input("tkImage", look.imageUrl, { placeholder: "https://…" })), field("embedThumbnail", null, input("tkThumbnail", look.thumbnailUrl, { placeholder: "https://…" }))),
+      field("embedFooter", null, input("tkFooter", look.footer, { maxLength: 2048 })),
+    ),
+    section(
+      "ticketSectionPick",
+      "layers",
+      "blue",
+      field("ticketLayout", "ticketLayoutHelp", layout),
+      menuField,
+      singleHelp,
+      singleButton,
+    ),
+    section(
+      "ticketSectionNew",
+      "ticket",
+      "cyan",
+      field("ticketIntro", null, h("textarea", { id: "tkIntro", rows: 3, maxLength: 1500, placeholder: defaults.intro }, look.intro ?? "")),
+      h("p", { class: "help" }, t("ticketPlaceholdersHelp", { placeholders: TICKET_PLACEHOLDERS })),
+      field("ticketNameFormat", "ticketNameFormatHelp", input("tkNameFormat", look.nameFormat, { maxLength: 90, placeholder: defaults.nameFormat })),
+      h(
+        "label",
+        { class: "switch-card" },
+        h("span", { class: "switch-text" }, h("strong", {}, t("ticketPingStaff")), h("span", { class: "help" }, t("ticketPingStaffHelp"))),
+        h("span", { class: "switch" }, pingStaff),
+      ),
+    ),
+    section(
+      "ticketCategories",
+      "layers",
+      "purple",
+      h("div", { class: "toolbar" }, h("p", { class: "help grow" }, t("ticketCategoriesHelp")), categories.count, categories.addButton),
+      categories.empty,
+      categories.list,
+    ),
+    h("div", { class: "toolbar" }, h("p", { class: "help grow" }, t(defaults.posted ? "ticketSaveUpdatesPanel" : "ticketSaveNoPanel")), save),
   );
-  return h(
+
+  function refresh(changed = true) {
+    const current = readTicketLook(form);
+    const kinds = readTicketCategories(form) ?? [];
+    const hasCategories = kinds.length > 0;
+    menuField.hidden = !hasCategories || current.layout !== "menu";
+    singleButton.hidden = hasCategories;
+    singleHelp.hidden = hasCategories;
+    layout.disabled = !hasCategories;
+    panelPreview.replaceChildren(ticketPanelPreview(current, kinds, data, defaults));
+    welcomePreview.replaceChildren(ticketWelcomePreview(current, kinds[0] ?? null, data, defaults));
+    for (const preview of [panelPreview, welcomePreview]) {
+      preview.querySelectorAll("[data-color]").forEach((element) => element.style.setProperty("--embed-color", element.dataset.color || "transparent"));
+    }
+    summaryCount.textContent = t("ticketCategoriesSummary", { count: kinds.length });
+    if (changed) {
+      state.unsaved = true;
+    }
+  }
+
+  const editor = h(
     "details",
-    { class: "card collapsible" },
-    h("summary", {}, iconChip("layers", "purple"), h("span", { class: "card-title" }, t("ticketCategories")), summaryCount),
-    form,
+    { class: "card collapsible", open: true },
+    h("summary", {}, iconChip("edit", "purple"), h("span", { class: "card-title" }, t("ticketPanelEditor")), summaryCount),
+    h(
+      "div",
+      { class: "embed-layout" },
+      form,
+      h(
+        "aside",
+        { class: "embed-side" },
+        card(t("ticketPreviewPanel"), "eye", "green", panelPreview),
+        card(t("ticketPreviewWelcome"), "message", "blue", welcomePreview),
+      ),
+    ),
   );
+  refresh(false);
+  return editor;
 }
 
 async function showTicketList(guildId, data, query) {
@@ -5161,7 +5538,7 @@ async function showTicketList(guildId, data, query) {
       data,
       "tickets",
       pageHero("tickets", t("ticketsIntro"), data),
-      canManageGuild(data) ? ticketCategoriesCard(guildId, data) : null,
+      canManageGuild(data) && data.ticketDefaults ? ticketPanelEditor(guildId, data) : null,
       filters,
       card(t("page_tickets"), "ticket", "cyan", summary, empty, list, h("div", { class: "center" }, more)),
     ),

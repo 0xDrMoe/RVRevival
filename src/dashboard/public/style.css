@@ -3125,11 +3125,77 @@ dialog textarea {
   margin-bottom: 12px;
 }
 
+/* Ticket panel editor */
+.ticket-editor {
+  display: grid;
+  gap: var(--gap);
+  min-width: 0;
+}
+
+.editor-section {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.editor-section + .editor-section {
+  padding-top: var(--gap);
+  border-top: 1px solid var(--border);
+}
+
+.editor-section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 1rem;
+}
+
+.editor-section .field {
+  max-width: none;
+}
+
 .category-row {
   padding: 12px;
   background: var(--surface-2);
   border: 1px solid var(--border);
   border-radius: 10px;
+  min-width: 0;
+}
+
+.category-row > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  list-style: none;
+}
+
+.category-row > summary::-webkit-details-marker {
+  display: none;
+}
+
+.category-row > summary::before {
+  content: "▸";
+  color: var(--muted);
+  transition: transform 0.15s ease;
+}
+
+.category-row[open] > summary {
+  margin-bottom: 12px;
+}
+
+.category-row[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.category-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .category-row :is(input, select, textarea) {
@@ -3143,18 +3209,155 @@ dialog textarea {
 
 .category-grid {
   display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(0, 0.7fr) minmax(0, 1.5fr);
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 0 12px;
 }
 
-.category-grid .field:nth-child(4) {
-  grid-column: 1 / -1;
+.category-grid .category-emoji-field {
+  min-width: 0;
+}
+
+.question-list .tag-list {
+  margin-top: 0;
+}
+
+.question-row {
+  padding: 10px;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+}
+
+.question-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 0.7fr) minmax(0, 0.7fr);
+  gap: 0 10px;
+  align-items: end;
+}
+
+.question-row .field {
+  margin-bottom: 6px;
+}
+
+@media (max-width: 900px) {
+  .question-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .question-grid .field:first-child {
+    grid-column: 1 / -1;
+  }
 }
 
 @media (max-width: 640px) {
   .category-grid {
     grid-template-columns: 1fr;
   }
+}
+
+/* Buttons, dropdowns and thread names in the Discord previews */
+.discord-buttons {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.discord-button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.discord-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 2px 16px;
+  border-radius: 8px;
+  background: #4e5058;
+  color: #fff;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.discord-button.primary {
+  background: #5865f2;
+}
+
+.discord-button.success {
+  background: #248046;
+}
+
+.discord-button.danger {
+  background: #da373c;
+}
+
+.discord-select {
+  max-width: 400px;
+}
+
+.discord-select-box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  background: #1e1f22;
+  border: 1px solid #1e1f22;
+  border-radius: 4px 4px 0 0;
+  color: #949ba4;
+  font-size: 0.875rem;
+}
+
+.discord-select-options {
+  list-style: none;
+  margin: 0;
+  padding: 4px 0;
+  background: #2b2d31;
+  border: 1px solid #1e1f22;
+  border-top: 0;
+  border-radius: 0 0 4px 4px;
+}
+
+.discord-select-options li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  font-size: 0.875rem;
+}
+
+.discord-select-options li > span:last-child {
+  display: grid;
+  min-width: 0;
+}
+
+.discord-select-options strong {
+  color: #f2f3f5;
+  font-weight: 500;
+}
+
+.discord-select-options .muted {
+  font-size: 0.8rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.discord-thread-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #3f4147;
+  color: #f2f3f5;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.embed-side > .card + .card {
+  margin-top: var(--gap);
 }
 
 /* Embed builder */
