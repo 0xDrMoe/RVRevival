@@ -797,7 +797,7 @@ export const GUIDE = [
           ["/feed remove id", "Stops following it."],
           ["/feed list", "Shows every feed, with the problem next to any that can't be read or posted."],
         ],
-        example: ["/feed add type:YouTube source:https://youtube.com/@rumbleverse channel:#news", "/feed add type:Reddit source:r/Rumbleverse channel:#reddit"],
+        example: ["/feed add type:YouTube source:https://youtube.com/@yourchannel channel:#news", "/feed add type:Reddit source:r/discordapp channel:#reddit"],
         tips: ["Checked every 10 minutes. Only new items, at most three at a time, up to 10 feeds.", "`message` can use `{title}`, `{link}`, `{author}` and `{feed}`."],
       },
       {

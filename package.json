@@ -1,8 +1,8 @@
 {
-  "name": "rumbleverse-revival-bot",
+  "name": "canopy-bot",
   "version": "1.0.0",
   "private": true,
-  "description": "Discord bot for the Rumbleverse Revival server.",
+  "description": "Canopy, the all-in-one Discord bot by Cedar Tech Solutions.",
   "license": "UNLICENSED",
   "type": "module",
   "main": "src/index.js",
