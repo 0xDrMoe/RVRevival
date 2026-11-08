@@ -474,6 +474,26 @@ describe("/rolepanel setup", () => {
     expect(editor.shown().content).toBe('Deleted the panel "Pick your roles".');
   });
 
+  it("deletes a panel from the start screen, after asking", async () => {
+    const editor = setupEditor();
+    await editor.open();
+    await editor.click("save");
+    await editor.open();
+    expect(buttonLabels(editor.shown())).toEqual(["Create a new panel", "Delete panel", "Close"]);
+    await editor.click("vdelpick");
+    await editor.click("delpick", { values: ["1"] });
+    expect(editor.shown().embeds[2].toJSON().description).toContain("Pick your roles");
+    // Back returns to the start screen without deleting anything.
+    await editor.click("vhome");
+    expect(editor.panels()).toHaveLength(1);
+    expect(editor.shown().embeds[0].toJSON().title).toBe("Role panel setup");
+    await editor.click("vdelpick");
+    await editor.click("delpick", { values: ["1"] });
+    const { outcome } = await editor.click("confirmdelete");
+    expect(outcome).toMatchObject({ status: Status.SUCCESS, key: "rolePanelDeleted" });
+    expect(editor.panels()).toEqual([]);
+  });
+
   it("refuses a panel that doesn't exist", async () => {
     const editor = setupEditor();
     const { interaction, outcome } = await editor.open(7);

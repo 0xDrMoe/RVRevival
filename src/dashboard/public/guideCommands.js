@@ -1079,7 +1079,7 @@ export const COMMAND_PARTS = [
         usages: [
           {
             usage: "/rolepanel setup [panel]",
-            what: "Opens a private editor. Pick a panel or create a new one, then use its buttons: **Add roles** (up to 25 at once), **Edit a role** (emoji and button text), **Remove roles**, **Edit message**, **Channel** and the mode. Nothing is posted until you press **Save**; **Cancel all changes** throws the draft away. **Delete panel** asks first.",
+            what: "Opens a private editor. Pick a panel, create a new one, or press **Delete panel** to delete one. In a panel, use its buttons: **Add roles** (up to 25 at once), **Edit a role** (emoji and button text), **Remove roles**, **Edit message**, **Channel** and the mode. Nothing is posted until you press **Save**; **Cancel all changes** throws the draft away. **Delete panel** asks first.",
             options: [["panel", "The panel to open. Leave it out to pick one from a list or create a new one."]],
           },
           {

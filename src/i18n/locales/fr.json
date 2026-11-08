@@ -490,6 +490,7 @@
   "rolePanelWizardHome": "Ce serveur a {count} panneaux de rôles sur {max}. Choisis-en un à modifier, ou crées-en un nouveau. Rien n'est posté avant que tu appuies sur **Enregistrer**.",
   "rolePanelWizardHomeFull": "Ce serveur a {count} panneaux de rôles sur {max}, le maximum. Choisis-en un à modifier, ou supprimes-en un pour faire de la place.",
   "rolePanelWizardPickPlaceholder": "Choisis un panneau à modifier",
+  "rolePanelWizardDeletePickPlaceholder": "Choisis un panneau à supprimer",
   "rolePanelWizardPickOption": "{count} rôles dans #{channel}",
   "rolePanelWizardNewButton": "Créer un nouveau panneau",
   "rolePanelWizardCloseButton": "Fermer",

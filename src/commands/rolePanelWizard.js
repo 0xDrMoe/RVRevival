@@ -1,7 +1,7 @@
 // /rolepanel setup: a private editor for role panels, so admins can build a
 // whole panel without running /rolepanel add once per role.
 //
-//   Start      pick a panel to change, or create a new one
+//   Start      pick a panel to change, create a new one, or delete one (asks first)
 //   Editor     a preview of the panel, its channel, mode and roles, and buttons:
 //                Add roles      a role menu, to add up to 25 roles at once
 //                Edit a role    pick a role, then set its emoji and button text
@@ -67,6 +67,8 @@ export const View = Object.freeze({
   REMOVE: "remove",
   CHANNEL: "channel",
   DELETE: "delete",
+  // The start screen, picking a panel to delete.
+  DELETE_PICK: "deletePick",
 });
 
 // Buttons that only switch what the editor shows.
@@ -76,6 +78,7 @@ const VIEW_BUTTONS = {
   vremove: View.REMOVE,
   vchannel: View.CHANNEL,
   vdelete: View.DELETE,
+  vdelpick: View.DELETE_PICK,
   back: View.EDIT,
 };
 
@@ -131,6 +134,7 @@ export function createRolePanelWizard({ guildSettings, logger, forcedLanguage, l
   const isDirty = (session) => session.draft && (!session.saved || !sameContent(session.saved, session.draft));
 
   function openPanel(session, panel) {
+    session.deletingFromHome = false;
     session.saved = panel;
     session.draft = contentOf(panel);
     session.view = View.EDIT;
@@ -159,15 +163,16 @@ export function createRolePanelWizard({ guildSettings, logger, forcedLanguage, l
     // Always set, so an update clears the last notice.
     const content = notices.join("\n").slice(0, 2000);
 
-    if (session.view === View.HOME) {
+    if (session.view === View.HOME || session.view === View.DELETE_PICK) {
       const panels = panelsOf(guildSettings, session.guildId);
+      const deleting = session.view === View.DELETE_PICK && panels.length > 0;
       const rows = [];
       if (panels.length > 0) {
         rows.push(
           row(
             new StringSelectMenuBuilder()
-              .setCustomId(id("pick"))
-              .setPlaceholder(text("rolePanelWizardPickPlaceholder"))
+              .setCustomId(id(deleting ? "delpick" : "pick"))
+              .setPlaceholder(text(deleting ? "rolePanelWizardDeletePickPlaceholder" : "rolePanelWizardPickPlaceholder"))
               .addOptions(
                 panels.slice(0, 25).map((panel) => ({
                   label: `#${panel.id} ${panel.title}`.slice(0, 100),
@@ -182,10 +187,13 @@ export function createRolePanelWizard({ guildSettings, logger, forcedLanguage, l
         );
       }
       rows.push(
-        row(
-          button("new", "rolePanelWizardNewButton", ButtonStyle.Primary, panels.length >= MAX_PANELS),
-          button("cancel", "rolePanelWizardCloseButton"),
-        ),
+        deleting
+          ? row(button("vhome", "rolePanelWizardBackButton"))
+          : row(
+              button("new", "rolePanelWizardNewButton", ButtonStyle.Primary, panels.length >= MAX_PANELS),
+              button("vdelpick", "rolePanelWizardDeleteButton", ButtonStyle.Danger, panels.length === 0),
+              button("cancel", "rolePanelWizardCloseButton"),
+            ),
       );
       const embed = new EmbedBuilder()
         .setColor(SETUP_COLOR)
@@ -264,7 +272,9 @@ export function createRolePanelWizard({ guildSettings, logger, forcedLanguage, l
       components = [row(menu), row(back)];
     } else if (session.view === View.DELETE && saved) {
       embeds.push(new EmbedBuilder().setColor(0xed4245).setDescription(text("rolePanelWizardDeleteConfirm", { title: saved.title })));
-      components = [row(button("confirmdelete", "rolePanelWizardDeleteButton", ButtonStyle.Danger), back)];
+      // Opened from the start screen's Delete panel: Back goes back there.
+      const deleteBack = session.deletingFromHome ? button("vhome", "rolePanelWizardBackButton") : back;
+      components = [row(button("confirmdelete", "rolePanelWizardDeleteButton", ButtonStyle.Danger), deleteBack)];
     } else {
       session.view = View.EDIT;
       const full = draft.roles.length >= MAX_PANEL_ROLES;
@@ -403,7 +413,7 @@ export function createRolePanelWizard({ guildSettings, logger, forcedLanguage, l
     const { action, arg } = parsed;
     const { draft } = session;
     // Every action but these needs a panel open in the editor.
-    if (!draft && !["pick", "new", "cancel"].includes(action)) {
+    if (!draft && !["pick", "new", "cancel", "vdelpick", "delpick", "vhome"].includes(action)) {
       session.view = View.HOME;
       await show();
       return null;
@@ -416,6 +426,28 @@ export function createRolePanelWizard({ guildSettings, logger, forcedLanguage, l
     }
 
     switch (action) {
+      case "vhome": {
+        // Only reachable before anything was changed: the delete screens.
+        session.saved = null;
+        session.draft = null;
+        session.deletingFromHome = false;
+        session.view = View.HOME;
+        await show();
+        return null;
+      }
+      case "delpick": {
+        const panel = panelsOf(guildSettings, guild.id).find((entry) => String(entry.id) === interaction.values?.[0]);
+        if (!panel) {
+          session.view = View.HOME;
+          await show([text("rolePanelNotFound")]);
+          return null;
+        }
+        openPanel(session, panel);
+        session.deletingFromHome = true;
+        session.view = View.DELETE;
+        await show();
+        return null;
+      }
       case "pick": {
         const panel = panelsOf(guildSettings, guild.id).find((entry) => String(entry.id) === interaction.values?.[0]);
         if (!panel) {

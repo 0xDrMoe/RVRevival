@@ -490,6 +490,7 @@
   "rolePanelWizardHome": "Este servidor tem {count} de {max} painéis de cargos. Escolha um para mudar ou crie um novo. Nada é postado até você apertar **Salvar**.",
   "rolePanelWizardHomeFull": "Este servidor tem {count} de {max} painéis de cargos, o máximo. Escolha um para mudar ou apague um para abrir espaço.",
   "rolePanelWizardPickPlaceholder": "Escolha um painel para mudar",
+  "rolePanelWizardDeletePickPlaceholder": "Escolha um painel para apagar",
   "rolePanelWizardPickOption": "{count} cargos em #{channel}",
   "rolePanelWizardNewButton": "Criar um painel novo",
   "rolePanelWizardCloseButton": "Fechar",

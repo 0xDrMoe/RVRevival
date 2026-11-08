@@ -490,6 +490,7 @@
   "rolePanelWizardHome": "This server has {count} of {max} role panels. Pick one to change, or create a new one. Nothing is posted until you press **Save**.",
   "rolePanelWizardHomeFull": "This server has {count} of {max} role panels, the most it can have. Pick one to change, or delete one to make room.",
   "rolePanelWizardPickPlaceholder": "Pick a panel to change",
+  "rolePanelWizardDeletePickPlaceholder": "Pick a panel to delete",
   "rolePanelWizardPickOption": "{count} roles in #{channel}",
   "rolePanelWizardNewButton": "Create a new panel",
   "rolePanelWizardCloseButton": "Close",
