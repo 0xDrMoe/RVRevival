@@ -1217,6 +1217,11 @@
   "joinTitle": "Obrigado por adicionar o Rabble!",
   "joinIntro": "O Rabble traz moderação, automod, registros, tickets, mensagens de boas-vindas, níveis e muito mais. Tudo começa desligado, então nada muda até você configurar.",
   "joinDashboard": "**Configure no painel:** {url}",
+  "dashboardCommandDescription": "Receba um link para o painel deste servidor",
+  "dashboardLink": "Configure e gerencie **{server}** no painel: configurações, casos, registros e o guia completo.\nEntre com o Discord. Alterar configurações exige **Gerenciar servidor** (ou um cargo do painel para uma visão limitada).",
+  "dashboardOpen": "Abrir painel",
+  "dashboardThisServer": "este servidor",
+  "dashboardNotSetUp": "O painel ainda não está configurado para este bot.",
   "joinGuide": "**Prefere o Discord?** Use `/guide` para conhecer cada recurso, ou `/settings` para o básico.",
   "joinCountriesOff": "Os cargos de país (`/country`) estão desligados. Ative-os na página Permissões do painel se quiser."
 }

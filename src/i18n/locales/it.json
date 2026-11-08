@@ -1217,6 +1217,11 @@
   "joinTitle": "Grazie per aver aggiunto Rabble!",
   "joinIntro": "Rabble porta moderazione, automod, log, ticket, messaggi di benvenuto, livelli e altro. Tutto parte spento, quindi non cambia nulla finché non lo configuri.",
   "joinDashboard": "**Configuralo dalla dashboard:** {url}",
+  "dashboardCommandDescription": "Ottieni un link alla dashboard di questo server",
+  "dashboardLink": "Configura e gestisci **{server}** dalla dashboard: impostazioni, casi, log e la guida completa.\nAccedi con Discord. Per cambiare le impostazioni serve **Gestisci server** (o un ruolo della dashboard per una vista limitata).",
+  "dashboardOpen": "Apri dashboard",
+  "dashboardThisServer": "questo server",
+  "dashboardNotSetUp": "La dashboard non è ancora configurata per questo bot.",
   "joinGuide": "**Preferisci Discord?** Usa `/guide` per un giro di tutte le funzioni, o `/settings` per le basi.",
   "joinCountriesOff": "I ruoli paese (`/country`) sono spenti. Attivali dalla pagina Permessi della dashboard se ti servono."
 }

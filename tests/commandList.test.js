@@ -12,6 +12,7 @@ describe("command list", () => {
       "country-help",
       "settings",
       "guide",
+      "dashboard",
       "ban",
       "unban",
       "kick",
