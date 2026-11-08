@@ -1126,6 +1126,9 @@
   "guideCommands": "Befehle",
   "guideExample": "Beispiel",
   "guideGoodToKnow": "Gut zu wissen",
+  "guideOptions": "Optionen",
+  "guideOptional": "optional",
+  "guideReadMore": "Mehr dazu:",
 
   "joinTitle": "Danke, dass du Rabble hinzugefügt hast!",
   "joinIntro": "Rabble bringt Moderation, Automod, Logs, Tickets, Willkommensnachrichten, Level und mehr. Alles startet ausgeschaltet, es ändert sich also nichts, bis du es einrichtest.",

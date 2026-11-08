@@ -1,17 +1,25 @@
-// The dashboard's Guide: how to use the bot and every feature, in English.
+// The dashboard's Guide: how to use Rabble and every feature, in English.
 // Shown by showGuide in app.js as a page of parts, a page per part and a page
-// per topic; tests/dashboardGuide.test.js checks
-// that every slash command and subcommand is mentioned somewhere.
+// per topic, and in Discord by /guide (commands/guide.js).
+//
+// The feature parts below explain each feature; the command reference
+// (guideCommands.js, added at the end) has a page per slash command with every
+// subcommand and option. tests/dashboardGuide.test.js checks both against the
+// real commands.
 //
 // Text can use `code`, **bold** and *italic*, nothing else; it's turned into elements,
 // never HTML. A section's `page` is the dashboard page it's set up on.
 //
-// Part fields: id, part (its name), icon, tone, about, sections.
+// Part fields: id, part (its name), group (a heading on the Guide's first
+// page, for the command reference), icon, tone, about, sections.
 // Section fields: id, title, icon, tone, page, summary, who, native (the
 // Discord feature to try first), steps, commands ([usage, what it does]),
 // table ({ head, rows }), legend (a second table), example (lines), tips.
+// Command pages also have command, related and usages (see guideCommands.js).
 
-export const GUIDE = [
+import { COMMAND_PARTS } from "./guideCommands.js";
+
+const FEATURE_PARTS = [
   {
     id: "start",
     part: "Getting started",
@@ -21,18 +29,18 @@ export const GUIDE = [
     sections: [
       {
         id: "setup",
-        title: "Set up the bot",
+        title: "Set up Rabble",
         icon: "sparkles",
         tone: "blue",
         page: "overview",
-        summary: "The few things to do once, after the bot joins a server. The **Setup** card on the Overview page ticks them off as you go, and you can skip the ones you don't need.",
+        summary: "The few things to do once, after Rabble joins a server. The **Setup** card on the Overview page ticks them off as you go, and you can skip the ones you don't need.",
         who: "Admins (Manage Server).",
         steps: [
           "**Check the bot's role.** Drag it above every role it should give or take (country roles, autoroles, level rewards, the quarantine role) in *Server Settings → Roles*. The bot can never manage a role at or above its own.",
           "**Pick who can moderate** on the **Permissions** page. The **Simple** tab sets the mod role, staff role and dashboard access in one step (*One staff team* suits most servers). You can also use `/settings mod-role` and `/settings staff-role`.",
           "**Set the log channels** on the **Logging** page: logs, mod log and server log. Keep all three staff-only.",
           "**Turn on what you need.** Protection and community features stay off until you set them up. Moderation commands, custom commands, giveaways, reminders, AFK and highlights work right away.",
-          "**Show staff their commands.** Discord hides staff commands from members without the permission, so add the staff roles under *Server Settings → Integrations → the bot*. The Permissions page lists which commands each role needs.",
+          "**Show staff their commands.** Discord hides staff commands from members without the permission, so add the staff roles under *Server Settings → Integrations → Rabble*. The Permissions page lists which commands each role needs.",
           "**Download a backup** on the **Backup** page once you're happy, so you can go back to it later.",
         ],
         native: "On a Community server, set up Discord's own **Onboarding** (*Server Settings → Onboarding*), **AutoMod** and **Safety Setup** first. The bot fills the gaps around them.",
@@ -68,15 +76,15 @@ export const GUIDE = [
           "The mod role falls back to the staff role until a separate mod role or a permission setup is chosen.",
           "`/case delete` and `/clearwarns` always need an admin, because they erase history.",
           "`/country-staff` needs the staff role itself. Being an admin isn't enough.",
-          "Can't see a command? Discord hides commands from people without the permission. Admins can change who sees them in *Server Settings → Integrations → the bot*.",
+          "Can't see a command? Discord hides commands from people without the permission. Admins can change who sees them in *Server Settings → Integrations → Rabble*.",
         ],
       },
       {
         id: "basics",
-        title: "How the bot works",
+        title: "How Rabble works",
         icon: "bot",
         tone: "cyan",
-        summary: "Things that are the same for every command.",
+        summary: "Things that are the same for every command. The **Commands** parts of this guide have a page for each command, with every option.",
         commands: [["/guide [topic]", "This guide in Discord, just for you. Page through it with the buttons, or pick a part or topic from the menus."]],
         table: {
           head: ["", ""],
@@ -852,7 +860,7 @@ export const GUIDE = [
         page: "access",
         summary: "Who can use which command, who can open this dashboard, and where each kind of log goes. Two tabs: **Simple** and **Advanced**.",
         who: "Only the **server owner** or **whoever added the bot** can change the setup and command rules. Other admins can look.",
-        native: "Discord's own *Server Settings → Integrations → the bot* can also limit a command to roles and channels, and hides it from everyone else. Use that when hiding is all you need. The bot's rules are for giving a command to a role without the permission, blocking roles, or turning a command off.",
+        native: "Discord's own *Server Settings → Integrations → Rabble* can also limit a command to roles and channels, and hides it from everyone else. Use that when hiding is all you need. The bot's rules are for giving a command to a role without the permission, blocking roles, or turning a command off.",
         table: {
           head: ["Simple setup", "What it does"],
           rows: [
@@ -863,7 +871,7 @@ export const GUIDE = [
         },
         steps: [
           "On **Simple**, pick a setup and its roles, press **Preview changes** to see exactly what will change, then **Apply this setup**.",
-          "Add each staff role under *Server Settings → Integrations → the bot*, so Discord shows them their commands. The page lists which commands each role needs.",
+          "Add each staff role under *Server Settings → Integrations → Rabble*, so Discord shows them their commands. The page lists which commands each role needs.",
           "Fine-tune on **Advanced**: whether **Discord permissions count**; the mod role, staff role and dashboard roles; **Command permissions** for each command (on or off, also allowed roles, only these roles, blocked roles, only these channels); and **Log channels per kind**.",
         ],
         tips: [
@@ -934,7 +942,7 @@ export const GUIDE = [
           rows: [
             ["\"Their highest role is equal to or above yours\"", "Ask someone higher up, or an admin."],
             ["\"…equal to or above mine\"", "The bot's role is too low. Move it up in *Server Settings → Roles*."],
-            ["You can't see `/ban`, `/kick` and so on", "Add the mod role under *Server Settings → Integrations → the bot*."],
+            ["You can't see `/ban`, `/kick` and so on", "Add the mod role under *Server Settings → Integrations → Rabble*."],
             ["\"I couldn't DM them about it\"", "Their DMs are closed. The action still happened."],
             ["`/purge` deleted fewer than asked", "Pinned messages and anything older than 14 days are skipped."],
             ["`/raid end` skipped some channels", "The bot couldn't edit them. They're listed in the mod log; fix them by hand."],
@@ -955,3 +963,5 @@ export const GUIDE = [
     ],
   },
 ];
+
+export const GUIDE = [...FEATURE_PARTS, ...COMMAND_PARTS];

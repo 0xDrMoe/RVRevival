@@ -3744,6 +3744,16 @@ dialog textarea {
   gap: var(--gap);
 }
 
+.guide-groups {
+  display: grid;
+  gap: var(--gap);
+}
+
+.guide-group-title {
+  margin: 12px 0 0;
+  font-size: 1.1rem;
+}
+
 .guide-part-card {
   display: grid;
   align-content: start;
@@ -3908,6 +3918,73 @@ dialog textarea {
   border-radius: 5px;
   background: var(--surface-2);
   font: 0.85em ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.guide-command-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.guide-command-links strong {
+  margin-inline-end: 4px;
+}
+
+.guide-command-links .guide-sibling {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-weight: 500;
+}
+
+.guide-usages {
+  display: grid;
+  gap: 12px;
+}
+
+.guide-usage {
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--surface-2) 45%, transparent);
+}
+
+.guide-usage h3 {
+  margin: 0;
+  font-size: 1rem;
+  overflow-wrap: anywhere;
+}
+
+.guide-usage h3 code {
+  font: 600 0.95rem ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--accent);
+}
+
+.guide-usage > p {
+  margin: 0;
+}
+
+.guide-options td:first-child {
+  width: 26%;
+  white-space: nowrap;
+}
+
+.guide-flag {
+  display: inline-block;
+  margin-inline-start: 6px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+  vertical-align: 1px;
+}
+
+.guide-flag.required {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent);
 }
 
 .guide-example pre {

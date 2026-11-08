@@ -6392,6 +6392,10 @@ async function showActivity(guildId) {
 // Every topic in guide.js, in order, with the part it's in.
 const GUIDE_TOPICS = GUIDE.flatMap(({ id, part, sections }) => sections.map((section) => ({ ...section, part, partId: id })));
 const guideLink = (guildId, topicId) => `#/g/${guildId}/guide${topicId ? `?topic=${topicId}` : ""}`;
+// The command reference's page for each slash command, by name ("/ban").
+const COMMAND_PAGES = new Map(GUIDE_TOPICS.filter((topic) => topic.command).map((topic) => [topic.command, topic]));
+// The command page a usage line ("/case view number") belongs to.
+const commandPageOf = (usage) => COMMAND_PAGES.get(usage.split(" ")[0]);
 const guidePartLink = (guildId, partId) => `#/g/${guildId}/guide?part=${partId}`;
 
 // Guide text: `code`, **bold** and *italic* become elements, everything else stays text.
@@ -6421,6 +6425,7 @@ const guideSearchText = (topic) =>
       topic.native,
       ...(topic.steps ?? []),
       ...(topic.commands ?? []).flat(),
+      ...(topic.usages ?? []).flatMap((usage) => [usage.usage, usage.what, ...usage.options.flat()]),
       ...[topic.table, topic.legend].flatMap((table) => (table ? table.rows.flat() : [])),
       ...(topic.example ?? []),
       ...(topic.tips ?? []),
@@ -6494,8 +6499,46 @@ function guideTable({ head, rows }) {
   );
 }
 
+// One way to run a command: its usage line, what it does, and each option.
+// An option in [brackets] in the usage line is optional.
+function guideUsage({ usage, what, options }) {
+  const optional = new Set([...usage.matchAll(/\[([^\]]+)\]/g)].map((match) => match[1]));
+  const rows = options.map(([name, text]) =>
+    h(
+      "tr",
+      {},
+      h("td", {}, h("code", {}, name), h("span", { class: `guide-flag${optional.has(name) ? "" : " required"}` }, t(optional.has(name) ? "guideOptional" : "guideRequired"))),
+      h("td", {}, guideText(text)),
+    ),
+  );
+  return h(
+    "div",
+    { class: "guide-usage" },
+    h("h3", {}, h("code", {}, usage)),
+    h("p", {}, guideText(what)),
+    rows.length > 0
+      ? h("div", { class: "table-wrap" }, h("table", { class: "table guide-table guide-options", "aria-label": t("guideOptions") }, h("tbody", {}, rows)))
+      : h("p", { class: "muted" }, t("guideNoOptions")),
+  );
+}
+
+// Links to the command pages for the commands a feature topic lists.
+function guideCommandLinks(guildId, topic) {
+  const pages = [...new Set((topic.commands ?? []).map(([usage]) => commandPageOf(usage)).filter(Boolean))];
+  if (pages.length === 0) {
+    return null;
+  }
+  return h(
+    "p",
+    { class: "guide-command-links" },
+    h("strong", {}, t("guideCommandPage")),
+    pages.map((page) => h("a", { class: "guide-sibling", href: guideLink(guildId, page.id) }, page.command)),
+  );
+}
+
 // Everything one topic says, as a card.
-function guideTopicBody(topic) {
+function guideTopicBody(topic, guildId) {
+  const related = topic.related && GUIDE_TOPICS.find((entry) => entry.id === topic.related);
   const commands = topic.commands?.length
     ? h(
         "div",
@@ -6513,9 +6556,14 @@ function guideTopicBody(topic) {
     { class: "card guide-body" },
     topic.who ? h("p", { class: "guide-who" }, h("strong", {}, t("guideWho")), " ", guideText(topic.who)) : null,
     topic.native ? h("p", { class: "tip" }, icon("sparkles"), h("span", {}, h("strong", {}, t("guideNative")), " ", guideText(topic.native))) : null,
+    related
+      ? h("p", { class: "tip" }, icon("book"), h("span", {}, h("strong", {}, t("guideReadMore")), " ", h("a", { href: guideLink(guildId, related.id) }, related.title)))
+      : null,
     topic.steps?.length ? h("ol", { class: "guide-steps" }, topic.steps.map((step) => h("li", {}, guideText(step)))) : null,
     topic.table ? guideTable(topic.table) : null,
     commands,
+    guideCommandLinks(guildId, topic),
+    topic.usages?.length ? h("div", { class: "guide-usages" }, topic.usages.map((usage) => guideUsage(usage))) : null,
     topic.legend ? guideTable(topic.legend) : null,
     topic.example?.length ? h("div", { class: "guide-example" }, h("span", { class: "field-label" }, t("guideExample")), h("pre", {}, h("code", {}, topic.example.join("\n")))) : null,
     topic.tips?.length
@@ -6528,19 +6576,24 @@ function guideTopicBody(topic) {
 function guideHome(data) {
   const guildId = data.guild.id;
   const searchTexts = GUIDE_TOPICS.map((topic) => ({ topic, text: guideSearchText(topic) }));
+  const partCard = (part) =>
+    h(
+      "a",
+      { class: "card guide-part-card", href: guidePartLink(guildId, part.id) },
+      iconChip(part.icon, part.tone, "lg"),
+      guideEnglish("strong", {}, part.part),
+      guideEnglish("span", { class: "muted" }, part.about),
+      h("span", { class: "guide-count" }, t("guideTopicCount", { count: part.sections.length })),
+    );
+  // The feature parts first, then each group (the command reference) under its heading.
+  const groups = [...new Set(GUIDE.map((part) => part.group ?? ""))];
   const parts = h(
     "div",
-    { class: "guide-parts" },
-    GUIDE.map((part) =>
-      h(
-        "a",
-        { class: "card guide-part-card", href: guidePartLink(guildId, part.id) },
-        iconChip(part.icon, part.tone, "lg"),
-        guideEnglish("strong", {}, part.part),
-        guideEnglish("span", { class: "muted" }, part.about),
-        h("span", { class: "guide-count" }, t("guideTopicCount", { count: part.sections.length })),
-      ),
-    ),
+    { class: "guide-groups" },
+    groups.flatMap((group) => [
+      group ? guideEnglish("h2", { class: "guide-group-title" }, group) : null,
+      h("div", { class: "guide-parts" }, GUIDE.filter((part) => (part.group ?? "") === group).map(partCard)),
+    ]),
   );
   const results = h("div", { class: "guide-list", hidden: true });
   const empty = h("p", { class: "muted empty", hidden: true }, t("guideNoMatch"));
@@ -6597,7 +6650,7 @@ function guideTopicPage(data, topic) {
           ),
         )
       : null,
-    guideTopicBody(topic),
+    guideTopicBody(topic, guildId),
     guidePager(pagerEntry(GUIDE_TOPICS[index - 1]), pagerEntry(GUIDE_TOPICS[index + 1])),
   ];
 }

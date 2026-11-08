@@ -102,6 +102,30 @@ describe("/guide pages", () => {
     }
   });
 
+  it("shows every usage and option of a command page, marking the optional ones", () => {
+    for (const topic of topics.filter((entry) => entry.usages)) {
+      const fields = PAGES.filter((page) => page.topic === topic).flatMap((page) => json(renderGuidePage(PAGES.indexOf(page))).embeds[0].fields ?? []);
+      for (const { usage, options } of topic.usages) {
+        const shown = fields
+          .filter((field) => field.name.startsWith(`▸ ${usage}`))
+          .map((field) => field.value)
+          .join("\n");
+        for (const [name] of options) {
+          const optional = usage.includes(`[${name}]`);
+          expect(shown, `${usage} ${name}`).toContain(optional ? `\`${name}\` *(optional)*` : `\`${name}\`:`);
+        }
+      }
+    }
+  });
+
+  it("points a command page to the feature it belongs to", () => {
+    const page = findGuidePage("cmdban");
+    const embed = json(renderGuidePage(page)).embeds[0];
+    expect(embed.title).toContain("/ban");
+    expect(embed.description).toContain("Read more:");
+    expect(embed.description).toContain("/guide topic:moderation");
+  });
+
   it("finds pages by key, topic, part and words, and falls back to the contents", () => {
     expect(PAGES[findGuidePage("t.moderation.0")].topic.id).toBe("moderation");
     expect(PAGES[findGuidePage("tickets")].topic.id).toBe("tickets");
