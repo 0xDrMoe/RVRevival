@@ -1152,6 +1152,7 @@
   "highlightCleared": "Todas as suas palavras foram removidas ({count}).",
   "highlightDm": "🔔 `{word}` foi mencionada em {channel} em **{server}**:",
   "highlightJump": "Ir para a mensagem",
+  "highlightNoContent": "Os destaques estão desligados agora: o bot não consegue ler o texto das mensagens porque o intent Message Content não está ativado. O dono do bot precisa ativá-lo no Discord Developer Portal e reiniciar o bot.",
 
   "leaderboardPeriodOptionDescription": "Desde sempre, ou só a XP dos últimos 7 ou 30 dias",
   "leaderboardPeriod_all": "Desde sempre",

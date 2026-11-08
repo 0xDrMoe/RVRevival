@@ -1152,6 +1152,7 @@
   "highlightCleared": "Alle deine Wörter entfernt ({count}).",
   "highlightDm": "🔔 `{word}` wurde in {channel} auf **{server}** erwähnt:",
   "highlightJump": "Zur Nachricht",
+  "highlightNoContent": "Highlights sind gerade aus: Der Bot kann keinen Nachrichtentext lesen, weil der Message Content Intent nicht aktiv ist. Der Besitzer des Bots muss ihn im Discord Developer Portal einschalten und den Bot neu starten.",
 
   "leaderboardPeriodOptionDescription": "Insgesamt oder nur XP der letzten 7 oder 30 Tage",
   "leaderboardPeriod_all": "Insgesamt",

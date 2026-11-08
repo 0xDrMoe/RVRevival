@@ -1152,6 +1152,7 @@
   "highlightCleared": "Removed all your words ({count}).",
   "highlightDm": "🔔 `{word}` was mentioned in {channel} on **{server}**:",
   "highlightJump": "Jump to the message",
+  "highlightNoContent": "Highlights are off right now: the bot can't read message text because the Message Content intent isn't on. The bot's owner has to turn it on in the Discord Developer Portal and restart the bot.",
 
   "leaderboardPeriodOptionDescription": "All time, or only XP from the last 7 or 30 days",
   "leaderboardPeriod_all": "All time",

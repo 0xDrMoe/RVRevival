@@ -9,7 +9,7 @@
 
 import { InteractionContextType, MessageFlags, SlashCommandBuilder } from "discord.js";
 import { pickLanguage, translate } from "../i18n/i18n.js";
-import { result, Status } from "../logs/actionLog.js";
+import { canReadContent, result, Status } from "../logs/actionLog.js";
 import { normalizeWord } from "../highlights/highlights.js";
 import { MAX_HIGHLIGHTS, MAX_WORD_LENGTH, MIN_WORD_LENGTH } from "../highlights/highlightStore.js";
 import { withDescription } from "./moderation.js";
@@ -30,8 +30,12 @@ export function buildHighlightCommandData() {
 export function createHighlightCommand({ store, highlights, forcedLanguage }) {
   async function execute(interaction) {
     const language = pickLanguage(interaction.locale, forcedLanguage);
-    const answer = async (status, key, values = {}) => {
-      await interaction.reply({ content: translate(language, key, values), allowedMentions: { parse: [] }, flags: MessageFlags.Ephemeral });
+    // Without the Message Content intent every message reads as empty, so no
+    // word can ever match: say so instead of saving words that never fire.
+    const warning = canReadContent(interaction) ? "" : `\n\n⚠️ ${translate(language, "highlightNoContent")}`;
+    const answer = async (status, key, values = {}, { warn = false } = {}) => {
+      const content = translate(language, key, values) + (warn ? warning : "");
+      await interaction.reply({ content, allowedMentions: { parse: [] }, flags: MessageFlags.Ephemeral });
       return result(status, key, values);
     };
     if (!interaction.inCachedGuild()) {
@@ -54,7 +58,7 @@ export function createHighlightCommand({ store, highlights, forcedLanguage }) {
         }
         store.add(guildId, userId, word);
         highlights?.changed(guildId);
-        return answer(Status.SUCCESS, "highlightAdded", { word });
+        return answer(Status.SUCCESS, "highlightAdded", { word }, { warn: true });
       }
       case "remove": {
         const word = normalizeWord(interaction.options.getString("word", true));
@@ -67,9 +71,9 @@ export function createHighlightCommand({ store, highlights, forcedLanguage }) {
       case "list": {
         const words = store.words(guildId, userId);
         if (words.length === 0) {
-          return answer(Status.SUCCESS, "highlightListEmpty");
+          return answer(Status.SUCCESS, "highlightListEmpty", {}, { warn: true });
         }
-        return answer(Status.SUCCESS, "highlightList", { count: words.length, max: MAX_HIGHLIGHTS, list: words.map((word) => `\`${word}\``).join(", ") });
+        return answer(Status.SUCCESS, "highlightList", { count: words.length, max: MAX_HIGHLIGHTS, list: words.map((word) => `\`${word}\``).join(", ") }, { warn: true });
       }
       case "clear": {
         const removed = store.clear(guildId, userId);

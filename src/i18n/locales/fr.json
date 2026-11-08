@@ -1152,6 +1152,7 @@
   "highlightCleared": "Tous vos mots ont été retirés ({count}).",
   "highlightDm": "🔔 `{word}` a été mentionné dans {channel} sur **{server}** :",
   "highlightJump": "Aller au message",
+  "highlightNoContent": "Les alertes sont désactivées pour l'instant : le bot ne peut pas lire le texte des messages, car l'intent Message Content n'est pas activé. Le propriétaire du bot doit l'activer dans le Discord Developer Portal et redémarrer le bot.",
 
   "leaderboardPeriodOptionDescription": "Depuis toujours, ou seulement l'XP des 7 ou 30 derniers jours",
   "leaderboardPeriod_all": "Depuis toujours",

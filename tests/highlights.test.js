@@ -1,3 +1,4 @@
+import { GatewayIntentBits, IntentsBitField } from "discord.js";
 import { describe, expect, it, vi } from "vitest";
 import { buildHighlightCommandData, createHighlightCommand } from "../src/commands/highlight.js";
 import { createHighlights, normalizeWord, wordPattern } from "../src/highlights/highlights.js";
@@ -92,8 +93,10 @@ describe("highlights", () => {
   });
 });
 
-function interaction(subcommand, word) {
+function interaction(subcommand, word, { readsContent = true } = {}) {
+  const intents = new IntentsBitField(readsContent ? [GatewayIntentBits.Guilds, GatewayIntentBits.MessageContent] : [GatewayIntentBits.Guilds]);
   return {
+    client: { options: { intents } },
     locale: "en-US",
     guildId: GUILD_ID,
     user: { id: WATCHER_ID },
@@ -134,5 +137,15 @@ describe("/highlight", () => {
     }
     expect(await command.execute(interaction("add", "more"))).toMatchObject({ key: "highlightFull" });
     expect(await command.execute(interaction("clear"))).toMatchObject({ key: "highlightCleared", values: { count: MAX_HIGHLIGHTS } });
+  });
+
+  it("warns when the bot can't read message text", async () => {
+    const command = createHighlightCommand({ store: new HighlightStore() });
+    const blind = interaction("add", "patch", { readsContent: false });
+    await command.execute(blind);
+    expect(blind.reply.mock.calls[0][0].content).toContain("Message Content intent");
+    const fine = interaction("add", "other");
+    await command.execute(fine);
+    expect(fine.reply.mock.calls[0][0].content).not.toContain("Message Content intent");
   });
 });
