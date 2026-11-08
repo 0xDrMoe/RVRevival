@@ -901,6 +901,27 @@ const FEATURE_PARTS = [
         ],
       },
       {
+        id: "branding",
+        title: "Branding",
+        icon: "palette",
+        tone: "pink",
+        page: "branding",
+        summary: "Give the bot its own nickname, avatar, banner, bio and embed colour in this server.",
+        who: "Admins.",
+        steps: [
+          "Open **Branding**, change what you like and press **Save branding**. The preview shows how it will look.",
+          "**Use default** puts the avatar or banner back to the bot's own. An empty nickname or bio does the same.",
+          "**Embed colour** is used on role panels, the ticket panel and tickets, /rank and /leaderboard.",
+        ],
+        tips: [
+          "Only this server sees it. Other servers keep the normal look.",
+          "The command list, the APP badge and DMs still show the app's own name and picture. Discord doesn't allow those per server.",
+          "Logs, cases, the starboard and giveaways keep their own colours, because there the colour means something.",
+          "Panels already posted pick up a new colour the next time they're updated.",
+          "Discord limits how often a bot's profile can change, so save changes together.",
+        ],
+      },
+      {
         id: "backup",
         title: "Backup and restore",
         icon: "archive",

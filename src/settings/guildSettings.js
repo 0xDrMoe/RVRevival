@@ -66,6 +66,7 @@ export const Setting = Object.freeze({
   BOT_INVITER: "botInviterId", // who added the bot, from the audit log; may change permissions like the owner
   COUNTRY_GUIDE: "countryGuide", // the /country-help guide's wording and colour, an object (see countries/guide.js)
   COUNTRY_GUIDE_POST: "countryGuidePost", // the last guide posted, { channelId, messageId }, so the dashboard can update it
+  BRANDING: "branding", // the bot's look in this server, { color, bio } (see branding/branding.js)
 });
 
 const KNOWN_SETTINGS = new Set(Object.values(Setting));

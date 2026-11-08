@@ -186,12 +186,14 @@ export function createLogChannelPoster({ guildSettings, logger, now = Date.now }
   async function sendBatch(guild, channel, webhook, batch) {
     if (webhook) {
       try {
-        // The bot's current name and avatar, in case they changed since the webhook was made.
-        const user = guild.members?.me?.user;
+        // The bot's current name and avatar in this server (its nickname and
+        // server avatar from the Branding page), in case they changed since
+        // the webhook was made.
+        const me = guild.members?.me;
         return await webhook.send({
           ...payloadOf(batch),
-          username: user?.username,
-          avatarURL: user?.displayAvatarURL?.(),
+          username: me?.displayName ?? me?.user?.username,
+          avatarURL: me?.displayAvatarURL?.() ?? me?.user?.displayAvatarURL?.(),
           threadId: threadIdOf(channel),
         });
       } catch (error) {

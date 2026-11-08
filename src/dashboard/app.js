@@ -74,6 +74,7 @@ import { canManage, DiscordApiError } from "./discordApi.js";
 import { SESSION_DAYS, SessionStore } from "./sessions.js";
 import { checkSettingChanges, describeValue, InvalidSetting, SETTING_RULES } from "./settingsRules.js";
 import { LogRoute, routedChannelId } from "../logs/logRoutes.js";
+import { brandingOf, InvalidBranding, planBrandingChange } from "../branding/branding.js";
 import { botCommandCatalog } from "../permissions/catalog.js";
 import { normalizeCommandRules } from "../permissions/commandRules.js";
 import { CUSTOM, InvalidPreset, planPreset } from "../permissions/presets.js";
@@ -555,7 +556,12 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     const categories = normalizeCategories(guildSettings.get(guildId, Setting.TICKET_CATEGORIES));
     let payload;
     if ("title" in panel) {
-      const message = buildPanelMessage(language, { title: panel.title, message: panel.message, categories });
+      const message = buildPanelMessage(language, {
+        title: panel.title,
+        message: panel.message,
+        categories,
+        color: brandingOf(guildSettings, guildId).color ?? undefined,
+      });
       payload = { embeds: message.embeds.map((embed) => embed.toJSON()), components: message.components.map((row) => row.toJSON()) };
     } else {
       payload = { components: [buildPanelButtons(language, categories).toJSON()] };
@@ -1604,6 +1610,100 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     await logAction(guildId, session, `**Message edited** in <#${channelId}>`, [summary, `https://discord.com/channels/${guildId}/${channelId}/${messageId}`]);
     return { ok: true };
   });
+
+  // --- Branding ---------------------------------------------------------------
+
+  // The bot's nickname, avatar, banner and bio in this server are Discord's
+  // per-server profile; the embed colour and bio are also saved here (see
+  // branding/branding.js).
+  const CDN = "https://cdn.discordapp.com";
+  const imageUrl = (hash, path) => (hash ? `${CDN}/${path}/${hash}.${hash.startsWith("a_") ? "gif" : "png"}?size=512` : null);
+  const brandingJson = (guildId, member, user) => {
+    const userId = user?.id ?? discord.clientId;
+    return {
+      ...brandingOf(guildSettings, guildId),
+      nickname: member?.nick ?? null,
+      avatarUrl: imageUrl(member?.avatar, `guilds/${guildId}/users/${userId}/avatars`),
+      bannerUrl: imageUrl(member?.banner, `guilds/${guildId}/users/${userId}/banners`),
+      defaults: {
+        name: user?.global_name ?? user?.username ?? "Rabble",
+        avatarUrl: imageUrl(user?.avatar, `avatars/${userId}`),
+        bannerUrl: imageUrl(user?.banner, `banners/${userId}`),
+      },
+    };
+  };
+
+  app.get("/api/guilds/:id/branding", async (request, reply) => {
+    const access = await requireGuild(request, reply, { manage: true });
+    if (!access) {
+      return reply;
+    }
+    const [member, user] = await Promise.all([discord.botMember(access.guildId), discord.botUser()]);
+    return brandingJson(access.guildId, member, user);
+  });
+
+  // Images come as data: URLs the page has already shrunk (an avatar is at
+  // most 512×512), so 3 MB of JSON is enough for both.
+  app.patch(
+    "/api/guilds/:id/branding",
+    { bodyLimit: 3 * 1024 * 1024, config: { rateLimit: { max: 10, timeWindow: "1 minute" } } },
+    async (request, reply) => {
+      const access = await requireGuild(request, reply, { manage: true });
+      if (!access) {
+        return reply;
+      }
+      const { guildId, session } = access;
+      const before = brandingOf(guildSettings, guildId);
+      let plan;
+      try {
+        plan = planBrandingChange(request.body, before);
+      } catch (error) {
+        if (error instanceof InvalidBranding) {
+          return reply.code(400).send({ error: "invalid", message: error.message });
+        }
+        throw error;
+      }
+      let member;
+      if (Object.keys(plan.profile).length > 0) {
+        try {
+          member = await discord.editBotProfile(guildId, plan.profile, `Branding changed on the dashboard by ${session.username}`);
+        } catch (error) {
+          return profileRefused(reply, error);
+        }
+      }
+      const saved = { color: plan.saved.color ?? null, bio: plan.saved.bio ?? null };
+      if (saved.color === null && saved.bio === null) {
+        await guildSettings.clear(guildId, Setting.BRANDING);
+      } else {
+        await guildSettings.set(guildId, Setting.BRANDING, saved);
+      }
+      const changed = [
+        plan.profile.nick !== undefined && (plan.profile.nick === null ? "Nickname reset" : `Nickname: ${plan.profile.nick}`),
+        plan.profile.avatar !== undefined && (plan.profile.avatar === null ? "Avatar reset" : "New avatar"),
+        plan.profile.banner !== undefined && (plan.profile.banner === null ? "Banner reset" : "New banner"),
+        plan.profile.bio !== undefined && (plan.profile.bio ? "New bio" : "Bio reset"),
+        saved.color !== before.color && (saved.color === null ? "Embed colour reset" : `Embed colour: #${saved.color.toString(16).padStart(6, "0")}`),
+      ].filter(Boolean);
+      await logAction(guildId, session, "**Bot branding changed**", changed);
+      const [current, user] = await Promise.all([member ?? discord.botMember(guildId), discord.botUser()]);
+      return brandingJson(guildId, current, user);
+    },
+  );
+
+  // Discord's answers to a profile change, in words.
+  function profileRefused(reply, error) {
+    if (error?.name?.startsWith("RateLimitError")) {
+      const seconds = Math.max(1, Math.ceil((error.retryAfter ?? 0) / 1000));
+      return reply.code(429).send({ error: "rate-limited", message: `Discord limits how often the bot's profile can change. Try again in ${seconds} seconds.` });
+    }
+    if (error.status === 403) {
+      return reply.code(403).send({ error: "bot-forbidden", message: "The bot needs the Change Nickname permission to set its nickname here." });
+    }
+    if (error.status === 400) {
+      return reply.code(400).send({ error: "discord-refused", message: "Discord refused that. Check the nickname and images, then try again." });
+    }
+    throw error;
+  }
 
   // --- Country guide ----------------------------------------------------------
 

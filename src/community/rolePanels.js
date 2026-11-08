@@ -70,9 +70,10 @@ export function roleProblem(role, { guild, admin, bot }) {
 }
 
 // The panel's message: an embed with the title and description, and its buttons.
-export function buildPanelMessage(panel, guild, emptyText) {
+// `color` is the server's embed colour (see branding/branding.js).
+export function buildPanelMessage(panel, guild, emptyText, color = EMBED_COLOR) {
   const embed = new EmbedBuilder()
-    .setColor(EMBED_COLOR)
+    .setColor(color)
     .setTitle(panel.title)
     .setDescription(panel.description || (panel.roles.length === 0 ? emptyText : null) || null);
   const rows = [];
@@ -95,12 +96,12 @@ export function buildPanelMessage(panel, guild, emptyText) {
 
 // Shows the panel's current buttons: edits its message, or posts it again if
 // the message was deleted. Returns the panel with its (maybe new) message ID.
-export async function publishPanel(panel, guild, emptyText) {
+export async function publishPanel(panel, guild, emptyText, color = undefined) {
   const channel = guild.channels.cache.get(panel.channelId);
   if (!channel?.isTextBased?.()) {
     throw Object.assign(new Error("The panel's channel no longer exists"), { code: "NO_CHANNEL" });
   }
-  const payload = buildPanelMessage(panel, guild, emptyText);
+  const payload = buildPanelMessage(panel, guild, emptyText, color);
   if (panel.messageId) {
     const existing = await channel.messages.fetch(panel.messageId).catch(() => undefined);
     if (existing) {

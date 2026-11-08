@@ -80,8 +80,12 @@ async function orNull(request) {
 //   config   from loadDashboardConfig (token, clientId, clientSecret, url)
 //   fetch    replaceable in tests
 //   rest     a discord.js REST client (made from the token when left out)
+const isProfileChange = (limit) => limit.method.toUpperCase() === "PATCH" && /\/members\/@me$/.test(limit.route);
+
 export function createDiscordApi({ config, fetch = globalThis.fetch, rest }) {
-  const bot = rest ?? new REST({ version: "10" }).setToken(config.token);
+  // Changing the bot's profile has a tight limit. Waiting it out would leave
+  // the Branding page hanging, so that request fails at once instead.
+  const bot = rest ?? new REST({ version: "10", rejectOnRateLimit: isProfileChange }).setToken(config.token);
   const redirectUri = `${config.url}/auth/callback`;
 
   async function oauthRequest(path, init) {
@@ -259,6 +263,19 @@ export function createDiscordApi({ config, fetch = globalThis.fetch, rest }) {
       } catch {
         return null;
       }
+    },
+
+    // The bot's own Discord account (name and avatar everywhere).
+    botUser: () => users.get(config.clientId),
+    // The bot's member in a server: its nickname, avatar and banner there.
+    // Not cached, so the Branding page always shows what Discord has now.
+    botMember: (guildId) => bot.get(Routes.guildMember(guildId, config.clientId)),
+    // Changes the bot's own profile in one server: { nick, avatar, banner, bio },
+    // images as data: URLs and null for the bot's default. Returns the member.
+    async editBotProfile(guildId, profile, reason) {
+      const member = await bot.patch(Routes.guildMember(guildId, "@me"), { body: profile, reason });
+      members.forget(`${guildId}:${config.clientId}`);
+      return member;
     },
 
     // The bot's own user ID, for the invite link.

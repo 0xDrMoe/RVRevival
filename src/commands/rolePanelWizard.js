@@ -48,6 +48,7 @@ import {
 } from "../community/rolePanels.js";
 import { pickLanguage, translate } from "../i18n/i18n.js";
 import { result, Status } from "../logs/actionLog.js";
+import { accentColor } from "../branding/branding.js";
 
 export const WIZARD_PREFIX = "rpw:";
 export const SESSION_IDLE_MS = 30 * 60 * 1000;
@@ -204,7 +205,7 @@ export function createRolePanelWizard({ guildSettings, logger, forcedLanguage, l
 
     const { draft, saved } = session;
     const emptyText = translate(session.serverLanguage, "rolePanelEmpty");
-    const preview = buildPanelMessage({ id: saved?.id ?? 0, ...draft }, guild, emptyText).embeds[0];
+    const preview = buildPanelMessage({ id: saved?.id ?? 0, ...draft }, guild, emptyText, accentColor(guildSettings, guild.id)).embeds[0];
     const roleLines = draft.roles.map((entry) =>
       [entry.emoji, `<@&${entry.roleId}>`, entry.label ? `· "${entry.label}"` : null].filter(Boolean).join(" "),
     );

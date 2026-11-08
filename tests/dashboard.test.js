@@ -75,6 +75,9 @@ function fakeDiscord() {
     searchMembers: vi.fn(async () => []),
     postMessage: vi.fn(async () => ({})),
     editMessage: vi.fn(async () => ({})),
+    botUser: vi.fn(async () => ({ id: config.clientId, username: "rabble", global_name: "Rabble", avatar: "abc", banner: null })),
+    botMember: vi.fn(async () => ({ nick: null, avatar: null, banner: null })),
+    editBotProfile: vi.fn(async (guildId, profile) => ({ nick: profile.nick ?? null, avatar: profile.avatar ? "a_new" : null, banner: null })),
   };
 }
 
@@ -1078,6 +1081,63 @@ describe("dashboard", () => {
     expect(after.state).toBe("cooldown");
     expect(after.cooldownEndsAt).toBeGreaterThan(Date.now() + 6 * 24 * 60 * 60 * 1000);
     expect((await write(cookies, "POST", `/api/appeals/${GUILD_ID}`, { answers: ["again"] })).statusCode).toBe(409);
+  });
+
+  it("changes the bot's look in one server and keeps the colour and bio", async () => {
+    const cookies = await login();
+    const before = (await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}/branding`, cookies })).json();
+    expect(before).toMatchObject({
+      color: null,
+      bio: null,
+      nickname: null,
+      avatarUrl: null,
+      defaults: { name: "Rabble", avatarUrl: `https://cdn.discordapp.com/avatars/${config.clientId}/abc.png?size=512` },
+    });
+
+    const png = `data:image/png;base64,${Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2]).toString("base64")}`;
+    const saved = await write(cookies, "PATCH", `/api/guilds/${GUILD_ID}/branding`, { nickname: "Butterfly", avatar: png, bio: "Hi!", color: 0x7c5cff });
+    expect(saved.statusCode).toBe(200);
+    expect(discord.editBotProfile).toHaveBeenCalledWith(GUILD_ID, { nick: "Butterfly", avatar: png, bio: "Hi!" }, "Branding changed on the dashboard by Moe");
+    expect(saved.json()).toMatchObject({
+      nickname: "Butterfly",
+      bio: "Hi!",
+      color: 0x7c5cff,
+      avatarUrl: `https://cdn.discordapp.com/guilds/${GUILD_ID}/users/${config.clientId}/avatars/a_new.gif?size=512`,
+    });
+    expect(guildSettings.get(GUILD_ID, Setting.BRANDING)).toEqual({ color: 0x7c5cff, bio: "Hi!" });
+    const activity = (await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}/activity`, cookies })).json();
+    expect(activity.entries[0]).toMatchObject({ summary: "**Bot branding changed**" });
+
+    // Only the colour: Discord isn't asked, and resetting clears the setting.
+    discord.editBotProfile.mockClear();
+    await write(cookies, "PATCH", `/api/guilds/${GUILD_ID}/branding`, { color: null, bio: null });
+    expect(discord.editBotProfile).toHaveBeenCalledWith(GUILD_ID, { bio: "" }, expect.any(String));
+    expect(guildSettings.get(GUILD_ID, Setting.BRANDING)).toBeUndefined();
+    discord.editBotProfile.mockClear();
+    await write(cookies, "PATCH", `/api/guilds/${GUILD_ID}/branding`, { color: 0x123456 });
+    expect(discord.editBotProfile).not.toHaveBeenCalled();
+  });
+
+  it("refuses bad branding and explains Discord's refusals", async () => {
+    const cookies = await login();
+    const url = `/api/guilds/${GUILD_ID}/branding`;
+    expect((await write(cookies, "PATCH", url, { avatar: "data:image/svg+xml;base64,PHN2Zz4=" })).statusCode).toBe(400);
+    expect((await write(cookies, "PATCH", url, { nickname: "x".repeat(40) })).json().message).toMatch(/at most 32/);
+    expect((await write(cookies, "PATCH", `/api/guilds/${OTHER_GUILD_ID}/branding`, { nickname: "Nope" })).statusCode).toBe(403);
+    expect(discord.editBotProfile).not.toHaveBeenCalled();
+
+    discord.editBotProfile.mockRejectedValueOnce(Object.assign(new Error("Missing Permissions"), { status: 403 }));
+    const forbidden = await write(cookies, "PATCH", url, { nickname: "Butterfly" });
+    expect(forbidden.statusCode).toBe(403);
+    expect(forbidden.json().message).toMatch(/Change Nickname/);
+
+    const limited = Object.assign(new Error("Rate limited"), { retryAfter: 12_300 });
+    Object.defineProperty(limited, "name", { value: "RateLimitError[/guilds/:id/members/@me]" });
+    discord.editBotProfile.mockRejectedValueOnce(limited);
+    const tooFast = await write(cookies, "PATCH", url, { nickname: "Butterfly" });
+    expect(tooFast.statusCode).toBe(429);
+    expect(tooFast.json().message).toMatch(/13 seconds/);
+    expect(guildSettings.get(GUILD_ID, Setting.BRANDING)).toBeUndefined();
   });
 
   it("shows the country guide's built-in text and fixed buttons", async () => {

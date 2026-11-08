@@ -81,9 +81,10 @@ export const threadName = (number, name) => `🎫 ${String(number).padStart(4, "
 
 // The panel: the title and message, and one button per category (or the
 // single "Open a ticket" button). Categories with a description are listed.
-export function buildPanelMessage(language, { title, message, categories = [] }) {
+// `color` is the server's embed colour (see branding/branding.js).
+export function buildPanelMessage(language, { title, message, categories = [], color = TICKET_COLOR }) {
   const embed = new EmbedBuilder()
-    .setColor(TICKET_COLOR)
+    .setColor(color)
     .setTitle(title || translate(language, "ticketPanelDefaultTitle"))
     .setDescription(message || translate(language, "ticketPanelDefaultMessage"));
   const described = categories.filter((category) => category.description);
@@ -105,10 +106,10 @@ export function buildPanelButtons(language, categories = []) {
 }
 
 // The first message in a ticket: who opened it, why, and the Close button.
-export function buildTicketWelcome(language, { ticket, staffRoleId }) {
+export function buildTicketWelcome(language, { ticket, staffRoleId, color = TICKET_COLOR }) {
   const values = { user: `<@${ticket.userId}>`, number: ticket.number, staff: `<@&${staffRoleId}>` };
   const embed = new EmbedBuilder()
-    .setColor(TICKET_COLOR)
+    .setColor(color)
     .setTitle(ticket.categoryLabel ?? translate(language, "ticketSubject"))
     .setDescription(ticket.subject.slice(0, 4096))
     .setTimestamp(ticket.createdAt);
