@@ -114,12 +114,23 @@ function tableFields(table) {
   );
 }
 
+const TOPICS = new Map(GUIDE.flatMap((part) => part.sections).map((topic) => [topic.id, topic]));
+
+// One way to run a command (a command page's usage) as field lines: what it
+// does, then each option. An option in [brackets] in the usage is optional.
+function usageLines({ usage, what, options }, text) {
+  const optional = new Set([...usage.matchAll(/\[([^\]]+)\]/g)].map((match) => match[1]));
+  return [what, ...options.map(([name, about]) => `• \`${name}\`${optional.has(name) ? ` *(${text("guideOptional")})*` : ""}: ${about}`)];
+}
+
 // A topic's text as an intro and fields, in the dashboard's order.
 function topicContent(topic, text) {
+  const related = topic.related && TOPICS.get(topic.related);
   const intro = [
     topic.summary,
     topic.who ? `**${text("guideWho")}** ${topic.who}` : null,
     topic.native ? `✨ **${text("guideNative")}** ${topic.native}` : null,
+    related ? `📘 **${text("guideReadMore")}** ${related.title} (\`/guide topic:${related.id}\`)` : null,
   ]
     .filter(Boolean)
     .join("\n\n");
@@ -127,6 +138,7 @@ function topicContent(topic, text) {
     ...(topic.steps?.length ? packFields(text("guideSteps"), topic.steps.map((step, index) => `${index + 1}. ${step}`)) : []),
     ...(topic.table ? tableFields(topic.table) : []),
     ...(topic.commands?.length ? packFields(text("guideCommands"), topic.commands.map(([usage, what]) => `\`${usage}\`\n${what}`)) : []),
+    ...(topic.usages ?? []).flatMap((usage) => packFields(`▸ ${usage.usage}`, usageLines(usage, text))),
     ...(topic.legend ? tableFields(topic.legend) : []),
     // Code blocks can't be split, so each example line is its own code line.
     ...(topic.example?.length ? packFields(text("guideExample"), topic.example.map((line) => `\`${line.replaceAll("`", "'")}\``)) : []),
@@ -323,7 +335,13 @@ function targetOf(interaction) {
 }
 
 const searchText = (page) =>
-  [pageTitle(page), page.topic?.summary, page.part?.part, ...(page.topic?.commands ?? []).map(([usage]) => usage)]
+  [
+    pageTitle(page),
+    page.topic?.summary,
+    page.part?.part,
+    ...(page.topic?.commands ?? []).map(([usage]) => usage),
+    ...(page.topic?.usages ?? []).map(({ usage }) => usage),
+  ]
     .filter(Boolean)
     .join(" ")
     .toLowerCase();

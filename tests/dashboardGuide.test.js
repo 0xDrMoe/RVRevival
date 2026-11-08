@@ -19,27 +19,49 @@ const texts = (topic) =>
     topic.native,
     ...(topic.steps ?? []),
     ...(topic.commands ?? []).flat(),
+    ...(topic.usages ?? []).flatMap((usage) => [usage.usage, usage.what, ...usage.options.flat()]),
     ...[topic.table, topic.legend].flatMap((table) => (table ? [...table.head, ...table.rows.flat()] : [])),
     ...(topic.example ?? []),
     ...(topic.tips ?? []),
   ].filter(Boolean);
 
-// "/name" and "/name sub" (and "/name group sub") for every slash command.
-function commandNames() {
+// Every way to run each slash command: { command: "/ban", path: "/ban" or
+// "/case view" or "/settings automod rule", options: [{ name, required }] }.
+function commandUsages() {
   const commands = createCommands({ logger: fakeLogger(), guildSettings: new GuildSettings() });
+  const optionsOf = (list) => (list ?? []).map((option) => ({ name: option.name, required: option.required === true }));
   return [...commands.values()].flatMap((command) => {
     const data = typeof command.data.toJSON === "function" ? command.data.toJSON() : command.data;
+    const base = `/${data.name}`;
     const subs = (data.options ?? []).flatMap((option) => {
       if (option.type === 1) {
-        return [`/${data.name} ${option.name}`];
+        return [{ command: base, path: `${base} ${option.name}`, options: optionsOf(option.options) }];
       }
       if (option.type === 2) {
-        return option.options.map((sub) => `/${data.name} ${option.name} ${sub.name}`);
+        return option.options.map((sub) => ({ command: base, path: `${base} ${option.name} ${sub.name}`, options: optionsOf(sub.options) }));
       }
       return [];
     });
-    return subs.length > 0 ? subs : [`/${data.name}`];
+    return subs.length > 0 ? subs : [{ command: base, path: base, options: optionsOf(data.options) }];
   });
+}
+
+// "/name" and "/name sub" (and "/name group sub") for every slash command.
+const commandNames = () => commandUsages().map((usage) => usage.path);
+
+// A usage line's options after its command path: "[reason]" is optional.
+function usageOptions(usage, path) {
+  return usage
+    .slice(path.length)
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word) => (word.startsWith("[") && word.endsWith("]") ? { name: word.slice(1, -1), required: false } : { name: word, required: true }));
+}
+
+// The real usage a usage line is for: the longest command path it starts with.
+function realUsageFor(line, usages) {
+  return usages.filter((usage) => line === usage.path || line.startsWith(`${usage.path} `)).sort((a, b) => b.path.length - a.path.length)[0];
 }
 
 describe("dashboard guide", () => {
@@ -79,9 +101,50 @@ describe("dashboard guide", () => {
   });
 
   it("explains every command and subcommand", () => {
-    const usages = topics.flatMap((topic) => (topic.commands ?? []).map(([usage]) => `${usage} `));
+    const usages = topics.flatMap((topic) => [...(topic.commands ?? []).map(([usage]) => usage), ...(topic.usages ?? []).map(({ usage }) => usage)]).map((usage) => `${usage} `);
     const missing = commandNames().filter((name) => !usages.some((usage) => usage.startsWith(`${name} `)));
     expect(missing).toEqual([]);
+  });
+
+  it("shows every command's real options, in order, wherever it lists a usage", () => {
+    const real = commandUsages();
+    const lines = topics.flatMap((topic) => [...(topic.commands ?? []).map(([usage]) => usage), ...(topic.usages ?? []).map(({ usage }) => usage)]);
+    for (const line of lines) {
+      const usage = realUsageFor(line, real);
+      expect(usage, `${line}: no such command`).toBeDefined();
+      expect(usageOptions(line, usage.path), line).toEqual(usage.options);
+    }
+  });
+
+  it("has a command page for every command, with every subcommand and option explained", () => {
+    const real = commandUsages();
+    const pages = topics.filter((topic) => topic.command);
+    const commands = [...new Set(real.map((usage) => usage.command))];
+    expect(pages.map((page) => page.command).sort()).toEqual(commands.sort());
+    const topicIds = new Set(topics.map((topic) => topic.id));
+    for (const page of pages) {
+      expect(page.title, page.id).toBe(page.command);
+      expect(topicIds.has(page.related), `${page.id} related ${page.related}`).toBe(true);
+      const paths = real.filter((usage) => usage.command === page.command).map((usage) => usage.path);
+      const covered = page.usages.map(({ usage }) => realUsageFor(usage, real)?.path);
+      // Every subcommand once, in whatever order reads best.
+      expect([...covered].sort(), page.id).toEqual([...paths].sort());
+      for (const { usage, what, options } of page.usages) {
+        expect(what.length, usage).toBeGreaterThan(0);
+        const path = realUsageFor(usage, real).path;
+        expect(options.map(([name]) => name), usage).toEqual(usageOptions(usage, path).map((option) => option.name));
+        for (const [name, text] of options) {
+          expect(text.length, `${usage} ${name}`).toBeGreaterThan(0);
+        }
+      }
+    }
+  });
+
+  it("keeps every part small enough for Discord's topic menu", () => {
+    expect(GUIDE.length).toBeLessThanOrEqual(24);
+    for (const part of GUIDE) {
+      expect(part.sections.length, part.id).toBeLessThanOrEqual(25);
+    }
   });
 
   it("shows only real icons and commands on the landing page", () => {

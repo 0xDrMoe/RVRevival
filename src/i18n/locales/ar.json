@@ -1126,6 +1126,9 @@
   "guideCommands": "الأوامر",
   "guideExample": "مثال",
   "guideGoodToKnow": "من المفيد معرفته",
+  "guideOptions": "الخيارات",
+  "guideOptional": "اختياري",
+  "guideReadMore": "اقرأ المزيد:",
 
   "joinTitle": "شكرًا لإضافة Rabble!",
   "joinIntro": "يقدّم Rabble الإشراف والفلترة التلقائية والسجلات والتذاكر ورسائل الترحيب والمستويات والمزيد. كل شيء يبدأ متوقفًا، فلن يتغير شيء حتى تضبطه.",
