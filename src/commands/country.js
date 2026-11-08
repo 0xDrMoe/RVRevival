@@ -70,12 +70,14 @@ export async function suggestCountries(interaction, { countries, logger }) {
 //   logger           required
 //   guildSettings    per-server settings, for the channel /country is limited to (GuildSettings)
 //   forcedLanguage   reply in this language for everyone (BOT_LANGUAGE)
+//   confirmations    roles/roleConfirmations.js, to ask before the guide's buttons give a role
 //   countries, roleService, wrapServer, wrapMember   replaceable in tests
 export function createCountryCommand(options) {
   const {
     logger,
     guildSettings,
     forcedLanguage,
+    confirmations,
     countries = countryList,
     roleService = new CountryRoleService(logger, countries),
     wrapServer: toServer = wrapServer,
@@ -127,7 +129,14 @@ export function createCountryCommand(options) {
   const autocomplete = (interaction) => suggestCountries(interaction, { countries, logger });
 
   // The buttons on the /country-help guide do the same job without typing a command.
-  const components = createCountryPicker({ countries, roleService, wrapServer: toServer, wrapMember: toMember, forcedLanguage });
+  const { components, componentPrefixes } = createCountryPicker({
+    countries,
+    roleService,
+    wrapServer: toServer,
+    wrapMember: toMember,
+    forcedLanguage,
+    confirmations,
+  });
 
-  return { name: COMMAND_NAME, data: buildCountryCommandData(), execute, autocomplete, components };
+  return { name: COMMAND_NAME, data: buildCountryCommandData(), execute, autocomplete, components, componentPrefixes };
 }

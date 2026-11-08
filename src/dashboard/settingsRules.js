@@ -77,6 +77,7 @@ export const SETTING_RULES = Object.freeze({
   [Setting.LEAVE_MESSAGE]: { kind: "text", label: "Leave message" },
   [Setting.WELCOME_DM]: { kind: "text", label: "Welcome DM" },
   [Setting.AUTOROLES]: { kind: "autoroles", label: "Autoroles" },
+  [Setting.ROLE_CONFIRM]: { kind: "onByDefault", label: "Role pick confirmations" },
   [Setting.ROLE_PERSIST]: { kind: "rolePersist", label: "Roles on rejoin" },
   [Setting.APPEALS]: { kind: "appeals", types: POSTING_CHANNELS, label: "Ban appeals" },
   [Setting.TAGS]: { kind: "tags", label: "Custom commands" },
@@ -353,6 +354,12 @@ function checkValue(setting, value, { guildId, channels, roles }) {
         }
         throw error;
       }
+    case "onByDefault":
+      if (typeof value !== "boolean") {
+        throw new InvalidSetting(setting, "Send true or false.");
+      }
+      // On is the default, so it's saved as no value.
+      return value ? null : false;
     case "nativePermissions":
       if (typeof value !== "boolean") {
         throw new InvalidSetting(setting, "Send whether Discord permissions count as true or false.");
@@ -402,6 +409,9 @@ export function checkSettingChanges(changes, server) {
 export function describeValue(setting, value) {
   if (SETTING_RULES[setting]?.kind === "nativePermissions") {
     return value === false ? "off (the bot's roles only)" : "on";
+  }
+  if (SETTING_RULES[setting]?.kind === "onByDefault") {
+    return value === false ? "off" : "on";
   }
   if (value === null || value === undefined || (Array.isArray(value) && value.length === 0)) {
     return "*none*";

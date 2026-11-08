@@ -21,6 +21,8 @@ import {
 import {
   BUTTON_PREFIX,
   cleanEmoji,
+  CONFIRM_PREFIX,
+  confirmId,
   MAX_DESCRIPTION_LENGTH,
   MAX_LABEL_LENGTH,
   MAX_PANEL_ROLES,
@@ -29,6 +31,8 @@ import {
   PanelMode,
   panelsOf,
   parseButtonId,
+  parseConfirmId,
+  PickAction,
   publishPanel,
   roleProblem,
 } from "../community/rolePanels.js";
@@ -106,7 +110,8 @@ export function buildRolePanelCommandData() {
 
 // Options:
 //   guildSettings, logger, forcedLanguage
-export function createRolePanelCommand({ guildSettings, logger, forcedLanguage }) {
+//   confirmations   roles/roleConfirmations.js; without it, clicks change roles right away
+export function createRolePanelCommand({ guildSettings, logger, forcedLanguage, confirmations }) {
   // One change at a time per server, so two admins can't overwrite each other's panels.
   const locks = new KeyedLock();
   const save = (guildId, panels) =>
@@ -267,49 +272,128 @@ export function createRolePanelCommand({ guildSettings, logger, forcedLanguage }
     await interaction.respond(choices);
   }
 
-  // A member clicking one of the panel's buttons.
-  async function handleButton(interaction) {
-    const language = pickLanguage(interaction.locale, forcedLanguage);
-    const reply = async (status, key, values = {}) => {
-      await interaction.reply({ content: translate(language, key, values), flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] } });
-      return result(status, key, values);
-    };
-    const parsed = parseButtonId(interaction.customId);
+  // Checks a click (or a Confirm) on one of the panel's buttons. Returns
+  // { panel, role } or { refusal: [status, key] }.
+  function checkPick(interaction, parsed) {
     if (!interaction.inCachedGuild() || !parsed) {
-      return reply(Status.REFUSED, "rolePanelButtonGone");
+      return { refusal: [Status.REFUSED, "rolePanelButtonGone"] };
     }
     const guild = interaction.guild;
     const panel = panelsOf(guildSettings, interaction.guildId).find((entry) => entry.id === parsed.panelId);
     const role = guild.roles.cache.get(parsed.roleId);
     if (!panel || !role || !panel.roles.some((entry) => entry.roleId === role.id)) {
-      return reply(Status.REFUSED, "rolePanelButtonGone");
+      return { refusal: [Status.REFUSED, "rolePanelButtonGone"] };
     }
     // Checked again here: the role's permissions may have changed since it was added.
     const me = guild.members.me;
     if (roleProblem(role, { guild, bot: me }) || !me.permissions.has(PermissionFlagsBits.ManageRoles)) {
-      return reply(Status.FAILED, "rolePanelButtonBroken");
+      return { refusal: [Status.FAILED, "rolePanelButtonBroken"] };
+    }
+    return { panel, role };
+  }
+
+  // What clicking the role would do: take it away, or give it (and in a
+  // "unique" panel, take away the panel's other roles the member has).
+  function planPick(member, panel, role) {
+    if (member.roles.cache.has(role.id)) {
+      return { action: PickAction.REMOVE, swapped: [] };
+    }
+    const swapped =
+      panel.mode === PanelMode.UNIQUE
+        ? panel.roles.map((entry) => entry.roleId).filter((id) => id !== role.id && member.roles.cache.has(id))
+        : [];
+    return { action: PickAction.ADD, swapped };
+  }
+
+  // Changes the member's roles. Returns [key, values] for the reply.
+  async function applyPick(member, role, { action, swapped }) {
+    const values = { role: `<@&${role.id}>` };
+    if (action === PickAction.REMOVE) {
+      await member.roles.remove(role.id, "Role panel");
+      return ["rolePanelYouLost", values];
+    }
+    if (swapped.length > 0) {
+      await member.roles.remove(swapped, "Role panel");
+    }
+    await member.roles.add(role.id, "Role panel");
+    return swapped.length > 0
+      ? ["rolePanelYouSwapped", { ...values, old: swapped.map((id) => `<@&${id}>`).join(", ") }]
+      : ["rolePanelYouGot", values];
+  }
+
+  // A member clicking one of the panel's buttons. With confirmations on, the
+  // bot asks first; otherwise the role changes right away.
+  async function handleButton(interaction) {
+    const language = pickLanguage(interaction.locale, forcedLanguage);
+    const reply = async (status, key, values = {}, components = []) => {
+      await interaction.reply({
+        content: translate(language, key, values),
+        components,
+        flags: MessageFlags.Ephemeral,
+        allowedMentions: { parse: [] },
+      });
+      return result(status, key, values);
+    };
+    const parsed = parseButtonId(interaction.customId);
+    const { panel, role, refusal } = checkPick(interaction, parsed);
+    if (refusal) {
+      return reply(...refusal);
     }
     const member = interaction.member;
-    const values = { role: `<@&${role.id}>` };
+    const plan = planPick(member, panel, role);
+
+    if (confirmations?.isOn(interaction.guildId, member.id)) {
+      const values = { role: `<@&${role.id}>`, old: plan.swapped.map((id) => `<@&${id}>`).join(", ") };
+      const key =
+        plan.action === PickAction.REMOVE ? "roleConfirmRemove" : plan.swapped.length > 0 ? "roleConfirmSwap" : "roleConfirmAdd";
+      await interaction.reply({
+        content: translate(language, key, values),
+        components: [confirmations.promptRow(language, confirmId(panel.id, role.id, plan.action), { danger: plan.action === PickAction.REMOVE })],
+        flags: MessageFlags.Ephemeral,
+        allowedMentions: { parse: [] },
+      });
+      // Asking isn't worth a log entry; confirming is.
+      return null;
+    }
+
     try {
-      if (member.roles.cache.has(role.id)) {
-        await member.roles.remove(role.id, "Role panel");
-        return reply(Status.SUCCESS, "rolePanelYouLost", values);
-      }
-      const swapped =
-        panel.mode === PanelMode.UNIQUE
-          ? panel.roles.map((entry) => entry.roleId).filter((id) => id !== role.id && member.roles.cache.has(id))
-          : [];
-      if (swapped.length > 0) {
-        await member.roles.remove(swapped, "Role panel");
-      }
-      await member.roles.add(role.id, "Role panel");
-      return swapped.length > 0
-        ? reply(Status.SUCCESS, "rolePanelYouSwapped", { ...values, old: swapped.map((id) => `<@&${id}>`).join(", ") })
-        : reply(Status.SUCCESS, "rolePanelYouGot", values);
+      const [key, values] = await applyPick(member, role, plan);
+      return reply(Status.SUCCESS, key, values, confirmations ? [confirmations.toggleRow(language, false)] : []);
     } catch (error) {
       if (isPermissionError(error)) {
         return reply(Status.FAILED, "rolePanelButtonBroken");
+      }
+      throw error;
+    }
+  }
+
+  // Confirm, under the bot's "Add X?" question. The click is checked again, in
+  // case the panel or the member's roles changed while the question was open.
+  async function handleConfirm(interaction) {
+    const language = pickLanguage(interaction.locale, forcedLanguage);
+    const answer = async (status, key, values = {}, components = []) => {
+      await interaction.update({ content: translate(language, key, values), components, allowedMentions: { parse: [] } });
+      return result(status, key, values);
+    };
+    const parsed = parseConfirmId(interaction.customId);
+    const { panel, role, refusal } = checkPick(interaction, parsed);
+    if (refusal) {
+      return answer(...refusal);
+    }
+    const member = interaction.member;
+    const plan = planPick(member, panel, role);
+    if (plan.action !== parsed.action) {
+      // They already got (or lost) the role some other way.
+      const key = parsed.action === PickAction.ADD ? "rolePanelAlreadyHave" : "rolePanelAlreadyGone";
+      return answer(Status.SUCCESS, key, { role: `<@&${role.id}>` });
+    }
+    try {
+      const [key, values] = await applyPick(member, role, plan);
+      const on = confirmations?.isOn(interaction.guildId, member.id) ?? false;
+      return answer(Status.SUCCESS, key, values, confirmations ? [confirmations.toggleRow(language, on)] : []);
+    } catch (error) {
+      if (isPermissionError(error)) {
+        return answer(Status.FAILED, "rolePanelButtonBroken");
       }
       throw error;
     }
@@ -320,8 +404,11 @@ export function createRolePanelCommand({ guildSettings, logger, forcedLanguage }
     data: buildRolePanelCommandData(),
     execute,
     autocomplete,
+    // Turning confirmations on or off, and Cancel (shared with the country picker).
+    components: confirmations?.components ?? {},
     componentPrefixes: {
       [BUTTON_PREFIX]: { label: "Role panel button", handle: handleButton },
+      [CONFIRM_PREFIX]: { label: "Role panel button", handle: handleConfirm },
       [WIZARD_PREFIX]: { label: "Role panel setup", handle: wizard.handle },
     },
     // For tests.

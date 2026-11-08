@@ -40,6 +40,7 @@ export const Setting = Object.freeze({
   WELCOME_DM: "welcomeDm", // text DMed to new members; unset = no DM
   AUTOROLES: "autoroleIds", // roles given to every new member, a list of IDs
   ROLE_PANELS: "rolePanels", // button role panels, a list of objects (see community/rolePanels.js)
+  ROLE_CONFIRM: "roleConfirmations", // false: role panels and the country picker don't ask members to confirm by default (see roles/roleConfirmations.js)
   TAGS: "tags", // custom commands for /tag, a list of { name, content } (see community/tags.js)
   STARBOARD: "starboard", // the starboard, { channelId, threshold, emoji } (see community/starboard.js)
   LEVELING: "leveling", // leveling and XP, an object (see leveling/config.js)

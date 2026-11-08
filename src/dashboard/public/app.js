@@ -2444,8 +2444,28 @@ async function showRoles(guildId) {
           filterKey: "filterRoles",
         }),
       ),
+      card(
+        t("sectionRoleConfirm"),
+        "check",
+        "blue",
+        h(
+          "label",
+          { class: "switch-card" },
+          h("span", { class: "switch-text" }, h("strong", {}, t("roleConfirmDefault")), h("span", { class: "help" }, t("roleConfirmDefaultHelp"))),
+          h(
+            "span",
+            { class: "switch" },
+            h("input", { id: "roleConfirmDefault", type: "checkbox", role: "switch", checked: data.settings.roleConfirmations !== false, "aria-label": t("roleConfirmDefault") }),
+          ),
+        ),
+      ),
     ],
-    fields: { autoroleIds: checkedList("autorole"), rolePersist: readRolePersist },
+    fields: {
+      autoroleIds: checkedList("autorole"),
+      rolePersist: readRolePersist,
+      // On is the default, saved as no value.
+      roleConfirmations: (form) => (form.querySelector("#roleConfirmDefault").checked ? null : false),
+    },
     after: card(t("sectionRolePanels"), "layers", "blue", h("p", { class: "help" }, t("rolePanelsHelp")), rolePanelList(data)),
   });
 }

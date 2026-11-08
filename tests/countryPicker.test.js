@@ -7,6 +7,8 @@ import { countryList } from "../src/countries/countries.js";
 import { getTranslations, SUPPORTED_LANGUAGES, translate } from "../src/i18n/i18n.js";
 import { Status } from "../src/logs/actionLog.js";
 import { CountryRoleService } from "../src/roles/countryRoles.js";
+import { ConfirmId, createRoleConfirmations, RoleConfirmStore } from "../src/roles/roleConfirmations.js";
+import { GuildSettings, Setting } from "../src/settings/guildSettings.js";
 import { FakeServer, fakeLogger } from "./helpers/fakes.js";
 
 const USER_ID = "300000000000000001";
@@ -257,6 +259,64 @@ describe("Pick my country button", () => {
       await run(interaction);
       expect(lastEdit(interaction).content).toBe(translate("en", "countryLocked", { country: "Japan" }));
     });
+  });
+});
+
+describe("country picker confirmations", () => {
+  let server;
+  let command;
+  let guildSettings;
+
+  beforeEach(() => {
+    server = new FakeServer();
+    const logger = fakeLogger();
+    guildSettings = new GuildSettings();
+    command = createCountryCommand({
+      logger,
+      roleService: new CountryRoleService(logger),
+      wrapServer: () => server,
+      wrapMember: () => server.member(USER_ID),
+      confirmations: createRoleConfirmations({ guildSettings, store: new RoleConfirmStore() }),
+    });
+  });
+
+  const run = (interaction) => {
+    const component =
+      command.components[interaction.customId] ??
+      Object.entries(command.componentPrefixes).find(([prefix]) => interaction.customId.startsWith(prefix))[1];
+    return component.handle(interaction);
+  };
+
+  it("asks before giving a chosen country, and says only staff can change it", async () => {
+    const interaction = choose("Guinea-Bissau");
+    expect(await run(interaction)).toBeNull();
+    const asked = lastEdit(interaction);
+    expect(asked.content).toBe(translate("en", "roleConfirmCountry", { country: "Guinea-Bissau" }));
+    expect(componentsOf(asked).map((button) => button.custom_id)).toEqual([`${PickerId.CONFIRM}GW`, ConfirmId.CANCEL, ConfirmId.TURN_OFF]);
+    expect(server.roles).toEqual([]);
+
+    const confirm = fakeInteraction(`${PickerId.CONFIRM}GW`);
+    const outcome = await run(confirm);
+    expect(lastEdit(confirm)).toEqual({ content: translate("en", "assigned", { country: "Guinea-Bissau" }), components: [] });
+    expect(outcome.status).toBe(Status.SUCCESS);
+  });
+
+  it("asks after an exact match in the form too", async () => {
+    const interaction = submit("usa");
+    expect(await run(interaction)).toBeNull();
+    expect(lastEdit(interaction).content).toBe(translate("en", "roleConfirmCountry", { country: "United States" }));
+  });
+
+  it("gives the role right away when the server switched them off", async () => {
+    guildSettings.set("900000000000000001", Setting.ROLE_CONFIRM, false);
+    const interaction = choose("Guinea-Bissau");
+    expect((await run(interaction)).status).toBe(Status.SUCCESS);
+  });
+
+  it("refuses a made-up country code", async () => {
+    const confirm = fakeInteraction(`${PickerId.CONFIRM}ZZ`);
+    expect((await run(confirm)).status).toBe(Status.REFUSED);
+    expect(server.roles).toEqual([]);
   });
 });
 

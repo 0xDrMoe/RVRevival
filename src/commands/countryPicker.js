@@ -36,6 +36,8 @@ export const PickerId = Object.freeze({
   CONTINENT: "country-picker:continent:",
   // Followed by the list's number, since IDs must be unique within a message.
   LIST: "country-picker:list:",
+  // Confirm, under "Pick X?" (with confirmations on), followed by the country's code.
+  CONFIRM: "country-picker:confirm:",
 });
 
 // Discord shows at most 25 options in a select menu, and 5 rows in a message.
@@ -132,10 +134,11 @@ export function buildChoiceRows(language, countries) {
 // Options:
 //   countries, roleService, wrapServer, wrapMember   shared with /country
 //   forcedLanguage   reply in this language for everyone (BOT_LANGUAGE)
+//   confirmations    roles/roleConfirmations.js; without it, a pick gives the role right away
 //
-// Returns { [customId]: { label, handle(interaction) } }. handle() returns what
-// to log, or null for steps that aren't worth a log entry (opening the form).
-export function createCountryPicker({ countries, roleService, wrapServer, wrapMember, forcedLanguage }) {
+// Returns { components, componentPrefixes }: { [customId]: { label, handle(interaction) } }.
+// handle() returns what to log, or null for steps that aren't worth a log entry (opening the form).
+export function createCountryPicker({ countries, roleService, wrapServer, wrapMember, forcedLanguage, confirmations }) {
   const languageOf = (interaction) => pickLanguage(interaction.locale, forcedLanguage);
   const logged = (outcome, fields = {}) => ({ ...outcome, action: { label: LOG_LABEL, fields } });
 
@@ -215,6 +218,9 @@ export function createCountryPicker({ countries, roleService, wrapServer, wrapMe
     const typed = interaction.fields.getTextInputValue(PickerId.FORM_INPUT) ?? "";
     const country = countries.find(typed);
     if (country) {
+      if (await askFirst(interaction, country, language)) {
+        return null;
+      }
       const { content, outcome } = await giveRole(interaction, country, language, { typed });
       await interaction.editReply({ content });
       return outcome;
@@ -250,13 +256,48 @@ export function createCountryPicker({ countries, roleService, wrapServer, wrapMe
       await interaction.editReply({ content: translate(language, "invalidCountry"), components: [] });
       return logged(result(Status.REFUSED, "invalidCountry"));
     }
+    if (await askFirst(interaction, country, language)) {
+      return null;
+    }
+    const { content, outcome } = await giveRole(interaction, country, language);
+    await interaction.editReply({ content, components: [] });
+    return outcome;
+  }
+
+  // With confirmations on, replaces the reply with "Pick X?" and Confirm, and
+  // returns true. The country can only be changed by staff afterwards, so the
+  // question says so.
+  async function askFirst(interaction, country, language) {
+    if (!confirmations?.isOn(interaction.guildId, interaction.user.id)) {
+      return false;
+    }
+    await interaction.editReply({
+      content: translate(language, "roleConfirmCountry", { country: country.name }),
+      components: [confirmations.promptRow(language, PickerId.CONFIRM + country.code)],
+    });
+    return true;
+  }
+
+  // Confirm, under "Pick X?".
+  async function confirmChoice(interaction) {
+    if (!interaction.inCachedGuild()) {
+      return refuseOutsideServer(interaction);
+    }
+    const language = languageOf(interaction);
+    await interaction.deferUpdate();
+    const code = interaction.customId.slice(PickerId.CONFIRM.length);
+    const country = countries.countries.find((entry) => entry.code === code);
+    if (!country) {
+      await interaction.editReply({ content: translate(language, "invalidCountry"), components: [] });
+      return logged(result(Status.REFUSED, "invalidCountry"));
+    }
     const { content, outcome } = await giveRole(interaction, country, language);
     await interaction.editReply({ content, components: [] });
     return outcome;
   }
 
   const handler = (handle) => ({ label: LOG_LABEL, handle });
-  return {
+  const components = {
     [PickerId.BUTTON]: handler(openForm),
     [PickerId.FORM]: handler(readForm),
     ...Object.fromEntries(
@@ -267,4 +308,5 @@ export function createCountryPicker({ countries, roleService, wrapServer, wrapMe
     ),
     ...Object.fromEntries(Array.from({ length: MAX_LISTS }, (_, index) => [PickerId.LIST + index, handler(readChoice)])),
   };
+  return { components, componentPrefixes: { [PickerId.CONFIRM]: handler(confirmChoice) } };
 }
