@@ -157,6 +157,7 @@ const NAV = [
       { id: "moderation", icon: "sliders", tone: "red", manage: true },
       { id: "logging", icon: "list", tone: "amber", manage: true, on: (s) => Boolean(s.logsChannelId || s.serverLogChannelId) },
       { id: "access", icon: "key", tone: "purple", manage: true },
+      { id: "branding", icon: "palette", tone: "pink", manage: true },
       { id: "backup", icon: "archive", tone: "cyan", manage: true },
     ],
   },
@@ -6238,6 +6239,285 @@ async function showBackup(guildId) {
   );
 }
 
+// --- Branding ----------------------------------------------------------------------
+
+const BRANDING_NICKNAME_MAX = 32;
+const BRANDING_BIO_MAX = 190;
+// Each image is sent as a data: URL. Keeping both under about 400 KB keeps
+// the request under nginx's default 1 MB limit.
+const BRANDING_IMAGE_MAX = 400_000;
+const BRANDING_SIZES = { avatar: [512, 512], banner: [960, 384] };
+const BRANDING_FALLBACK_COLOR = "#7c5cff";
+
+// Reads an image file, crops it to fill width×height and shrinks it, in the
+// browser. Returns a data: URL (PNG, else WebP, else JPEG, whichever fits).
+async function shrinkImage(file, [width, height]) {
+  const source = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+  const image = new Image();
+  await new Promise((resolve, reject) => {
+    image.onload = resolve;
+    image.onerror = () => reject(new Error("Not an image"));
+    image.src = source;
+  });
+  if (!image.naturalWidth || !image.naturalHeight) {
+    throw new Error("Not an image");
+  }
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const scale = Math.max(width / image.naturalWidth, height / image.naturalHeight);
+  const drawWidth = image.naturalWidth * scale;
+  const drawHeight = image.naturalHeight * scale;
+  canvas.getContext("2d").drawImage(image, (width - drawWidth) / 2, (height - drawHeight) / 2, drawWidth, drawHeight);
+  for (const [type, quality] of [["image/png"], ["image/webp", 0.9], ["image/jpeg", 0.88], ["image/jpeg", 0.7]]) {
+    const url = canvas.toDataURL(type, quality);
+    if (url.startsWith(`data:${type}`) && url.length <= BRANDING_IMAGE_MAX) {
+      return url;
+    }
+  }
+  throw new Error("Too big");
+}
+
+// The Branding page: the bot's nickname, avatar, banner and bio in this
+// server (Discord's per-server profile), and the embed colour.
+async function showBranding(guildId) {
+  const data = await loadManagedGuild(guildId);
+  if (!data) {
+    return;
+  }
+  let saved;
+  try {
+    saved = await api(`/api/guilds/${guildId}/branding`);
+  } catch (error) {
+    failed(error);
+    return;
+  }
+  // What's changed and not saved yet. Images: a data: URL, or null for the default.
+  let draft = {};
+
+  const nickname = h("input", { id: "brandingNickname", type: "text", maxLength: BRANDING_NICKNAME_MAX, autocomplete: "off" });
+  const bio = h("textarea", { id: "brandingBio", rows: 3, maxLength: BRANDING_BIO_MAX });
+  const colorInput = h("input", { id: "brandingColor", type: "color", "aria-label": t("brandingColor") });
+  const colorState = h("p", { class: "help" });
+  const saveButton = h("button", { class: "primary", type: "button" }, icon("check", "icon small"), t("brandingSave"));
+
+  // Preview: the bot's profile card, and an embed in the chosen colour.
+  const previewBanner = h("div", { class: "brand-banner" });
+  const previewAvatar = h("img", { class: "brand-avatar", alt: "" });
+  const previewName = h("strong", { class: "brand-name" });
+  const previewBio = h("p", { class: "brand-bio" });
+  const sampleAvatar = h("img", { class: "discord-avatar", alt: "" });
+  const sampleName = h("strong", {});
+  const sampleEmbed = h(
+    "div",
+    { class: "brand-embed" },
+    h("strong", {}, t("brandingSampleTitle")),
+    h("p", {}, t("brandingSampleText")),
+  );
+
+  const current = (part) => (part in draft ? draft[part] : saved[part]);
+  const imageOf = (part) => {
+    const changed = draft[part];
+    if (changed !== undefined) {
+      return changed ?? saved.defaults[`${part}Url`];
+    }
+    return saved[`${part}Url`] ?? saved.defaults[`${part}Url`];
+  };
+  const colorOf = () => {
+    const value = current("color");
+    return value === null || value === undefined ? null : hexColor(value);
+  };
+
+  function refresh() {
+    const name = nickname.value.trim() || saved.defaults.name;
+    const avatar = imageOf("avatar");
+    const banner = imageOf("banner");
+    const color = colorOf();
+    previewAvatar.hidden = !avatar;
+    sampleAvatar.hidden = !avatar;
+    if (avatar) {
+      previewAvatar.src = avatar;
+      sampleAvatar.src = avatar;
+    }
+    previewBanner.replaceChildren(banner ? h("img", { src: banner, alt: "" }) : "");
+    previewBanner.style.setProperty("--brand", color ?? BRANDING_FALLBACK_COLOR);
+    sampleEmbed.style.setProperty("--brand", color ?? BRANDING_FALLBACK_COLOR);
+    previewName.replaceChildren(name, h("span", { class: "app-badge" }, "APP"));
+    sampleName.replaceChildren(name, " ", h("span", { class: "app-badge" }, "APP"));
+    previewBio.textContent = bio.value.trim();
+    previewBio.hidden = !bio.value.trim();
+    colorState.textContent = color ? "" : t("brandingColorUsingDefault");
+    colorState.hidden = Boolean(color);
+    saveButton.disabled = Object.keys(changes()).length === 0;
+  }
+
+  // The fields that differ from what Discord and the dashboard have now.
+  function changes() {
+    const body = {};
+    const nick = nickname.value.trim() || null;
+    if (nick !== (saved.nickname ?? null)) {
+      body.nickname = nick;
+    }
+    const about = bio.value.trim() || null;
+    if (about !== (saved.bio ?? null)) {
+      body.bio = about;
+    }
+    for (const part of ["avatar", "banner"]) {
+      if (draft[part] !== undefined) {
+        body[part] = draft[part];
+      }
+    }
+    if ("color" in draft && draft.color !== saved.color) {
+      body.color = draft.color;
+    }
+    return body;
+  }
+
+  function fill() {
+    draft = {};
+    nickname.value = saved.nickname ?? "";
+    nickname.placeholder = saved.defaults.name;
+    bio.value = saved.bio ?? "";
+    colorInput.value = saved.color === null ? BRANDING_FALLBACK_COLOR : hexColor(saved.color);
+    refresh();
+  }
+
+  const setColor = (value) => {
+    draft.color = value;
+    if (value !== null) {
+      colorInput.value = hexColor(value);
+    }
+    refresh();
+  };
+  colorInput.addEventListener("input", () => setColor(Number.parseInt(colorInput.value.slice(1), 16)));
+  nickname.addEventListener("input", refresh);
+  bio.addEventListener("input", refresh);
+  const swatches = [BRANDING_FALLBACK_COLOR, ...EMBED_SWATCHES].map((swatch) => {
+    const button = h("button", { type: "button", class: "swatch", title: swatch, "aria-label": swatch, onclick: () => setColor(Number.parseInt(swatch.slice(1), 16)) });
+    button.style.setProperty("--swatch", swatch);
+    return button;
+  });
+
+  // A file picker and a "use default" button for the avatar or banner.
+  function imagePicker(part) {
+    const input = h("input", { id: `branding_${part}`, type: "file", accept: "image/png,image/jpeg,image/webp,image/gif", class: "visually-hidden" });
+    input.addEventListener("change", async () => {
+      const file = input.files?.[0];
+      input.value = "";
+      if (!file) {
+        return;
+      }
+      try {
+        draft[part] = await shrinkImage(file, BRANDING_SIZES[part]);
+      } catch {
+        toast(t("brandingImageFailed"), "error");
+        return;
+      }
+      refresh();
+    });
+    const choose = h("label", { class: "button ghost small", for: input.id }, icon("upload", "icon small"), t("brandingChooseImage"));
+    const reset = h(
+      "button",
+      {
+        type: "button",
+        class: "ghost small",
+        onclick: () => {
+          draft[part] = null;
+          refresh();
+        },
+      },
+      icon("refresh", "icon small"),
+      t("brandingUseDefault"),
+    );
+    const label = part === "avatar" ? "brandingAvatar" : "brandingBanner";
+    return h(
+      "div",
+      { class: "field" },
+      h("span", { class: "field-label" }, t(label)),
+      h("div", { class: "toolbar" }, input, choose, reset),
+      h("span", { class: "help" }, t(`${label}Help`)),
+    );
+  }
+
+  saveButton.addEventListener("click", async () => {
+    const body = changes();
+    if (Object.keys(body).length === 0) {
+      toast(t("brandingNothing"));
+      return;
+    }
+    saveButton.disabled = true;
+    try {
+      saved = await api(`/api/guilds/${guildId}/branding`, { method: "PATCH", body });
+      state.cache = null;
+      fill();
+      toast(t("brandingSaved"));
+    } catch (error) {
+      failed(error);
+      refresh();
+    }
+  });
+  const discard = h("button", { class: "ghost", type: "button", onclick: fill }, t("brandingDiscard"));
+
+  show(
+    guildLayout(
+      data,
+      "branding",
+      pageHero("branding", t("brandingIntro"), data),
+      h(
+        "div",
+        { class: "brand-grid" },
+        h(
+          "div",
+          { class: "brand-column" },
+          card(
+            t("brandingProfile"),
+            "user",
+            "pink",
+            field("brandingNickname", "brandingNicknameHelp", nickname),
+            field("brandingBio", "brandingBioHelp", bio),
+            imagePicker("avatar"),
+            imagePicker("banner"),
+            h("p", { class: "help" }, t("brandingRateHelp")),
+          ),
+          card(
+            t("brandingColor"),
+            "palette",
+            "purple",
+            h("p", { class: "help" }, t("brandingColorHelp")),
+            h(
+              "div",
+              { class: "toolbar" },
+              colorInput,
+              h("div", { class: "swatches" }, swatches),
+              h("button", { type: "button", class: "ghost small", onclick: () => setColor(null) }, icon("refresh", "icon small"), t("brandingColorDefault")),
+            ),
+            colorState,
+          ),
+        ),
+        card(
+          t("brandingPreview"),
+          "image",
+          "blue",
+          h(
+            "div",
+            { class: "embed-preview brand-preview" },
+            h("div", { class: "brand-card" }, previewBanner, previewAvatar, h("div", { class: "brand-card-body" }, previewName, previewBio)),
+            h("div", { class: "discord-message" }, sampleAvatar, h("div", { class: "discord-body" }, h("div", { class: "discord-head" }, sampleName), sampleEmbed)),
+          ),
+          h("p", { class: "help" }, t("brandingLimits")),
+        ),
+      ),
+      h("div", { class: "toolbar" }, h("span", { class: "grow" }), discard, saveButton),
+    ),
+  );
+  fill();
+}
+
 // --- Server stats ------------------------------------------------------------------
 
 const COUNTER_PRESET_NAMES = ["members", "humans", "bots", "boosts", "channels", "roles"];
@@ -6759,6 +7039,7 @@ const SHOW_PAGE = {
   counters: showCounters,
   sticky: showStickies,
   backup: showBackup,
+  branding: showBranding,
   moderation: showModeration,
   logging: showLogging,
   access: showAccess,

@@ -18,8 +18,10 @@ import { checkSettingChanges, InvalidSetting, SETTING_RULES } from "./settingsRu
 export const BACKUP_FORMAT = "rvrevival-settings";
 export const BACKUP_VERSION = 1;
 
-// Running state, or facts about one server (who added the bot): never backed up.
-const NOT_BACKED_UP = new Set([Setting.LOCKDOWN, Setting.BOT_INVITER]);
+// Running state, or facts about one server (who added the bot): never backed
+// up. Branding is mostly the bot's Discord profile, which Discord keeps, so
+// restoring only the saved half of it would leave the two out of step.
+const NOT_BACKED_UP = new Set([Setting.LOCKDOWN, Setting.BOT_INVITER, Setting.BRANDING]);
 // Settings the dashboard has no form for. They point at messages and
 // channels of the server they were made on, so they're only restored there
 // (stats counters get new channels elsewhere).

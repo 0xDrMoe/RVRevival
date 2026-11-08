@@ -66,6 +66,7 @@ import { findCategory, subjectFromAnswers } from "../tickets/categories.js";
 import { buildTicketTranscript, fetchThreadMessages } from "../tickets/transcript.js";
 import { noTicketLog, TICKET_EVENTS, TicketEvent } from "../tickets/ticketLog.js";
 import { isPermissionError } from "../utils/discordErrors.js";
+import { accentColor } from "../branding/branding.js";
 
 const COMMAND_NAME = "tickets";
 
@@ -434,7 +435,12 @@ export function createTicketsCommand({
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       const title = interaction.options.getString("title")?.trim() || null;
       const message = interaction.options.getString("message")?.trim() || null;
-      const panel = buildPanelMessage(serverLanguage(guild, forcedLanguage), { title, message, categories: ticketCategories(guildSettings, guildId) });
+      const panel = buildPanelMessage(serverLanguage(guild, forcedLanguage), {
+        title,
+        message,
+        categories: ticketCategories(guildSettings, guildId),
+        color: accentColor(guildSettings, guildId),
+      });
       let posted;
       try {
         posted = await channel.send(panel);
@@ -608,7 +614,7 @@ export function createTicketsCommand({
     const staffRoleId = category?.staffRoleId ?? settings.staffRoleId ?? ticketStaffRoleId(guildSettings, guild.id);
     await thread.members.add(interaction.user.id);
     await thread.send({
-      ...buildTicketWelcome(serverLanguage(guild, forcedLanguage), { ticket, staffRoleId }),
+      ...buildTicketWelcome(serverLanguage(guild, forcedLanguage), { ticket, staffRoleId, color: accentColor(guildSettings, guild.id) }),
       allowedMentions: { users: [interaction.user.id], roles: staffRoleId ? [staffRoleId] : [] },
     });
     logger.info("Ticket opened", { guildId: guild.id, ticket: ticket.number });

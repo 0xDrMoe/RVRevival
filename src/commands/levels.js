@@ -38,6 +38,7 @@ import { result, Status } from "../logs/actionLog.js";
 import { Period, PERIODS, periodStart } from "../leveling/levelStore.js";
 import { isModeratorRole } from "../permissions/moderatorPermissions.js";
 import { Setting } from "../settings/guildSettings.js";
+import { accentColor } from "../branding/branding.js";
 
 const LEADERBOARD_PAGE = 10;
 const PROGRESS_BAR_LENGTH = 12;
@@ -202,7 +203,7 @@ export function createLevelCommands({ levels, leveling, guildSettings, forcedLan
     const { level, current, needed } = levelProgress(entry.xp);
     const member = interaction.options.getMember?.("member") ?? (user.id === interaction.user.id ? interaction.member : null);
     const embed = new EmbedBuilder()
-      .setColor(LEVEL_COLOR)
+      .setColor(accentColor(guildSettings, interaction.guildId, LEVEL_COLOR))
       .setAuthor({ name: member?.displayName ?? user.username, iconURL: user.displayAvatarURL?.() })
       .setDescription(progressBar(current, needed))
       .addFields(
@@ -251,7 +252,7 @@ export function createLevelCommands({ levels, leveling, guildSettings, forcedLan
     const myRank = since === undefined ? levels.rank(interaction.guildId, interaction.user.id) : levels.rankSince(interaction.guildId, interaction.user.id, since);
     const footer = text("leaderboardFooter", { page, pages }) + (myRank ? ` · ${text("leaderboardYou", { rank: number(myRank) })}` : "");
     const embed = new EmbedBuilder()
-      .setColor(LEVEL_COLOR)
+      .setColor(accentColor(guildSettings, interaction.guildId, LEVEL_COLOR))
       .setTitle(text(since === undefined ? "leaderboardTitle" : `leaderboardTitle_${period}`, { server: interaction.guild.name }))
       .setDescription(lines.join("\n"))
       .setFooter({ text: footer });

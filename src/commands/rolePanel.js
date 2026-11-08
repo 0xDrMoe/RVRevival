@@ -35,6 +35,7 @@ import {
 import { discordLocalizations, pickLanguage, translate } from "../i18n/i18n.js";
 import { result, Status } from "../logs/actionLog.js";
 import { Setting } from "../settings/guildSettings.js";
+import { accentColor } from "../branding/branding.js";
 import { isPermissionError } from "../utils/discordErrors.js";
 import { KeyedLock } from "../utils/keyedLock.js";
 import { createRolePanelWizard, WIZARD_PREFIX } from "./rolePanelWizard.js";
@@ -113,7 +114,7 @@ export function createRolePanelCommand({ guildSettings, logger, forcedLanguage }
   // Posts or edits the panel's message; undefined if the bot can't post there.
   const publish = async (panel, guild, emptyText) => {
     try {
-      return await publishPanel(panel, guild, emptyText);
+      return await publishPanel(panel, guild, emptyText, accentColor(guildSettings, guild.id));
     } catch (error) {
       if (isPermissionError(error) || error.code === "NO_CHANNEL") {
         return undefined;

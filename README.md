@@ -31,6 +31,7 @@ Rabble is an all-in-one Discord bot and web dashboard by Cedar Tech Solutions, m
 | [Server stats](#server-stats) | `/stats`, or the dashboard's Server stats page | Manage Server or a dashboard role that can change settings |
 | [Sticky messages](#sticky-messages) | `/sticky`, or the dashboard's Sticky messages page | Manage Messages (dashboard: Manage Server or a dashboard role that can change settings) |
 | [Media-only channels](#media-only-channels) | `/mediaonly`, or the dashboard's Automod page | Manage Channels (dashboard: Manage Server or a dashboard role that can change settings) |
+| [Branding](#branding) | The dashboard's Branding page | Manage Server or a dashboard role that can change settings |
 | [Settings backup](#settings-backup) | The dashboard's Backup page | Manage Server or a dashboard role that can change settings (anti-nuke: the server owner) |
 | [Highlights](#highlights) | `/highlight` | Everyone |
 | [AFK](#afk) | `/afk` | Everyone |
@@ -416,6 +417,17 @@ When people talk, the bot waits a few seconds, deletes its last copy and posts t
 
 Other messages are deleted, with a note that deletes itself after a few seconds (at most one note per member every 30 seconds). Members with **Manage Messages** in the channel are exempt, and threads in the channel stay open for comments. Community servers can also use Discord's own **media channels** (Create Channel → Media), which are built for galleries; this is for normal text channels. Needs **Manage Channels**. The bot needs **Manage Messages** in the channel.
 
+### Branding
+
+The dashboard's **Branding** page gives the bot its own look in one server, using Discord's per-server bot profile.
+
+- **Nickname, avatar, banner and About me** are set on Discord (`PATCH /guilds/:id/members/@me`). The page crops and shrinks images in the browser (avatar 512×512, banner 960×384) so the request stays under nginx's default 1 MB body limit. Discord keeps the images; the bot doesn't store them. **Use default**, or an empty field, puts the bot's own back.
+- **Embed colour** is saved with the server's settings and used on role panels, the ticket panel and ticket threads, `/rank` and `/leaderboard`. Logs, cases, the starboard and giveaways keep their own colours because the colour means something there. Panels already posted pick it up the next time they're updated.
+- Log entries posted through the bot's webhook use its nickname and avatar in that server.
+- Discord has no per-server version of the app's name and icon in the slash command list, the APP badge or DMs, so those stay as the main bot. A fully separate bot for one server would need its own token (a possible later premium tier).
+- Setting a nickname needs the bot's **Change Nickname** permission. Discord rate-limits profile changes; the page shows how long to wait when it hits the limit.
+- Changes are listed on the Activity page and in the logs channel. Branding isn't part of settings backups, since most of it lives on Discord.
+
 ### Settings backup
 
 The dashboard's **Backup** page saves every setting of a server to a `.json` file, and restores one later or on another server.
@@ -744,6 +756,7 @@ src/
   scheduled/             Scheduled messages: saved in SQLite (scheduledMessageStore.js), posted when due (scheduler.js)
   reminders/             Reminders: saved in SQLite (reminderStore.js), sent when due (reminderScheduler.js)
   automod/               Automod: settings (config.js), what each rule matches (rules.js), acting on messages
+  branding/              Branding: the per-server embed colour and bio, and checks for the Branding page's changes
   logs/                  Logs channel, server log, posting to log channels, and a channel per kind of entry (logRoutes.js)
   moderation/            Moderation: cases (SQLite), checks, actions, mod log, temporary bans
   settings/              Per-server settings (saved in data/bot.db)
