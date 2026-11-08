@@ -300,7 +300,7 @@
   "leaveChannelHelp": "Where the bot posts when someone leaves. Off means no leave message.",
   "leaveMessage": "Leave message",
   "sectionAutoroles": "Autoroles",
-  "autorolesHelp": "Roles every new member gets (up to {max}). Members who must accept the rules first get them once they do. Bot and admin roles aren't listed.",
+  "autorolesHelp": "Roles every new member gets (up to {max}). Members who must accept the rules first get them once they do. Bot roles and roles with moderator permissions aren't listed.",
   "sectionRolePanels": "Role panels",
   "rolePanelsHelp": "Messages with buttons where members pick their own roles. Make and change them in Discord with /rolepanel.",
   "rolePanelsNone": "No role panels yet. Try /rolepanel create in Discord.",

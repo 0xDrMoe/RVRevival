@@ -536,6 +536,7 @@ const FEATURE_PARTS = [
         tips: [
           "In `/rolepanel setup`, nothing changes until you press **Save**. **Cancel all changes** throws the draft away. An editor left alone for 30 minutes closes.",
           "If members must accept the rules first (Rules Screening), autoroles wait until they do.",
+          "Autoroles can't be staff or admin roles (Ban, Kick, Timeout, Manage Messages and similar), so joining never gives anyone moderator powers.",
           "Members click a button to get the role and click again to remove it. A one-role panel swaps the old one out, good for region or main platform.",
           "Panels refuse staff and admin roles, bot roles, and roles above the bot or you. A deleted panel message comes back on the next `add` or `remove`.",
           "Roles on rejoin never give back staff, bot or booster roles, so leaving can't shake off a restricted role but can't keep staff either.",

@@ -19,6 +19,7 @@ import { MAX_AUTOROLES, MAX_MESSAGE_LENGTH, renderTemplate, welcomeText } from "
 import { discordLocalizations, pickLanguage, translate } from "../i18n/i18n.js";
 import { result, Status } from "../logs/actionLog.js";
 import { normalizeRolePersist } from "../members/rolePersistence.js";
+import { isModeratorRole } from "../permissions/moderatorPermissions.js";
 import { Setting } from "../settings/guildSettings.js";
 
 const COMMAND_NAME = "welcome";
@@ -184,7 +185,7 @@ export function createWelcomeCommand({ guildSettings, forcedLanguage }) {
         if (role.id === guildId || role.managed) {
           return reply(Status.REFUSED, "welcomeAutoroleInvalid", values);
         }
-        if (role.permissions?.has(PermissionFlagsBits.Administrator) || role.permissions?.has(PermissionFlagsBits.ManageGuild)) {
+        if (isModeratorRole(role)) {
           return reply(Status.REFUSED, "welcomeAutoroleDangerous", values);
         }
         if (roles.length >= MAX_AUTOROLES) {

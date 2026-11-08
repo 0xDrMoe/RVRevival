@@ -22,6 +22,7 @@ import { LogEvent } from "../logs/serverLog.js";
 import { checkLogRoutes, describeLogRoutes, InvalidLogRoutes } from "../logs/logRoutes.js";
 import { botCommandCatalog } from "../permissions/catalog.js";
 import { checkCommandRules, describeCommandRules, InvalidCommandRules } from "../permissions/commandRules.js";
+import { isModeratorRole } from "../permissions/moderatorPermissions.js";
 import { CUSTOM, PRESETS } from "../permissions/presets.js";
 import { Setting } from "../settings/guildSettings.js";
 
@@ -54,10 +55,6 @@ const MAX_DASHBOARD_ROLES = 25;
 const LOG_EVENTS = Object.values(LogEvent);
 // The steps on the dashboard's Setup card, in the order it shows them.
 export const SETUP_STEPS = Object.freeze(["logs", "serverLog", "modLog", "modRole", "country", "dashboard", "automod", "welcome"]);
-// Roles new members must never get automatically: Administrator and Manage Server.
-const AUTOROLE_FORBIDDEN = (1n << 3n) | (1n << 5n);
-// Roles the birthday role can't be: any with moderator permissions (as for role panels).
-const BIRTHDAY_ROLE_FORBIDDEN = [3n, 5n, 28n, 4n, 13n, 29n, 27n, 30n, 33n, 34n, 2n, 1n, 40n, 17n, 7n].reduce((bits, bit) => bits | (1n << bit), 0n);
 
 // Each setting: the kind of value, and (for lists) what each item may be.
 export const SETTING_RULES = Object.freeze({
@@ -174,10 +171,10 @@ function checkValue(setting, value, { guildId, channels, roles }) {
       const ids = [...new Set(value)];
       const allowed = (id) => {
         const role = roles.find((entry) => entry.id === id);
-        return roleOk(id) && !role.managed && (BigInt(role.permissions ?? 0) & AUTOROLE_FORBIDDEN) === 0n;
+        return roleOk(id) && !role.managed && !isModeratorRole(role);
       };
       if (!ids.every(allowed)) {
-        throw new InvalidSetting(setting, "Pick roles from this server that aren't bot roles or admin roles.");
+        throw new InvalidSetting(setting, "Pick roles from this server that aren't bot roles or roles with moderator permissions.");
       }
       return ids.length > 0 ? ids : null;
     }
@@ -224,7 +221,7 @@ function checkValue(setting, value, { guildId, channels, roles }) {
         throw new InvalidSetting(setting, "Pick a text or announcement channel from this server for birthday greetings.");
       }
       const role = roles.find((entry) => entry.id === roleId);
-      if (roleId && (!roleOk(roleId) || role.managed || (BigInt(role.permissions ?? 0) & BIRTHDAY_ROLE_FORBIDDEN) !== 0n)) {
+      if (roleId && (!roleOk(roleId) || role.managed || isModeratorRole(role))) {
         throw new InvalidSetting(setting, "Pick a birthday role without moderator permissions that isn't a bot role.");
       }
       const timezone = value.timezone || "UTC";
@@ -301,10 +298,10 @@ function checkValue(setting, value, { guildId, channels, roles }) {
         throw error;
       }
     case "leveling": {
-      // Reward roles: not @everyone, bot roles or roles with Administrator or Manage Server.
+      // Reward roles: not @everyone, bot roles or roles with moderator permissions.
       const isRewardRole = (id) => {
         const role = roles.find((entry) => entry.id === id);
-        return roleOk(id) && !role.managed && (BigInt(role.permissions ?? 0) & AUTOROLE_FORBIDDEN) === 0n;
+        return roleOk(id) && !role.managed && !isModeratorRole(role);
       };
       try {
         const leveling = checkLeveling(value, {

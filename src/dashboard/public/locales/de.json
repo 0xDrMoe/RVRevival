@@ -300,7 +300,7 @@
   "leaveChannelHelp": "Wo der Bot postet, wenn jemand geht. Aus heißt: keine Abschiedsnachricht.",
   "leaveMessage": "Abschiedsnachricht",
   "sectionAutoroles": "Autorollen",
-  "autorolesHelp": "Rollen, die jedes neue Mitglied bekommt (bis zu {max}). Wer zuerst die Regeln akzeptieren muss, bekommt sie danach. Bot- und Adminrollen werden nicht angezeigt.",
+  "autorolesHelp": "Rollen, die jedes neue Mitglied bekommt (bis zu {max}). Wer zuerst die Regeln akzeptieren muss, bekommt sie danach. Bot-Rollen und Rollen mit Moderationsrechten werden nicht angezeigt.",
   "sectionRolePanels": "Rollen-Panels",
   "rolePanelsHelp": "Nachrichten mit Buttons, über die Mitglieder sich selbst Rollen geben. Erstelle und ändere sie in Discord mit /rolepanel.",
   "rolePanelsNone": "Noch keine Rollen-Panels. Probiere /rolepanel create in Discord.",

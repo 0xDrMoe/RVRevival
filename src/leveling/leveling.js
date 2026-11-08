@@ -6,6 +6,7 @@
 import { randomInt } from "node:crypto";
 import { PermissionFlagsBits } from "discord.js";
 import { pickLanguage, translate } from "../i18n/i18n.js";
+import { isModeratorRole } from "../permissions/moderatorPermissions.js";
 import { Setting } from "../settings/guildSettings.js";
 import {
   Announce,
@@ -50,7 +51,9 @@ export function createLeveling({ guildSettings, store, logger, forcedLanguage, r
     const wanted = new Set(rewardRolesFor(config, level));
     const manageable = (roleId) => member.guild.roles.cache.get(roleId)?.editable;
     const has = (roleId) => member.roles.cache.has(roleId);
-    const added = [...wanted].filter((roleId) => !has(roleId) && manageable(roleId));
+    // A reward role that has since been given moderator permissions isn't handed out.
+    const givable = (roleId) => manageable(roleId) && !isModeratorRole(member.guild.roles.cache.get(roleId));
+    const added = [...wanted].filter((roleId) => !has(roleId) && givable(roleId));
     const removed = config.rewards
       .map((reward) => reward.roleId)
       .filter((roleId) => !wanted.has(roleId) && has(roleId) && manageable(roleId));

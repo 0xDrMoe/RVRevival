@@ -77,10 +77,11 @@ const REPEATS = [
 // The starboard's limits and defaults (community/starboard.js).
 const STARBOARD_DEFAULTS = { threshold: 3, emoji: "⭐" };
 const MAX_STARBOARD_THRESHOLD = 50;
-// Administrator and Manage Server: roles the bot won't give new members.
-const AUTOROLE_FORBIDDEN = (1n << 3n) | (1n << 5n);
-// Moderator permissions: roles with any of them can't be the birthday role.
-const BIRTHDAY_ROLE_FORBIDDEN = [3n, 5n, 28n, 4n, 13n, 29n, 27n, 30n, 33n, 34n, 2n, 1n, 40n, 17n, 7n].reduce((bits, bit) => bits | (1n << bit), 0n);
+// Moderator permissions (as in permissions/moderatorPermissions.js): roles with
+// any of them can't be autoroles, level rewards or the birthday role.
+const MODERATOR_PERMISSION_BITS = [3n, 5n, 28n, 4n, 13n, 29n, 27n, 30n, 33n, 34n, 2n, 1n, 40n, 17n, 7n].reduce((bits, bit) => bits | (1n << bit), 0n);
+const AUTOROLE_FORBIDDEN = MODERATOR_PERMISSION_BITS;
+const BIRTHDAY_ROLE_FORBIDDEN = MODERATOR_PERMISSION_BITS;
 const MAX_BIRTHDAY_MESSAGE_LENGTH = 1000;
 // Leveling XP boosts (leveling/config.js).
 const MAX_MULTIPLIER = 5;

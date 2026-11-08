@@ -12,8 +12,8 @@ import {
   ButtonBuilder,
   ButtonStyle,
   EmbedBuilder,
-  PermissionFlagsBits,
 } from "discord.js";
+import { isModeratorRole } from "../permissions/moderatorPermissions.js";
 import { Setting } from "../settings/guildSettings.js";
 
 export const PanelMode = Object.freeze({ TOGGLE: "toggle", UNIQUE: "unique" });
@@ -26,23 +26,6 @@ export const MAX_LABEL_LENGTH = 80;
 export const BUTTON_PREFIX = "rp:";
 
 // Roles members must never be able to give themselves.
-const DANGEROUS_PERMISSIONS = [
-  PermissionFlagsBits.Administrator,
-  PermissionFlagsBits.ManageGuild,
-  PermissionFlagsBits.ManageRoles,
-  PermissionFlagsBits.ManageChannels,
-  PermissionFlagsBits.ManageMessages,
-  PermissionFlagsBits.ManageWebhooks,
-  PermissionFlagsBits.ManageNicknames,
-  PermissionFlagsBits.ManageGuildExpressions,
-  PermissionFlagsBits.ManageEvents,
-  PermissionFlagsBits.ManageThreads,
-  PermissionFlagsBits.BanMembers,
-  PermissionFlagsBits.KickMembers,
-  PermissionFlagsBits.ModerateMembers,
-  PermissionFlagsBits.MentionEveryone,
-  PermissionFlagsBits.ViewAuditLog,
-];
 
 const EMBED_COLOR = 0x5865f2;
 // A custom emoji (<:name:id> or <a:name:id>), or a few characters that are an emoji.
@@ -74,7 +57,7 @@ export function roleProblem(role, { guild, admin, bot }) {
   if (role.managed) {
     return "rolePanelManaged";
   }
-  if (DANGEROUS_PERMISSIONS.some((permission) => role.permissions?.has(permission))) {
+  if (isModeratorRole(role)) {
     return "rolePanelDangerous";
   }
   if (!bot || role.position >= bot.roles.highest.position) {

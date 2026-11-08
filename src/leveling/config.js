@@ -146,7 +146,7 @@ export function checkLeveling(value, { isRole, isRewardRole, isChannel }) {
       throw new InvalidLeveling(`Reward levels go from 1 to ${MAX_LEVEL}.`);
     }
     if (!isRewardRole(reward.roleId)) {
-      throw new InvalidLeveling("Pick reward roles the bot can give: below its own role, not bot or admin roles.");
+      throw new InvalidLeveling("Pick reward roles the bot can give: below its own role, not bot roles or roles with moderator permissions.");
     }
   }
   const levels = value.rewards.map((reward) => reward.level);

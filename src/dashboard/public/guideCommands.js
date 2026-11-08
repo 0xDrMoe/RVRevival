@@ -1313,7 +1313,7 @@ export const COMMAND_PARTS = [
             what: "Gives a role when members reach a level. Up to 25 rewards.",
             options: [
               ["level", "The level, 1 to 500."],
-              ["role", "The role. Below the bot's, without admin or Manage Server."],
+              ["role", "The role. Below the bot's, without staff or admin permissions."],
             ],
           },
           {

@@ -240,6 +240,8 @@ describe("/welcome", () => {
 
     const admin = { ...role, permissions: { has: (bit) => bit === PermissionFlagsBits.Administrator } };
     expect((await run(guildSettings, "autorole", { role: admin })).outcome.key).toBe("welcomeAutoroleDangerous");
+    const banner = { ...role, permissions: { has: (bit) => bit === PermissionFlagsBits.BanMembers } };
+    expect((await run(guildSettings, "autorole", { role: banner })).outcome.key).toBe("welcomeAutoroleDangerous");
     expect((await run(guildSettings, "autorole", { role: { ...role, managed: true } })).outcome.key).toBe("welcomeAutoroleInvalid");
     expect((await run(guildSettings, "autorole", { role: { ...role, id: GUILD_ID } })).outcome.key).toBe("welcomeAutoroleInvalid");
   });

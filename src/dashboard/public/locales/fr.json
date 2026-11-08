@@ -300,7 +300,7 @@
   "leaveChannelHelp": "Où le bot poste quand quelqu'un part. Désactivé signifie pas de message de départ.",
   "leaveMessage": "Message de départ",
   "sectionAutoroles": "Rôles automatiques",
-  "autorolesHelp": "Rôles que reçoit chaque nouveau membre (jusqu'à {max}). Ceux qui doivent d'abord accepter les règles les reçoivent ensuite. Les rôles de bot et d'admin ne sont pas listés.",
+  "autorolesHelp": "Rôles que reçoit chaque nouveau membre (jusqu'à {max}). Ceux qui doivent d'abord accepter les règles les reçoivent ensuite. Les rôles de bot et les rôles avec des permissions de modération ne sont pas listés.",
   "sectionRolePanels": "Panneaux de rôles",
   "rolePanelsHelp": "Des messages avec des boutons où les membres choisissent leurs rôles. Créez-les et modifiez-les dans Discord avec /rolepanel.",
   "rolePanelsNone": "Aucun panneau de rôles. Essayez /rolepanel create dans Discord.",
