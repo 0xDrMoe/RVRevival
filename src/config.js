@@ -80,7 +80,7 @@ function dashboardUrl(env) {
   try {
     url = new URL(value);
   } catch {
-    throw new ConfigError("DASHBOARD_URL should be the dashboard's address, like https://canopy.example.com");
+    throw new ConfigError("DASHBOARD_URL should be the dashboard's address, like https://rabble.example.com");
   }
   const isLocal = url.hostname === "localhost" || url.hostname === "127.0.0.1";
   if (url.protocol !== "https:" && !(isLocal && url.protocol === "http:")) {

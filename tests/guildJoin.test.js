@@ -26,7 +26,7 @@ function fakeGuild({ systemChannel = null, channels = [], joinedTimestamp = NOW 
 function handler(guildSettings = new GuildSettings()) {
   return {
     guildSettings,
-    join: createGuildJoinHandler({ guildSettings, logger, dashboardUrl: "https://canopy.example.com", now: () => NOW }),
+    join: createGuildJoinHandler({ guildSettings, logger, dashboardUrl: "https://rabble.example.com", now: () => NOW }),
   };
 }
 
@@ -61,8 +61,8 @@ describe("guildJoined", () => {
 
     const { embeds, allowedMentions } = channel.send.mock.calls[0][0];
     const text = embeds[0].data.description;
-    expect(embeds[0].data.title).toBe("Thanks for adding Canopy!");
-    expect(text).toContain(`https://canopy.example.com/#/g/${GUILD_ID}`);
+    expect(embeds[0].data.title).toBe("Thanks for adding Rabble!");
+    expect(text).toContain(`https://rabble.example.com/#/g/${GUILD_ID}`);
     expect(text).toContain("/country");
     expect(allowedMentions).toEqual({ parse: [] });
   });

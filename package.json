@@ -1,8 +1,8 @@
 {
-  "name": "canopy-bot",
+  "name": "rabble-bot",
   "version": "1.0.0",
   "private": true,
-  "description": "Canopy, the all-in-one Discord bot by Cedar Tech Solutions.",
+  "description": "Rabble, the all-in-one Discord bot by Cedar Tech Solutions.",
   "license": "UNLICENSED",
   "type": "module",
   "main": "src/index.js",

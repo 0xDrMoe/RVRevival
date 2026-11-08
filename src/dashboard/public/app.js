@@ -934,7 +934,7 @@ function landingDemo(tone, iconName, title, text) {
     h(
       "div",
       {},
-      h("span", { class: "landing-demo-name" }, "Canopy", h("span", { class: "landing-demo-bot" }, t("landingBot"))),
+      h("span", { class: "landing-demo-name" }, "Rabble", h("span", { class: "landing-demo-bot" }, t("landingBot"))),
       h("div", { class: "landing-demo-embed" }, h("strong", {}, icon(iconName), title), h("span", {}, text)),
     ),
   );
@@ -988,7 +988,7 @@ function showLanding(failedLogin = false) {
           "div",
           { class: "landing-copy" },
           status,
-          h("h1", {}, "Canopy"),
+          h("h1", {}, "Rabble"),
           h("p", { class: "landing-tagline" }, t("landingTagline")),
           failedLogin ? h("p", { class: "landing-error", role: "alert" }, t("loginFailed")) : null,
           h("div", { class: "landing-actions" }, invites[0], login()),
@@ -1081,7 +1081,7 @@ function showLanding(failedLogin = false) {
       h(
         "footer",
         { class: "landing-footer" },
-        h("span", { class: "landing-footer-brand" }, h("img", { src: "favicon.svg", alt: "", width: 24, height: 24 }), "Canopy"),
+        h("span", { class: "landing-footer-brand" }, h("img", { src: "favicon.svg", alt: "", width: 24, height: 24 }), "Rabble"),
         h(
           "nav",
           { "aria-label": t("landingFooterNav") },

@@ -1,7 +1,7 @@
 {
   "loading": "Chargement…",
   "logout": "Se déconnecter",
-  "loginTitle": "Tableau de bord Canopy",
+  "loginTitle": "Tableau de bord Rabble",
   "loginIntro": "Connectez-vous avec Discord pour gérer le bot sur les serveurs où vous avez Gérer le serveur.",
   "loginButton": "Se connecter avec Discord",
   "loginFailed": "La connexion n'a pas fonctionné. Veuillez réessayer.",
@@ -724,7 +724,7 @@
   "embedSaved": "Message mis à jour.",
   "embedPreview": "Aperçu",
   "embedEmpty": "Écris quelque chose pour le voir ici.",
-  "embedBotName": "Canopy",
+  "embedBotName": "Rabble",
   "embedBotTag": "App",
   "embedToday": "Aujourd'hui",
   "embedUnknownUser": "quelqu'un",

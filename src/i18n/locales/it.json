@@ -1127,8 +1127,8 @@
   "guideExample": "Esempio",
   "guideGoodToKnow": "Buono a sapersi",
 
-  "joinTitle": "Grazie per aver aggiunto Canopy!",
-  "joinIntro": "Canopy porta moderazione, automod, log, ticket, messaggi di benvenuto, livelli e altro. Tutto parte spento, quindi non cambia nulla finché non lo configuri.",
+  "joinTitle": "Grazie per aver aggiunto Rabble!",
+  "joinIntro": "Rabble porta moderazione, automod, log, ticket, messaggi di benvenuto, livelli e altro. Tutto parte spento, quindi non cambia nulla finché non lo configuri.",
   "joinDashboard": "**Configuralo dalla dashboard:** {url}",
   "joinGuide": "**Preferisci Discord?** Usa `/guide` per un giro di tutte le funzioni, o `/settings` per le basi.",
   "joinCountriesOff": "I ruoli paese (`/country`) sono spenti. Attivali dalla pagina Permessi della dashboard se ti servono."
