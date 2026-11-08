@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createAfk } from "../src/afk/afk.js";
 import { AfkStore, NicknameChange } from "../src/afk/afkStore.js";
 import { buildAfkCommandData, createAfkCommand } from "../src/commands/afk.js";
+import { openDatabase } from "../src/storage/database.js";
 import { fakeLogger } from "./helpers/fakes.js";
 
 const GUILD_ID = "900000000000000001";
@@ -57,6 +58,18 @@ function setup(options) {
 }
 
 describe("AFK", () => {
+  it("knows who is away after a restart without asking the database for everyone else", async () => {
+    const db = openDatabase();
+    new AfkStore(db).set({ guildId: GUILD_ID, userId: AWAY_ID, message: "Back soon" });
+    const restarted = new AfkStore(db);
+    expect(restarted.get(GUILD_ID, AWAY_ID)).toMatchObject({ message: "Back soon" });
+    expect(restarted.get(GUILD_ID, OTHER_ID)).toBeUndefined();
+    expect(restarted.delete(GUILD_ID, OTHER_ID)).toBeUndefined();
+    expect(restarted.delete(GUILD_ID, AWAY_ID)).toMatchObject({ userId: AWAY_ID });
+    expect(restarted.get(GUILD_ID, AWAY_ID)).toBeUndefined();
+    expect(restarted.count(GUILD_ID)).toBe(0);
+  });
+
   it("answers mentions and replies once a minute per channel, then welcomes the member back", async () => {
     const { store, afk, timers, advance } = setup();
     const guild = fakeGuild();

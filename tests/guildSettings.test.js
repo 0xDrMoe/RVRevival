@@ -111,6 +111,49 @@ describe("GuildSettings", () => {
     await expect(load()).rejects.toThrow();
   });
 
+  it("re-reads only the servers another process changed, and nothing for other tables", async () => {
+    const OTHER_GUILD = "900000000000000002";
+    const bot = await load();
+    const dashboard = await load();
+    await bot.set(GUILD_ID, Setting.STAFF_ROLE, ROLE_ID);
+    await bot.set(OTHER_GUILD, Setting.STAFF_ROLE, ROLE_ID);
+    expect(dashboard.reloadIfChanged()).toBe(true);
+    expect(dashboard.get(OTHER_GUILD, Setting.STAFF_ROLE)).toBe(ROLE_ID);
+
+    // A write to another table (XP, logins) re-reads nothing.
+    databases[0].prepare("INSERT INTO member_xp (guild_id, user_id, xp) VALUES (?, ?, ?)").run(GUILD_ID, "1", 5);
+    expect(dashboard.reloadIfChanged()).toBe(false);
+
+    const before = bot.get(OTHER_GUILD, Setting.STAFF_ROLE);
+    await dashboard.set(GUILD_ID, Setting.LOGS_CHANNEL, CHANNEL_ID);
+    await dashboard.clear(OTHER_GUILD, Setting.STAFF_ROLE);
+    expect(bot.reloadIfChanged()).toBe(true);
+    expect(before).toBe(ROLE_ID);
+    expect(bot.all(GUILD_ID)).toEqual({ [Setting.STAFF_ROLE]: ROLE_ID, [Setting.LOGS_CHANNEL]: CHANNEL_ID });
+    expect(bot.all(OTHER_GUILD)).toEqual({});
+    expect(bot.reloadIfChanged()).toBe(false);
+  });
+
+  it("keeps a derived value until its setting changes, and freezes it", async () => {
+    const settings = await load();
+    let runs = 0;
+    const derive = (value) => {
+      runs += 1;
+      return { ids: [...(value ?? [])] };
+    };
+    const list = [CHANNEL_ID];
+    await settings.set(GUILD_ID, Setting.LOG_IGNORED_CHANNELS, list);
+    // Changing the caller's own array afterwards doesn't reach the saved setting.
+    list.push(OTHER_CHANNEL_ID);
+    const first = settings.derived(GUILD_ID, Setting.LOG_IGNORED_CHANNELS, derive);
+    expect(first.ids).toEqual([CHANNEL_ID]);
+    expect(settings.derived(GUILD_ID, Setting.LOG_IGNORED_CHANNELS, derive)).toBe(first);
+    expect(Object.isFrozen(first.ids)).toBe(true);
+    await settings.toggleInList(GUILD_ID, Setting.LOG_IGNORED_CHANNELS, OTHER_CHANNEL_ID);
+    expect(settings.derived(GUILD_ID, Setting.LOG_IGNORED_CHANNELS, derive).ids).toEqual([CHANNEL_ID, OTHER_CHANNEL_ID]);
+    expect(runs).toBe(2);
+  });
+
   it("rejects unknown settings", async () => {
     await expect(new GuildSettings().set(GUILD_ID, "somethingElse", "1")).rejects.toThrow();
   });

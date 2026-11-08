@@ -7,7 +7,7 @@ import { randomInt } from "node:crypto";
 import { PermissionFlagsBits } from "discord.js";
 import { pickLanguage, translate } from "../i18n/i18n.js";
 import { isModeratorRole } from "../permissions/moderatorPermissions.js";
-import { Setting } from "../settings/guildSettings.js";
+import { derivedSetting, Setting } from "../settings/guildSettings.js";
 import {
   Announce,
   levelForXp,
@@ -21,6 +21,8 @@ import {
 
 const ANNOUNCE_PERMISSIONS = [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages];
 const VOICE_TICK_MS = 60 * 1000;
+// Past this many members on cooldown, the expired ones are forgotten.
+const COOLDOWN_SWEEP_SIZE = 10_000;
 
 // "{user} reached level {level}!" with the placeholders filled in.
 export function fillLevelMessage(template, { member, level, guild }) {
@@ -41,6 +43,30 @@ export function rewardRolesFor(config, level) {
 // Options: guildSettings, store (LevelStore), logger, forcedLanguage, random(max), now
 export function createLeveling({ guildSettings, store, logger, forcedLanguage, random = randomInt, now = Date.now }) {
   const configFor = (guildId) => normalizeLeveling(guildSettings.get(guildId, Setting.LEVELING));
+  // The same, shared and kept until the settings change: for every message and voice minute.
+  const liveConfigFor = (guildId) => derivedSetting(guildSettings, guildId, Setting.LEVELING, normalizeLeveling);
+
+  // "<server>:<member>" -> when they last earned message XP. Most messages come
+  // inside the cooldown, and this skips the database write for them. The
+  // database still checks the cooldown itself, so this is only a shortcut.
+  const lastAwarded = new Map();
+  let lastSweep = -Infinity;
+
+  function onCooldown(key, time) {
+    const last = lastAwarded.get(key);
+    if (last !== undefined && time - last < XP_COOLDOWN_MS) {
+      return true;
+    }
+    if (lastAwarded.size >= COOLDOWN_SWEEP_SIZE && time - lastSweep >= XP_COOLDOWN_MS) {
+      lastSweep = time;
+      for (const [entry, at] of lastAwarded) {
+        if (time - at >= XP_COOLDOWN_MS) {
+          lastAwarded.delete(entry);
+        }
+      }
+    }
+    return false;
+  }
 
   // Gives and takes reward roles so the member has exactly what their level
   // earns. Roles the bot can't manage are skipped.
@@ -121,12 +147,17 @@ export function createLeveling({ guildSettings, store, logger, forcedLanguage, r
       return undefined;
     }
     const guildId = message.guildId;
-    const config = configFor(guildId);
+    const config = liveConfigFor(guildId);
     if (!config.enabled) {
       return undefined;
     }
     const member = message.member;
     if (!member || noXp(config, guildId, message.channel, member)) {
+      return undefined;
+    }
+    const time = now();
+    const cooldownKey = `${guildId}:${member.id}`;
+    if (onCooldown(cooldownKey, time)) {
       return undefined;
     }
     const base = MIN_XP_PER_MESSAGE + random(MAX_XP_PER_MESSAGE - MIN_XP_PER_MESSAGE + 1);
@@ -135,19 +166,20 @@ export function createLeveling({ guildSettings, store, logger, forcedLanguage, r
       userId: member.id,
       userTag: member.user?.username ?? null,
       amount: Math.round(base * multiplierFor(config, member)),
-      now: now(),
+      now: time,
       cooldownMs: XP_COOLDOWN_MS,
     });
     if (!award) {
       return undefined;
     }
+    lastAwarded.set(cooldownKey, time);
     return afterAward(award, member, message.channel, config);
   }
 
   // One minute of voice XP for a server: everyone in a voice channel with at
   // least one other person, not deafened, not in the AFK channel.
   async function awardVoice(guild) {
-    const config = configFor(guild.id);
+    const config = liveConfigFor(guild.id);
     if (!config.enabled || !config.voiceXp) {
       return [];
     }

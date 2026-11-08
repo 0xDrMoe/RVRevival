@@ -1,6 +1,6 @@
 // Starts the bot. Slash commands are registered separately with `npm run register`.
 
-import { Client, Events, GatewayCloseCodes, GatewayIntentBits, Partials } from "discord.js";
+import { Client, Events, GatewayCloseCodes, GatewayIntentBits, Options, Partials } from "discord.js";
 import { createAutomod } from "./automod/automod.js";
 import { normalizeAutomod } from "./automod/config.js";
 import { createCountryChannelGuard } from "./channels/countryChannelGuard.js";
@@ -59,7 +59,7 @@ import { BirthdayStore } from "./birthdays/birthdayStore.js";
 import { GuildSettings, Setting } from "./settings/guildSettings.js";
 import { TicketStore } from "./tickets/ticketStore.js";
 import { createTicketLog } from "./tickets/ticketLog.js";
-import { closeDatabase, DEFAULT_DATABASE_FILE, openDatabase } from "./storage/database.js";
+import { closeDatabase, DEFAULT_DATABASE_FILE, openDatabase, optimizeDatabase } from "./storage/database.js";
 import { logger, registerSecret } from "./utils/logger.js";
 import { withoutChannel } from "./logs/logRoutes.js";
 
@@ -105,6 +105,16 @@ const INTENT_NAMES = {
 // as a message deleted that was posted before the bot started, or a reaction
 // on an old message (the starboard).
 const PARTIALS = [Partials.Message, Partials.Channel, Partials.GuildMember, Partials.User, Partials.Reaction];
+
+// discord.js keeps the last 200 messages of every channel forever by default,
+// which adds up across many servers. Messages older than MESSAGE_CACHE_HOURS
+// are dropped every hour; the server log still logs deleting or editing one,
+// just without the old text (as for messages from before a restart).
+const MESSAGE_CACHE_HOURS = 12;
+const SWEEPERS = {
+  ...Options.DefaultSweeperSettings,
+  messages: { interval: 60 * 60, lifetime: MESSAGE_CACHE_HOURS * 60 * 60 },
+};
 
 async function start() {
   const config = loadBotConfig();
@@ -158,6 +168,9 @@ async function start() {
     }
   }, 5_000);
   settingsReload.unref();
+  // Keeps SQLite's query plans good as tables grow.
+  const dbHousekeeping = setInterval(() => optimizeDatabase(db), 6 * 60 * 60 * 1000);
+  dbHousekeeping.unref();
   const forcedLanguage = config.forcedLanguage;
 
   // What the bot did itself, so the events Discord sends back aren't logged twice.
@@ -315,7 +328,7 @@ async function start() {
   let livePoller;
 
   function connect(intents) {
-    client = new Client({ intents, partials: PARTIALS });
+    client = new Client({ intents, partials: PARTIALS, sweepers: SWEEPERS });
     const readsContent = intents.includes(GatewayIntentBits.MessageContent);
     const seesMembers = intents.includes(GatewayIntentBits.GuildMembers);
 
@@ -561,6 +574,7 @@ async function start() {
       leveling.stopVoiceXp();
       automod.stop();
       clearInterval(heartbeat);
+      clearInterval(dbHousekeeping);
       await client?.destroy().catch(() => {});
       closeDatabase(db);
       process.exit(0);

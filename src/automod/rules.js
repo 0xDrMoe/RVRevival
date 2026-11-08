@@ -42,6 +42,38 @@ function wordPattern(word) {
   return new RegExp(`${before}${body}${after}`, "u");
 }
 
+// Compiled patterns by banned word, so a message doesn't build hundreds of
+// regular expressions. Cleared when it gets this big (lists change rarely).
+const MAX_CACHED_PATTERNS = 10_000;
+const patterns = new Map();
+
+function cachedWordPattern(word) {
+  let pattern = patterns.get(word);
+  if (pattern === undefined) {
+    if (patterns.size >= MAX_CACHED_PATTERNS) {
+      patterns.clear();
+    }
+    pattern = wordPattern(word) ?? null;
+    patterns.set(word, pattern);
+  }
+  return pattern;
+}
+
+// Per word list: one pattern matching any of its words, so a clean message
+// (nearly all of them) is checked with two tests instead of two per word.
+// Lists from GuildSettings.derived() keep their identity until they change.
+const combinedPatterns = new WeakMap();
+
+function combinedPattern(words) {
+  let combined = combinedPatterns.get(words);
+  if (combined === undefined) {
+    const sources = words.map(cachedWordPattern).filter(Boolean).map((pattern) => `(?:${pattern.source})`);
+    combined = sources.length > 0 ? new RegExp(sources.join("|"), "u") : null;
+    combinedPatterns.set(words, combined);
+  }
+  return combined;
+}
+
 // The first banned word in `content`, or undefined. Accents, capitals and
 // number-for-letter swaps don't hide a word.
 export function findBannedWord(content, words) {
@@ -50,8 +82,12 @@ export function findBannedWord(content, words) {
   }
   const text = plain(content);
   const swapped = withoutLookalikes(text);
+  const combined = combinedPattern(words);
+  if (!combined || !(combined.test(text) || combined.test(swapped))) {
+    return undefined;
+  }
   return words.find((word) => {
-    const pattern = wordPattern(word);
+    const pattern = cachedWordPattern(word);
     return pattern && (pattern.test(text) || pattern.test(swapped));
   });
 }
