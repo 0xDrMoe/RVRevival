@@ -1,7 +1,7 @@
 {
   "loading": "Cargando…",
   "logout": "Cerrar sesión",
-  "loginTitle": "Panel de Canopy",
+  "loginTitle": "Panel de Rabble",
   "loginIntro": "Inicia sesión con Discord para gestionar el bot en los servidores donde tienes Gestionar servidor.",
   "loginButton": "Iniciar sesión con Discord",
   "loginFailed": "No se pudo iniciar sesión. Inténtalo de nuevo.",
@@ -724,7 +724,7 @@
   "embedSaved": "Mensaje actualizado.",
   "embedPreview": "Vista previa",
   "embedEmpty": "Escribe algo para verlo aquí.",
-  "embedBotName": "Canopy",
+  "embedBotName": "Rabble",
   "embedBotTag": "App",
   "embedToday": "Hoy",
   "embedUnknownUser": "alguien",

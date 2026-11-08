@@ -1,7 +1,7 @@
 {
   "loading": "Wird geladen…",
   "logout": "Abmelden",
-  "loginTitle": "Canopy Dashboard",
+  "loginTitle": "Rabble Dashboard",
   "loginIntro": "Melde dich mit Discord an, um den Bot auf Servern zu verwalten, auf denen du Server verwalten darfst.",
   "loginButton": "Mit Discord anmelden",
   "loginFailed": "Die Anmeldung hat nicht geklappt. Versuch es bitte erneut.",
@@ -724,7 +724,7 @@
   "embedSaved": "Nachricht aktualisiert.",
   "embedPreview": "Vorschau",
   "embedEmpty": "Schreib etwas, um es hier zu sehen.",
-  "embedBotName": "Canopy",
+  "embedBotName": "Rabble",
   "embedBotTag": "App",
   "embedToday": "Heute",
   "embedUnknownUser": "jemand",

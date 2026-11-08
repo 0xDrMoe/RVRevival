@@ -17,7 +17,7 @@ import { Setting } from "../settings/guildSettings.js";
 
 export const COUNTRY_COMMANDS = ["country", "country-help", "country-staff"];
 export const RECENT_JOIN_MS = 10 * 60 * 1000;
-export const BRAND_COLOR = 0x1f8a5b;
+export const BRAND_COLOR = 0x7c5cff;
 
 const NEEDED = [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.EmbedLinks];
 

@@ -120,7 +120,7 @@ describe("dashboard", () => {
   it("serves the page with strict security headers", async () => {
     const page = await app.inject({ method: "GET", url: "/" });
     expect(page.statusCode).toBe(200);
-    expect(page.body).toContain("Canopy");
+    expect(page.body).toContain("Rabble");
     expect(page.headers["content-security-policy"]).toContain("script-src 'self'");
     expect(page.headers["content-security-policy"]).toContain("frame-ancestors 'none'");
     expect(page.headers["x-content-type-options"]).toBe("nosniff");
@@ -1349,13 +1349,13 @@ describe("dashboard helpers", () => {
       DISCORD_TOKEN: config.token,
       DISCORD_CLIENT_ID: config.clientId,
       DISCORD_CLIENT_SECRET: "s",
-      DASHBOARD_URL: "https://canopy.example.com/",
+      DASHBOARD_URL: "https://rabble.example.com/",
       DASHBOARD_SESSION_SECRET: SECRET,
     };
-    expect(loadDashboardConfig(env)).toMatchObject({ url: "https://canopy.example.com", port: 3080 });
+    expect(loadDashboardConfig(env)).toMatchObject({ url: "https://rabble.example.com", port: 3080 });
     expect(loadDashboardConfig(env).legalContact).toBe("support@cedartechsolutions.ca");
     expect(loadDashboardConfig({ ...env, LEGAL_CONTACT: "  team@example.com " }).legalContact).toBe("team@example.com");
-    expect(() => loadDashboardConfig({ ...env, DASHBOARD_URL: "http://canopy.example.com" })).toThrow(/https/);
+    expect(() => loadDashboardConfig({ ...env, DASHBOARD_URL: "http://rabble.example.com" })).toThrow(/https/);
     expect(() => loadDashboardConfig({ ...env, DASHBOARD_SESSION_SECRET: "short" })).toThrow(/32/);
   });
 });

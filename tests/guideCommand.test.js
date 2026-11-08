@@ -5,7 +5,7 @@ import { GUIDE } from "../src/dashboard/public/guide.js";
 import { SUPPORTED_LANGUAGES } from "../src/i18n/i18n.js";
 
 const GUILD_ID = "900000000000000001";
-const DASHBOARD = "https://canopy.example.com";
+const DASHBOARD = "https://rabble.example.com";
 const PAGES = buildGuidePages();
 const topics = GUIDE.flatMap((part) => part.sections);
 

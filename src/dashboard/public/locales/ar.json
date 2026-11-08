@@ -1,7 +1,7 @@
 {
   "loading": "جارٍ التحميل…",
   "logout": "تسجيل الخروج",
-  "loginTitle": "لوحة تحكم Canopy",
+  "loginTitle": "لوحة تحكم Rabble",
   "loginIntro": "سجّل الدخول عبر Discord لإدارة البوت في الخوادم التي لديك فيها صلاحية إدارة الخادم.",
   "loginButton": "تسجيل الدخول عبر Discord",
   "loginFailed": "تعذّر تسجيل الدخول. حاول مجددًا.",
@@ -724,7 +724,7 @@
   "embedSaved": "تم تحديث الرسالة.",
   "embedPreview": "معاينة",
   "embedEmpty": "اكتب شيئًا لتراه هنا.",
-  "embedBotName": "Canopy",
+  "embedBotName": "Rabble",
   "embedBotTag": "تطبيق",
   "embedToday": "اليوم",
   "embedUnknownUser": "شخص ما",

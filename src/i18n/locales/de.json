@@ -1127,8 +1127,8 @@
   "guideExample": "Beispiel",
   "guideGoodToKnow": "Gut zu wissen",
 
-  "joinTitle": "Danke, dass du Canopy hinzugefügt hast!",
-  "joinIntro": "Canopy bringt Moderation, Automod, Logs, Tickets, Willkommensnachrichten, Level und mehr. Alles startet ausgeschaltet, es ändert sich also nichts, bis du es einrichtest.",
+  "joinTitle": "Danke, dass du Rabble hinzugefügt hast!",
+  "joinIntro": "Rabble bringt Moderation, Automod, Logs, Tickets, Willkommensnachrichten, Level und mehr. Alles startet ausgeschaltet, es ändert sich also nichts, bis du es einrichtest.",
   "joinDashboard": "**Im Dashboard einrichten:** {url}",
   "joinGuide": "**Lieber in Discord?** Mit `/guide` bekommst du eine Tour durch alle Funktionen, mit `/settings` die Grundlagen.",
   "joinCountriesOff": "Länderrollen (`/country`) sind aus. Du kannst sie auf der Berechtigungen-Seite im Dashboard einschalten."
