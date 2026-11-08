@@ -15,6 +15,9 @@ async function start() {
   registerSecret(config.token);
   registerSecret(config.clientSecret);
   registerSecret(config.sessionSecret);
+  if (config.twitch) {
+    registerSecret(config.twitch.clientSecret);
+  }
 
   const db = openDatabase(DEFAULT_DATABASE_FILE);
   // Imports data/settings.json if the bot hasn't yet (see GuildSettings.load).

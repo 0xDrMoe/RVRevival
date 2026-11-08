@@ -21,6 +21,8 @@ import { createRolePersistence } from "./members/rolePersistence.js";
 import { TempRoleStore } from "./tempRoles/tempRoleStore.js";
 import { FeedStore } from "./feeds/feedStore.js";
 import { createFeedPoller } from "./feeds/feedPoller.js";
+import { createTwitchApi } from "./feeds/twitch.js";
+import { createTwitchPoller } from "./feeds/twitchPoller.js";
 import { BotStatsStore, HEARTBEAT_MS } from "./stats/botStats.js";
 import { createStatsUpdater } from "./stats/statsUpdater.js";
 import { createAfk } from "./afk/afk.js";
@@ -105,6 +107,9 @@ const PARTIALS = [Partials.Message, Partials.Channel, Partials.GuildMember, Part
 async function start() {
   const config = loadBotConfig();
   registerSecret(config.token);
+  if (config.twitch) {
+    registerSecret(config.twitch.clientSecret);
+  }
 
   // Settings and moderation cases live in data/bot.db (SQLite).
   const db = openDatabase(DEFAULT_DATABASE_FILE);
@@ -183,8 +188,10 @@ async function start() {
   const quarantine = createQuarantine({ guildSettings, store: savedRoles, modLog, logger });
   // Roles that end by themselves (/temprole).
   const tempRoles = new TempRoleStore(db);
-  // YouTube channels, subreddits and RSS feeds followed with /feed.
+  // YouTube and Twitch channels, Bluesky and Mastodon accounts, subreddits and
+  // RSS feeds followed with /feed. Twitch needs keys in .env.
   const feeds = new FeedStore(db);
+  const twitch = config.twitch ? createTwitchApi(config.twitch) : undefined;
   // Server stats channels (/stats): voice channels named after live counts.
   const statsUpdater = createStatsUpdater({ guildSettings, logger });
   // Members who are away (/afk).
@@ -238,6 +245,7 @@ async function start() {
     quarantine,
     tempRoles,
     feeds,
+    twitch,
     statsUpdater,
     afk,
     stickyStore,
@@ -294,6 +302,7 @@ async function start() {
   let birthdays;
   let tempRoleScheduler;
   let feedPoller;
+  let twitchPoller;
 
   function connect(intents) {
     client = new Client({ intents, partials: PARTIALS });
@@ -331,6 +340,11 @@ async function start() {
       feedPoller?.stop();
       feedPoller = createFeedPoller({ client: readyClient, store: feeds, logger, forcedLanguage });
       feedPoller.start();
+      twitchPoller?.stop();
+      if (twitch) {
+        twitchPoller = createTwitchPoller({ client: readyClient, store: feeds, twitch, logger, forcedLanguage });
+        twitchPoller.start();
+      }
       statsUpdater.start(readyClient);
       countSafely("start time", () => botStats.started());
     });
@@ -526,6 +540,7 @@ async function start() {
       birthdays?.stop();
       tempRoleScheduler?.stop();
       feedPoller?.stop();
+      twitchPoller?.stop();
       statsUpdater.stop();
       leveling.stopVoiceXp();
       automod.stop();

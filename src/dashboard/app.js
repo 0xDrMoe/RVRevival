@@ -57,6 +57,7 @@ import { SentMessageStore } from "../messages/sentMessageStore.js";
 import { addFeed, FeedDuplicate, FeedError, FeedLimit } from "../feeds/feeds.js";
 import { FEED_KINDS } from "../feeds/fetchFeed.js";
 import { FeedStore, MAX_FEEDS } from "../feeds/feedStore.js";
+import { createTwitchApi } from "../feeds/twitch.js";
 import { normalizeMediaOnly } from "../community/mediaOnly.js";
 import { buildBackup, InvalidBackup, planRestore, settingLabel } from "./backup.js";
 import { MAX_STICKIES, MAX_STICKY_LENGTH, StickyStore } from "../sticky/stickyStore.js";
@@ -223,8 +224,9 @@ const sameText = (a, b) =>
 //   guildSettings   GuildSettings on the same database
 //   store           CaseStore on the same database
 //   logger
-// `feedFetchOptions` replaces fetch and DNS for feeds in tests.
-export async function buildDashboard({ config, db, discord, guildSettings, store, logger, feedFetchOptions }) {
+// `feedFetchOptions` replaces fetch and DNS for feeds in tests, `twitch` the Twitch API.
+export async function buildDashboard({ config, db, discord, guildSettings, store, logger, feedFetchOptions, twitch: twitchApi }) {
+  const twitch = twitchApi ?? (config.twitch ? createTwitchApi(config.twitch) : undefined);
   const sessions = new SessionStore(db, { secret: config.sessionSecret });
   const memberEvents = new MemberEventStore(db);
   const tickets = new TicketStore(db);
@@ -1636,7 +1638,7 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     if (!access) {
       return reply;
     }
-    return { feeds: feeds.list(access.guildId).map(feedJson), max: MAX_FEEDS };
+    return { feeds: feeds.list(access.guildId).map(feedJson), max: MAX_FEEDS, twitch: Boolean(twitch) };
   });
 
   // Adding reads the feed once, which can take a few seconds.
@@ -1648,7 +1650,7 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     const { guildId, session } = access;
     const { kind, source, channelId, roleId = null, message = null } = request.body ?? {};
     if (!FEED_KINDS.includes(kind) || typeof source !== "string") {
-      return reply.code(400).send({ error: "bad-feed", message: "Pick YouTube, Reddit or RSS and type what to follow." });
+      return reply.code(400).send({ error: "bad-feed", message: "Pick what kind of feed it is and type what to follow." });
     }
     const [guild, channels] = await Promise.all([discord.guild(guildId), discord.channels(guildId)]);
     if (!channels.some((channel) => channel.id === channelId && POSTABLE.has(channel.type))) {
@@ -1662,7 +1664,7 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     }
     let feed;
     try {
-      feed = await addFeed({ store: feeds, guildId, kind, source, channelId, roleId, message, createdBy: session.userId, fetchOptions: feedFetchOptions });
+      feed = await addFeed({ store: feeds, guildId, kind, source, channelId, roleId, message, createdBy: session.userId, fetchOptions: feedFetchOptions, twitch });
     } catch (error) {
       if (error instanceof FeedLimit || error instanceof FeedDuplicate) {
         return reply.code(409).send({ error: "feed-refused", message: error.message });

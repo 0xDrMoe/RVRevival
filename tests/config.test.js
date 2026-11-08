@@ -26,6 +26,12 @@ describe("loadBotConfig", () => {
     expect(loadBotConfig({ DISCORD_TOKEN: TOKEN, BOT_LANGUAGE: "" }).forcedLanguage).toBeUndefined();
     expect(() => loadBotConfig({ DISCORD_TOKEN: TOKEN, BOT_LANGUAGE: "klingon" })).toThrow(/BOT_LANGUAGE/);
   });
+
+  it("takes both Twitch keys or neither", () => {
+    expect(loadBotConfig({ DISCORD_TOKEN: TOKEN, TWITCH_CLIENT_ID: "", TWITCH_CLIENT_SECRET: " " }).twitch).toBeUndefined();
+    expect(loadBotConfig({ DISCORD_TOKEN: TOKEN, TWITCH_CLIENT_ID: " id ", TWITCH_CLIENT_SECRET: "secret" }).twitch).toEqual({ clientId: "id", clientSecret: "secret" });
+    expect(() => loadBotConfig({ DISCORD_TOKEN: TOKEN, TWITCH_CLIENT_ID: "id" })).toThrow(/TWITCH_CLIENT_SECRET/);
+  });
 });
 
 describe("loadBotConfig DASHBOARD_URL", () => {

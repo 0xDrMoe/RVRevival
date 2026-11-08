@@ -46,6 +46,14 @@ function isHttp(link) {
 }
 
 export const MAX_ITEMS = 30;
+const EXCERPT_LENGTH = 200;
+
+// Bluesky and Mastodon posts have no title, only their text: the start of it
+// stands in for one.
+function excerpt(block) {
+  const text = tagText(block, "description") || tagText(block, "content") || tagText(block, "summary");
+  return text.length > EXCERPT_LENGTH ? `${text.slice(0, EXCERPT_LENGTH - 1).trimEnd()}…` : text;
+}
 
 // { title, items: [{ id, title, link, author, publishedAt }] }, items in feed order (newest first, usually).
 export function parseFeed(xml) {
@@ -62,7 +70,7 @@ export function parseFeed(xml) {
     const time = Date.parse(published);
     return {
       id: id.slice(0, 300),
-      title: tagText(block, "title").slice(0, 256) || "(untitled)",
+      title: (tagText(block, "title") || excerpt(block)).slice(0, 256) || "(untitled)",
       link: isHttp(link) ? link : "",
       author: (isAtom ? tagText(block.match(/<author[\s>][\s\S]*?<\/author>/i)?.[0] ?? "", "name") : tagText(block, "dc:creator") || tagText(block, "author")).slice(0, 100),
       publishedAt: Number.isFinite(time) ? time : null,

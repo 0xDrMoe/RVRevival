@@ -368,12 +368,23 @@ Discord's limits are checked before sending: 2,000 characters of text, 6,000 in 
 
 ### Feeds
 
-`/feed` (or the dashboard's **Feeds** page) posts new YouTube videos, subreddit posts and blog or news articles in a channel.
+`/feed` (or the dashboard's **Feeds** page) posts new YouTube videos, Twitch streams going live, Bluesky and Mastodon posts, subreddit posts and blog or news articles in a channel.
 
-- **`/feed add type source channel [role] [message]`** follows something. `type` is YouTube, Reddit or RSS. For YouTube, `source` is the channel's link (`https://youtube.com/@name` or a `/channel/UC…` link); for Reddit, the subreddit (`r/gaming`); for RSS, the feed's full link. `role` is pinged with each post. `message` replaces the default text and can use `{title}`, `{link}`, `{author}` and `{feed}`.
+- **`/feed add type source channel [role] [message]`** follows something. `source` depends on `type`:
+  - **YouTube**: the channel's link (`https://youtube.com/@name` or a `/channel/UC…` link).
+  - **Twitch**: the channel's name or link (`twitch.tv/name`). Posts once each time the stream goes live.
+  - **Bluesky**: the handle (`name.bsky.social`, or a custom domain) or profile link.
+  - **Mastodon**: `@name@server` or the profile link (`https://mastodon.social/@name`).
+  - **Reddit**: the subreddit (`r/gaming`). **RSS**: the feed's full link.
+
+  `role` is pinged with each post. `message` replaces the default text and can use `{title}`, `{link}`, `{author}`, `{feed}` and, for Twitch, `{game}`. Bluesky and Mastodon posts have no title, so `{title}` is the start of the post's text.
 - **`/feed remove id`** stops following it. **`/feed list`** shows what the server follows, with the problem next to any feed that can't be read or posted.
 
-The bot checks each feed every 10 minutes and posts only items that appear after the feed was added, at most three at a time (oldest first), so a feed never floods a channel. A server can follow up to 10 feeds. Feed links must point to the public internet: addresses on private networks (like the VPS itself) are refused, also after redirects. Needs **Manage Server**. The bot needs View Channel and Send Messages in the channel.
+The bot checks each feed every 10 minutes (Twitch every 2) and posts only items that appear after the feed was added, at most three at a time (oldest first), so a feed never floods a channel. A server can follow up to 20 feeds. Feed links must point to the public internet: addresses on private networks (like the VPS itself) are refused, also after redirects. Needs **Manage Server**. The bot needs View Channel and Send Messages in the channel.
+
+**Twitch keys.** Twitch only answers apps it knows, so Twitch stays off until `TWITCH_CLIENT_ID` and `TWITCH_CLIENT_SECRET` are in `.env` (free: make an application at [dev.twitch.tv/console/apps](https://dev.twitch.tv/console/apps), Client Type Confidential, any redirect such as `http://localhost`). The bot uses an app token, so nobody logs in to Twitch. Until then, `/feed add type:Twitch` and the Feeds page say Twitch isn't switched on. All followed Twitch channels are checked together, 100 per request.
+
+**X (Twitter), TikTok and Instagram** aren't supported: X charges for reading posts through its API, and TikTok and Instagram only let an account's own owner read its posts through their APIs. If you have an RSS link for such an account (from a feed service), add it as **RSS**.
 
 ### Server stats
 
@@ -717,7 +728,7 @@ src/
   permissions/           Who can use what: per-command rules (commandRules.js), the premade setups (presets.js), the command list for the dashboard (catalog.js)
   tempRoles/             Temporary roles: saved in SQLite (tempRoleStore.js), taken away when due (tempRoleScheduler.js)
   messages/              Embed builder: checking messages against Discord's limits (embedMessage.js), messages posted from the dashboard (sentMessageStore.js)
-  feeds/                 Feeds: reading RSS and Atom (parseFeed.js), safe fetching and finding YouTube and Reddit feeds (fetchFeed.js), saved in SQLite (feedStore.js), adding feeds and posts (feeds.js), checked on time (feedPoller.js)
+  feeds/                 Feeds: reading RSS and Atom (parseFeed.js), safe fetching and finding YouTube, Bluesky, Mastodon and Reddit feeds (fetchFeed.js), saved in SQLite (feedStore.js), adding feeds and posts (feeds.js), checked on time (feedPoller.js); Twitch's API (twitch.js) and live checks (twitchPoller.js)
   stats/                 Server stats: counters and counts (statsCounters.js), creating and renaming the channels (statsUpdater.js)
   sticky/                Sticky messages: saved in SQLite (stickyStore.js), reposting (stickies.js)
   highlights/            Highlights: saved in SQLite (highlightStore.js), matching and DMs (highlights.js)
