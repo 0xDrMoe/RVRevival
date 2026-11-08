@@ -12,6 +12,7 @@
 
 import { escapeMarkdown, PermissionFlagsBits } from "discord.js";
 import { pickLanguage, translate } from "../i18n/i18n.js";
+import { isModeratorRole } from "../permissions/moderatorPermissions.js";
 import { Setting } from "../settings/guildSettings.js";
 
 export const MAX_MESSAGE_LENGTH = 1000;
@@ -77,7 +78,7 @@ export function createWelcomer({ guildSettings, logger, forcedLanguage, skipAuto
     const me = guild.members.me;
     const ids = guildSettings.getList(guild.id, Setting.AUTOROLES).filter((id) => {
       const role = guild.roles.cache.get(id);
-      return role && !role.managed && me && role.position < me.roles.highest.position && !member.roles.cache.has(id);
+      return role && !role.managed && !isModeratorRole(role) && me && role.position < me.roles.highest.position && !member.roles.cache.has(id);
     });
     if (ids.length === 0) {
       return;

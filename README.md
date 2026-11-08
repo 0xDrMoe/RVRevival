@@ -176,7 +176,7 @@ Admins set it up on the dashboard's **Welcome & leave** and **Autoroles** pages,
 
 - `/welcome channel channel:<channel>` and `/welcome leave-channel channel:<channel>` switch welcome or leave messages on, in that channel.
 - `/welcome message text:<…>`, `/welcome leave-message text:<…>` and `/welcome dm text:<…>` set the messages. Type `\n` for a new line.
-- `/welcome autorole role:<role>` adds an autorole, or removes it if it's already one. Bot roles, `@everyone` and roles with Administrator or Manage Server are refused.
+- `/welcome autorole role:<role>` adds an autorole, or removes it if it's already one. Bot roles, `@everyone` and roles with moderator permissions (the same list as role panels: Ban, Kick, Timeout, Manage Messages and so on) are refused, and the bot skips any autorole that gains them later.
 - `/welcome off what:<Welcome messages | Leave messages | Welcome DM | Autoroles | Custom messages>` switches one off (custom messages go back to the default).
 - `/welcome test` previews everything privately, with you as the new member. `/welcome show` lists the setup.
 
@@ -447,7 +447,7 @@ Members earn XP for chatting and level up; reward roles are given automatically.
 - Each level takes a little more XP than the last (100 to reach level 1, then 155, 220, 295…), up to level 500.
 - `/rank [member]` shows a level, XP, progress to the next level and place on the leaderboard. `/leaderboard [period] [page]` shows the top members, 10 per page: all time, or by the XP earned this week (the last 7 days) or this month (the last 30 days). Both answer publicly.
 - `/levels announce where:` picks where level-ups are posted: in the channel the member is chatting in (default), in one channel, by DM, or nowhere. `/levels message text:` changes the text (`{user}`, `{username}`, `{level}`, `{server}`); leave it empty for the default.
-- `/levels reward-add level: role:` gives a role at a level (up to 25), `/levels reward-remove level:` takes it off the list. `/levels reward-mode` picks whether members keep every reward role they reached (default) or only the highest. Reward roles are checked again on every level-up, and the bot never gives bot roles or roles with Administrator or Manage Server.
+- `/levels reward-add level: role:` gives a role at a level (up to 25), `/levels reward-remove level:` takes it off the list. `/levels reward-mode` picks whether members keep every reward role they reached (default) or only the highest. Reward roles are checked again on every level-up, and the bot never gives bot roles or roles with moderator permissions (the same list as role panels).
 - `/levels no-xp channel:` or `role:` switches XP off (or back on) in a channel, category or forum, or for members with a role.
 - `/levels voice enabled:` lets members earn 10 XP a minute in voice channels (off by default). It only counts when at least two people (not bots) are in the channel, and never for deafened members, the AFK channel or no-XP channels and roles. Voice level-ups are announced in the voice channel's chat.
 - `/levels boost multiplier:` gives server boosters more XP (for example `1.5`), and `/levels boost multiplier: role:` gives a role more XP (up to 10 roles). Boosts go from 1 to 5 in steps of 0.1; set `1` to remove one. Boosts don't add up: a member gets their highest one.

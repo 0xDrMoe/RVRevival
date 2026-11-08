@@ -36,13 +36,13 @@ import {
 } from "../leveling/config.js";
 import { result, Status } from "../logs/actionLog.js";
 import { Period, PERIODS, periodStart } from "../leveling/levelStore.js";
+import { isModeratorRole } from "../permissions/moderatorPermissions.js";
 import { Setting } from "../settings/guildSettings.js";
 
 const LEADERBOARD_PAGE = 10;
 const PROGRESS_BAR_LENGTH = 12;
 const LEVEL_COLOR = 0xfaa61a;
 // Roles never handed out as rewards: Administrator and Manage Server.
-const FORBIDDEN_REWARD_PERMISSIONS = [PermissionFlagsBits.Administrator, PermissionFlagsBits.ManageGuild];
 
 function withDescription(builder, key) {
   return builder.setDescription(translate("en", key)).setDescriptionLocalizations(discordLocalizations(key));
@@ -328,7 +328,7 @@ export function createLevelCommands({ levels, leveling, guildSettings, forcedLan
       case "reward-add": {
         const level = interaction.options.getInteger("level", true);
         const role = interaction.options.getRole("role", true);
-        if (role.id === guildId || role.managed || !role.editable || FORBIDDEN_REWARD_PERMISSIONS.some((bit) => role.permissions?.has(bit))) {
+        if (role.id === guildId || role.managed || !role.editable || isModeratorRole(role)) {
           return answer(Status.REFUSED, "levelsRewardBadRole", { role: `<@&${role.id}>` });
         }
         const others = config.rewards.filter((reward) => reward.level !== level && reward.roleId !== role.id);

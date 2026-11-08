@@ -300,7 +300,7 @@
   "leaveChannelHelp": "Onde o bot avisa quando alguém sai. Desligado significa sem mensagem de saída.",
   "leaveMessage": "Mensagem de saída",
   "sectionAutoroles": "Cargos automáticos",
-  "autorolesHelp": "Cargos que todo novo membro recebe (até {max}). Quem precisa aceitar as regras primeiro recebe depois de aceitar. Cargos de bot e de admin não aparecem.",
+  "autorolesHelp": "Cargos que todo novo membro recebe (até {max}). Quem precisa aceitar as regras primeiro recebe depois de aceitar. Cargos de bot e cargos com permissões de moderação não aparecem.",
   "sectionRolePanels": "Painéis de cargos",
   "rolePanelsHelp": "Mensagens com botões onde os membros escolhem seus próprios cargos. Crie e altere no Discord com /rolepanel.",
   "rolePanelsNone": "Ainda não há painéis de cargos. Experimente /rolepanel create no Discord.",
