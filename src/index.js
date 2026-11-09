@@ -327,6 +327,8 @@ async function start() {
   let birthdays;
   let tempRoleScheduler;
   let feedPoller;
+  // Checks tickets for inactivity (tickets/support.js) every 5 minutes.
+  let ticketSweep;
   let livePoller;
 
   function connect(intents) {
@@ -371,6 +373,14 @@ async function start() {
         livePoller.start();
       }
       statsUpdater.start(readyClient);
+      clearInterval(ticketSweep);
+      ticketSweep = setInterval(() => {
+        commands
+          .get("tickets")
+          .sweepIdle(readyClient)
+          .catch((error) => logger.error("Couldn't check tickets for inactivity", { error }));
+      }, 5 * 60 * 1000);
+      ticketSweep.unref();
       countSafely("start time", () => botStats.started());
     });
 
@@ -401,6 +411,7 @@ async function start() {
     client.on(Events.MessageCreate, safely("AFK", (message) => afk.messageCreated(message)));
     client.on(Events.MessageCreate, safely("sticky messages", (message) => stickies.messageCreated(message)));
     client.on(Events.MessageCreate, safely("highlights", (message) => highlights.messageCreated(message)));
+    client.on(Events.MessageCreate, safely("ticket activity", (message) => commands.get("tickets").messageCreated(message)));
 
     // The server log (/settings server-log-channel).
     client.on(Events.MessageDelete, safely("a deleted message", (message) => serverLog.messageDeleted(message)));
@@ -572,6 +583,7 @@ async function start() {
       tempRoleScheduler?.stop();
       feedPoller?.stop();
       livePoller?.stop();
+      clearInterval(ticketSweep);
       statsUpdater.stop();
       leveling.stopVoiceXp();
       automod.stop();

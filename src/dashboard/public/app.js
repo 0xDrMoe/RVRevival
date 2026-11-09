@@ -45,7 +45,7 @@ import { contextsUsing, exampleValues, fillVariables, findVariableProblems, vari
 const LANGUAGES = { en: "English", es: "Español", de: "Deutsch", fr: "Français", pt: "Português", it: "Italiano", ar: "العربية" };
 const LOG_EVENTS = ["messageEdit", "messageDelete", "bulkDelete", "memberJoin", "memberLeave", "memberUpdate"];
 // What the ticket log records (tickets/ticketLog.js).
-const TICKET_EVENTS = ["opened", "closed", "reopened", "memberAdded", "memberRemoved", "renamed", "deleted"];
+const TICKET_EVENTS = ["opened", "closed", "reopened", "memberAdded", "memberRemoved", "renamed", "deleted", "claimed", "unclaimed", "rated"];
 const CASE_ACTIONS = ["ban", "softban", "unban", "kick", "timeout", "untimeout", "warn", "note"];
 const AUTOMOD_RULES = ["bannedWords", "invites", "links", "mentions", "spam", "duplicates", "caps"];
 const AUTOMOD_ACTIONS = ["delete", "warn", "timeout", "log"];
@@ -7307,6 +7307,9 @@ async function showMemberHistory(guildId, userId) {
 const ticketLink = (guildId, number) => `/g/${guildId}/tickets?ticket=${number}`;
 const TICKET_STATUSES = ["open", "closed", "all"];
 
+// "★★★★☆" with the number for screen readers.
+const ratingStars = (rating) => h("span", { class: "rating-stars", title: t("ticketsRatingOf", { rating }), "aria-label": t("ticketsRatingOf", { rating }) }, "★".repeat(rating) + "☆".repeat(5 - rating));
+
 function ticketBadge(ticket) {
   return h("span", { class: `badge ${ticket.closedAt ? "" : "badge-cyan"}` }, t(ticket.closedAt ? "memberTicketClosed" : "memberTicketOpen"));
 }
@@ -7329,11 +7332,18 @@ function ticketRow(guildId, ticket) {
         h(
           "span",
           { class: "muted" },
-          [ticket.category, ticket.userName ?? ticket.userId, formatDate(ticket.createdAt), ticket.hasTranscript ? t("ticketsMessages", { count: formatNumber(ticket.messageCount ?? 0) }) : null]
+          [
+            ticket.category,
+            ticket.userName ?? ticket.userId,
+            formatDate(ticket.createdAt),
+            ticket.hasTranscript ? t("ticketsMessages", { count: formatNumber(ticket.messageCount ?? 0) }) : null,
+            ticket.claimedBy ? t("ticketsClaimedByName", { name: ticket.claimedByName ?? ticket.claimedBy }) : null,
+          ]
             .filter(Boolean)
             .join(" · "),
         ),
       ),
+      ticket.rating ? ratingStars(ticket.rating) : null,
       ticketBadge(ticket),
     ),
   );
@@ -7623,7 +7633,7 @@ function ticketWelcomePreview(look, category, data, defaults) {
     },
     data,
   );
-  message.querySelector(".discord-body").append(h("div", { class: "discord-buttons" }, h("div", { class: "discord-button-row" }, ticketPreviewButton("secondary", "🔒", defaults.closeButton))));
+  message.querySelector(".discord-body").append(h("div", { class: "discord-buttons" }, h("div", { class: "discord-button-row" }, ticketPreviewButton("secondary", "🔒", defaults.closeButton), ticketPreviewButton("primary", "🙋", defaults.claimButton))));
   return h(
     "div",
     {},
@@ -7985,6 +7995,64 @@ function ticketPanelEditor(guildId, data) {
   return editor;
 }
 
+// The last 30 days of tickets, above the list.
+function ticketStats(stats, openCount) {
+  return [
+    tile("inbox", "cyan", formatNumber(openCount), t("ticketsStatOpen")),
+    tile("ticket", "accent", formatNumber(stats.opened), t("ticketsStatOpened"), t("ticketsStat30Days")),
+    tile("check", "green", formatNumber(stats.closed), t("ticketsStatClosed"), t("ticketsStat30Days")),
+    tile("clock", "amber", stats.averageFirstResponseMs === null ? "–" : formatDuration(stats.averageFirstResponseMs), t("ticketsStatFirstReply"), t("ticketsStat30Days")),
+    tile(
+      "star",
+      "pink",
+      stats.averageRating === null ? "–" : new Intl.NumberFormat(state.language, { maximumFractionDigits: 1 }).format(stats.averageRating),
+      t("ticketsStatRating"),
+      t("ticketsStatRatings", { count: formatNumber(stats.ratings) }),
+    ),
+  ];
+}
+
+// Auto-close after inactivity and ratings (tickets/support.js).
+function ticketSupportCard(guildId, data) {
+  const saved = data.settings.ticketSupport ?? { autoCloseHours: 0, ratings: false };
+  const hours = h("input", { id: "ticketAutoClose", type: "number", min: 0, max: 720, step: 1, value: String(saved.autoCloseHours), inputMode: "numeric" });
+  const ratings = h("input", { id: "ticketRatings", type: "checkbox", role: "switch", checked: saved.ratings, "aria-label": t("ticketsRatings") });
+  const save = h("button", { class: "primary", type: "submit" }, t("save"));
+  const form = h(
+    "form",
+    {
+      class: "stack",
+      onsubmit: async (event) => {
+        event.preventDefault();
+        const autoCloseHours = Number(hours.value);
+        if (!Number.isInteger(autoCloseHours) || autoCloseHours < 0 || autoCloseHours > 720) {
+          hours.reportValidity();
+          return;
+        }
+        setBusy(save, true);
+        try {
+          const result = await api(`/api/guilds/${guildId}/settings`, { method: "PUT", body: { ticketSupport: { autoCloseHours, ratings: ratings.checked } } });
+          data.settings = result.settings;
+          toast(t("saved"));
+        } catch (error) {
+          failed(error);
+        } finally {
+          setBusy(save, false);
+        }
+      },
+    },
+    field("ticketsAutoClose", "ticketsAutoCloseHelp", hours),
+    h(
+      "label",
+      { class: "switch-card" },
+      h("span", { class: "switch-text" }, h("strong", {}, t("ticketsRatings")), h("span", { class: "help" }, t("ticketsRatingsHelp"))),
+      h("span", { class: "switch" }, ratings),
+    ),
+    h("div", { class: "toolbar" }, save),
+  );
+  return card(t("ticketsSupportTitle"), "sliders", "purple", form);
+}
+
 async function showTicketList(guildId, data, query) {
   const status = TICKET_STATUSES.includes(query.get("status")) ? query.get("status") : "all";
   const userId = /^\d{17,20}$/.test(query.get("user") ?? "") ? query.get("user") : "";
@@ -8023,6 +8091,7 @@ async function showTicketList(guildId, data, query) {
   const more = h("button", { class: "ghost", type: "button", hidden: true }, t("loadMore"));
   const summary = h("p", { class: "help" });
   const empty = h("p", { class: "muted empty", hidden: true }, t("ticketsNone"));
+  const statsRow = h("div", { class: "stats", "aria-busy": "true" });
   let before = null;
   const load = async () => {
     setBusy(more, true);
@@ -8035,6 +8104,10 @@ async function showTicketList(guildId, data, query) {
         params.set("before", before);
       }
       const page = await api(`/api/guilds/${guildId}/tickets?${params}`);
+      if (statsRow.hasAttribute("aria-busy") && page.stats) {
+        statsRow.removeAttribute("aria-busy");
+        statsRow.replaceChildren(...ticketStats(page.stats, page.openCount));
+      }
       list.append(...page.tickets.map((ticket) => ticketRow(guildId, ticket)));
       summary.textContent = t(page.panel ? "ticketsSummary" : "ticketsSummaryNoPanel", { count: formatNumber(page.openCount) });
       empty.hidden = list.children.length > 0;
@@ -8050,7 +8123,9 @@ async function showTicketList(guildId, data, query) {
       data,
       "tickets",
       pageHero("tickets", t("ticketsIntro"), data),
+      statsRow,
       canManageGuild(data) && data.ticketDefaults ? ticketPanelEditor(guildId, data) : null,
+      canManageGuild(data) && data.settings ? ticketSupportCard(guildId, data) : null,
       filters,
       card(t("page_tickets"), "ticket", "cyan", summary, empty, list, h("div", { class: "center" }, more)),
     ),
@@ -8098,6 +8173,9 @@ async function showTicket(guildId, data, number) {
     ticket.closedAt ? [t("ticketsClosedBy"), ticketPerson(guildId, ticket.closedBy, ticket.closedByName)] : null,
     ticket.closedAt ? [t("ticketsClosed"), formatDate(ticket.closedAt)] : null,
     ticket.closeReason ? [t("ticketsReason"), ticket.closeReason] : null,
+    ticket.claimedBy ? [t("ticketsClaimedBy"), ticketPerson(guildId, ticket.claimedBy, ticket.claimedByName)] : null,
+    ticket.firstResponseAt ? [t("ticketsFirstReply"), formatDuration(ticket.firstResponseAt - ticket.createdAt)] : null,
+    ticket.rating ? [t("ticketsRating"), ratingStars(ticket.rating)] : null,
   ].filter(Boolean);
   const actions = h(
     "div",

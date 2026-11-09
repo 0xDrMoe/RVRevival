@@ -450,6 +450,17 @@ const MIGRATIONS = [
   END;
   CREATE INDEX xp_daily_by_day_only ON xp_daily (day);
   `,
+  // 30: ticket claiming, activity (first staff reply, last message, the idle
+  // warning before auto-close) and the member's 1-5 rating (tickets/ticketStore.js).
+  `
+  ALTER TABLE tickets ADD COLUMN claimed_by TEXT;
+  ALTER TABLE tickets ADD COLUMN claimed_at INTEGER;
+  ALTER TABLE tickets ADD COLUMN first_response_at INTEGER;
+  ALTER TABLE tickets ADD COLUMN last_activity_at INTEGER;
+  ALTER TABLE tickets ADD COLUMN idle_warned_at INTEGER;
+  ALTER TABLE tickets ADD COLUMN rating INTEGER;
+  CREATE INDEX tickets_open_all ON tickets (closed_at) WHERE closed_at IS NULL;
+  `,
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS.length;

@@ -57,6 +57,9 @@ export const LogRoute = Object.freeze({
   TICKET_MEMBER_REMOVED: "ticketMemberRemoved",
   TICKET_RENAMED: "ticketRenamed",
   TICKET_DELETED: "ticketDeleted",
+  TICKET_CLAIMED: "ticketClaimed",
+  TICKET_UNCLAIMED: "ticketUnclaimed",
+  TICKET_RATED: "ticketRated",
 });
 export const LOG_ROUTES = Object.values(LogRoute);
 

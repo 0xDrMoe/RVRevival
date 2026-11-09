@@ -4,6 +4,16 @@
 export const CHANGELOG = [
   {
     date: "2026-11-09",
+    title: "Tickets: claiming, auto-close, ratings and stats",
+    items: [
+      "Staff can claim a ticket with the 🙋 Claim button or /tickets claim, so everyone sees who is on it.",
+      "Quiet tickets can close themselves: a warning first, then the close. Set it with /tickets auto-close.",
+      "Members can rate the help from 1 to 5 stars by DM when their ticket closes (/tickets ratings).",
+      "The Tickets page shows the last 30 days: tickets opened and closed, the average first reply time and the average rating.",
+    ],
+  },
+  {
+    date: "2026-11-09",
     title: "A status page, a clearer home page and a public guide",
     items: [
       "New status page at /status: live bot status, ping and 30 days of uptime, refreshed every minute.",

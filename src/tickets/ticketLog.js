@@ -21,6 +21,9 @@ export const TicketEvent = Object.freeze({
   MEMBER_REMOVED: "memberRemoved",
   RENAMED: "renamed",
   DELETED: "deleted",
+  CLAIMED: "claimed",
+  UNCLAIMED: "unclaimed",
+  RATED: "rated",
 });
 export const TICKET_EVENTS = Object.values(TicketEvent);
 
@@ -35,6 +38,9 @@ const STYLE = {
   [TicketEvent.MEMBER_REMOVED]: { title: "people removed", color: 0xe67e22 },
   [TicketEvent.RENAMED]: { title: "renamed", color: 0x99aab5 },
   [TicketEvent.DELETED]: { title: "thread deleted", color: 0xed4245 },
+  [TicketEvent.CLAIMED]: { title: "claimed", color: 0x7c5cff },
+  [TicketEvent.UNCLAIMED]: { title: "unclaimed", color: 0x99aab5 },
+  [TicketEvent.RATED]: { title: "rated", color: 0xfee75c },
 };
 
 const UNKNOWN = "Unknown or automatic";

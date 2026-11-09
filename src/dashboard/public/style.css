@@ -7296,3 +7296,10 @@ input.has-variable-problem {
 .counter-edit .message-with-variables {
   flex: 1;
 }
+
+/* A ticket's 1-5 star rating (tickets/support.js). */
+.rating-stars {
+  color: #f0b232;
+  letter-spacing: 1px;
+  white-space: nowrap;
+}

@@ -3,7 +3,8 @@ import { describe, expect, it, vi } from "vitest";
 import { buildTicketsCommandData, createTicketsCommand, OPEN_GRACE_MS } from "../src/commands/tickets.js";
 import { Status } from "../src/logs/actionLog.js";
 import { GuildSettings, Setting } from "../src/settings/guildSettings.js";
-import { CLOSE_BUTTON, FORM_ID, MAX_OPEN_TICKETS, MENU_ID, OPEN_BUTTON, threadName } from "../src/tickets/tickets.js";
+import { CLAIM_BUTTON, CLOSE_BUTTON, FORM_ID, MAX_OPEN_TICKETS, MENU_ID, OPEN_BUTTON, RATE_PREFIX, threadName } from "../src/tickets/tickets.js";
+import { checkTicketSupport, idleStep, normalizeTicketSupport } from "../src/tickets/support.js";
 import { TicketStore, MAX_EVENTS_PER_TICKET } from "../src/tickets/ticketStore.js";
 import { createTicketLog, TicketEvent } from "../src/tickets/ticketLog.js";
 import { LogRoute } from "../src/logs/logRoutes.js";
@@ -136,6 +137,7 @@ function setup({ canPost = true, mentionable = true, staffMembers = [], threadMe
         getRole: (name) => options[name] ?? null,
         getUser: (name) => options[name] ?? null,
         getBoolean: (name) => options[name] ?? null,
+        getInteger: (name) => options[name] ?? null,
       },
       fields: { getTextInputValue: () => subject },
       reply: vi.fn(async () => {
@@ -186,7 +188,7 @@ describe("tickets", () => {
     const data = buildTicketsCommandData();
     expect(data.name).toBe("tickets");
     expect(data.default_member_permissions).toBe(String(PermissionFlagsBits.ManageGuild));
-    expect(data.options.map((option) => option.name)).toEqual(["panel", "off", "close", "add", "remove", "list", "log", "log-event"]);
+    expect(data.options.map((option) => option.name)).toEqual(["panel", "off", "close", "add", "remove", "list", "claim", "auto-close", "ratings", "log", "log-event"]);
   });
 
   it("posts the panel and saves it", async () => {
@@ -896,5 +898,132 @@ describe("customized ticket panels", () => {
     await t.command.componentPrefixes["tk:open:"].handle(t.interaction({ customId: "tk:open:urgent", userId: MEMBER_ID }));
     await t.command.componentPrefixes["tk:form:"].handle(t.interaction({ customId: "tk:form:urgent", userId: MEMBER_ID, subject: "Now!" }));
     expect(t.threads[0].send.mock.calls[0][0].allowedMentions.roles).toEqual([STAFF_ROLE_ID]);
+  });
+});
+
+describe("ticket claiming, auto-close and ratings", () => {
+  const HOUR = 60 * 60 * 1000;
+
+  it("claims a ticket from the button, lets go of it, and only an admin can take over", async () => {
+    const t = setup();
+    await t.postPanel({ "staff-role": { id: STAFF_ROLE_ID } });
+    await t.openTicket();
+    const thread = t.threads[0];
+    expect(thread.send.mock.calls[0][0].components[0].components.map((button) => button.data.custom_id)).toEqual([CLOSE_BUTTON, CLAIM_BUTTON]);
+
+    const member = t.interaction({ customId: CLAIM_BUTTON, userId: MEMBER_ID, channelId: thread.id });
+    expect((await t.command.components[CLAIM_BUTTON].handle(member)).status).toBe(Status.REFUSED);
+
+    const staff = t.interaction({ customId: CLAIM_BUTTON, userId: STRANGER_ID, roleIds: [STAFF_ROLE_ID], channelId: thread.id });
+    expect((await t.command.components[CLAIM_BUTTON].handle(staff)).status).toBe(Status.SUCCESS);
+    expect(staff.reply.mock.calls[0][0].content).toContain(`<@${STRANGER_ID}> has claimed ticket #1`);
+    expect(t.tickets.byThread(thread.id).claimedBy).toBe(STRANGER_ID);
+    expect(t.logPosts.at(-1).title).toBe("🎫 Ticket #1 claimed");
+
+    const otherStaff = t.interaction({ subcommand: "claim", userId: "300000000000000004", roleIds: [STAFF_ROLE_ID], channelId: thread.id });
+    expect((await t.command.execute(otherStaff)).status).toBe(Status.REFUSED);
+    expect(t.lastText(otherStaff)).toContain("already claimed");
+
+    const admin = t.interaction({ subcommand: "claim", userId: ADMIN_ID, manageGuild: true, channelId: thread.id });
+    await t.command.execute(admin);
+    expect(t.tickets.byThread(thread.id).claimedBy).toBe(ADMIN_ID);
+    expect(t.logPosts.at(-1).fields.find((field) => field.name === "Note").value).toContain(STRANGER_ID);
+
+    await t.command.execute(t.interaction({ subcommand: "claim", userId: ADMIN_ID, manageGuild: true, channelId: thread.id }));
+    expect(t.tickets.byThread(thread.id).claimedBy).toBeNull();
+    expect(t.logPosts.at(-1).title).toBe("🎫 Ticket #1 unclaimed");
+  });
+
+  it("tracks activity and the first reply from someone other than the member", async () => {
+    const t = setup();
+    await t.postPanel();
+    await t.openTicket();
+    const thread = t.threads[0];
+    const message = (authorId, at, bot = false) => ({
+      author: { id: authorId, bot },
+      inGuild: () => true,
+      guildId: GUILD_ID,
+      channelId: thread.id,
+      channel: { isThread: () => true },
+      createdTimestamp: at,
+    });
+    t.command.messageCreated(message(MEMBER_ID, 1_100_000));
+    expect(t.tickets.byThread(thread.id)).toMatchObject({ lastActivityAt: 1_100_000, firstResponseAt: null });
+    t.command.messageCreated(message(BOT_ID, 1_150_000, true));
+    expect(t.tickets.byThread(thread.id).lastActivityAt).toBe(1_100_000);
+    t.command.messageCreated(message(STRANGER_ID, 1_200_000));
+    t.command.messageCreated(message(STRANGER_ID, 1_300_000));
+    expect(t.tickets.byThread(thread.id)).toMatchObject({ lastActivityAt: 1_300_000, firstResponseAt: 1_200_000 });
+    expect(t.tickets.stats(GUILD_ID, 0)).toMatchObject({ opened: 1, closed: 0, averageFirstResponseMs: 200_000, averageRating: null });
+  });
+
+  it("warns a quiet ticket, then closes it and asks for a rating", async () => {
+    const t = setup();
+    await t.postPanel();
+    await t.openTicket();
+    const thread = t.threads[0];
+    const sent = vi.fn(async () => ({}));
+    const client = { guilds: { cache: new Map([[GUILD_ID, t.guild]]) }, users: { fetch: async () => ({ send: sent }) } };
+    t.guild.client = client;
+
+    await t.command.sweepIdle(client);
+    expect(thread.send).toHaveBeenCalledTimes(1);
+
+    await t.command.execute(t.interaction({ subcommand: "auto-close", manageGuild: true, options: { hours: 24 } }));
+    await t.command.execute(t.interaction({ subcommand: "ratings", manageGuild: true, options: { enabled: true } }));
+    expect(t.guildSettings.get(GUILD_ID, Setting.TICKET_SUPPORT)).toEqual({ autoCloseHours: 24, ratings: true });
+
+    t.advance(24 * HOUR);
+    await t.command.sweepIdle(client);
+    expect(thread.send.mock.calls.at(-1)[0].content).toContain("will close in 12 hours");
+    await t.command.sweepIdle(client);
+    expect(thread.send).toHaveBeenCalledTimes(2);
+
+    t.advance(12 * HOUR);
+    await t.command.sweepIdle(client);
+    const ticket = t.tickets.byNumber(GUILD_ID, 1);
+    expect(ticket.closedAt).not.toBeNull();
+    expect(ticket.closeReason).toBe("No messages for 24 hours");
+    expect(thread.edit).toHaveBeenCalledWith(expect.objectContaining({ locked: true, archived: true }));
+    expect(sent).toHaveBeenCalledTimes(1);
+    const buttons = sent.mock.calls[0][0].components[0].components.map((button) => button.data.custom_id);
+    expect(buttons).toEqual([1, 2, 3, 4, 5].map((stars) => `${RATE_PREFIX}${ticket.id}:${stars}`));
+
+    const rate = (userId, stars) => ({
+      customId: `${RATE_PREFIX}${ticket.id}:${stars}`,
+      locale: "en-US",
+      user: { id: userId },
+      client,
+      reply: vi.fn(async () => {}),
+      update: vi.fn(async () => {}),
+    });
+    const stranger = rate(STRANGER_ID, 1);
+    expect((await t.command.componentPrefixes[RATE_PREFIX].handle(stranger)).status).toBe(Status.REFUSED);
+    const member = rate(MEMBER_ID, 4);
+    expect((await t.command.componentPrefixes[RATE_PREFIX].handle(member)).status).toBe(Status.SUCCESS);
+    expect(member.update.mock.calls[0][0].content).toContain("⭐⭐⭐⭐");
+    expect(t.tickets.byNumber(GUILD_ID, 1).rating).toBe(4);
+    expect((await t.command.componentPrefixes[RATE_PREFIX].handle(rate(MEMBER_ID, 5))).status).toBe(Status.REFUSED);
+    expect(t.tickets.stats(GUILD_ID, 0)).toMatchObject({ closed: 1, averageRating: 4, ratings: 1 });
+    expect(t.logPosts.at(-1).title).toBe("🎫 Ticket #1 rated");
+  });
+
+  it("forgets the warning when someone writes", () => {
+    const ticket = { createdAt: 0, lastActivityAt: null, idleWarnedAt: null };
+    expect(idleStep(ticket, 0, 100 * HOUR)).toBeNull();
+    expect(idleStep(ticket, 2, HOUR)).toBeNull();
+    expect(idleStep(ticket, 2, 2 * HOUR)).toBe("warn");
+    expect(idleStep({ ...ticket, idleWarnedAt: 2 * HOUR }, 2, 3 * HOUR)).toBeNull();
+    expect(idleStep({ ...ticket, idleWarnedAt: 2 * HOUR }, 2, 4 * HOUR)).toBe("close");
+    expect(idleStep({ ...ticket, lastActivityAt: 3 * HOUR }, 2, 4 * HOUR)).toBeNull();
+  });
+
+  it("checks the dashboard's support settings", () => {
+    expect(checkTicketSupport({ autoCloseHours: 0, ratings: false })).toBeNull();
+    expect(checkTicketSupport({ autoCloseHours: 48, ratings: true })).toEqual({ autoCloseHours: 48, ratings: true });
+    expect(() => checkTicketSupport({ autoCloseHours: 1.5, ratings: true })).toThrow(/whole number/);
+    expect(() => checkTicketSupport({ autoCloseHours: 721, ratings: true })).toThrow();
+    expect(() => checkTicketSupport({ autoCloseHours: 1, ratings: "yes" })).toThrow();
+    expect(normalizeTicketSupport({ autoCloseHours: -3, ratings: 1 })).toEqual({ autoCloseHours: 0, ratings: false });
   });
 });

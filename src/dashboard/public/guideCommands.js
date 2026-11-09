@@ -637,6 +637,21 @@ export const COMMAND_PARTS = [
             options: [],
           },
           {
+            usage: "/tickets claim",
+            what: "Claims the ticket you're in, so everyone sees who is handling it, or lets go of it if it's yours. Taking over someone else's claim needs Manage Server. The 🙋 **Claim** button in the ticket does the same. **Ticket staff.**",
+            options: [],
+          },
+          {
+            usage: "/tickets auto-close hours",
+            what: "Closes tickets that go quiet. After this many hours without a message the ticket gets a warning; if it stays quiet it closes 12 hours later (or after the same number of hours, if that's shorter). Any message resets it. **Admins.**",
+            options: [["hours", "Hours without a message before the warning, from 1 to 720. `0` switches auto-close off."]],
+          },
+          {
+            usage: "/tickets ratings enabled",
+            what: "When a ticket closes, sends the member a DM with 1 to 5 star buttons. Ratings show on the ticket and as an average on the Tickets page. Members with DMs closed just aren't asked. **Admins.**",
+            options: [["enabled", "`True` asks for ratings, `False` stops."]],
+          },
+          {
             usage: "/tickets log [channel]",
             what: "Picks the channel for the ticket log: every ticket opened, closed (with its transcript), reopened, renamed, people added or removed and thread deleted, with who did it. **Admins.**",
             options: [["channel", "The ticket log channel. Leave it out to send ticket entries to the mod log again. The bot needs to post, embed and attach files there."]],
@@ -645,7 +660,7 @@ export const COMMAND_PARTS = [
             usage: "/tickets log-event event enabled",
             what: "Switches one kind of ticket log entry off or back on. Switched-off kinds are still kept in each ticket's history on the dashboard. **Admins.**",
             options: [
-              ["event", "The kind of entry: opened, closed, reopened, people added, people removed, renamed or thread deleted."],
+              ["event", "The kind of entry: opened, closed, reopened, people added, people removed, renamed, thread deleted, claimed, let go or rated."],
               ["enabled", "`True` posts it, `False` stops posting it."],
             ],
           },
