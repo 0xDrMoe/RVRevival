@@ -29,6 +29,7 @@
 // (names, reasons) is always set as text, never as HTML.
 
 import { GUIDE } from "./guide.js";
+import { RESPONDER_TEMPLATES, TAG_TEMPLATES, responderFromTemplate, tagFromTemplate } from "./customCommandTemplates.js";
 
 const LANGUAGES = { en: "English", es: "Español", de: "Deutsch", fr: "Français", pt: "Português", it: "Italiano", ar: "العربية" };
 const LOG_EVENTS = ["messageEdit", "messageDelete", "bulkDelete", "memberJoin", "memberLeave", "memberUpdate"];
@@ -3344,10 +3345,12 @@ function responderRow(responder, channels, onRemove) {
 
 // The auto-responders on the page, as the bot saves them (triggers lowercased,
 // spaces collapsed). Empty rows are ignored; bad ones are sent so the server explains.
+const cleanResponderTrigger = (text) => text.normalize("NFKC").toLowerCase().replace(/\s+/g, " ").trim();
+
 function readResponders(form) {
   const responders = [...form.querySelectorAll(".responder-row")]
     .map((row) => ({
-      trigger: row.querySelector(".responder-trigger").value.normalize("NFKC").toLowerCase().replace(/\s+/g, " ").trim(),
+      trigger: cleanResponderTrigger(row.querySelector(".responder-trigger").value),
       match: row.querySelector(".responder-match").value,
       reply: row.querySelector(".responder-reply").value.replace(/\r\n?/g, "\n").trim(),
       channelId: row.querySelector(".responder-channel select").value || null,
@@ -3392,8 +3395,74 @@ function editableList({ items, max, makeRow, focus, emptyKey, addKey }) {
     list.replaceChildren(...values.map((item) => makeRow(item, remove)));
     update();
   };
+  // Adds one filled-in row (from a template) and returns it, or null when the list is full.
+  const add = (item) => {
+    if (list.children.length >= max) {
+      return null;
+    }
+    const row = makeRow(item, remove);
+    list.append(row);
+    update();
+    list.dispatchEvent(new Event("input", { bubbles: true }));
+    return row;
+  };
   set(items);
-  return { list, count, empty, addButton, set };
+  return { list, count, empty, addButton, set, add };
+}
+
+// "Start from a template": a card of ready-made entries. `preview(item)` is the
+// short line under each title (the command or the trigger), `body(item)` the
+// text it posts. `onUse(template, item)` adds it to the page's list.
+function templateCard({ templates, makeItem, helpKey, exampleKey, preview, body, onUse }) {
+  const tiles = templates.map((template) => {
+    const item = makeItem(template);
+    return h(
+      "li",
+      { class: "template-tile" },
+      h(
+        "div",
+        { class: "template-head" },
+        h("span", { class: "template-icon", "aria-hidden": "true" }, template.icon),
+        h("span", { class: "template-text grow" }, h("strong", {}, t(`${template.kind}_${template.id}_title`)), h("span", { class: "template-preview", title: preview(item) }, preview(item))),
+        h("button", { class: "ghost small", type: "button", onclick: () => onUse(makeItem(template)) }, t("tplUse")),
+      ),
+      // Bold markers would show as stars here; Discord shows them as bold.
+      h("p", { class: "template-body" }, body(item).replaceAll("**", "")),
+    );
+  });
+  return card(
+    t("tplHeading"),
+    "sparkles",
+    "purple",
+    h("p", { class: "help" }, t(helpKey)),
+    h("p", { class: "template-example" }, t(exampleKey)),
+    h("ul", { class: "template-grid" }, tiles),
+  );
+}
+
+// Puts a template's row in front of the person: scrolled to, highlighted and focused.
+function showTemplateRow(row, focus) {
+  row.classList.add("template-new");
+  row.scrollIntoView({ behavior: "smooth", block: "center" });
+  row.querySelector(focus)?.focus({ preventScroll: true });
+  setTimeout(() => row.classList.remove("template-new"), 2000);
+}
+
+// Adds a template to an editable list unless the same entry (by `key`) is already there.
+function useTemplate(list, item, { existing, focus }) {
+  const match = existing().find((entry) => entry.key === item.key);
+  if (match) {
+    toast(t("tplExists"), "error");
+    showTemplateRow(match.row, focus);
+    return;
+  }
+  const row = list.add(item.value);
+  if (!row) {
+    toast(t("tplFull"), "error");
+    return;
+  }
+  showTemplateRow(row, focus);
+  toast(t("tplAdded"));
 }
 
 async function showTags(guildId) {
@@ -3422,6 +3491,23 @@ async function showTags(guildId) {
         tags.empty,
         tags.list,
       ),
+      templateCard({
+        templates: TAG_TEMPLATES.map((template) => ({ ...template, kind: "tagTpl" })),
+        makeItem: (template) => tagFromTemplate(template, t),
+        helpKey: "tplTagsHelp",
+        exampleKey: "tagsExample",
+        preview: (tag) => `/tag ${tag.name}`,
+        body: (tag) => tag.content,
+        onUse: (tag) =>
+          useTemplate(tags, { key: tag.name, value: tag }, {
+            focus: ".tag-content",
+            existing: () =>
+              [...tags.list.querySelectorAll(".tag-row")].map((row) => {
+                const typed = row.querySelector(".tag-name").value;
+                return { row, key: cleanTagName(typed) || typed.trim() };
+              }),
+          }),
+      }),
     ],
     fields: { tags: readTags },
   });
@@ -3457,6 +3543,23 @@ async function showResponders(guildId) {
         responders.empty,
         responders.list,
       ),
+      templateCard({
+        templates: RESPONDER_TEMPLATES.map((template) => ({ ...template, kind: "respTpl" })),
+        makeItem: (template) => responderFromTemplate(template, t),
+        helpKey: "tplRespondersHelp",
+        exampleKey: "respondersExample",
+        preview: (responder) => `“${responder.trigger}” · ${t(`responderMatch_${responder.match}`)}`,
+        body: (responder) => responder.reply,
+        onUse: (responder) =>
+          useTemplate(responders, { key: cleanResponderTrigger(responder.trigger), value: responder }, {
+            focus: ".responder-reply",
+            existing: () =>
+              [...responders.list.querySelectorAll(".responder-row")].map((row) => ({
+                row,
+                key: cleanResponderTrigger(row.querySelector(".responder-trigger").value),
+              })),
+          }),
+      }),
     ],
     fields: { autoResponders: readResponders },
   });

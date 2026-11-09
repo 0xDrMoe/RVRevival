@@ -2831,6 +2831,80 @@ dialog textarea {
   flex: 1;
 }
 
+/* Templates: ready-made custom commands and auto-responders. */
+.template-example {
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  font-size: 0.86rem;
+  background: var(--surface-2);
+  border-left: 3px solid var(--accent);
+  border-radius: 6px;
+}
+
+.template-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.template-tile {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 10px 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.template-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+}
+
+.template-icon {
+  font-size: 1.3rem;
+  line-height: 1.6rem;
+}
+
+.template-text {
+  display: grid;
+  min-width: 0;
+}
+
+.template-preview {
+  overflow: hidden;
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8rem;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.template-body {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.84rem;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+
+.tag-row.template-new {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent);
+  transition: box-shadow 0.3s, border-color 0.3s;
+}
+
 .responder-row .toolbar {
   flex-wrap: wrap;
 }

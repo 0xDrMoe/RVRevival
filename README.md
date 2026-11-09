@@ -228,7 +228,7 @@ Saved answers that staff write once and anyone can post: the download link, how 
 - `/tags add name:<name>` opens a form to write a new one (several lines are fine, up to 2000 characters). Names use lowercase letters, numbers and dashes, up to 32 characters; `Download Link` becomes `download-link`.
 - `/tags edit name:<tag>` opens the form with the current text. `/tags remove name:<tag>` deletes one. `/tags list` lists them.
 
-`/tags` needs **Manage Messages** or the mod role. Up to 50 per server. Admins can also add, edit and remove them on the dashboard's **Custom commands** page.
+`/tags` needs **Manage Messages** or the mod role. Up to 50 per server. Admins can also add, edit and remove them on the dashboard's **Custom commands** page, which also has ready-made templates (rules, how to ask for help, reporting, roles, invite link, socials) in the dashboard's language: **Use** adds one to the list to edit before saving.
 
 ### Auto-responders
 
@@ -240,7 +240,7 @@ The bot answers messages that match a trigger, like "how do I download" or "serv
 - In the reply, `{user}` mentions the author without pinging, `{server}` is the server's name and `{channel}` the channel. Nothing in a reply can ping anyone.
 - `/autoresponder remove trigger:<text>` deletes one; `/autoresponder list` lists them.
 
-Needs **Manage Server**. Up to 25 per server. Each answers at most once every 30 seconds per channel, never answers bots, and skips messages automod acted on. Reading messages needs the **Message Content** intent. They're also on the dashboard's **Auto-responders** page.
+Needs **Manage Server**. Up to 25 per server. Each answers at most once every 30 seconds per channel, never answers bots, and skips messages automod acted on. Reading messages needs the **Message Content** intent. They're also on the dashboard's **Auto-responders** page, with ready-made templates (say hello back, where to get roles, the rules, the invite link, how to report, quiet chat) to start from.
 
 ### Scheduled messages
 
