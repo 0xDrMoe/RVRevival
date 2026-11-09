@@ -7,9 +7,15 @@
 //   - "Type my country" opens a small form. An exact match ("Germany", "USA")
 //     gives the role right away; otherwise the bot shows close matches to pick.
 //
+// Servers that pick continents and regions instead of countries (see
+// countries/options.js) get the same continent buttons, and a click gives that
+// region's role. There's no "Type my country" button then. Places the server
+// took off its list have no button and aren't listed.
+//
 // The same rules as /country apply: one country per member, and only staff can
-// change it afterwards. Every custom ID is fixed, so buttons on old messages
-// keep working after the bot restarts.
+// change it afterwards, unless the server lets members remove their own role
+// ("Remove my country" button). Every custom ID is fixed, so buttons on old
+// messages keep working after the bot restarts.
 
 import {
   ActionRowBuilder,
@@ -24,9 +30,11 @@ import {
 } from "discord.js";
 import { CONTINENTS, continentOf } from "../countries/continents.js";
 import { MAX_NAME_LENGTH, normalizeName } from "../countries/countries.js";
+import { kindOf, normalizeCountryOptions, PlaceKind, PlaceMode, placesFor, REGION_KEYS, regionList } from "../countries/options.js";
 import { pickLanguage, translate } from "../i18n/i18n.js";
 import { result, Status, statusForOutcome } from "../logs/actionLog.js";
 import { Outcome } from "../roles/countryRoles.js";
+import { Setting } from "../settings/guildSettings.js";
 
 export const PickerId = Object.freeze({
   BUTTON: "country-picker:open",
@@ -38,6 +46,9 @@ export const PickerId = Object.freeze({
   LIST: "country-picker:list:",
   // Confirm, under "Pick X?" (with confirmations on), followed by the country's code.
   CONFIRM: "country-picker:confirm:",
+  // "Remove my country", and Confirm under "Remove X?".
+  REMOVE: "country-picker:remove",
+  REMOVE_CONFIRM: "country-picker:remove-confirm",
 });
 
 // Discord shows at most 25 options in a select menu, and 5 rows in a message.
@@ -47,16 +58,7 @@ export const MAX_LISTS = 5;
 // How the picker shows up in the logs channel.
 const LOG_LABEL = "Country picker buttons";
 
-const CONTINENT_KEYS = {
-  africa: "continentAfrica",
-  asia: "continentAsia",
-  europe: "continentEurope",
-  "north-america": "continentNorthAmerica",
-  "south-america": "continentSouthAmerica",
-  oceania: "continentOceania",
-};
-
-const CONTINENT_EMOJI = {
+export const CONTINENT_EMOJI = {
   africa: "🌍",
   asia: "🌏",
   europe: "🌍",
@@ -64,6 +66,22 @@ const CONTINENT_EMOJI = {
   "south-america": "🌎",
   oceania: "🌏",
 };
+
+// Region roles get their own wording where the country wording would be wrong.
+const REGION_MESSAGES = {
+  [Outcome.ASSIGNED]: "regionAssigned",
+  [Outcome.LOCKED]: "regionLocked",
+  invalidCountry: "invalidRegion",
+};
+
+// The translation key for an outcome, for a place of `kind`. `removable`: the
+// server lets members remove their own role, so "locked" says how.
+export function placeMessageKey(outcome, kind, removable = false) {
+  if (outcome === Outcome.LOCKED && removable) {
+    return "placeLockedRemovable";
+  }
+  return (kind === PlaceKind.REGION && REGION_MESSAGES[outcome]) || outcome;
+}
 
 // The "Type my country" button. `labelKey` lets the "no match" reply reuse it as "Try again".
 function typeButton(language, labelKey = "pickButtonLabel") {
@@ -74,24 +92,56 @@ function typeButton(language, labelKey = "pickButtonLabel") {
     .setLabel(translate(language, labelKey));
 }
 
+// "Remove my country" (or region).
+function removeButton(language, mode) {
+  return new ButtonBuilder()
+    .setCustomId(PickerId.REMOVE)
+    .setStyle(ButtonStyle.Secondary)
+    .setEmoji("🗑️")
+    .setLabel(translate(language, mode === PlaceMode.REGIONS ? "pickRemoveRegionLabel" : "pickRemoveLabel"));
+}
+
 export function buildTryAgainRow(language) {
   return new ActionRowBuilder().addComponents(typeButton(language, "pickTryAgainLabel"));
 }
 
-// The buttons under the guide: continents in two rows of three, then "Type my country".
-export function buildGuideRows(language) {
+// The continents that get a button: in regions mode the regions the server
+// offers, else the continents with at least one country it offers.
+export function offeredContinents(saved, lists) {
+  const options = normalizeCountryOptions(saved);
+  const offered = placesFor(options, lists).countries;
+  if (options.mode === PlaceMode.REGIONS) {
+    const codes = new Set(offered.map((region) => region.code));
+    return CONTINENTS.filter((continent) => codes.has(continent));
+  }
+  const used = new Set(offered.map((country) => continentOf(country.code)));
+  return CONTINENTS.filter((continent) => used.has(continent));
+}
+
+// The buttons under the guide: continents in up to two rows, then "Type my
+// country" (countries only), "Remove my country" (when the server allows it)
+// and any `extra` buttons (the guide's "Translate this message"). `saved` is
+// the server's Setting.COUNTRY_ROLES.
+export function buildGuideRows(language, saved = undefined, extra = [], lists = undefined) {
+  const options = normalizeCountryOptions(saved);
   const continentButton = (continent) =>
     new ButtonBuilder()
       .setCustomId(PickerId.CONTINENT + continent)
       .setStyle(ButtonStyle.Primary)
       .setEmoji(CONTINENT_EMOJI[continent])
-      .setLabel(translate(language, CONTINENT_KEYS[continent]));
-  const half = Math.ceil(CONTINENTS.length / 2);
-  return [
-    new ActionRowBuilder().addComponents(CONTINENTS.slice(0, half).map(continentButton)),
-    new ActionRowBuilder().addComponents(CONTINENTS.slice(half).map(continentButton)),
-    new ActionRowBuilder().addComponents(typeButton(language)),
+      .setLabel(translate(language, REGION_KEYS[continent]));
+  const continents = offeredContinents(options, lists);
+  const half = continents.length <= 3 ? continents.length : Math.ceil(continents.length / 2);
+  const tools = [
+    ...(options.mode === PlaceMode.COUNTRIES ? [typeButton(language)] : []),
+    ...(options.memberRemove ? [removeButton(language, options.mode)] : []),
+    ...extra,
   ];
+  return [continents.slice(0, half), continents.slice(half)]
+    .map((row) => row.map(continentButton))
+    .concat([tools])
+    .filter((buttons) => buttons.length > 0)
+    .map((buttons) => new ActionRowBuilder().addComponents(buttons));
 }
 
 export function buildPickForm(language) {
@@ -133,59 +183,111 @@ export function buildChoiceRows(language, countries) {
 
 // Options:
 //   countries, roleService, wrapServer, wrapMember   shared with /country
+//   guildSettings    per-server settings, for what members can pick (Setting.COUNTRY_ROLES)
 //   forcedLanguage   reply in this language for everyone (BOT_LANGUAGE)
 //   confirmations    roles/roleConfirmations.js; without it, a pick gives the role right away
+//   regions          the region list, replaceable in tests
 //
 // Returns { components, componentPrefixes }: { [customId]: { label, handle(interaction) } }.
 // handle() returns what to log, or null for steps that aren't worth a log entry (opening the form).
-export function createCountryPicker({ countries, roleService, wrapServer, wrapMember, forcedLanguage, confirmations }) {
+export function createCountryPicker({
+  countries,
+  roleService,
+  wrapServer,
+  wrapMember,
+  guildSettings,
+  forcedLanguage,
+  confirmations,
+  regions = regionList,
+}) {
   const languageOf = (interaction) => pickLanguage(interaction.locale, forcedLanguage);
   const logged = (outcome, fields = {}) => ({ ...outcome, action: { label: LOG_LABEL, fields } });
+  const optionsOf = (interaction) => normalizeCountryOptions(guildSettings?.get(interaction.guildId, Setting.COUNTRY_ROLES));
+  const placesOf = (options) => placesFor(options, { countries, regions });
+  const kindFor = (options) => (options.mode === PlaceMode.REGIONS ? PlaceKind.REGION : PlaceKind.COUNTRY);
+  const serverOf = (interaction) => wrapServer(interaction.guild);
+  const memberOf = (interaction) => wrapMember(interaction.member);
 
   async function refuseOutsideServer(interaction) {
     await interaction.reply({ content: translate(languageOf(interaction), "guildOnly"), flags: MessageFlags.Ephemeral });
     return logged(result(Status.REFUSED, "guildOnly"));
   }
 
-  // Gives the role and returns the reply text and log entry.
-  async function giveRole(interaction, country, language, fields) {
-    const { outcome, role } = await roleService.giveCountryRole(
-      wrapServer(interaction.guild),
-      wrapMember(interaction.member),
-      country,
-    );
-    const values = { country: outcome === Outcome.LOCKED ? role.name : country.name };
+  // The "Remove my country" button, under a "you already have X" reply.
+  const removeRows = (language, options) => (options.memberRemove ? [new ActionRowBuilder().addComponents(removeButton(language, options.mode))] : []);
+
+  // Gives the role and returns the reply (text and buttons) and log entry.
+  async function giveRole(interaction, place, language, options, fields) {
+    const { outcome, role } = await roleService.giveCountryRole(serverOf(interaction), memberOf(interaction), place);
+    const values = { country: outcome === Outcome.LOCKED ? role.name : place.name };
+    const key = placeMessageKey(outcome, kindOf(place), options.memberRemove);
     return {
-      content: translate(language, outcome, values),
-      outcome: logged(result(statusForOutcome(outcome), outcome, values), { ...fields, country: country.name }),
+      reply: { content: translate(language, key, values), components: outcome === Outcome.LOCKED ? removeRows(language, options) : [] },
+      outcome: logged(result(statusForOutcome(outcome), outcome, values), { ...fields, country: place.name }),
     };
   }
 
   // Members who already have a country are told as soon as they click, instead
   // of picking for nothing. Returns what to log, or null if they can pick.
-  async function refuseIfLocked(interaction, language) {
-    const [held] = roleService.heldCountryRoles(wrapServer(interaction.guild), wrapMember(interaction.member));
+  async function refuseIfLocked(interaction, language, options) {
+    const [held] = roleService.heldCountryRoles(serverOf(interaction), memberOf(interaction), [kindFor(options)]);
     if (!held) {
       return null;
     }
     const values = { country: held.name };
-    await interaction.reply({ content: translate(language, Outcome.LOCKED, values), flags: MessageFlags.Ephemeral });
+    const key = placeMessageKey(Outcome.LOCKED, kindFor(options), options.memberRemove);
+    const rows = removeRows(language, options);
+    await interaction.reply({ content: translate(language, key, values), ...(rows.length > 0 ? { components: rows } : {}), flags: MessageFlags.Ephemeral });
     return logged(result(Status.REFUSED, Outcome.LOCKED, values));
   }
 
-  // A continent button: that continent's countries, privately.
+  // Not on the server's list (taken off after the guide was posted, say).
+  async function refuseNotOffered(interaction, language, name, { replied = true } = {}) {
+    const content = translate(language, "placeNotOffered", { country: name });
+    if (replied) {
+      await interaction.editReply({ content, components: [] });
+    } else {
+      await interaction.reply({ content, flags: MessageFlags.Ephemeral });
+    }
+    return logged(result(Status.REFUSED, "placeNotOffered", { country: name }));
+  }
+
+  // A continent button: that continent's countries, privately. When the server
+  // picks regions, the region's role instead.
   async function showContinent(interaction, continent) {
     if (!interaction.inCachedGuild()) {
       return refuseOutsideServer(interaction);
     }
     const language = languageOf(interaction);
-    const refused = await refuseIfLocked(interaction, language);
+    const options = optionsOf(interaction);
+    const refused = await refuseIfLocked(interaction, language, options);
     if (refused) {
       return refused;
     }
-    const inContinent = countries.countries.filter((country) => continentOf(country.code) === continent);
+    const continentName = translate(language, REGION_KEYS[continent]);
+    const places = placesOf(options);
+
+    if (options.mode === PlaceMode.REGIONS) {
+      const region = places.countries.find((place) => place.code === continent);
+      if (!region) {
+        return refuseNotOffered(interaction, language, continentName, { replied: false });
+      }
+      // Role changes can take longer than the 3 seconds Discord waits.
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+      if (await askFirst(interaction, region, language, options)) {
+        return null;
+      }
+      const { reply, outcome } = await giveRole(interaction, region, language, options);
+      await interaction.editReply(reply);
+      return outcome;
+    }
+
+    const inContinent = places.countries.filter((country) => continentOf(country.code) === continent);
+    if (inContinent.length === 0) {
+      return refuseNotOffered(interaction, language, continentName, { replied: false });
+    }
     await interaction.reply({
-      content: translate(language, "pickContinentChoose", { continent: translate(language, CONTINENT_KEYS[continent]) }),
+      content: translate(language, "pickContinentChoose", { continent: continentName }),
       components: buildChoiceRows(language, inContinent),
       flags: MessageFlags.Ephemeral,
     });
@@ -198,7 +300,7 @@ export function createCountryPicker({ countries, roleService, wrapServer, wrapMe
       return refuseOutsideServer(interaction);
     }
     const language = languageOf(interaction);
-    const refused = await refuseIfLocked(interaction, language);
+    const refused = await refuseIfLocked(interaction, language, optionsOf(interaction));
     if (refused) {
       return refused;
     }
@@ -212,21 +314,28 @@ export function createCountryPicker({ countries, roleService, wrapServer, wrapMe
       return refuseOutsideServer(interaction);
     }
     const language = languageOf(interaction);
+    const options = optionsOf(interaction);
+    const places = placesOf(options);
     // Role changes can take longer than the 3 seconds Discord waits.
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     const typed = interaction.fields.getTextInputValue(PickerId.FORM_INPUT) ?? "";
-    const country = countries.find(typed);
-    if (country) {
-      if (await askFirst(interaction, country, language)) {
+    const place = places.find(typed);
+    if (place) {
+      if (await askFirst(interaction, place, language, options)) {
         return null;
       }
-      const { content, outcome } = await giveRole(interaction, country, language, { typed });
-      await interaction.editReply({ content });
+      const { reply, outcome } = await giveRole(interaction, place, language, options, { typed });
+      await interaction.editReply(reply);
       return outcome;
     }
+    // A real country the server took off its list.
+    const known = options.mode === PlaceMode.COUNTRIES ? countries.find(typed) : regions.find(typed);
+    if (known) {
+      return refuseNotOffered(interaction, language, known.name);
+    }
 
-    const matches = countries.search(typed, MAX_CHOICES);
+    const matches = places.search(typed, MAX_CHOICES);
     if (matches.length === 0) {
       await interaction.editReply({
         content: translate(language, "pickNoMatch"),
@@ -248,32 +357,38 @@ export function createCountryPicker({ countries, roleService, wrapServer, wrapMe
       return refuseOutsideServer(interaction);
     }
     const language = languageOf(interaction);
+    const options = optionsOf(interaction);
     await interaction.deferUpdate();
 
     // The list only holds valid names, but the value still comes from the client.
-    const country = countries.find(interaction.values?.[0]);
-    if (!country) {
+    const typed = interaction.values?.[0];
+    const place = placesOf(options).find(typed);
+    if (!place) {
+      const known = countries.find(typed) ?? regions.find(typed);
+      if (known) {
+        return refuseNotOffered(interaction, language, known.name);
+      }
       await interaction.editReply({ content: translate(language, "invalidCountry"), components: [] });
       return logged(result(Status.REFUSED, "invalidCountry"));
     }
-    if (await askFirst(interaction, country, language)) {
+    if (await askFirst(interaction, place, language, options)) {
       return null;
     }
-    const { content, outcome } = await giveRole(interaction, country, language);
-    await interaction.editReply({ content, components: [] });
+    const { reply, outcome } = await giveRole(interaction, place, language, options);
+    await interaction.editReply(reply);
     return outcome;
   }
 
   // With confirmations on, replaces the reply with "Pick X?" and Confirm, and
-  // returns true. The country can only be changed by staff afterwards, so the
-  // question says so.
-  async function askFirst(interaction, country, language) {
+  // returns true. The question says whether the pick can be undone.
+  async function askFirst(interaction, place, language, options) {
     if (!confirmations?.isOn(interaction.guildId, interaction.user.id)) {
       return false;
     }
+    const key = options.memberRemove ? "roleConfirmPlaceRemovable" : kindOf(place) === PlaceKind.REGION ? "roleConfirmRegion" : "roleConfirmCountry";
     await interaction.editReply({
-      content: translate(language, "roleConfirmCountry", { country: country.name }),
-      components: [confirmations.promptRow(language, PickerId.CONFIRM + country.code)],
+      content: translate(language, key, { country: place.name }),
+      components: [confirmations.promptRow(language, PickerId.CONFIRM + place.code)],
     });
     return true;
   }
@@ -284,22 +399,70 @@ export function createCountryPicker({ countries, roleService, wrapServer, wrapMe
       return refuseOutsideServer(interaction);
     }
     const language = languageOf(interaction);
+    const options = optionsOf(interaction);
     await interaction.deferUpdate();
     const code = interaction.customId.slice(PickerId.CONFIRM.length);
-    const country = countries.countries.find((entry) => entry.code === code);
-    if (!country) {
+    const place = placesOf(options).countries.find((entry) => entry.code === code);
+    if (!place) {
+      const known = [...countries.countries, ...regions.countries].find((entry) => entry.code === code);
+      if (known) {
+        return refuseNotOffered(interaction, language, known.name);
+      }
       await interaction.editReply({ content: translate(language, "invalidCountry"), components: [] });
       return logged(result(Status.REFUSED, "invalidCountry"));
     }
-    const { content, outcome } = await giveRole(interaction, country, language);
-    await interaction.editReply({ content, components: [] });
+    const { reply, outcome } = await giveRole(interaction, place, language, options);
+    await interaction.editReply(reply);
     return outcome;
+  }
+
+  // "Remove my country": the member takes their own role off, when the server
+  // allows it. Asks first when confirmations are on.
+  async function removeOwn(interaction, { confirmed = false } = {}) {
+    if (!interaction.inCachedGuild()) {
+      return refuseOutsideServer(interaction);
+    }
+    const language = languageOf(interaction);
+    const options = optionsOf(interaction);
+    // The button can be on a private reply (changed in place) or on the guide
+    // (answered privately). Role changes can take longer than 3 seconds.
+    if (confirmed || interaction.message?.flags?.has?.(MessageFlags.Ephemeral)) {
+      await interaction.deferUpdate();
+    } else {
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    }
+    const answer = (message) => interaction.editReply({ components: [], ...message });
+    if (!options.memberRemove) {
+      await answer({ content: translate(language, "selfRemoveOff") });
+      return logged(result(Status.REFUSED, "selfRemoveOff"));
+    }
+    const kinds = [kindFor(options)];
+    const held = roleService.heldCountryRoles(serverOf(interaction), memberOf(interaction), kinds);
+    if (held.length === 0) {
+      await answer({ content: translate(language, "selfNothingToRemove") });
+      return logged(result(Status.REFUSED, "selfNothingToRemove"));
+    }
+    const names = held.map((role) => role.name).join(", ");
+    if (!confirmed && confirmations?.isOn(interaction.guildId, interaction.user.id)) {
+      await answer({
+        content: translate(language, "roleConfirmSelfRemove", { country: names }),
+        components: [confirmations.promptRow(language, PickerId.REMOVE_CONFIRM, { danger: true })],
+      });
+      return null;
+    }
+    const change = await roleService.removeCountryRoles(serverOf(interaction), memberOf(interaction), undefined, kinds);
+    const key = change.outcome === Outcome.REMOVED ? "selfRemoved" : change.outcome === Outcome.NOTHING_TO_REMOVE ? "selfNothingToRemove" : change.outcome;
+    const values = { country: change.outcome === Outcome.REMOVED ? change.removed.map((role) => role.name).join(", ") : (change.role?.name ?? names), member: `<@${interaction.user.id}>` };
+    await answer({ content: translate(language, key, values), allowedMentions: { parse: [] } });
+    return logged(result(statusForOutcome(change.outcome), key, values));
   }
 
   const handler = (handle) => ({ label: LOG_LABEL, handle });
   const components = {
     [PickerId.BUTTON]: handler(openForm),
     [PickerId.FORM]: handler(readForm),
+    [PickerId.REMOVE]: handler((interaction) => removeOwn(interaction)),
+    [PickerId.REMOVE_CONFIRM]: handler((interaction) => removeOwn(interaction, { confirmed: true })),
     ...Object.fromEntries(
       CONTINENTS.map((continent) => [
         PickerId.CONTINENT + continent,

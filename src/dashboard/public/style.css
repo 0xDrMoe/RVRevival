@@ -3794,6 +3794,72 @@ dialog textarea {
   margin: 0;
 }
 
+/* Country page: the places members can pick */
+.place-groups {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.place-search {
+  max-width: 360px;
+}
+
+.place-group {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-2);
+  padding: 0 12px;
+}
+
+.place-group > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  cursor: pointer;
+}
+
+.place-group[open] {
+  padding-bottom: 12px;
+}
+
+.place-count {
+  margin-inline-start: auto;
+  color: var(--muted);
+  font-size: 0.9em;
+}
+
+.place-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 4px 12px;
+  margin: 8px 0 14px;
+}
+
+.place-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 32px;
+  overflow-wrap: anywhere;
+}
+
+.place-option input {
+  width: 18px;
+  height: 18px;
+  min-height: 0;
+  margin: 0;
+  flex: none;
+  accent-color: var(--accent);
+}
+
+.place-option[hidden],
+.place-group[hidden] {
+  display: none;
+}
+
 .preset-points {
   margin: 4px 0 0;
   padding-inline-start: 18px;

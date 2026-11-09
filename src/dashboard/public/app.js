@@ -3178,10 +3178,46 @@ function readCountryGuide(form, defaults) {
   return Object.keys(guide).length > 0 ? guide : null;
 }
 
-// The guide as members will see it, with its fixed buttons.
+// What members can pick, from the Country page's form, saved the way the
+// server does (countries/options.js): only what differs from the defaults.
+function readCountryRoles(form) {
+  const mode = form.querySelector('input[name="placeMode"]:checked')?.value ?? "countries";
+  const hidden = [...form.querySelectorAll('input[name="placeOffered"]:not(:checked)')].map((box) => box.value).sort();
+  const memberRemove = form.querySelector("#placeMemberRemove").checked;
+  const saved = {};
+  if (mode !== "countries") saved.mode = mode;
+  if (hidden.length > 0) saved.hidden = hidden;
+  if (memberRemove) saved.memberRemove = true;
+  return Object.keys(saved).length > 0 ? saved : null;
+}
+
+// The guide's buttons for these options, as the bot builds them
+// (countryPicker.js buildGuideRows): continents in up to two rows, then
+// "Type my country" (countries only), "Remove my country" and "Translate".
+function countryGuideButtons(info, options) {
+  const mode = options?.mode ?? "countries";
+  const hidden = new Set(options?.hidden ?? []);
+  const offered =
+    mode === "regions"
+      ? new Set(info.places.regions.filter((region) => !hidden.has(region.code)).map((region) => region.code))
+      : new Set(info.places.countries.filter((country) => !hidden.has(country.code)).map((country) => country.continent));
+  const continents = info.continents.filter((continent) => offered.has(continent.id)).map((continent) => ({ ...continent, primary: true }));
+  const half = continents.length <= 3 ? continents.length : Math.ceil(continents.length / 2);
+  const tools = [
+    ...(mode === "countries" ? [{ label: info.labels.type, emoji: "🔎" }] : []),
+    ...(options?.memberRemove ? [{ label: info.labels.remove[mode], emoji: "🗑️" }] : []),
+    { label: info.labels.translate, emoji: "🌐" },
+  ];
+  return [continents.slice(0, half), continents.slice(half), tools].filter((row) => row.length > 0);
+}
+
+// The guide as members will see it, with its buttons.
 function countryGuidePreview(form, data, info, isCountryChannel) {
-  const value = (part) => form.querySelector(`#${guideInputId(part)}`).value.trim() || info.defaults[part];
-  const notes = [value("notes"), info.fallbackNote, isCountryChannel ? info.channelNote : null].filter(Boolean).join("\n");
+  const options = readCountryRoles(form);
+  const defaults = info.defaults[options?.mode ?? "countries"];
+  const value = (part) => form.querySelector(`#${guideInputId(part)}`).value.trim() || defaults[part];
+  const removeNote = options?.memberRemove ? info.removeNotes[options.mode ?? "countries"] : null;
+  const notes = [value("notes"), info.fallbackNote, removeNote, isCountryChannel ? info.channelNote : null].filter(Boolean).join("\n");
   const message = embedPreview(
     {
       content: "",
@@ -3207,7 +3243,7 @@ function countryGuidePreview(form, data, info, isCountryChannel) {
     h(
       "div",
       { class: "discord-buttons", "aria-label": t("countryButtonsLocked") },
-      info.buttons.map((row) =>
+      countryGuideButtons(info, options).map((row) =>
         h(
           "div",
           { class: "discord-button-row" },
@@ -3219,6 +3255,107 @@ function countryGuidePreview(form, data, info, isCountryChannel) {
   return message;
 }
 
+// The Country page's "What members pick" card: countries or regions, which
+// ones are offered, and whether members may remove their own role.
+function countryPlacesCard(info, saved) {
+  const mode = saved?.mode ?? "countries";
+  const hidden = new Set(saved?.hidden ?? []);
+  const modeOption = (value) =>
+    h(
+      "label",
+      { class: "preset-option" },
+      h("input", { type: "radio", name: "placeMode", value, checked: value === mode }),
+      h("span", { class: "preset-text" }, h("strong", {}, t(`placeMode_${value}`)), h("span", { class: "help" }, t(`placeModeHelp_${value}`))),
+    );
+  const modeGrid = h("div", { class: "preset-grid", role: "radiogroup", "aria-label": t("placeModeLabel") }, ["countries", "regions"].map(modeOption));
+
+  const placeBox = (place) =>
+    h(
+      "label",
+      { class: "place-option", "data-name": place.name.toLowerCase() },
+      h("input", { type: "checkbox", name: "placeOffered", value: place.code, checked: !hidden.has(place.code) }),
+      h("span", {}, place.name),
+    );
+  const search = h("input", { type: "search", placeholder: t("placeSearch"), "aria-label": t("placeSearch"), class: "place-search" });
+  const count = h("p", { class: "help", "aria-live": "polite" });
+
+  // One folding group per continent, with All and None.
+  const groups = info.continents.map((continent) => {
+    const boxes = info.places.countries.filter((country) => country.continent === continent.id).map(placeBox);
+    const summaryCount = h("span", { class: "place-count" });
+    const setAll = (checked) => {
+      boxes.forEach((box) => {
+        const input = box.querySelector("input");
+        if (!box.hidden) input.checked = checked;
+      });
+      boxes[0]?.querySelector("input").dispatchEvent(new Event("change", { bubbles: true }));
+    };
+    const group = h(
+      "details",
+      { class: "place-group" },
+      h("summary", {}, h("span", { "aria-hidden": "true" }, continent.emoji), h("strong", {}, continent.label), summaryCount),
+      h(
+        "div",
+        { class: "toolbar" },
+        h("button", { type: "button", class: "ghost small", onclick: () => setAll(true) }, t("placeAll")),
+        h("button", { type: "button", class: "ghost small", onclick: () => setAll(false) }, t("placeNone")),
+      ),
+      h("div", { class: "place-grid" }, boxes),
+    );
+    group.update = (words) => {
+      let shown = 0;
+      boxes.forEach((box) => {
+        box.hidden = Boolean(words) && !box.dataset.name.includes(words);
+        shown += box.hidden ? 0 : 1;
+      });
+      const offered = boxes.filter((box) => box.querySelector("input").checked).length;
+      summaryCount.textContent = t("placeOfferedCount", { offered, total: boxes.length });
+      group.hidden = shown === 0;
+      if (words) group.open = shown > 0;
+    };
+    return group;
+  });
+  const countriesPart = h("div", { class: "place-groups" }, search, groups);
+  const regionsPart = h("div", { class: "place-grid" }, info.places.regions.map(placeBox));
+
+  const removeSwitch = h(
+    "label",
+    { class: "switch-card" },
+    h("span", { class: "switch-text" }, h("strong", {}, t("placeMemberRemove")), h("span", { class: "help" }, t("placeMemberRemoveHelp"))),
+    h("span", { class: "switch" }, h("input", { id: "placeMemberRemove", type: "checkbox", role: "switch", checked: saved?.memberRemove === true, "aria-label": t("placeMemberRemove") })),
+  );
+
+  const element = card(
+    t("placesTitle"),
+    "sliders",
+    "cyan",
+    h("p", { class: "help" }, t("placesHelp")),
+    modeGrid,
+    h("h3", { class: "field-label" }, t("placesOffered")),
+    count,
+    countriesPart,
+    regionsPart,
+    removeSwitch,
+  );
+  const update = () => {
+    const current = element.querySelector('input[name="placeMode"]:checked')?.value ?? "countries";
+    countriesPart.hidden = current !== "countries";
+    regionsPart.hidden = current !== "regions";
+    const words = search.value.trim().toLowerCase();
+    groups.forEach((group) => group.update(words));
+    const part = current === "countries" ? countriesPart : regionsPart;
+    const boxes = [...part.querySelectorAll('input[name="placeOffered"]')];
+    count.textContent = t(current === "countries" ? "placeCountriesOffered" : "placeRegionsOffered", {
+      offered: boxes.filter((box) => box.checked).length,
+      total: boxes.length,
+    });
+  };
+  search.addEventListener("input", update);
+  element.addEventListener("change", update);
+  update();
+  return element;
+}
+
 async function showCountry(guildId) {
   const data = await loadManagedGuild(guildId);
   if (!data) {
@@ -3226,11 +3363,14 @@ async function showCountry(guildId) {
   }
   const info = data.countryGuide;
   const guide = data.settings.countryGuide ?? {};
-  const savedColor = hexColor(guide.color ?? info.defaults.color);
+  const savedPlaces = data.settings.countryRoles ?? null;
+  let mode = savedPlaces?.mode ?? "countries";
+  const defaultsNow = () => info.defaults[mode];
+  const savedColor = hexColor(guide.color ?? info.defaults.countries.color);
 
   const guideInputs = GUIDE_PARTS.map(({ part, max, rows }) => {
     // Filled with the text members see now, so it can be edited in place.
-    const text = guide[part] ?? info.defaults[part];
+    const text = guide[part] ?? defaultsNow()[part];
     const attributes = { id: guideInputId(part), maxLength: max };
     const control =
       rows === 0
@@ -3260,9 +3400,9 @@ async function showCountry(guildId) {
       class: "ghost small",
       onclick: () => {
         GUIDE_PARTS.forEach(({ part }) => {
-          document.getElementById(guideInputId(part)).value = info.defaults[part];
+          document.getElementById(guideInputId(part)).value = defaultsNow()[part];
         });
-        colorInput.value = hexColor(info.defaults.color);
+        colorInput.value = hexColor(defaultsNow().color);
         colorInput.dispatchEvent(new Event("input", { bubbles: true }));
       },
     },
@@ -3367,17 +3507,33 @@ async function showCountry(guildId) {
         ),
         field("staffRole", "countryStaffRoleHelp", picker({ id: "countryStaffRoleId", options: roleOptions(data), value: data.settings.staffRoleId, emptyLabel: t("notSet") })),
       ),
+      countryPlacesCard(info, savedPlaces),
       h("div", { class: "embed-layout" }, h("div", {}, guideCard, postCard), h("div", { class: "embed-side" }, previewCard)),
     ],
     fields: {
       countryChannelId: selectValue("countryChannelId"),
       staffRoleId: selectValue("countryStaffRoleId"),
-      countryGuide: (form) => readCountryGuide(form, info.defaults),
+      countryRoles: readCountryRoles,
+      countryGuide: (form) => readCountryGuide(form, defaultsNow()),
     },
   });
 
   const form = main.querySelector("form.settings");
   const drawPreview = () => {
+    // Switching between countries and regions swaps the built-in text in
+    // the parts still showing it.
+    const nextMode = form.querySelector('input[name="placeMode"]:checked')?.value ?? "countries";
+    if (nextMode !== mode) {
+      const before = info.defaults[mode];
+      const after = info.defaults[nextMode];
+      GUIDE_PARTS.forEach(({ part }) => {
+        const input = document.getElementById(guideInputId(part));
+        if (input.value.trim() === before[part] || !input.value.trim()) {
+          input.value = after[part];
+        }
+      });
+      mode = nextMode;
+    }
     const countryChannelId = form.querySelector("#countryChannelId").value;
     // The guide usually goes in the /country channel.
     if (!postChannel.value && countryChannelId) {

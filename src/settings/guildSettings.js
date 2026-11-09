@@ -72,6 +72,7 @@ export const Setting = Object.freeze({
   NATIVE_PERMISSIONS: "nativePermissions", // false: Discord permissions alone don't let members use the bot's commands (see permissions/commandRules.js)
   BOT_INVITER: "botInviterId", // who added the bot, from the audit log; may change permissions like the owner
   COUNTRY_GUIDE: "countryGuide", // the /country-help guide's wording and colour, an object (see countries/guide.js)
+  COUNTRY_ROLES: "countryRoles", // what members pick (countries or regions), hidden places and self-removal, an object (see countries/options.js)
   COUNTRY_GUIDE_POST: "countryGuidePost", // the last guide posted, { channelId, messageId }, so the dashboard can update it
   BRANDING: "branding", // the bot's look in this server, { color } (see branding/branding.js)
 });

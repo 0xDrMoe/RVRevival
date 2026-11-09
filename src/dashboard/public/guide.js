@@ -527,7 +527,7 @@ const FEATURE_PARTS = [
         icon: "globe",
         tone: "cyan",
         page: "country",
-        summary: "Members pick the country they live in and get a role named after it, always in English. One country each, real countries only.",
+        summary: "Members pick the country they live in, or only their continent or region, and get a role named after it, always in English. One each, from the list the server offers.",
         who: "Everyone picks their own. The staff role changes it. Admins set the channel and post the guide.",
         commands: [
           ["/country country", "Picks your country, in the country channel."],
@@ -539,14 +539,17 @@ const FEATURE_PARTS = [
         steps: [
           "Set the country channel on the **Country** page or with `/settings country-channel`.",
           "Post the guide there from the **Country** page or with `/country-help`. It has a button per continent, **Type my country**, and 🌐 **Translate**.",
+          "Under **What members pick** on the **Country** page, choose **Specific countries** or **Continents and regions only** (roles like `Europe`, one click each). Untick any country or region to take it off the list.",
+          "Switch on **Members can remove their own role** to add a 🗑️ **Remove my country** button to the guide, so members can take their role off and pick again.",
           "Change the guide's wording and colour on the **Country** page, with a live preview. Saving updates the guide already posted.",
           "Members click their continent and pick, or type a name in any of the bot's languages or a common alias (`USA`, `UK`, `Deutschland`).",
         ],
         tips: [
           "**The country channel deletes every message**, staff's and admins' included. Deleted messages are saved in the logs channel.",
-          "Once picked, only staff can change it. The bot never guesses; a name that doesn't match gets close suggestions.",
+          "Once picked, only staff can change it, unless members may remove their own. The bot never guesses; a name that doesn't match gets close suggestions.",
+          "Taking a country or region off the list doesn't take the role from members who already have it. Switching between countries and regions doesn't either: old roles stay until you remove them in Discord, and they don't stop anyone picking.",
           "Central America and the Caribbean are under North America.",
-          "**The guide's buttons can't be changed**, by anyone, so picking always works. Your own wording shows in the server's language; translated copies use the bot's text.",
+          "**The guide's buttons can't be edited** by hand, so picking always works. They follow **What members pick**: hidden places lose their button, and regions have no **Type my country**. Your own wording shows in the server's language; translated copies use the bot's text.",
           "A guide missing buttons? Post it again with `/country-help` and delete the old one.",
         ],
       },
@@ -622,7 +625,7 @@ const FEATURE_PARTS = [
             ["*Add the role?*", "The member clicks a role they don't have."],
             ["*Remove the role?*", "They click a role they already have."],
             ["*Switch to the role?*", "On a one-role panel, when it would replace the one they have. It names both."],
-            ["*Pick this country?*", "On the country guide. It reminds them only staff can change it afterwards."],
+            ["*Pick this country?*", "On the country guide. It says whether they can remove it themselves later."],
           ],
         },
         tips: [
