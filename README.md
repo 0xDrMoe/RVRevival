@@ -192,7 +192,7 @@ When someone joins, the bot can post a welcome message in a channel, DM them, an
 
 Messages can use `{user}` (a mention), `{username}`, `{server}` and `{count}` (the member count), up to 1000 characters. Only `{user}` pings anyone. Unset messages use a default in the server's language: *Welcome to {server}, {user}! You're member #{count}.* and *{username} has left the server.*
 
-Admins set it up on the dashboard's **Welcome & leave** and **Autoroles** pages, or with:
+Admins set it up on the dashboard's **Welcome & leave** and **Roles & panels** pages, or with:
 
 - `/welcome channel channel:<channel>` and `/welcome leave-channel channel:<channel>` switch welcome or leave messages on, in that channel.
 - `/welcome message text:<…>`, `/welcome leave-message text:<…>` and `/welcome dm text:<…>` set the messages. Type `\n` for a new line.
@@ -202,21 +202,22 @@ Admins set it up on the dashboard's **Welcome & leave** and **Autoroles** pages,
 
 Giving roles needs **Manage Roles** and the bot's role above the autoroles.
 
-**Roles on rejoin.** `/welcome persist enabled:true` (or the switch on the dashboard's **Autoroles** page) makes the bot remember members' roles when they leave and give them back when they rejoin, so leaving can't shake off a restricted role. Roles with moderator permissions (ban, kick, manage anything, mention everyone…), bot and booster roles, and roles above the bot are never given back automatically; the dashboard can also list roles to never give back. Saved roles are used once and forgotten after a year. Quarantined members keep their [quarantine](#quarantine) instead.
+**Roles on rejoin.** `/welcome persist enabled:true` (or the switch on the dashboard's **Roles & panels** page) makes the bot remember members' roles when they leave and give them back when they rejoin, so leaving can't shake off a restricted role. Roles with moderator permissions (ban, kick, manage anything, mention everyone…), bot and booster roles, and roles above the bot are never given back automatically; the dashboard can also list roles to never give back. Saved roles are used once and forgotten after a year. Quarantined members keep their [quarantine](#quarantine) instead.
 
-**Community servers should use Onboarding.** Discord's own Onboarding (Server Settings → Onboarding) gives new members roles and lets them pick their own, so on a Community server we recommend it over autoroles and role panels. `/welcome autorole`, `/welcome show`, `/rolepanel create`, saving a new panel in `/rolepanel setup` and the dashboard's Autoroles page say so when the server is a Community server. Autoroles and role panels are there for servers that don't use Onboarding.
+**Community servers should use Onboarding.** Discord's own Onboarding (Server Settings → Onboarding) gives new members roles and lets them pick their own, so on a Community server we recommend it over autoroles and role panels. `/welcome autorole`, `/welcome show`, `/rolepanel create`, saving a new panel in `/rolepanel setup` and the dashboard's Roles & panels page say so when the server is a Community server. Autoroles and role panels are there for servers that don't use Onboarding.
 
 ### Role panels
 
 A role panel is a message with a button per role. Members click a button to get the role, and click again to take it off. Good for platforms (PC, PlayStation, Xbox), regions, and ping roles for events or playtests. In **Pick only one role** mode, picking a role takes away the panel's other roles.
 
-**Confirmations.** Before a role is added or removed, the bot privately asks the member to **Confirm** ("Add the @PC role?", "Remove the @PC role?", or "Switch to @PC?" naming the role a one-role panel takes away), with **Cancel** next to it. The country guide's buttons ask too, and say only staff can change the country afterwards. Each member can press **Turn off confirmations** (or **Turn on confirmations**) under the bot's reply; that choice is per server, saved in `data/bot.db` (table `role_confirm_prefs`) and forgotten when they leave. The server's default is on, and can be switched on the dashboard's Autoroles page (**Role pick confirmations**).
+**Confirmations.** Before a role is added or removed, the bot privately asks the member to **Confirm** ("Add the @PC role?", "Remove the @PC role?", or "Switch to @PC?" naming the role a one-role panel takes away), with **Cancel** next to it. The country guide's buttons ask too, and say only staff can change the country afterwards. Each member can press **Turn off confirmations** (or **Turn on confirmations**) under the bot's reply; that choice is per server, saved in `data/bot.db` (table `role_confirm_prefs`) and forgotten when they leave. The server's default is on, and can be switched on the dashboard's Roles & panels page (**Role pick confirmations**).
 
 - `/rolepanel setup panel:<panel>` opens a private editor (only you see it). Leave `panel` out to pick a panel from a list, create a new one, or delete one. Its buttons: **Add roles** (a role menu, up to 25 roles at once), **Edit a role** (emoji and button text), **Remove roles**, **Edit message** (title and text), **Channel**, the mode, **Save** (or **Post panel** for a new one), **Cancel all changes** and **Delete panel** (asks first). Every change is a draft until you save; drafts are kept in memory only and close after 30 idle minutes or a restart. Saving checks every role again.
 - `/rolepanel create channel:<channel> title:<…> description:<…> mode:<Pick any number | Pick only one>` posts a new, empty panel (up to 10 per server).
 - `/rolepanel add panel:<panel> role:<role> emoji:<emoji> label:<text>` adds a button (up to 25 per panel); adding a role that's already there updates its emoji and label.
 - `/rolepanel remove panel:<panel> role:<role>` removes a button; `/rolepanel delete panel:<panel>` deletes the panel and its message.
-- `/rolepanel list` lists the panels. They're also shown (read-only) on the dashboard's Autoroles page.
+- `/rolepanel list` lists the panels.
+- The dashboard's **Roles & panels** page lists them too, and makes, changes and deletes them with the same checks: **New panel** (or **Edit**) opens an editor with a live preview for the channel, title, text, mode and roles (emoji, button text and order for each). Saving posts the panel, or edits its message in place; a deleted message is posted again, and moving a panel to another channel posts it there and deletes the old message. Roles above the bot (or above you, unless you're the owner) are refused when saving.
 
 Panels are edited in place; if the message was deleted, the next change posts it again. Roles with moderator or admin permissions (Administrator, Manage Server/Roles/Channels/Messages, Ban, Kick, Timeout, Mention Everyone and similar), bot roles, `@everyone`, roles above the bot and roles above your own top role can't go on a panel, and each click checks the role again.
 
@@ -630,7 +631,7 @@ A website where admins log in with Discord and manage the bot without slash comm
 - **Anti-nuke:** the main switch, what happens to someone who goes over a limit, each limit, and trusted people. Only the server owner can change it (see [Anti-nuke](#anti-nuke)).
 - **Raid protection:** the new-account gate, join-wave alerts, and a running lockdown (see [Raid protection](#raid-protection)).
 - **Welcome & leave:** the welcome and leave channels and messages (empty boxes show the default) and the welcome DM.
-- **Autoroles:** roles given on joining, giving roles back on rejoin (with roles to never give back), and the server's role panels (read-only; change them with `/rolepanel`). Community servers get a tip recommending Discord's Onboarding.
+- **Roles & panels:** roles given on joining, giving roles back on rejoin (with roles to never give back), role pick confirmations, and the server's role panels (make, edit, move and delete them, with a live preview; `/rolepanel` in Discord does the same). Community servers get a tip recommending Discord's Onboarding.
 - **Starboard:** channel, stars needed and emoji.
 - **Birthdays:** channel, role, time zone and greeting.
 - **Leveling:** the main switch, where and how level-ups are announced, reward roles, voice XP and XP boosts, channels and roles that earn no XP, and the leaderboard for all time, the last 7 days or the last 30 days, with each member's level and progress (see [Leveling](#leveling)).

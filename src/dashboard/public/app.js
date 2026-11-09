@@ -12,7 +12,7 @@
 //   #/g/<id>/antinuke      anti-nuke limits, punishment and trusted people (owner only)
 //   #/g/<id>/raid          the new-account gate, join alerts and a running lockdown
 //   #/g/<id>/welcome       welcome and leave messages
-//   #/g/<id>/roles         autoroles and role panels
+//   #/g/<id>/roles         autoroles, roles on rejoin, role panels (made and edited here)
 //   #/g/<id>/starboard     the starboard
 //   #/g/<id>/birthdays     birthday greetings and role
 //   #/g/<id>/levels        leveling: XP, level-up messages, reward roles, the leaderboard (?page=)
@@ -2693,40 +2693,313 @@ function messageBox(id, value, placeholder, max = MAX_MESSAGE_LENGTH) {
 
 const textValue = (id) => (form) => form.querySelector(`#${id}`).value.replace(/\r\n?/g, "\n").trim() || null;
 
-// The server's role panels, read-only: they're made with /rolepanel in Discord.
-function rolePanelList(data) {
-  const panels = Array.isArray(data.settings.rolePanels) ? data.settings.rolePanels : [];
-  if (panels.length === 0) {
-    return h("p", { class: "muted" }, t("rolePanelsNone"));
-  }
+// Role panels: messages with a button per role, where members pick their own
+// roles. The same panels /rolepanel makes; saving posts or edits the message.
+const MAX_ROLE_PANELS = 10;
+const MAX_PANEL_ROLES = 25;
+const ROLE_PANEL_TITLE_LENGTH = 100;
+const ROLE_PANEL_TEXT_LENGTH = 1000;
+const ROLE_PANEL_LABEL_LENGTH = 80;
+const ROLE_PANEL_COLOR = 0x5865f2;
+
+// The panel as Discord would show it: the embed, then rows of five buttons.
+function rolePanelPreview(panel, data) {
   const roleName = (id) => data.roles.find((role) => role.id === id)?.name ?? t("unknownOption", { id });
+  const message = embedPreview(
+    {
+      content: "",
+      embed: {
+        title: panel.title || t("rolePanelTitlePlaceholder"),
+        url: "",
+        description: panel.description || (panel.roles.length === 0 ? t("rolePanelPreviewEmpty") : ""),
+        color: data.ticketDefaults?.brandColor ?? ROLE_PANEL_COLOR,
+        author: { name: "", icon_url: "" },
+        footer: { text: "" },
+        image: { url: "" },
+        thumbnail: { url: "" },
+        fields: [],
+      },
+    },
+    data,
+  );
+  const rows = [];
+  for (let index = 0; index < panel.roles.length; index += 5) {
+    rows.push(
+      h(
+        "div",
+        { class: "discord-button-row" },
+        panel.roles.slice(index, index + 5).map((entry) => ticketPreviewButton("secondary", entry.emoji, entry.label || roleName(entry.roleId))),
+      ),
+    );
+  }
+  if (rows.length > 0) {
+    message.querySelector(".discord-body").append(h("div", { class: "discord-buttons" }, rows));
+  }
+  return message;
+}
+
+// The Role panels card: the list, and an editor for a new or saved panel.
+function rolePanelManager(guildId, data) {
+  const body = h("div", { class: "role-panels" });
+  const countPill = h("span", { class: "count-pill" });
+  const newButton = h("button", { class: "primary small", type: "button", onclick: () => edit(null) }, icon("plus", "icon small"), t("rolePanelNew"));
+  const panels = () => (Array.isArray(data.settings.rolePanels) ? data.settings.rolePanels : []);
   const channelName = (id) => {
     const channel = data.channels.find((entry) => entry.id === id);
     return channel ? `#${channel.name}` : t("unknownOption", { id });
   };
-  return h(
-    "ul",
-    { class: "panel-list" },
-    panels.map((panel) =>
+  const roleById = (id) => data.roles.find((role) => role.id === id);
+  // Roles members may give themselves: no bot roles and nothing with moderator
+  // powers. Roles above the bot are refused when saving.
+  const pickable = data.roles.filter((role) => !role.managed && (BigInt(role.permissions ?? 0) & AUTOROLE_FORBIDDEN) === 0n);
+
+  // The saved settings changed (after a save or delete): the nav dot follows.
+  function savedSettings(settings) {
+    data.settings = settings;
+    state.cache = { guildId, data, at: Date.now() };
+    state.unsaved = false;
+    state.shell?.nav.replaceChildren(...navLinks(data, "roles").filter(Boolean));
+  }
+
+  function list() {
+    const saved = panels();
+    countPill.textContent = t("tagsCount", { count: saved.length, max: MAX_ROLE_PANELS });
+    newButton.disabled = saved.length >= MAX_ROLE_PANELS;
+    newButton.hidden = false;
+    if (saved.length === 0) {
+      body.replaceChildren(h("p", { class: "muted empty" }, t("rolePanelsNone")));
+      return;
+    }
+    body.replaceChildren(
       h(
-        "li",
-        {},
-        h(
-          "div",
-          { class: "toolbar" },
-          h("strong", { class: "grow" }, `#${panel.id} ${panel.title}`),
-          h("span", { class: "badge" }, t(`rolePanelMode_${panel.mode === "unique" ? "unique" : "toggle"}`)),
-          h("span", { class: "muted" }, channelName(panel.channelId)),
-        ),
-        h(
-          "div",
-          { class: "badges" },
-          panel.roles.length > 0
-            ? panel.roles.map((entry) => h("span", { class: "badge" }, `${entry.emoji ? `${entry.emoji} ` : ""}@${roleName(entry.roleId)}`))
-            : h("span", { class: "muted" }, t("rolePanelsEmpty")),
+        "ul",
+        { class: "panel-list" },
+        saved.map((panel) =>
+          h(
+            "li",
+            {},
+            h(
+              "div",
+              { class: "toolbar" },
+              h("strong", { class: "grow" }, `#${panel.id} ${panel.title}`),
+              h("span", { class: "badge" }, t(`rolePanelMode_${panel.mode === "unique" ? "unique" : "toggle"}`)),
+              h("span", { class: "muted" }, channelName(panel.channelId)),
+              panel.messageId
+                ? h("a", { class: "button ghost small", href: `https://discord.com/channels/${guildId}/${panel.channelId}/${panel.messageId}`, target: "_blank", rel: "noopener noreferrer" }, t("rolePanelOpen"))
+                : null,
+              h("button", { class: "ghost small", type: "button", onclick: () => edit(panel) }, t("embedEdit")),
+              h("button", { class: "ghost small danger", type: "button", onclick: () => remove(panel) }, t("delete")),
+            ),
+            h(
+              "div",
+              { class: "badges" },
+              panel.roles.length > 0
+                ? panel.roles.map((entry) => h("span", { class: "badge" }, `${entry.emoji && !entry.emoji.startsWith("<") ? `${entry.emoji} ` : ""}@${roleById(entry.roleId)?.name ?? t("unknownOption", { id: entry.roleId })}`))
+                : h("span", { class: "muted" }, t("rolePanelsEmpty")),
+            ),
+          ),
         ),
       ),
-    ),
+    );
+  }
+
+  async function remove(panel) {
+    if (!confirm(t("rolePanelDeleteConfirm", { title: panel.title }))) {
+      return;
+    }
+    try {
+      const result = await api(`/api/guilds/${guildId}/role-panels/${panel.id}`, { method: "DELETE" });
+      savedSettings(result.settings);
+      toast(t("rolePanelDeleted"));
+      list();
+    } catch (error) {
+      failed(error);
+    }
+  }
+
+  // The editor. `saved` is the panel being changed, or null for a new one.
+  function edit(saved) {
+    const draft = saved
+      ? { channelId: saved.channelId, title: saved.title, description: saved.description ?? "", mode: saved.mode === "unique" ? "unique" : "toggle", roles: saved.roles.map((entry) => ({ ...entry })) }
+      : { channelId: "", title: "", description: "", mode: "toggle", roles: [] };
+    newButton.hidden = true;
+    const preview = h("div", { class: "embed-preview role-panel-preview" });
+    const roleRows = h("ul", { class: "role-panel-roles" });
+    const addPicker = h("select", { id: "rolePanelAdd", "aria-label": t("rolePanelAddRole") });
+    const roleCount = h("span", { class: "muted small-text" });
+    const touched = () => {
+      state.unsaved = true;
+      preview.replaceChildren(rolePanelPreview(draft, data));
+    };
+
+    function drawRoles() {
+      roleRows.replaceChildren(
+        ...draft.roles.map((entry, index) => {
+          const role = roleById(entry.roleId);
+          const emoji = h("input", { class: "role-panel-emoji", value: entry.emoji ?? "", maxLength: 64, spellcheck: false, placeholder: t("rolePanelEmoji"), "aria-label": t("rolePanelEmoji") });
+          emoji.addEventListener("input", () => {
+            entry.emoji = emoji.value.trim() || null;
+            touched();
+          });
+          const label = h("input", { class: "role-panel-label grow", value: entry.label ?? "", maxLength: ROLE_PANEL_LABEL_LENGTH, placeholder: role?.name ?? t("rolePanelLabel"), "aria-label": t("rolePanelLabel") });
+          label.addEventListener("input", () => {
+            entry.label = label.value.trim() || null;
+            touched();
+          });
+          const move = (by) => () => {
+            const [moved] = draft.roles.splice(index, 1);
+            draft.roles.splice(index + by, 0, moved);
+            drawRoles();
+            touched();
+          };
+          return h(
+            "li",
+            { class: "role-panel-role" },
+            h("span", { class: "role-panel-name" }, role ? roleDot(role) : null, `@${role?.name ?? t("unknownOption", { id: entry.roleId })}`),
+            emoji,
+            label,
+            h(
+              "span",
+              { class: "row-actions" },
+              h("button", { class: "ghost small", type: "button", disabled: index === 0, onclick: move(-1), "aria-label": t("rolePanelMoveUp"), title: t("rolePanelMoveUp") }, "↑"),
+              h("button", { class: "ghost small", type: "button", disabled: index === draft.roles.length - 1, onclick: move(1), "aria-label": t("rolePanelMoveDown"), title: t("rolePanelMoveDown") }, "↓"),
+              h(
+                "button",
+                {
+                  class: "ghost small",
+                  type: "button",
+                  onclick: () => {
+                    draft.roles.splice(index, 1);
+                    drawRoles();
+                    touched();
+                  },
+                },
+                t("tagRemove"),
+              ),
+            ),
+          );
+        }),
+      );
+      const taken = new Set(draft.roles.map((entry) => entry.roleId));
+      addPicker.replaceChildren(
+        h("option", { value: "" }, t("rolePanelAddRole")),
+        ...pickable.filter((role) => !taken.has(role.id)).map((role) => h("option", { value: role.id }, `@${role.name}`)),
+      );
+      addPicker.disabled = draft.roles.length >= MAX_PANEL_ROLES;
+      roleCount.textContent = t("tagsCount", { count: draft.roles.length, max: MAX_PANEL_ROLES });
+    }
+    addPicker.addEventListener("change", () => {
+      if (addPicker.value && draft.roles.length < MAX_PANEL_ROLES) {
+        draft.roles.push({ roleId: addPicker.value, emoji: null, label: null });
+        drawRoles();
+        touched();
+      }
+    });
+
+    const channel = picker({ id: "rolePanelChannel", options: postableChannels(data), value: draft.channelId || null, emptyLabel: t("embedPickChannel") });
+    channel.required = true;
+    channel.addEventListener("change", () => {
+      draft.channelId = channel.value;
+      state.unsaved = true;
+    });
+    const title = h("input", { id: "rolePanelTitle", value: draft.title, maxLength: ROLE_PANEL_TITLE_LENGTH, required: true, placeholder: t("rolePanelTitlePlaceholder") });
+    title.addEventListener("input", () => {
+      draft.title = title.value;
+      touched();
+    });
+    const description = h("textarea", { id: "rolePanelDescription", rows: 3, maxLength: ROLE_PANEL_TEXT_LENGTH, placeholder: t("rolePanelDescriptionPlaceholder") }, draft.description);
+    description.addEventListener("input", () => {
+      draft.description = description.value;
+      touched();
+    });
+    const mode = h(
+      "select",
+      { id: "rolePanelMode" },
+      ["toggle", "unique"].map((value) => h("option", { value, selected: draft.mode === value }, t(`rolePanelMode_${value}`))),
+    );
+    mode.addEventListener("change", () => {
+      draft.mode = mode.value;
+      state.unsaved = true;
+    });
+
+    const saveButton = h("button", { class: "primary", type: "submit" }, icon("check", "icon small"), t(saved ? "rolePanelSaveChanges" : "rolePanelPost"));
+    const form = h(
+      "form",
+      {
+        class: "role-panel-editor",
+        onsubmit: async (event) => {
+          event.preventDefault();
+          saveButton.disabled = true;
+          try {
+            const result = await api(saved ? `/api/guilds/${guildId}/role-panels/${saved.id}` : `/api/guilds/${guildId}/role-panels`, {
+              method: saved ? "PUT" : "POST",
+              body: { channelId: draft.channelId, title: draft.title, description: draft.description, mode: draft.mode, roles: draft.roles },
+            });
+            savedSettings(result.settings);
+            toast(t(saved ? "rolePanelSaved" : "rolePanelPosted"));
+            list();
+          } catch (error) {
+            failed(error);
+          } finally {
+            saveButton.disabled = false;
+          }
+        },
+      },
+      h("h3", { class: "role-panel-heading" }, saved ? t("rolePanelEditing", { id: saved.id }) : t("rolePanelCreating")),
+      h(
+        "div",
+        { class: "role-panel-layout" },
+        h(
+          "div",
+          { class: "rule-body" },
+          field("rolePanelChannel", "rolePanelChannelHelp", channel),
+          field("rolePanelTitle", null, title),
+          field("rolePanelDescription", "rolePanelDescriptionHelp", description),
+          field("rolePanelModeLabel", "rolePanelModeHelp", mode),
+          h(
+            "div",
+            { class: "field wide" },
+            h("span", { class: "field-label" }, t("rolePanelRoles"), " ", roleCount),
+            roleRows,
+            addPicker,
+            h("span", { class: "help" }, t("rolePanelRolesHelp", { max: MAX_PANEL_ROLES })),
+          ),
+        ),
+        h("div", { class: "role-panel-side" }, h("span", { class: "field-label" }, t("rolePanelPreview")), preview),
+      ),
+      h(
+        "div",
+        { class: "toolbar" },
+        h("span", { class: "grow" }),
+        h(
+          "button",
+          {
+            class: "ghost",
+            type: "button",
+            onclick: () => {
+              state.unsaved = false;
+              list();
+            },
+          },
+          t("cancel"),
+        ),
+        saveButton,
+      ),
+    );
+    drawRoles();
+    preview.replaceChildren(rolePanelPreview(draft, data));
+    body.replaceChildren(form);
+    title.focus();
+  }
+
+  list();
+  return card(
+    t("sectionRolePanels"),
+    "layers",
+    "blue",
+    h("div", { class: "toolbar" }, h("p", { class: "help grow" }, t("rolePanelsHelp")), countPill, newButton),
+    data.guild.community ? h("p", { class: "tip" }, icon("sparkles"), h("span", {}, t("rolePanelsOnboardingTip"))) : null,
+    body,
   );
 }
 
@@ -3134,7 +3407,7 @@ async function showWelcome(guildId) {
   });
 }
 
-// Role persistence on the Autoroles page, or null when it's off with nothing ignored.
+// Role persistence on the Roles & panels page, or null when it's off with nothing ignored.
 function readRolePersist(form) {
   const enabled = form.querySelector("#persistEnabled").checked;
   const ignoredRoleIds = checkedList("persistIgnore")(form) ?? [];
@@ -3203,7 +3476,7 @@ async function showRoles(guildId) {
       // On is the default, saved as no value.
       roleConfirmations: (form) => (form.querySelector("#roleConfirmDefault").checked ? null : false),
     },
-    after: card(t("sectionRolePanels"), "layers", "blue", h("p", { class: "help" }, t("rolePanelsHelp")), rolePanelList(data)),
+    after: rolePanelManager(guildId, data),
   });
 }
 

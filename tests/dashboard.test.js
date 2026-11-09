@@ -1344,6 +1344,100 @@ describe("dashboard", () => {
     expect(guildSettings.get(GUILD_ID, Setting.STATS_COUNTERS)).toEqual([]);
   });
 
+  it("posts, changes, moves and deletes role panels with the same checks as /rolepanel", async () => {
+    const PICK_ID = "700000000000000002";
+    const STAFF_ID = "700000000000000003";
+    const BOT_ROLE_ID = "700000000000000004";
+    const HIGH_ID = "700000000000000005";
+    let ownerId = "300000000000000099";
+    discord.guild = vi.fn(async (id) => ({
+      id,
+      name: "Rumbleverse Revival",
+      icon: null,
+      owner_id: ownerId,
+      roles: [
+        { id, name: "@everyone", color: 0, position: 0, managed: false, permissions: "0" },
+        { id: PICK_ID, name: "PC", color: 0, position: 1, managed: false, permissions: "0" },
+        { id: ROLE_ID, name: "Mods", color: 0, position: 2, managed: false, permissions: "0" },
+        { id: STAFF_ID, name: "Staff", color: 0, position: 3, managed: false, permissions: String(1n << 2n) },
+        { id: BOT_ROLE_ID, name: "Rabble", color: 0, position: 4, managed: true, permissions: "0" },
+        { id: HIGH_ID, name: "Owner", color: 0, position: 6, managed: false, permissions: "0" },
+      ],
+    }));
+    discord.botMember = vi.fn(async () => ({ roles: [BOT_ROLE_ID] }));
+    discord.member = vi.fn(async () => ({ roles: [ROLE_ID], nick: null }));
+    let next = 0;
+    discord.postMessage = vi.fn(async () => ({ id: `82000000000000000${next++}` }));
+    discord.deleteMessage = vi.fn(async () => {});
+    const cookies = await login();
+    const base = `/api/guilds/${GUILD_ID}/role-panels`;
+    const panel = (roles, extra = {}) => ({ channelId: TEXT_ID, title: "Pick your platform", description: "Click a button", mode: "toggle", roles, ...extra });
+
+    // Refused: a voice channel, moderator roles, roles above the bot or the admin, bad emojis, unknown fields.
+    expect((await write(cookies, "POST", base, panel([], { channelId: VOICE_ID }))).statusCode).toBe(400);
+    expect((await write(cookies, "POST", base, panel([{ roleId: STAFF_ID }]))).json().message).toContain("moderator permissions");
+    expect((await write(cookies, "POST", base, panel([{ roleId: HIGH_ID }]))).json().message).toContain("above the bot");
+    expect((await write(cookies, "POST", base, panel([{ roleId: ROLE_ID }]))).json().message).toContain("above your highest role");
+    expect((await write(cookies, "POST", base, panel([{ roleId: PICK_ID, emoji: "hello" }]))).json().message).toContain("emoji");
+    expect((await write(cookies, "POST", base, { ...panel([]), messageId: "1" })).statusCode).toBe(400);
+    expect(discord.postMessage).not.toHaveBeenCalled();
+
+    const created = await write(cookies, "POST", base, panel([{ roleId: PICK_ID, emoji: "🖥️", label: " PC players " }]));
+    expect(created.statusCode).toBe(200);
+    expect(created.json().panel).toEqual({
+      id: 1,
+      channelId: TEXT_ID,
+      title: "Pick your platform",
+      description: "Click a button",
+      mode: "toggle",
+      roles: [{ roleId: PICK_ID, emoji: "🖥️", label: "PC players" }],
+      messageId: "820000000000000000",
+    });
+    const [postedIn, payload] = discord.postMessage.mock.calls.find(([id]) => id === TEXT_ID);
+    expect(postedIn).toBe(TEXT_ID);
+    expect(payload.embeds[0]).toMatchObject({ title: "Pick your platform", description: "Click a button" });
+    expect(payload.components[0].components[0]).toMatchObject({ custom_id: `rp:1:${PICK_ID}`, label: "PC players", emoji: { name: "🖥️" } });
+    expect(guildSettings.get(GUILD_ID, Setting.ROLE_PANELS)).toHaveLength(1);
+    expect(created.json().settings.rolePanels).toHaveLength(1);
+
+    // Editing changes the posted message in place.
+    discord.postMessage.mockClear();
+    const edited = await write(cookies, "PUT", `${base}/1`, panel([{ roleId: PICK_ID }], { title: "Platforms", mode: "unique" }));
+    expect(edited.json().panel).toMatchObject({ id: 1, title: "Platforms", mode: "unique", messageId: "820000000000000000", roles: [{ roleId: PICK_ID, emoji: null, label: null }] });
+    expect(discord.editMessage).toHaveBeenCalledWith(TEXT_ID, "820000000000000000", expect.objectContaining({ embeds: [expect.objectContaining({ title: "Platforms" })] }));
+    expect(discord.postMessage.mock.calls.filter(([id]) => id === TEXT_ID)).toHaveLength(0);
+
+    // A deleted message is posted again; moving posts in the new channel and removes the old message.
+    discord.editMessage = vi.fn(async () => {
+      throw Object.assign(new Error("Unknown Message"), { status: 404 });
+    });
+    expect((await write(cookies, "PUT", `${base}/1`, panel([{ roleId: PICK_ID }]))).json().panel.messageId).toBe("820000000000000001");
+    const moved = await write(cookies, "PUT", `${base}/1`, panel([{ roleId: PICK_ID }], { channelId: LOGS_ID }));
+    expect(moved.json().panel).toMatchObject({ channelId: LOGS_ID, messageId: "820000000000000002" });
+    expect(discord.deleteMessage).toHaveBeenCalledWith(TEXT_ID, "820000000000000001");
+
+    // The owner may add roles above their own.
+    ownerId = USER_ID;
+    expect((await write(cookies, "PUT", `${base}/1`, panel([{ roleId: ROLE_ID }], { channelId: LOGS_ID }))).statusCode).toBe(200);
+    expect((await write(cookies, "PUT", `${base}/7`, panel([]))).statusCode).toBe(404);
+
+    expect((await write(cookies, "DELETE", `${base}/1`)).json().settings.rolePanels).toBeUndefined();
+    expect(discord.deleteMessage).toHaveBeenLastCalledWith(LOGS_ID, "820000000000000003");
+    expect(guildSettings.get(GUILD_ID, Setting.ROLE_PANELS)).toBeUndefined();
+    expect((await write(cookies, "DELETE", `${base}/1`)).statusCode).toBe(404);
+  });
+
+  it("refuses a new role panel once the server has the most", async () => {
+    await guildSettings.set(
+      GUILD_ID,
+      Setting.ROLE_PANELS,
+      Array.from({ length: 10 }, (_, index) => ({ id: index + 1, channelId: TEXT_ID, messageId: null, title: `P${index}`, description: "", mode: "toggle", roles: [] })),
+    );
+    const cookies = await login();
+    const refused = await write(cookies, "POST", `/api/guilds/${GUILD_ID}/role-panels`, { channelId: TEXT_ID, title: "One more" });
+    expect(refused.statusCode).toBe(409);
+  });
+
   it("posts, replaces and removes sticky messages", async () => {
     let next = 0;
     discord.postMessage = vi.fn(async () => ({ id: `81000000000000010${next++}` }));
