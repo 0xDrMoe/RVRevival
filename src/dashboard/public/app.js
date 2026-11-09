@@ -2323,12 +2323,325 @@ function readBirthdays(form) {
   };
 }
 
+// --- Time zone picker -------------------------------------------------------------
+
+// The regions a time zone's name starts with, in the order the picker lists them.
+// Zones outside these (UTC, old aliases) go under "Other".
+const TIME_ZONE_REGIONS = ["America", "Europe", "Africa", "Asia", "Australia", "Pacific", "Atlantic", "Indian", "Antarctica", "Arctic"];
+
+// Minutes ahead of UTC for a zone at the given moment, from "GMT+05:30" style names.
+function timeZoneOffset(zone, at) {
+  const name = new Intl.DateTimeFormat("en-US", { timeZone: zone, timeZoneName: "longOffset" })
+    .formatToParts(at)
+    .find((part) => part.type === "timeZoneName")?.value;
+  const match = /GMT([+-])(\d{2}):?(\d{2})?/.exec(name ?? "");
+  return match ? (match[1] === "-" ? -1 : 1) * (Number(match[2]) * 60 + Number(match[3] ?? 0)) : 0;
+}
+
+// "UTC+5:30", "UTC−3", "UTC+0".
+function formatOffset(minutes) {
+  const sign = minutes < 0 ? "−" : "+";
+  const hours = Math.floor(Math.abs(minutes) / 60);
+  const rest = Math.abs(minutes) % 60;
+  return `UTC${sign}${hours}${rest ? `:${String(rest).padStart(2, "0")}` : ""}`;
+}
+
+// Browsers still list some zones by their old names. They work the same (the bot
+// accepts both), but people search for and recognise the new ones.
+const TIME_ZONE_NEW_NAMES = {
+  "Africa/Asmera": "Africa/Asmara",
+  "America/Buenos_Aires": "America/Argentina/Buenos_Aires",
+  "America/Godthab": "America/Nuuk",
+  "America/Indianapolis": "America/Indiana/Indianapolis",
+  "America/Louisville": "America/Kentucky/Louisville",
+  "Asia/Calcutta": "Asia/Kolkata",
+  "Asia/Katmandu": "Asia/Kathmandu",
+  "Asia/Rangoon": "Asia/Yangon",
+  "Asia/Saigon": "Asia/Ho_Chi_Minh",
+  "Atlantic/Faeroe": "Atlantic/Faroe",
+  "Europe/Kiev": "Europe/Kyiv",
+  "Pacific/Enderbury": "Pacific/Kanton",
+  "Pacific/Ponape": "Pacific/Pohnpei",
+  "Pacific/Truk": "Pacific/Chuuk",
+};
+const newTimeZoneName = (zone) => TIME_ZONE_NEW_NAMES[zone] ?? zone;
+
+// The zone's name without its region, readable: "America/Argentina/Buenos_Aires" → "Argentina › Buenos Aires".
+const timeZoneCity = (zone) => {
+  const name = newTimeZoneName(zone);
+  return (name.includes("/") ? name.split("/").slice(1) : [name]).join(" › ").replaceAll("_", " ");
+};
+const timeZoneRegion = (zone) => (TIME_ZONE_REGIONS.includes(zone.split("/")[0]) && zone.includes("/") ? zone.split("/")[0] : "Other");
+
+// Every zone the browser knows, with its offset and search text, worked out once
+// a page load (an offset only moves with daylight saving). `extra` adds a saved
+// zone the list doesn't have, such as an old alias like "US/Eastern".
+let timeZoneCache = null;
+function timeZoneList(extra) {
+  if (!timeZoneCache) {
+    const now = new Date();
+    const names = (zone, locale, style) =>
+      new Intl.DateTimeFormat(locale, { timeZone: zone, timeZoneName: style }).formatToParts(now).find((part) => part.type === "timeZoneName")?.value ?? "";
+    const make = (zone) => {
+      const offset = timeZoneOffset(zone, now);
+      const plain = formatOffset(offset).replace("−", "-");
+      const hours = plain.slice(3);
+      return {
+        zone,
+        offset,
+        city: timeZoneCity(zone),
+        region: timeZoneRegion(zone),
+        text: searchable(
+          [zone.replaceAll("_", " "), newTimeZoneName(zone).replaceAll("_", " "), plain, `GMT${hours}`, hours, names(zone, "en-US", "short"), names(zone, "en-US", "long"), names(zone, state.language, "long")].join(" "),
+        ),
+      };
+    };
+    const zones = Intl.supportedValuesOf?.("timeZone") ?? [];
+    timeZoneCache = { make, items: ["UTC", ...zones.filter((zone) => zone !== "UTC")].map(make) };
+  }
+  const { make, items } = timeZoneCache;
+  if (!extra || items.some((item) => item.zone === extra)) {
+    return items;
+  }
+  // A saved new name ("Asia/Kolkata") takes the place of the browser's old one, so it isn't listed twice.
+  const old = items.findIndex((item) => newTimeZoneName(item.zone) === extra);
+  return old >= 0 ? items.map((item, index) => (index === old ? make(extra) : item)) : [...items, make(extra)];
+}
+
+// The time now in a zone, as "4:32 PM", with the weekday added when it's a
+// different day there than here ("Tue 4:32 PM") – which matters for birthdays.
+function timeIn(item) {
+  const now = Date.now();
+  const there = new Date(now + item.offset * 60_000);
+  const here = new Date(now - new Date(now).getTimezoneOffset() * 60_000);
+  const otherDay = there.getUTCDate() !== here.getUTCDate();
+  return new Intl.DateTimeFormat(state.language, { timeZone: "UTC", hour: "numeric", minute: "2-digit", weekday: otherDay ? "short" : undefined }).format(there);
+}
+
+// A searchable time zone picker that keeps its value in a hidden input `id`, so
+// forms read it like any other field. A button shows the chosen zone with its
+// offset and time there now; opening it shows a search box, quick picks (your
+// own zone, UTC) and every zone grouped by region, sorted by offset. Arrow keys,
+// Enter and Esc work in the search box.
+function timeZonePicker({ id, value, labelKey, helpKey }) {
+  const fallback = "UTC";
+  const mine = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const items = timeZoneList(value);
+  const byZone = new Map(items.map((item) => [item.zone, item]));
+  const regionRank = (region) => (region === "Other" ? -1 : TIME_ZONE_REGIONS.indexOf(region));
+  const sorted = [...items].sort((a, b) => regionRank(a.region) - regionRank(b.region) || a.offset - b.offset || a.city.localeCompare(b.city));
+
+  const labelId = `${id}Label`;
+  const listId = `${id}List`;
+  const input = h("input", { type: "hidden", id, value: value || fallback });
+  const summary = h("span", { class: "tz-summary" });
+  const trigger = h("button", {
+    type: "button",
+    class: "tz-trigger",
+    "aria-haspopup": "listbox",
+    "aria-expanded": "false",
+    "aria-controls": listId,
+    "aria-labelledby": `${labelId} ${id}Summary`,
+  });
+  summary.id = `${id}Summary`;
+  trigger.append(icon("globe"), summary, icon("chevronDown", "icon small tz-chevron"));
+  const search = h("input", {
+    type: "search",
+    role: "combobox",
+    autocomplete: "off",
+    spellcheck: false,
+    "aria-controls": listId,
+    "aria-expanded": "true",
+    "aria-autocomplete": "list",
+    placeholder: t("tzSearch"),
+    "aria-label": t("tzSearch"),
+  });
+  const list = h("ul", { id: listId, class: "tz-list", role: "listbox", "aria-labelledby": labelId });
+  const count = h("span", { class: "muted tz-count", "aria-live": "polite" });
+  const quick = h("div", { class: "tz-quick" });
+  const panel = h("div", { class: "tz-panel", hidden: true }, h("div", { class: "tz-search" }, icon("search"), search), quick, list, count);
+  const root = h(
+    "div",
+    { class: "field tz-field" },
+    h("span", { class: "field-label", id: labelId }, t(labelKey)),
+    input,
+    trigger,
+    panel,
+    helpKey ? h("span", { class: "help" }, t(helpKey)) : null,
+  );
+
+  let shown = [];
+  let active = 0;
+
+  const describe = (zone) => {
+    const item = byZone.get(zone);
+    return item
+      ? [h("strong", {}, item.zone === "UTC" ? "UTC" : item.city), h("span", { class: "muted" }, `${item.region === "Other" ? "" : `${t(`tzRegion_${item.region}`)} · `}${formatOffset(item.offset)} · ${timeIn(item)}`)]
+      : [h("strong", {}, zone)];
+  };
+  const paintSummary = () => summary.replaceChildren(...describe(input.value));
+
+  const choose = (zone) => {
+    const changed = input.value !== zone;
+    input.value = zone;
+    paintSummary();
+    close();
+    trigger.focus();
+    if (changed) {
+      // Hidden inputs don't fire events, so tell the form (and its save bar) ourselves.
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+  };
+
+  const optionId = (index) => `${id}Option${index}`;
+  // Scrolls the list (never the page) so the highlighted zone shows: in the middle
+  // when the picker opens, otherwise just enough.
+  const reveal = (row, centre) => {
+    const top = row.offsetTop;
+    const bottom = top + row.offsetHeight;
+    const header = list.querySelector(".tz-group")?.offsetHeight ?? 0;
+    if (centre) {
+      list.scrollTop = top - (list.clientHeight - row.offsetHeight) / 2;
+    } else if (top - header < list.scrollTop) {
+      list.scrollTop = top - header;
+    } else if (bottom > list.scrollTop + list.clientHeight) {
+      list.scrollTop = bottom - list.clientHeight;
+    }
+  };
+  const paint = (centre = false) => {
+    const rows = [];
+    let region = null;
+    shown.forEach((item, index) => {
+      if (item.region !== region) {
+        region = item.region;
+        rows.push(h("li", { class: "tz-group", role: "presentation" }, t(`tzRegion_${region}`)));
+      }
+      const selected = item.zone === input.value;
+      const row = h(
+        "li",
+        {
+          id: optionId(index),
+          role: "option",
+          class: `tz-option${index === active ? " active" : ""}`,
+          "aria-selected": String(selected),
+          onmousedown: (event) => event.preventDefault(),
+          onclick: () => choose(item.zone),
+          onmousemove: () => {
+            if (active !== index) {
+              list.querySelector(".tz-option.active")?.classList.remove("active");
+              row.classList.add("active");
+              active = index;
+              search.setAttribute("aria-activedescendant", optionId(index));
+            }
+          },
+        },
+        h("span", { class: "tz-city" }, item.zone === "UTC" ? t("tzUtc") : item.city),
+        h("span", { class: "tz-offset" }, formatOffset(item.offset)),
+        h("span", { class: "tz-time muted" }, timeIn(item)),
+        selected ? icon("check", "icon small tz-tick") : h("span", { class: "tz-tick" }),
+      );
+      rows.push(row);
+    });
+    if (shown.length === 0) {
+      rows.push(h("li", { class: "muted empty", role: "presentation" }, t("nothingMatches")));
+    }
+    list.replaceChildren(...rows);
+    count.textContent = t("tzCount", { count: shown.length });
+    if (shown[active]) {
+      search.setAttribute("aria-activedescendant", optionId(active));
+      reveal(list.querySelector(".tz-option.active"), centre);
+    } else {
+      search.removeAttribute("aria-activedescendant");
+    }
+  };
+
+  const filter = () => {
+    const words = searchWords(search.value);
+    shown = words.length ? sorted.filter((item) => matchesWords(item.text, words)) : sorted;
+    const current = shown.findIndex((item) => item.zone === input.value);
+    active = words.length || current < 0 ? 0 : current;
+    paint(!words.length);
+  };
+
+  const paintQuick = () => {
+    const picks = [mine, "UTC"].filter((zone, index, all) => zone && byZone.has(zone) && all.indexOf(zone) === index);
+    quick.replaceChildren(
+      ...picks.map((zone) =>
+        h(
+          "button",
+          { type: "button", class: `tz-chip${zone === input.value ? " on" : ""}`, onmousedown: (event) => event.preventDefault(), onclick: () => choose(zone) },
+          zone === mine ? t("tzMine", { zone: byZone.get(zone).city }) : t("tzUtc"),
+        ),
+      ),
+    );
+  };
+
+  const open = () => {
+    panel.hidden = false;
+    trigger.setAttribute("aria-expanded", "true");
+    root.classList.add("open");
+    search.value = "";
+    paintQuick();
+    filter();
+    search.focus();
+  };
+  function close() {
+    panel.hidden = true;
+    trigger.setAttribute("aria-expanded", "false");
+    root.classList.remove("open");
+  }
+
+  trigger.addEventListener("click", () => (panel.hidden ? open() : close()));
+  search.addEventListener("input", filter);
+  search.addEventListener("keydown", (event) => {
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      const step = event.key === "ArrowDown" ? 1 : -1;
+      active = shown.length === 0 ? 0 : (active + step + shown.length) % shown.length;
+      paint();
+    } else if (event.key === "Enter") {
+      // Enter picks the highlighted zone and must never submit the settings form.
+      event.preventDefault();
+      if (shown[active]) {
+        choose(shown[active].zone);
+      }
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      if (search.value) {
+        search.value = "";
+        filter();
+      } else {
+        close();
+        trigger.focus();
+      }
+    }
+  });
+  // Leaving the picker (Tab, or a click elsewhere) closes it.
+  root.addEventListener("focusout", (event) => {
+    if (!panel.hidden && !root.contains(event.relatedTarget)) {
+      close();
+    }
+  });
+
+  // Keep "the time there now" current while the page is open.
+  const timer = setInterval(() => {
+    if (!root.isConnected) {
+      clearInterval(timer);
+    } else if (panel.hidden) {
+      paintSummary();
+    }
+  }, 30_000);
+
+  paintSummary();
+  return root;
+}
+
 function birthdayCard(data, postable, defaults) {
   const saved = data.settings.birthdays ?? {};
   const roles = data.roles
     .filter((role) => role.id !== data.guild.id && !role.managed && (BigInt(role.permissions ?? 0) & BIRTHDAY_ROLE_FORBIDDEN) === 0n)
     .map((role) => roleItem(role));
-  const zones = h("datalist", { id: "birthdayZones" }, ["UTC", ...Intl.supportedValuesOf("timeZone")].map((zone) => h("option", { value: zone })));
   return card(
     t("sectionBirthdays"),
     "cake",
@@ -2338,20 +2651,8 @@ function birthdayCard(data, postable, defaults) {
       { class: "rule-body" },
       field("birthdayChannel", "birthdayChannelHelp", picker({ id: "birthdayChannelId", options: postable, value: saved.channelId, emptyLabel: t("communityOff") })),
       field("birthdayRole", "birthdayRoleHelp", picker({ id: "birthdayRoleId", options: roles, value: saved.roleId, emptyLabel: t("communityOff") })),
-      field(
-        "birthdayTimezone",
-        "birthdayTimezoneHelp",
-        h("input", {
-          id: "birthdayTimezone",
-          list: "birthdayZones",
-          maxLength: 64,
-          spellcheck: false,
-          value: saved.timezone ?? "UTC",
-          placeholder: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        }),
-      ),
     ),
-    zones,
+    timeZonePicker({ id: "birthdayTimezone", value: saved.timezone ?? "UTC", labelKey: "birthdayTimezone", helpKey: "birthdayTimezoneHelp" }),
     field("birthdayMessage", "birthdayMessageHelp", messageBox("birthdayMessage", saved.message, defaults.birthdayMessage, MAX_BIRTHDAY_MESSAGE_LENGTH)),
   );
 }
