@@ -3364,6 +3364,215 @@ dialog textarea {
   max-width: none;
 }
 
+/* Step-by-step editors (the ticket panel): a numbered step bar, one step shown at
+   a time, and Back / Next / Save underneath. */
+.wizard .wizard-panel {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.wizard-panel > .help:first-of-type {
+  margin-top: -4px;
+}
+
+.wizard-steps {
+  display: flex;
+  gap: 4px;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.wizard-steps li {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.wizard-step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 36px;
+  padding: 6px 10px;
+  color: var(--muted);
+  font-size: 0.88rem;
+  font-weight: 600;
+  line-height: 1.2;
+  text-align: start;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+}
+
+.wizard-step:hover {
+  color: var(--text);
+  background: var(--surface);
+}
+
+.wizard-step[aria-current="step"] {
+  color: var(--text);
+  background: var(--surface);
+  border-color: var(--border);
+  box-shadow: var(--shadow);
+}
+
+.wizard-step-number {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  font-size: 0.78rem;
+  border: 1.5px solid currentColor;
+  border-radius: 50%;
+}
+
+.wizard-step[aria-current="step"] .wizard-step-number {
+  color: var(--accent-text);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.wizard-step.done .wizard-step-number {
+  color: var(--accent-text);
+  background: var(--ok);
+  border-color: var(--ok);
+}
+
+.wizard-nav {
+  padding-top: var(--gap);
+  border-top: 1px solid var(--border);
+}
+
+.wizard-nav button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.wizard-position {
+  font-size: 0.85rem;
+}
+
+/* On phones only the open step keeps its name. */
+@media (max-width: 640px) {
+  .wizard-steps li {
+    flex: 0 0 auto;
+    min-width: 0;
+  }
+
+  .wizard-step:not([aria-current="step"]) .wizard-step-label {
+    display: none;
+  }
+
+  .wizard-position {
+    display: none;
+  }
+}
+
+.wizard-review {
+  display: grid;
+  margin: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.wizard-review-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.6fr) 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+}
+
+.wizard-review-row + .wizard-review-row {
+  border-top: 1px solid var(--border);
+}
+
+.wizard-review dt {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.wizard-review dd {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.wizard-review dd > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+@media (max-width: 640px) {
+  .wizard-review-row {
+    grid-template-columns: 1fr auto;
+  }
+
+  .wizard-review dt {
+    grid-column: 1 / -1;
+  }
+}
+
+.color-dot {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  background: var(--swatch);
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px var(--border);
+}
+
+/* Colour chooser: picker, hex box, eyedropper, swatches and a reset. */
+.color-chooser {
+  display: grid;
+  gap: 6px;
+}
+
+.color-chooser-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.color-chooser input[type="color"] {
+  width: 44px;
+  min-height: 36px;
+  padding: 2px;
+  cursor: pointer;
+}
+
+.color-chooser .color-hex {
+  width: calc(7ch + 32px);
+  min-width: calc(7ch + 32px);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  text-transform: uppercase;
+}
+
+.color-chooser .color-hex:invalid {
+  border-color: var(--danger);
+}
+
+.color-chooser .swatch {
+  cursor: pointer;
+}
+
+.color-status:empty {
+  display: none;
+}
+
 .category-row {
   padding: 12px;
   background: var(--surface-2);
