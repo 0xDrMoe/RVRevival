@@ -84,6 +84,8 @@ import { MAX_DELAY_MS, MAX_INTERVAL_MS, MAX_SCHEDULED, MAX_SCHEDULED_LENGTH, MIN
 import { buildCaseEmbed } from "../moderation/modLog.js";
 import { Setting } from "../settings/guildSettings.js";
 import { ActivityStore } from "./activityStore.js";
+import { serverCheckup } from "./checkup.js";
+import { CommandUsageStore } from "../stats/commandUsage.js";
 import { canManage, DiscordApiError } from "./discordApi.js";
 import { SESSION_DAYS, SessionStore } from "./sessions.js";
 import { checkSettingChanges, describeValue, InvalidSetting, SETTING_RULES } from "./settingsRules.js";
@@ -305,6 +307,7 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
   const levels = new LevelStore(db);
   const scheduledMessages = new ScheduledMessageStore(db);
   const activity = new ActivityStore(db);
+  const commandUsage = new CommandUsageStore(db);
   const savedRoles = new SavedRoleStore(db);
   const tempRoles = new TempRoleStore(db);
   const appeals = new AppealStore(db);
@@ -633,10 +636,27 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
   };
   const sameValue = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
 
-  // Saves `changes` ({ setting: value | null }, already checked) and returns
-  // the log lines for those that changed.
+  // Settings only the owner (anti-nuke) or the owner and whoever added the bot
+  // (command permissions) may change. Returns the 403 body, or null.
+  async function refuseRestricted(guildId, guild, session, changes) {
+    const changed = (setting) => !sameValue(savedValue(guildId, setting), changes[setting]);
+    const ownerOnly = Object.keys(changes).filter((setting) => SETTING_RULES[setting].ownerOnly && changed(setting));
+    if (ownerOnly.length > 0 && guild.owner_id !== session.userId) {
+      return { error: "owner-only", setting: ownerOnly[0], message: "Only the server owner can change this." };
+    }
+    const permissionsOnly = Object.keys(changes).filter((setting) => SETTING_RULES[setting].permissionsOnly && changed(setting));
+    if (permissionsOnly.length > 0 && !(await canManagePermissions(guild, session.userId))) {
+      return { error: "permissions-only", setting: permissionsOnly[0], message: "Only the server owner or whoever added the bot can change this." };
+    }
+    return null;
+  }
+
+  // Saves `changes` ({ setting: value | null }, already checked). Returns the
+  // log lines for those that changed, and what each was before and after
+  // ({ setting: { before, after } }) so the Activity page can undo it.
   async function saveSettings(guildId, guild, changes) {
     const lines = [];
+    const undo = {};
     let ticketPanelChanged = false;
     for (const [setting, value] of Object.entries(changes)) {
       // Unsaved automod, leveling or anti-nuke means the defaults, which is what the page was shown.
@@ -650,6 +670,7 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
         await guildSettings.set(guildId, setting, value);
       }
       lines.push(`**${SETTING_RULES[setting].label}:** ${describeValue(setting, before)} → ${describeValue(setting, value)}`);
+      undo[setting] = { before: before ?? null, after: savedValue(guildId, setting) ?? null };
       ticketPanelChanged ||= TICKET_PANEL_SETTINGS.includes(setting);
       if ([Setting.COUNTRY_GUIDE, Setting.COUNTRY_CHANNEL, Setting.COUNTRY_ROLES].includes(setting) && !(await redrawCountryGuide(guildId, guild))) {
         lines.push("The posted country guide couldn't be updated; post it again from the Country page.");
@@ -659,7 +680,7 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     if (ticketPanelChanged && !(await redrawTicketPanel(guildId, guild))) {
       lines.push("The ticket panel couldn't be updated; post it again with `/tickets panel`.");
     }
-    return lines;
+    return { lines, undo };
   }
 
   // Gives the posted ticket panel the current look and categories. Panels
@@ -780,9 +801,9 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
 
   // Records what someone did on the dashboard (Activity page) and posts it in
   // the server's logs channel when there is one.
-  async function logAction(guildId, session, summary, lines = []) {
+  async function logAction(guildId, session, summary, lines = [], undo = null) {
     try {
-      activity.add({ guildId, userId: session.userId, userName: session.username, summary, lines });
+      activity.add({ guildId, userId: session.userId, userName: session.username, summary, lines, undo });
     } catch (error) {
       logger.warn("Couldn't save a dashboard change", { guildId, error });
     }
@@ -898,6 +919,22 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     };
   });
 
+  // Top commands (30 days) and the server checkup, for the Overview.
+  async function overviewExtras(guildId) {
+    const [guild, channels, me] = await Promise.all([
+      discord.guild(guildId),
+      discord.channels(guildId),
+      discord.botMember(guildId).catch((error) => {
+        logger.debug("Couldn't read the bot's member for the checkup", { guildId, error });
+        return null;
+      }),
+    ]);
+    return {
+      commandUsage: commandUsage.top(guildId, { days: STATS_DAYS }),
+      checkup: serverCheckup({ guildId, guild, channels, me, settings: guildSettings.all(guildId) }),
+    };
+  }
+
   app.get("/api/guilds/:id/stats", async (request, reply) => {
     const access = await requireGuild(request, reply);
     if (!access) {
@@ -922,6 +959,8 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
       runningTempBans: stats.runningTempBans,
       caseCounts: store.countGuildCases(access.guildId),
       recent: store.searchCases(access.guildId, { limit: 6 }).map(caseJson),
+      // The rest of the Overview in the same request, for people who manage the server.
+      ...(access.access === Access.MANAGE ? await overviewExtras(access.guildId) : {}),
     };
   });
 
@@ -942,19 +981,11 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
       throw error;
     }
 
-    const changed = (setting) => !sameValue(savedValue(guildId, setting), changes[setting]);
-    const ownerOnly = Object.keys(changes).filter((setting) => SETTING_RULES[setting].ownerOnly && changed(setting));
-    if (ownerOnly.length > 0 && guild.owner_id !== session.userId) {
-      return reply.code(403).send({ error: "owner-only", setting: ownerOnly[0], message: "Only the server owner can change this." });
+    const refused = await refuseRestricted(guildId, guild, session, changes);
+    if (refused) {
+      return reply.code(403).send(refused);
     }
-    const permissionsOnly = Object.keys(changes).filter((setting) => SETTING_RULES[setting].permissionsOnly && changed(setting));
-    if (permissionsOnly.length > 0 && !(await canManagePermissions(guild, session.userId))) {
-      return reply.code(403).send({
-        error: "permissions-only",
-        setting: permissionsOnly[0],
-        message: "Only the server owner or whoever added the bot can change this.",
-      });
-    }
+    const permissionsOnly = Object.keys(changes).filter((setting) => SETTING_RULES[setting].permissionsOnly && !sameValue(savedValue(guildId, setting), changes[setting]));
     // Hand-made command rules no longer match the premade setup that was applied.
     if (
       permissionsOnly.includes(Setting.COMMAND_RULES) &&
@@ -964,10 +995,10 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
       changes[Setting.PERMISSION_PRESET] = CUSTOM;
     }
 
-    const lines = await saveSettings(guildId, guild, changes);
+    const { lines, undo } = await saveSettings(guildId, guild, changes);
     if (lines.length > 0) {
       logger.info("Dashboard settings change", { guildId, userId: session.userId, settings: Object.keys(changes) });
-      await logAction(guildId, session, "**Settings changed**", lines);
+      await logAction(guildId, session, "**Settings changed**", lines, undo);
     }
     return { settings: settingsJson(guildId) };
   });
@@ -2487,10 +2518,10 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     if (request.body?.dryRun !== false) {
       return { dryRun: true, changes: summary };
     }
-    const lines = await saveSettings(guildId, guild, changes);
+    const { lines, undo } = await saveSettings(guildId, guild, changes);
     if (lines.length > 0) {
       logger.info("Dashboard permission setup applied", { guildId, userId: session.userId, preset: request.body.preset });
-      await logAction(guildId, session, "**Permission setup applied**", lines);
+      await logAction(guildId, session, "**Permission setup applied**", lines, undo);
     }
     return { dryRun: false, changes: summary, settings: settingsJson(guildId) };
   });
@@ -2503,7 +2534,68 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
       return reply;
     }
     const before = Number.parseInt(request.query?.before ?? "", 10);
-    return activity.page(access.guildId, { before: Number.isSafeInteger(before) ? before : undefined });
+    const user = typeof request.query?.user === "string" && request.query.user ? request.query.user : null;
+    if (user !== null && !DISCORD_ID.test(user)) {
+      return reply.code(400).send({ error: "bad-user" });
+    }
+    const text = typeof request.query?.q === "string" ? request.query.q.slice(0, 100) : null;
+    const page = activity.page(access.guildId, { before: Number.isSafeInteger(before) ? before : undefined, userId: user, text });
+    // The people filter only needs loading with the first page.
+    return Number.isSafeInteger(before) ? page : { ...page, people: activity.people(access.guildId) };
+  });
+
+  // Puts back what a settings change replaced. A setting someone changed
+  // again since is left alone (listed in `skipped`).
+  app.post("/api/guilds/:id/activity/:entry/undo", async (request, reply) => {
+    const access = await requireGuild(request, reply, { manage: true });
+    if (!access) {
+      return reply;
+    }
+    const { guildId, session } = access;
+    const entryId = Number.parseInt(request.params.entry, 10);
+    const entry = Number.isSafeInteger(entryId) ? activity.get(guildId, entryId) : undefined;
+    if (!entry?.undo) {
+      return reply.code(404).send({ error: "cannot-undo", message: "This change can't be undone (it was already undone, or it wasn't a settings change)." });
+    }
+    const restore = {};
+    const skipped = [];
+    for (const [setting, { before, after }] of Object.entries(entry.undo)) {
+      if (!SETTING_RULES[setting]) {
+        continue;
+      }
+      if (sameValue(savedValue(guildId, setting), after)) {
+        restore[setting] = before;
+      } else {
+        skipped.push(SETTING_RULES[setting].label);
+      }
+    }
+    if (Object.keys(restore).length === 0) {
+      return reply.code(409).send({ error: "changed-since", message: "Every setting in this change was changed again since, so there's nothing to undo.", skipped });
+    }
+    const [guild, channels] = await Promise.all([discord.guild(guildId), discord.channels(guildId)]);
+    let changes;
+    try {
+      changes = checkSettingChanges(restore, { guildId, channels, roles: guild.roles });
+    } catch (error) {
+      if (error instanceof InvalidSetting) {
+        return reply.code(409).send({ error: "invalid-setting", setting: error.setting ?? null, message: `This can't be undone: ${error.message}` });
+      }
+      throw error;
+    }
+    const refused = await refuseRestricted(guildId, guild, session, changes);
+    if (refused) {
+      return reply.code(403).send(refused);
+    }
+    if (!activity.markUndone(guildId, entryId)) {
+      return reply.code(404).send({ error: "cannot-undo", message: "This change was already undone." });
+    }
+    const { lines, undo } = await saveSettings(guildId, guild, changes);
+    if (skipped.length > 0) {
+      lines.push(`Left as they are (changed again since): ${skipped.join(", ")}`);
+    }
+    logger.info("Dashboard change undone", { guildId, userId: session.userId, entry: entryId });
+    await logAction(guildId, session, `**Undid a change** by ${entry.userName ?? entry.userId}`, lines, undo);
+    return { settings: settingsJson(guildId), skipped };
   });
 
   return app;

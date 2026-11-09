@@ -1505,6 +1505,81 @@ a.stat:hover {
   background: linear-gradient(120deg, color-mix(in srgb, var(--tone) 11%, var(--surface)), var(--surface) 80%);
 }
 
+/* A feature tile with a quick on/off switch: the switch sits over the status pill's spot. */
+.feature-cell {
+  position: relative;
+  display: grid;
+}
+
+.feature-cell .feature {
+  padding-inline-end: 62px;
+}
+
+.feature-cell .feature .status {
+  display: none;
+}
+
+.feature-switch {
+  position: absolute;
+  inset-inline-end: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.checkup-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.checkup-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--amber, #f59e0b) 35%, var(--border));
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--amber, #f59e0b) 7%, var(--surface));
+}
+
+.checkup-list li > svg {
+  flex: none;
+  color: var(--amber, #f59e0b);
+}
+
+.checkup-list li > .grow {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.checkup.ok {
+  padding-block: 12px;
+}
+
+.checkup-ok {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+}
+
+.activity-filters {
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.activity-filters select {
+  flex: 0 1 14em;
+}
+
+.activity-filters input {
+  flex: 1 1 14em;
+  min-width: 0;
+}
+
 .grid-2 {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr));
@@ -1638,6 +1713,10 @@ a.stat:hover {
 
 .meter-fill {
   background: var(--act);
+}
+
+.meter-fill.command-fill {
+  background: var(--accent);
 }
 
 .progress-fill {

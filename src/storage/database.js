@@ -502,6 +502,20 @@ const MIGRATIONS = [
     winner_id TEXT
   ) WITHOUT ROWID;
   `,
+  // 33: what a dashboard settings change was before, so the Activity page
+  // can undo it (dashboard/activityStore.js), and how often each command was
+  // used per server and day, counts only (stats/commandUsage.js).
+  `
+  ALTER TABLE dashboard_activity ADD COLUMN undo TEXT;
+  ALTER TABLE dashboard_activity ADD COLUMN undone_at INTEGER;
+  CREATE TABLE command_usage (
+    guild_id  TEXT    NOT NULL,
+    command   TEXT    NOT NULL,
+    day       INTEGER NOT NULL,
+    uses      INTEGER NOT NULL,
+    PRIMARY KEY (guild_id, day, command)
+  ) WITHOUT ROWID;
+  `,
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS.length;

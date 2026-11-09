@@ -27,6 +27,7 @@ import { createFeedPoller } from "./feeds/feedPoller.js";
 import { createLiveApis, liveSecrets } from "./feeds/liveApis.js";
 import { createLivePoller } from "./feeds/livePoller.js";
 import { BotStatsStore, HEARTBEAT_MS } from "./stats/botStats.js";
+import { commandUsageName, CommandUsageStore } from "./stats/commandUsage.js";
 import { createStatsUpdater } from "./stats/statsUpdater.js";
 import { createAfk } from "./afk/afk.js";
 import { AfkStore } from "./afk/afkStore.js";
@@ -175,7 +176,11 @@ async function start() {
   }, 5_000);
   settingsReload.unref();
   // Keeps SQLite's query plans good as tables grow.
-  const dbHousekeeping = setInterval(() => optimizeDatabase(db), 6 * 60 * 60 * 1000);
+  const commandUsage = new CommandUsageStore(db);
+  const dbHousekeeping = setInterval(() => {
+    optimizeDatabase(db);
+    countSafely("command usage cleanup", () => commandUsage.prune());
+  }, 6 * 60 * 60 * 1000);
   dbHousekeeping.unref();
   const forcedLanguage = config.forcedLanguage;
 
@@ -401,6 +406,9 @@ async function start() {
     client.on(Events.InteractionCreate, (interaction) => {
       if (interaction.isChatInputCommand()) {
         countSafely("command count", () => botStats.countCommand());
+      }
+      if (interaction.guildId && (interaction.isChatInputCommand() || interaction.isContextMenuCommand())) {
+        countSafely("command usage", () => commandUsage.count(interaction.guildId, commandUsageName(interaction)));
       }
       handleInteraction(interaction).catch((error) => logger.error("Interaction handler crashed", { error }));
     });

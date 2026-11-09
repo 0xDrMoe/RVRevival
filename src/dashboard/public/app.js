@@ -214,6 +214,7 @@ const ICONS = {
   chevronLeft: '<path d="m15 18-6-6 6-6"/>',
   chevronRight: '<path d="m9 18 6-6-6-6"/>',
   check: '<path d="M20 6 9 17l-5-5"/>',
+  undo: '<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>',
   x: '<path d="M18 6 6 18M6 6l12 12"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
   logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5M21 12H9"/>',
@@ -6605,6 +6606,7 @@ async function showOverview(guildId) {
         banner: bannerFor(guild.id),
       }),
       tiles,
+      stats.checkup ? checkupCard(stats.checkup, guildId) : null,
       canManageGuild(data) ? featuresCard(data) : null,
       canManageGuild(data) ? setupCard(data) : null,
       card(t("chartTitle"), "chart", "pink", legend, chartBox),
@@ -6620,9 +6622,124 @@ async function showOverview(guildId) {
         card(t("recentCases"), "clock", "blue", recent, h("a", { class: "button ghost small", href: casesLink() }, t("allCases"))),
         card(t("topModerators"), "trophy", "green", leaderboard(stats.topModerators, "moderator")),
         card(t("topMembers"), "alert", "red", leaderboard(stats.topMembers, "user")),
+        stats.commandUsage ? commandUsageCard(stats.commandUsage) : null,
       ),
     ),
   );
+}
+
+// "ManageRoles" -> "Manage Roles".
+const discordPermissionLabel = (name) => name.replace(/([a-z])([A-Z])/g, "$1 $2");
+
+// Things that stop features working: missing permissions, roles above the
+// bot's, channels that were deleted (dashboard/checkup.js).
+function checkupCard(checkup, guildId) {
+  if (!checkup.checked) {
+    return null;
+  }
+  const problems = [
+    checkup.missingPermissions.length > 0
+      ? { text: t("checkupPermissions", { permissions: checkup.missingPermissions.map(discordPermissionLabel).join(", ") }), help: t("checkupPermissionsHelp") }
+      : null,
+    ...checkup.rolesTooHigh.map((role) => ({
+      text: t("checkupRole", { role: `@${role.name}`, use: t(`checkupUse_${role.use}`) }),
+      help: t("checkupRoleHelp"),
+      href: `/g/${guildId}/${role.page}`,
+    })),
+    ...checkup.missingChannels.map((channel) => ({ text: t("checkupChannel", { setting: channel.label }), href: `/g/${guildId}/${channel.page}` })),
+  ].filter(Boolean);
+  if (problems.length === 0) {
+    return h("section", { class: "card checkup ok" }, h("p", { class: "checkup-ok" }, iconChip("check", "green", "sm"), h("span", {}, h("strong", {}, t("checkupTitle")), " · ", t("checkupOk"))));
+  }
+  return card(
+    t("checkupTitle"),
+    "alert",
+    "amber",
+    h("p", { class: "help" }, t("checkupIntro", { count: problems.length })),
+    h(
+      "ul",
+      { class: "checkup-list" },
+      problems.map((problem) =>
+        h(
+          "li",
+          {},
+          icon("alert"),
+          h("span", { class: "grow" }, h("span", {}, problem.text), problem.help ? h("span", { class: "help" }, problem.help) : null),
+          problem.href ? h("a", { class: "button ghost small", href: problem.href }, t("checkupFix")) : null,
+        ),
+      ),
+    ),
+  );
+}
+
+// The most used commands in the last 30 days (counts only).
+function commandUsageCard(usage) {
+  const max = Math.max(1, ...usage.top.map((entry) => entry.uses));
+  return card(
+    t("commandsTitle"),
+    "zap",
+    "purple",
+    h("p", { class: "help" }, t("commandsSub", { count: formatNumber(usage.total) })),
+    usage.top.length === 0
+      ? h("p", { class: "muted empty" }, t("commandsNone"))
+      : h(
+          "div",
+          { class: "meters" },
+          usage.top.map((entry) =>
+            h(
+              "div",
+              { class: "meter-row" },
+              h("span", { class: "meter-label" }, h("code", {}, entry.command)),
+              h("span", { class: "meter" }, fillBar("meter-fill command-fill", entry.uses / max)),
+              h("span", { class: "meter-value" }, formatNumber(entry.uses)),
+            ),
+          ),
+        ),
+  );
+}
+
+// Features the Overview can switch on and off in place: the setting holding
+// an `enabled` flag, and whether only the owner may change it.
+const QUICK_TOGGLES = {
+  automod: { setting: "automod" },
+  levels: { setting: "leveling" },
+  antinuke: { setting: "antiNuke", ownerOnly: true },
+};
+
+// A switch that saves `enabled` for one feature and redraws its tile.
+function featureToggle(data, page, tileElement) {
+  const quick = QUICK_TOGGLES[page.id];
+  if (!quick || (quick.ownerOnly && !data.isOwner) || !data.settings[quick.setting]) {
+    return null;
+  }
+  const label = t(`page_${page.id}`);
+  const input = h("input", { type: "checkbox", role: "switch", checked: page.on(data.settings), "aria-label": t("featureToggle", { feature: label }) });
+  input.addEventListener("change", async () => {
+    const enabled = input.checked;
+    input.disabled = true;
+    try {
+      const saved = await api(`/api/guilds/${data.guild.id}/settings`, {
+        method: "PUT",
+        body: { [quick.setting]: { ...data.settings[quick.setting], enabled } },
+      });
+      data.settings = saved.settings;
+      if (state.cache?.guildId === data.guild.id) {
+        state.cache.data.settings = saved.settings;
+      }
+      const on = page.on(data.settings);
+      tileElement.classList.toggle("on", on);
+      const status = tileElement.querySelector(".status");
+      status.className = `status ${on ? "on" : "off"}`;
+      status.textContent = t(on ? "featureOn" : "featureOff");
+      toast(t(on ? "featureTurnedOn" : "featureTurnedOff", { feature: label }));
+    } catch (error) {
+      input.checked = !enabled;
+      failed(error);
+    } finally {
+      input.disabled = false;
+    }
+  });
+  return h("label", { class: "switch feature-switch" }, input);
 }
 
 // Every feature with an on/off state, linking to its page.
@@ -6643,13 +6760,15 @@ function featuresCard(data) {
       { class: "feature-grid" },
       features.map((page) => {
         const on = page.on(data.settings);
-        return h(
+        const link = h(
           "a",
           { class: `feature tone-${page.tone}${on ? " on" : ""}`, href: `/g/${data.guild.id}/${page.id}` },
           iconChip(page.icon, page.tone, "sm"),
           h("span", { class: "grow" }, t(`page_${page.id}`)),
           h("span", { class: `status ${on ? "on" : "off"}` }, t(on ? "featureOn" : "featureOff")),
         );
+        const toggle = featureToggle(data, page, link);
+        return toggle ? h("div", { class: "feature-cell has-switch" }, link, toggle) : link;
       }),
     ),
   );
@@ -10141,6 +10260,38 @@ function activityText(text, data) {
   return named.split(/\*\*(.+?)\*\*/g).map((part, index) => (index % 2 === 1 ? h("strong", {}, part) : part));
 }
 
+// Undo on a settings change: puts back what it replaced, then reloads the page.
+function undoButton(entry, data) {
+  if (!entry.canUndo) {
+    return entry.undoneAt ? h("span", { class: "badge" }, t("activityUndone")) : null;
+  }
+  return h(
+    "button",
+    {
+      class: "ghost small",
+      type: "button",
+      onclick: async (event) => {
+        if (!confirm(t("activityUndoConfirm"))) {
+          return;
+        }
+        const button = event.currentTarget;
+        setBusy(button, true);
+        try {
+          const result = await api(`/api/guilds/${data.guild.id}/activity/${entry.id}/undo`, { method: "POST", body: {} });
+          state.cache = null;
+          toast(result.skipped.length > 0 ? t("activityUndoSkipped", { settings: result.skipped.join(", ") }) : t("activityUndoDone"));
+          route();
+        } catch (error) {
+          failed(error);
+          setBusy(button, false);
+        }
+      },
+    },
+    icon("undo"),
+    t("activityUndo"),
+  );
+}
+
 function activityRow(entry, data) {
   return h(
     "li",
@@ -10154,6 +10305,8 @@ function activityRow(entry, data) {
         { class: "activity-head" },
         h("a", { href: memberLink(data.guild.id, entry.userId) }, entry.userName ?? entry.userId),
         h("span", { class: "muted", title: formatDate(entry.createdAt) }, formatAgo(entry.createdAt)),
+        h("span", { class: "grow" }),
+        undoButton(entry, data),
       ),
       h("p", { class: "activity-summary" }, activityText(entry.summary, data)),
       entry.lines.length > 0 ? h("ul", { class: "activity-lines" }, entry.lines.map((line) => h("li", {}, activityText(line, data)))) : null,
@@ -10169,12 +10322,42 @@ async function showActivity(guildId) {
   const list = h("ul", { class: "activity" });
   const empty = h("p", { class: "muted empty", hidden: true }, t("activityNone"));
   const more = h("button", { class: "ghost", type: "button", hidden: true }, t("loadMore"));
+  const person = h("select", { "aria-label": t("activityFilterPerson") }, h("option", { value: "" }, t("activityEveryone")));
+  const search = h("input", { type: "search", placeholder: t("activitySearch"), "aria-label": t("activitySearch"), maxLength: 100 });
   let before = null;
-  const load = async () => {
+  let peopleLoaded = false;
+  // Each new filter restarts the list; an older answer arriving late is dropped.
+  let generation = 0;
+  const load = async ({ restart = false } = {}) => {
+    const mine = restart ? ++generation : generation;
+    if (restart) {
+      before = null;
+    }
+    const query = new URLSearchParams();
+    if (before) {
+      query.set("before", before);
+    }
+    if (person.value) {
+      query.set("user", person.value);
+    }
+    if (search.value.trim()) {
+      query.set("q", search.value.trim());
+    }
     setBusy(more, true);
     try {
-      const page = await api(`/api/guilds/${guildId}/activity${before ? `?before=${before}` : ""}`);
+      const page = await api(`/api/guilds/${guildId}/activity${query.size > 0 ? `?${query}` : ""}`);
+      if (mine !== generation) {
+        return;
+      }
+      if (restart) {
+        list.replaceChildren();
+      }
+      if (page.people && !peopleLoaded) {
+        peopleLoaded = true;
+        person.append(...page.people.map((somebody) => h("option", { value: somebody.userId }, somebody.userName || somebody.userId)));
+      }
       list.append(...page.entries.map((entry) => activityRow(entry, data)));
+      empty.textContent = person.value || search.value.trim() ? t("activityNoMatch") : t("activityNone");
       empty.hidden = list.children.length > 0;
       before = page.next;
       more.hidden = !page.next;
@@ -10182,9 +10365,16 @@ async function showActivity(guildId) {
       setBusy(more, false);
     }
   };
+  let typing;
+  search.addEventListener("input", () => {
+    clearTimeout(typing);
+    typing = setTimeout(() => load({ restart: true }).catch(failed), 300);
+  });
+  person.addEventListener("change", () => load({ restart: true }).catch(failed));
   more.addEventListener("click", () => load().catch(failed));
-  show(guildLayout(data, "activity", pageHero("activity", t("activityIntro"), data), h("section", { class: "card" }, empty, list, h("div", { class: "center" }, more))));
-  await load();
+  const filters = h("div", { class: "toolbar activity-filters" }, person, search);
+  show(guildLayout(data, "activity", pageHero("activity", t("activityIntro"), data), h("section", { class: "card" }, filters, empty, list, h("div", { class: "center" }, more))));
+  await load({ restart: true });
 }
 
 // --- Guide -------------------------------------------------------------------

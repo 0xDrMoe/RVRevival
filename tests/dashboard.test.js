@@ -13,6 +13,7 @@ import { DEFAULT_LEVELING } from "../src/leveling/config.js";
 import { LevelStore } from "../src/leveling/levelStore.js";
 import { TicketStore } from "../src/tickets/ticketStore.js";
 import { BotStatsStore } from "../src/stats/botStats.js";
+import { CommandUsageStore } from "../src/stats/commandUsage.js";
 import { MemberEvent, MemberEventStore } from "../src/members/memberEventStore.js";
 import { SavedRoles, SavedRoleStore } from "../src/members/savedRoleStore.js";
 import { CaseAction, CaseStore } from "../src/moderation/caseStore.js";
@@ -725,6 +726,84 @@ describe("dashboard", () => {
 
     const older = await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}/activity?before=${entries[1].id}`, cookies });
     expect(older.json()).toEqual({ entries: [], next: null });
+  });
+
+  it("filters the Activity page and undoes a settings change unless it changed again", async () => {
+    const cookies = await login();
+    await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, { modRoleId: ROLE_ID, logsChannelId: LOGS_ID });
+    const first = (await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}/activity`, cookies })).json();
+    expect(first.people).toEqual([{ userId: USER_ID, userName: "Moe" }]);
+    expect(first.entries[0]).toMatchObject({ canUndo: true, undoneAt: null });
+    const matching = (await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}/activity?q=MOD%20ROLE`, cookies })).json();
+    expect(matching.entries).toHaveLength(1);
+    const none = (await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}/activity?q=starboard`, cookies })).json();
+    expect(none.entries).toHaveLength(0);
+    const nobody = (await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}/activity?user=300000000000000999`, cookies })).json();
+    expect(nobody.entries).toHaveLength(0);
+    expect((await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}/activity?user=nope`, cookies })).statusCode).toBe(400);
+
+    // The logs channel changes again, so only the mod role is put back.
+    await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, { logsChannelId: TEXT_ID });
+    const undone = await write(cookies, "POST", `/api/guilds/${GUILD_ID}/activity/${first.entries[0].id}/undo`, {});
+    expect(undone.statusCode).toBe(200);
+    expect(undone.json().skipped).toEqual(["Logs channel"]);
+    expect(guildSettings.get(GUILD_ID, Setting.MOD_ROLE)).toBeUndefined();
+    expect(guildSettings.get(GUILD_ID, Setting.LOGS_CHANNEL)).toBe(TEXT_ID);
+    const again = await write(cookies, "POST", `/api/guilds/${GUILD_ID}/activity/${first.entries[0].id}/undo`, {});
+    expect(again.statusCode).toBe(404);
+
+    const after = (await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}/activity`, cookies })).json();
+    expect(after.entries[0].summary).toBe("**Undid a change** by Moe");
+    expect(after.entries.find((entry) => entry.id === first.entries[0].id)).toMatchObject({ canUndo: false });
+    expect(after.entries.find((entry) => entry.id === first.entries[0].id).undoneAt).toEqual(expect.any(Number));
+
+    // The undo itself can be undone, which brings the mod role back.
+    const redo = await write(cookies, "POST", `/api/guilds/${GUILD_ID}/activity/${after.entries[0].id}/undo`, {});
+    expect(redo.statusCode).toBe(200);
+    expect(guildSettings.get(GUILD_ID, Setting.MOD_ROLE)).toBe(ROLE_ID);
+
+    // Changed again since: nothing left to undo.
+    await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, { modRoleId: null });
+    const latest = (await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}/activity`, cookies })).json();
+    const redoEntry = latest.entries.find((entry) => entry.summary.startsWith("**Undid"));
+    expect((await write(cookies, "POST", `/api/guilds/${GUILD_ID}/activity/${redoEntry.id}/undo`, {})).statusCode).toBe(409);
+  });
+
+  it("adds the server checkup and top commands to the Overview stats", async () => {
+    const cookies = await login();
+    const BOT_ROLE = "700000000000000050";
+    const HIGH_ROLE = "700000000000000051";
+    discord.guild.mockImplementation(async (id) => ({
+      id,
+      name: "Rumbleverse Revival",
+      owner_id: "1",
+      roles: [
+        { id, name: "@everyone", position: 0, managed: false, permissions: String(1 << 10) },
+        { id: BOT_ROLE, name: "Rabble", position: 2, managed: true, permissions: String(1 << 11) },
+        { id: HIGH_ROLE, name: "VIP", position: 5, managed: false, permissions: "0" },
+      ],
+    }));
+    discord.botMember.mockResolvedValue({ roles: [BOT_ROLE] });
+    await guildSettings.set(GUILD_ID, Setting.AUTOROLES, [HIGH_ROLE]);
+    await guildSettings.set(GUILD_ID, Setting.WELCOME_CHANNEL, "200000000000000999");
+    const usage = new CommandUsageStore(db);
+    usage.count(GUILD_ID, "/warn");
+    usage.count(GUILD_ID, "/warn");
+    usage.count(GUILD_ID, "Report message");
+    usage.count(OTHER_GUILD_ID, "/ban");
+
+    const stats = (await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}/stats`, cookies })).json();
+    expect(stats.commandUsage).toEqual({ total: 3, top: [{ command: "/warn", uses: 2 }, { command: "Report message", uses: 1 }] });
+    expect(stats.checkup.checked).toBe(true);
+    expect(stats.checkup.missingPermissions).toContain("ManageRoles");
+    expect(stats.checkup.missingPermissions).not.toContain("ViewChannel");
+    expect(stats.checkup.missingPermissions).not.toContain("SendMessages");
+    expect(stats.checkup.rolesTooHigh).toEqual([{ roleId: HIGH_ROLE, name: "VIP", use: "autorole", page: "roles" }]);
+    expect(stats.checkup.missingChannels).toEqual([{ setting: Setting.WELCOME_CHANNEL, label: "Welcome channel", page: "welcome" }]);
+
+    // Dashboard roles only see cases: no checkup.
+    const viewer = (await app.inject({ method: "GET", url: `/api/guilds/${OTHER_GUILD_ID}/stats`, cookies })).json();
+    expect(viewer.checkup).toBeUndefined();
   });
 
   it("saves birthday settings and refuses bad time zones and moderator roles", async () => {
