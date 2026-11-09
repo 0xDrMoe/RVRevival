@@ -6348,6 +6348,50 @@ const feedPingLabel = (guildId, roleId, data) => {
   return role ? `@${role.name}` : t("unknownOption", { id: roleId });
 };
 
+// A feed's message box. Its placeholder is what the feed posts while the box is
+// empty (the default for its kind, in the server's language), and one button
+// either copies that default in to edit or clears a custom message back to it.
+// setKind() swaps the default when the type changes on the add form.
+function feedMessageField(data, { id, kind, value }) {
+  const defaults = data.communityDefaults?.feedMessages ?? {};
+  const max = 500;
+  let current = kind;
+  const defaultFor = () => defaults[current] ?? defaults.rss ?? "";
+  const box = h("textarea", { id, rows: 3, maxLength: max });
+  box.value = value ?? "";
+  const count = h("span", { class: "char-count" });
+  const status = h("span", { class: "help grow" });
+  const toggle = h("button", { class: "ghost small", type: "button" });
+  const update = () => {
+    const custom = box.value.trim() !== "";
+    box.placeholder = defaultFor();
+    count.textContent = `${box.value.length}/${max}`;
+    status.textContent = t(custom ? "feedsMessageCustom" : "feedsMessageUsingDefault");
+    toggle.replaceChildren(icon(custom ? "refresh" : "edit", "icon small"), t(custom ? "feedsMessageReset" : "feedsMessageEditDefault"));
+  };
+  toggle.addEventListener("click", () => {
+    const custom = box.value.trim() !== "";
+    box.value = custom ? "" : defaultFor();
+    update();
+    box.focus();
+  });
+  box.addEventListener("input", update);
+  update();
+  return {
+    box,
+    setKind(next) {
+      current = next;
+      update();
+    },
+    element: h(
+      "div",
+      { class: "feed-message" },
+      field("feedsMessage", "feedsMessageHelp", h("span", { class: "message-box" }, box, count)),
+      h("div", { class: "toolbar" }, status, toggle),
+    ),
+  };
+}
+
 // One followed feed. Edit opens a form under it for where it posts, who it
 // pings and its message; what it follows stays (that's a new feed).
 function feedRow(guildId, feed, data, roles, onChanged) {
@@ -6356,6 +6400,7 @@ function feedRow(guildId, feed, data, roles, onChanged) {
     channel ? `#${channel.name}` : t("unknownOption", { id: feed.channelId }),
     feedPingLabel(guildId, feed.roleId, data),
     feed.postedAt ? t("feedsLastPost", { date: formatAgo(feed.postedAt) }) : t("feedsNoPostYet"),
+    t(feed.message ? "feedsCustomMessage" : "feedsDefaultMessage"),
   ].filter(Boolean);
   const editor = h("div", { class: "feed-editor", hidden: true });
   const editButton = h("button", { class: "ghost small", type: "button", "aria-expanded": "false" }, t("embedEdit"));
@@ -6370,8 +6415,8 @@ function feedRow(guildId, feed, data, roles, onChanged) {
     const channelPicker = picker({ id: `feedChannel-${feed.id}`, options: postableChannels(data), value: feed.channelId, emptyLabel: t("embedPickChannel") });
     channelPicker.required = true;
     const rolePicker = picker({ id: `feedRole-${feed.id}`, options: roles, value: feed.roleId, emptyLabel: t("feedsNoRole") });
-    const messageInput = h("textarea", { rows: 2, maxLength: 500, placeholder: t("feedsMessagePlaceholder") });
-    messageInput.value = feed.message ?? "";
+    const message = feedMessageField(data, { id: `feedMessage-${feed.id}`, kind: feed.kind, value: feed.message });
+    const messageInput = message.box;
     const save = h("button", { class: "primary small", type: "submit" }, t("feedsSave"));
     const form = h(
       "form",
@@ -6398,7 +6443,7 @@ function feedRow(guildId, feed, data, roles, onChanged) {
         field("feedsChannel", null, channelPicker),
         field("feedsRole", "feedsRoleHelp", rolePicker),
       ),
-      field("feedsMessage", "feedsMessageHelp", messageInput),
+      message.element,
       h("div", { class: "toolbar" }, h("span", { class: "grow" }), h("button", { class: "ghost small", type: "button", onclick: closeEditor }, t("cancel")), save),
     );
     editor.replaceChildren(form);
@@ -6466,11 +6511,13 @@ async function showFeeds(guildId) {
     const off = kind in FEED_KEYS_OFF && liveReady[kind] === false;
     sourceHelp.textContent = off ? t(FEED_KEYS_OFF[kind]) : t(`feedsSourceHelp_${kind}`);
     sourceHelp.classList.toggle("danger-text", off);
+    message.setKind(kind);
   };
   // @everyone is the role with the server's ID; listed first.
   const roles = [{ id: guildId, label: t("feedsEveryone") }, ...data.roles.filter((role) => role.id !== guildId && !role.managed).map((role) => roleItem(role))];
   const add = h("button", { class: "primary", type: "submit" }, icon("plus", "icon small"), t("feedsAdd"));
-  const messageInput = h("textarea", { id: "feedMessage", rows: 2, maxLength: 500, placeholder: t("feedsMessagePlaceholder") });
+  const message = feedMessageField(data, { id: "feedMessage", kind, value: null });
+  const messageInput = message.box;
 
   async function load() {
     const result = await api(`/api/guilds/${guildId}/feeds`);
@@ -6503,6 +6550,7 @@ async function showFeeds(guildId) {
           toast(t("feedsAdded", { name: result.feed.name }));
           sourceInput.value = "";
           messageInput.value = "";
+          message.setKind(kind);
           add.lastChild.textContent = t("feedsAdd");
           // load() then disables the button again if the limit is reached.
           setBusy(add, false);
@@ -6537,7 +6585,7 @@ async function showFeeds(guildId) {
       field("feedsChannel", null, picker({ id: "feedChannel", options: postableChannels(data), value: null, emptyLabel: t("embedPickChannel") })),
       field("feedsRole", "feedsRoleHelp", picker({ id: "feedRole", options: roles, value: null, emptyLabel: t("feedsNoRole") })),
     ),
-    field("feedsMessage", "feedsMessageHelp", messageInput),
+    message.element,
     h("div", { class: "toolbar" }, h("span", { class: "grow" }), add),
   );
   form.querySelector("#feedChannel").required = true;
