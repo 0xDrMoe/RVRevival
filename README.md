@@ -77,7 +77,7 @@ Once an admin runs `/settings logs-channel`, the bot posts a compact embed there
   - **Success** (green): it did what was asked.
   - **Refused** (yellow): not allowed, bad input, or nothing to do (for example a second `/country`, an unknown country, or `/country-staff` without the staff role).
   - **Failed** (orange): allowed, but the bot couldn't do it, usually because of a missing permission or the role hierarchy.
-  - **Error** (red): the command crashed, or Discord cancelled it. The details stay in the bot's console log.
+  - **Error** (red): the command crashed, or Discord cancelled it. The details stay in the bot's console log. A crash gets a reference code like `E-7F3A9C`: the member sees it in the error reply, the log entry names it, and the console log line has it as `ref`, so `pm2 logs rv-bot | grep E-7F3A9C` finds the exact error. Dashboard errors work the same way (the error message shows the code; search `pm2 logs rv-dashboard`).
   The embed includes the reply the member got, in English.
 - **Every message deleted from the `/country` channel**, with its author, the full text exactly as written (in a code block, so it can't ping or format anything), every attachment and sticker, and the user and message IDs. Attachments are downloaded before the message is deleted and re-uploaded with the log entry, since their links stop working once the message is gone (up to 8 MB and 10 files per message; anything bigger is listed with its name and size). If the bot can't delete messages there, that is logged once until a delete works again.
 

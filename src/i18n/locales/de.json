@@ -1520,5 +1520,7 @@
   "weeklyBoardIntro": "XP von {from} bis {to}.",
   "weeklyBoardXp": "{xp} XP",
   "weeklyBoardWinner": "👑 {user} hat {role} bis nächste Woche.",
-  "weeklyBoardFooter": "Jeden Montag · /leaderboard für die ganze Liste"
+  "weeklyBoardFooter": "Jeden Montag · /leaderboard für die ganze Liste",
+
+  "unexpectedRef": "Etwas ist schiefgelaufen. Bitte versuche es später erneut. Wenn es weiter passiert, gib dem Server-Team diesen Code: `{ref}`"
 }

@@ -1656,5 +1656,6 @@
   "activityUndone": "Desfeito",
   "activityUndoConfirm": "Restaurar as configurações que esta alteração substituiu? O que mudou depois fica como está.",
   "activityUndoDone": "Alteração desfeita.",
-  "activityUndoSkipped": "Desfeito, exceto as configurações alteradas depois: {settings}"
+  "activityUndoSkipped": "Desfeito, exceto as configurações alteradas depois: {settings}",
+  "errorGenericRef": "Algo deu errado. Tente de novo. Se continuar, informe este código: {ref}"
 }

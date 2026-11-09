@@ -1656,5 +1656,6 @@
   "activityUndone": "Annulé",
   "activityUndoConfirm": "Remettre les réglages que ce changement a remplacés ? Ce qui a été modifié depuis reste tel quel.",
   "activityUndoDone": "Changement annulé.",
-  "activityUndoSkipped": "Annulé, sauf les réglages modifiés depuis : {settings}"
+  "activityUndoSkipped": "Annulé, sauf les réglages modifiés depuis : {settings}",
+  "errorGenericRef": "Une erreur s'est produite. Réessaie. Si ça continue, donne-nous ce code : {ref}"
 }
