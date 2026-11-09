@@ -201,6 +201,7 @@ const ICONS = {
   logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5M21 12H9"/>',
   download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5M12 15V3"/>',
   upload: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5M12 3v12"/>',
+  pipette: '<path d="m2 22 1-1h3l9-9"/><path d="M3 21v-3l9-9"/><path d="m15 6 3.4-3.4a2.1 2.1 0 1 1 3 3L18 9l.4.4a2.1 2.1 0 1 1-3 3l-3.8-3.8a2.1 2.1 0 1 1 3-3l.4.4Z"/>',
   palette: '<path d="M12 21a9 9 0 1 1 9-9c0 2.5-2 3-3.5 3H15a2 2 0 0 0-1.5 3.3A1.6 1.6 0 0 1 12 21z"/><circle cx="7.5" cy="11" r="1"/><circle cx="10.5" cy="7" r="1"/><circle cx="15.5" cy="8" r="1"/>',
   mic: '<rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 17v4"/>',
   clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
@@ -230,6 +231,7 @@ const ICONS = {
   userX: '<circle cx="9" cy="8" r="4"/><path d="M2 21a7 7 0 0 1 14 0"/><path d="m17 8 5 5M22 8l-5 5"/>',
   inbox: '<path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>',
   volume: '<path d="M11 5 6 9H2v6h4l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14"/>',
+  smile: '<circle cx="12" cy="12" r="9"/><path d="M8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01"/>',
 };
 
 // Permission bits shown as badges on the roles page. Administrator includes
@@ -372,6 +374,18 @@ function show(...children) {
 }
 
 let toastTimer;
+// Marks a button as waiting on a request: disabled, with aria-busy so the
+// progress cursor shows only then. A button that is simply unavailable (at a
+// limit, no permission, nothing to save) stays disabled without the spinner.
+function setBusy(button, busy) {
+  button.disabled = busy;
+  if (busy) {
+    button.setAttribute("aria-busy", "true");
+  } else {
+    button.removeAttribute("aria-busy");
+  }
+}
+
 function toast(message, kind = "ok") {
   const element = document.getElementById("toast");
   element.textContent = message;
@@ -494,6 +508,259 @@ function field(labelKey, helpKey, control) {
     control,
     helpKey ? h("span", { class: "help" }, t(helpKey)) : null,
   );
+}
+// --- Emoji picker --------------------------------------------------------------------
+
+// A custom emoji as Discord writes it: <:name:id>, or <a:name:id> when animated.
+const CUSTOM_EMOJI = /^<(a?):(\w{2,32}):(\d{17,20})>$/;
+const customEmojiCode = (emoji) => `<${emoji.animated ? "a" : ""}:${emoji.name}:${emoji.id}>`;
+const customEmojiUrl = (id, animated) => `https://cdn.discordapp.com/emojis/${id}.${animated ? "gif" : "webp"}?size=48`;
+
+// The standard emojis (emojiData.js, about 40 KB), loaded the first time a picker opens.
+let standardEmojis;
+function loadStandardEmojis() {
+  standardEmojis ??= import("./emojiData.js")
+    .then(({ EMOJI_GROUPS }) =>
+      EMOJI_GROUPS.map((group) => ({
+        id: group.id,
+        emojis: group.emojis.split("|").map((entry) => {
+          const space = entry.indexOf(" ");
+          return { value: entry.slice(0, space), name: entry.slice(space + 1) };
+        }),
+      })),
+    )
+    .catch((error) => {
+      standardEmojis = undefined;
+      throw error;
+    });
+  return standardEmojis;
+}
+
+// How an emoji setting looks: a custom emoji as its image, anything else as text.
+function emojiGlyph(value) {
+  const custom = CUSTOM_EMOJI.exec(value ?? "");
+  return custom
+    ? h("img", { class: "emoji-img", src: customEmojiUrl(custom[3], custom[1] === "a"), alt: `:${custom[2]}:`, title: `:${custom[2]}:` })
+    : h("span", { class: "emoji-char" }, value ?? "");
+}
+
+// A text box for one emoji, with a button that opens a picker: this server's
+// own emojis first, then the standard ones by group, and a search over both.
+// Typing or pasting an emoji still works. `id` is the text box's id, which is
+// what the page's save reads. Works inside field()'s <label>.
+function emojiInput(data, { id, value = "", placeholder = "", maxLength = 64 }) {
+  const serverEmojis = data.emojis ?? [];
+  const input = h("input", { id, type: "text", class: "emoji-value", maxLength, value, placeholder, autocomplete: "off", spellcheck: false });
+  const shown = h("span", { class: "emoji-shown", "aria-hidden": "true" });
+  const trigger = h("button", {
+    class: "emoji-trigger",
+    type: "button",
+    title: t("emojiPickerOpen"),
+    "aria-label": t("emojiPickerOpen"),
+    "aria-haspopup": "dialog",
+    "aria-expanded": "false",
+  });
+  const search = h("input", { type: "search", class: "emoji-search", placeholder: t("emojiPickerSearch"), "aria-label": t("emojiPickerSearch"), autocomplete: "off" });
+  const tabs = h("div", { class: "emoji-tabs", role: "toolbar", "aria-label": t("emojiPickerGroups") });
+  const list = h("div", { class: "emoji-list" });
+  const hint = h("div", { class: "emoji-hint", "aria-live": "polite" }, t("emojiPickerHint"));
+  const panel = h("div", { class: "emoji-picker", role: "dialog", "aria-label": t("emojiPickerOpen"), hidden: true }, search, tabs, list, hint);
+  const wrap = h("div", { class: "emoji-input" }, input, trigger, panel);
+
+  const showValue = () => {
+    const current = input.value.trim();
+    shown.replaceChildren(current ? emojiGlyph(current) : icon("smile", "icon small"));
+    trigger.replaceChildren(shown);
+  };
+  showValue();
+  input.addEventListener("input", showValue);
+
+  const pick = (code) => {
+    input.value = code;
+    // The page's save bar listens for input on the form.
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    close();
+    input.focus();
+  };
+
+  const emojiButton = ({ value: code, label, glyph, disabled = false }) =>
+    h(
+      "button",
+      {
+        class: "emoji-option",
+        type: "button",
+        tabindex: "-1",
+        title: label,
+        "aria-label": label,
+        "aria-disabled": disabled ? "true" : undefined,
+        "data-code": code,
+        onclick: () => (disabled ? null : pick(code)),
+        onmouseenter: () => (hint.textContent = label),
+        onfocus: () => (hint.textContent = label),
+      },
+      glyph,
+    );
+
+  // The server's emojis and the standard groups as sections; `query` filters by name.
+  const render = (groups, query = "") => {
+    const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+    const matches = (name) => words.every((word) => name.toLowerCase().includes(word));
+    const sections = [];
+    const server = serverEmojis.filter((emoji) => matches(emoji.name));
+    if (!words.length || server.length > 0) {
+      sections.push({
+        id: "server",
+        tab: guildIcon(data.guild, "xs"),
+        buttons: server.map((emoji) =>
+          emojiButton({
+            value: customEmojiCode(emoji),
+            label: emoji.available ? `:${emoji.name}:` : `:${emoji.name}: · ${t("emojiPickerUnavailable")}`,
+            glyph: h("img", { class: "emoji-img", src: customEmojiUrl(emoji.id, emoji.animated), alt: "", loading: "lazy" }),
+            disabled: !emoji.available,
+          }),
+        ),
+        empty: words.length ? null : t("emojiPickerServerEmpty"),
+      });
+    }
+    for (const group of groups) {
+      const found = group.emojis.filter((emoji) => matches(emoji.name));
+      if (found.length > 0) {
+        sections.push({
+          id: group.id,
+          tab: h("span", { class: "emoji-char" }, group.emojis[0].value),
+          buttons: found.map((emoji) => emojiButton({ value: emoji.value, label: emoji.name, glyph: h("span", { class: "emoji-char" }, emoji.value) })),
+        });
+      }
+    }
+    list.replaceChildren(
+      ...sections.map((section) =>
+        h(
+          "section",
+          { class: "emoji-section", "data-group": section.id },
+          h("h3", { class: "emoji-section-title" }, t(section.id === "server" ? "emojiPickerServer" : `emojiGroup_${section.id}`)),
+          section.buttons.length > 0
+            ? h("div", { class: "emoji-grid", role: "group", "aria-label": t(section.id === "server" ? "emojiPickerServer" : `emojiGroup_${section.id}`) }, section.buttons)
+            : h("p", { class: "help" }, section.empty),
+        ),
+      ),
+      sections.length === 0 ? h("p", { class: "help emoji-none" }, t("emojiPickerNone")) : null,
+    );
+    // Search results show without tabs; the tabs jump to a group.
+    tabs.hidden = words.length > 0;
+    tabs.replaceChildren(
+      ...sections.map((section) =>
+        h(
+          "button",
+          {
+            class: "emoji-tab",
+            type: "button",
+            title: t(section.id === "server" ? "emojiPickerServer" : `emojiGroup_${section.id}`),
+            "aria-label": t(section.id === "server" ? "emojiPickerServer" : `emojiGroup_${section.id}`),
+            onclick: () => {
+              const target = list.querySelector(`[data-group="${section.id}"]`);
+              list.scrollTop = target ? target.offsetTop - list.offsetTop : 0;
+            },
+          },
+          section.tab,
+        ),
+      ),
+    );
+    list.scrollTop = 0;
+  };
+
+  const options = () => [...list.querySelectorAll(".emoji-option")];
+  // Arrow keys move through the emojis; up and down go a row at a time.
+  list.addEventListener("keydown", (event) => {
+    const all = options();
+    const index = all.indexOf(document.activeElement);
+    if (index < 0) {
+      return;
+    }
+    const grid = document.activeElement.parentElement;
+    const columns = getComputedStyle(grid).gridTemplateColumns.split(" ").length || 1;
+    const rtl = document.documentElement.dir === "rtl";
+    const step = { ArrowRight: rtl ? -1 : 1, ArrowLeft: rtl ? 1 : -1, ArrowDown: columns, ArrowUp: -columns }[event.key];
+    if (step === undefined) {
+      return;
+    }
+    event.preventDefault();
+    if (index + step < 0) {
+      search.focus();
+      return;
+    }
+    all[Math.min(all.length - 1, index + step)]?.focus();
+  });
+  search.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      // Not the page's save: pick the first match instead.
+      event.preventDefault();
+      options().find((option) => option.getAttribute("aria-disabled") !== "true")?.click();
+    } else if (event.key === "ArrowDown") {
+      event.preventDefault();
+      options()[0]?.focus();
+    }
+  });
+  let groups = [];
+  search.addEventListener("input", (event) => {
+    // The page's save bar doesn't need to hear about searches.
+    event.stopPropagation();
+    render(groups, search.value);
+  });
+  // Clicks on the picker's empty space mustn't reach the <label> around it.
+  panel.addEventListener("click", (event) => {
+    if (!event.target.closest("button, input")) {
+      event.preventDefault();
+    }
+  });
+
+  const onOutside = (event) => {
+    if (!wrap.isConnected || !wrap.contains(event.target)) {
+      close();
+    }
+  };
+  const onKey = (event) => {
+    if (event.key === "Escape" && !panel.hidden) {
+      event.preventDefault();
+      event.stopPropagation();
+      close();
+      trigger.focus();
+    }
+  };
+  function close() {
+    panel.hidden = true;
+    trigger.setAttribute("aria-expanded", "false");
+    document.removeEventListener("pointerdown", onOutside, true);
+    wrap.removeEventListener("keydown", onKey);
+  }
+  async function open() {
+    panel.hidden = false;
+    trigger.setAttribute("aria-expanded", "true");
+    document.addEventListener("pointerdown", onOutside, true);
+    wrap.addEventListener("keydown", onKey);
+    search.value = "";
+    hint.textContent = t("emojiPickerHint");
+    render(groups);
+    search.focus();
+    if (groups.length === 0) {
+      try {
+        groups = await loadStandardEmojis();
+        if (!panel.hidden) {
+          render(groups, search.value);
+        }
+      } catch {
+        hint.textContent = t("emojiPickerLoadFailed");
+      }
+    }
+  }
+  trigger.addEventListener("click", (event) => {
+    event.preventDefault();
+    if (panel.hidden) {
+      open();
+    } else {
+      close();
+    }
+  });
+  return wrap;
 }
 
 // --- Look and feel ---------------------------------------------------------------
@@ -1689,7 +1956,7 @@ function settingsPage({ data, pageId, intro, cards, fields, after = null, heroEx
           toast(t("noChanges"));
           return;
         }
-        saveButton.disabled = true;
+        setBusy(saveButton, true);
         try {
           const result = await api(`/api/guilds/${guildId}/settings`, { method: "PUT", body: pending });
           Object.keys(saved).forEach((key) => delete saved[key]);
@@ -1704,7 +1971,7 @@ function settingsPage({ data, pageId, intro, cards, fields, after = null, heroEx
         } catch (error) {
           failed(error);
         } finally {
-          saveButton.disabled = false;
+          setBusy(saveButton, false);
         }
       },
     },
@@ -2471,7 +2738,8 @@ function readStarboard(form) {
   return {
     channelId,
     threshold: Number(form.querySelector("#starboardThreshold").value),
-    emoji: form.querySelector("#starboardEmoji").value.trim(),
+    // Left empty, the star stays the default.
+    emoji: form.querySelector("#starboardEmoji").value.trim() || STARBOARD_DEFAULTS.emoji,
   };
 }
 
@@ -2490,12 +2758,325 @@ function readBirthdays(form) {
   };
 }
 
+// --- Time zone picker -------------------------------------------------------------
+
+// The regions a time zone's name starts with, in the order the picker lists them.
+// Zones outside these (UTC, old aliases) go under "Other".
+const TIME_ZONE_REGIONS = ["America", "Europe", "Africa", "Asia", "Australia", "Pacific", "Atlantic", "Indian", "Antarctica", "Arctic"];
+
+// Minutes ahead of UTC for a zone at the given moment, from "GMT+05:30" style names.
+function timeZoneOffset(zone, at) {
+  const name = new Intl.DateTimeFormat("en-US", { timeZone: zone, timeZoneName: "longOffset" })
+    .formatToParts(at)
+    .find((part) => part.type === "timeZoneName")?.value;
+  const match = /GMT([+-])(\d{2}):?(\d{2})?/.exec(name ?? "");
+  return match ? (match[1] === "-" ? -1 : 1) * (Number(match[2]) * 60 + Number(match[3] ?? 0)) : 0;
+}
+
+// "UTC+5:30", "UTC−3", "UTC+0".
+function formatOffset(minutes) {
+  const sign = minutes < 0 ? "−" : "+";
+  const hours = Math.floor(Math.abs(minutes) / 60);
+  const rest = Math.abs(minutes) % 60;
+  return `UTC${sign}${hours}${rest ? `:${String(rest).padStart(2, "0")}` : ""}`;
+}
+
+// Browsers still list some zones by their old names. They work the same (the bot
+// accepts both), but people search for and recognise the new ones.
+const TIME_ZONE_NEW_NAMES = {
+  "Africa/Asmera": "Africa/Asmara",
+  "America/Buenos_Aires": "America/Argentina/Buenos_Aires",
+  "America/Godthab": "America/Nuuk",
+  "America/Indianapolis": "America/Indiana/Indianapolis",
+  "America/Louisville": "America/Kentucky/Louisville",
+  "Asia/Calcutta": "Asia/Kolkata",
+  "Asia/Katmandu": "Asia/Kathmandu",
+  "Asia/Rangoon": "Asia/Yangon",
+  "Asia/Saigon": "Asia/Ho_Chi_Minh",
+  "Atlantic/Faeroe": "Atlantic/Faroe",
+  "Europe/Kiev": "Europe/Kyiv",
+  "Pacific/Enderbury": "Pacific/Kanton",
+  "Pacific/Ponape": "Pacific/Pohnpei",
+  "Pacific/Truk": "Pacific/Chuuk",
+};
+const newTimeZoneName = (zone) => TIME_ZONE_NEW_NAMES[zone] ?? zone;
+
+// The zone's name without its region, readable: "America/Argentina/Buenos_Aires" → "Argentina › Buenos Aires".
+const timeZoneCity = (zone) => {
+  const name = newTimeZoneName(zone);
+  return (name.includes("/") ? name.split("/").slice(1) : [name]).join(" › ").replaceAll("_", " ");
+};
+const timeZoneRegion = (zone) => (TIME_ZONE_REGIONS.includes(zone.split("/")[0]) && zone.includes("/") ? zone.split("/")[0] : "Other");
+
+// Every zone the browser knows, with its offset and search text, worked out once
+// a page load (an offset only moves with daylight saving). `extra` adds a saved
+// zone the list doesn't have, such as an old alias like "US/Eastern".
+let timeZoneCache = null;
+function timeZoneList(extra) {
+  if (!timeZoneCache) {
+    const now = new Date();
+    const names = (zone, locale, style) =>
+      new Intl.DateTimeFormat(locale, { timeZone: zone, timeZoneName: style }).formatToParts(now).find((part) => part.type === "timeZoneName")?.value ?? "";
+    const make = (zone) => {
+      const offset = timeZoneOffset(zone, now);
+      const plain = formatOffset(offset).replace("−", "-");
+      const hours = plain.slice(3);
+      return {
+        zone,
+        offset,
+        city: timeZoneCity(zone),
+        region: timeZoneRegion(zone),
+        text: searchable(
+          [zone.replaceAll("_", " "), newTimeZoneName(zone).replaceAll("_", " "), plain, `GMT${hours}`, hours, names(zone, "en-US", "short"), names(zone, "en-US", "long"), names(zone, state.language, "long")].join(" "),
+        ),
+      };
+    };
+    const zones = Intl.supportedValuesOf?.("timeZone") ?? [];
+    timeZoneCache = { make, items: ["UTC", ...zones.filter((zone) => zone !== "UTC")].map(make) };
+  }
+  const { make, items } = timeZoneCache;
+  if (!extra || items.some((item) => item.zone === extra)) {
+    return items;
+  }
+  // A saved new name ("Asia/Kolkata") takes the place of the browser's old one, so it isn't listed twice.
+  const old = items.findIndex((item) => newTimeZoneName(item.zone) === extra);
+  return old >= 0 ? items.map((item, index) => (index === old ? make(extra) : item)) : [...items, make(extra)];
+}
+
+// The time now in a zone, as "4:32 PM", with the weekday added when it's a
+// different day there than here ("Tue 4:32 PM") – which matters for birthdays.
+function timeIn(item) {
+  const now = Date.now();
+  const there = new Date(now + item.offset * 60_000);
+  const here = new Date(now - new Date(now).getTimezoneOffset() * 60_000);
+  const otherDay = there.getUTCDate() !== here.getUTCDate();
+  return new Intl.DateTimeFormat(state.language, { timeZone: "UTC", hour: "numeric", minute: "2-digit", weekday: otherDay ? "short" : undefined }).format(there);
+}
+
+// A searchable time zone picker that keeps its value in a hidden input `id`, so
+// forms read it like any other field. A button shows the chosen zone with its
+// offset and time there now; opening it shows a search box, quick picks (your
+// own zone, UTC) and every zone grouped by region, sorted by offset. Arrow keys,
+// Enter and Esc work in the search box.
+function timeZonePicker({ id, value, labelKey, helpKey }) {
+  const fallback = "UTC";
+  const mine = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const items = timeZoneList(value);
+  const byZone = new Map(items.map((item) => [item.zone, item]));
+  const regionRank = (region) => (region === "Other" ? -1 : TIME_ZONE_REGIONS.indexOf(region));
+  const sorted = [...items].sort((a, b) => regionRank(a.region) - regionRank(b.region) || a.offset - b.offset || a.city.localeCompare(b.city));
+
+  const labelId = `${id}Label`;
+  const listId = `${id}List`;
+  const input = h("input", { type: "hidden", id, value: value || fallback });
+  const summary = h("span", { class: "tz-summary" });
+  const trigger = h("button", {
+    type: "button",
+    class: "tz-trigger",
+    "aria-haspopup": "listbox",
+    "aria-expanded": "false",
+    "aria-controls": listId,
+    "aria-labelledby": `${labelId} ${id}Summary`,
+  });
+  summary.id = `${id}Summary`;
+  trigger.append(icon("globe"), summary, icon("chevronDown", "icon small tz-chevron"));
+  const search = h("input", {
+    type: "search",
+    role: "combobox",
+    autocomplete: "off",
+    spellcheck: false,
+    "aria-controls": listId,
+    "aria-expanded": "true",
+    "aria-autocomplete": "list",
+    placeholder: t("tzSearch"),
+    "aria-label": t("tzSearch"),
+  });
+  const list = h("ul", { id: listId, class: "tz-list", role: "listbox", "aria-labelledby": labelId });
+  const count = h("span", { class: "muted tz-count", "aria-live": "polite" });
+  const quick = h("div", { class: "tz-quick" });
+  const panel = h("div", { class: "tz-panel", hidden: true }, h("div", { class: "tz-search" }, icon("search"), search), quick, list, count);
+  const root = h(
+    "div",
+    { class: "field tz-field" },
+    h("span", { class: "field-label", id: labelId }, t(labelKey)),
+    input,
+    trigger,
+    panel,
+    helpKey ? h("span", { class: "help" }, t(helpKey)) : null,
+  );
+
+  let shown = [];
+  let active = 0;
+
+  const describe = (zone) => {
+    const item = byZone.get(zone);
+    return item
+      ? [h("strong", {}, item.zone === "UTC" ? "UTC" : item.city), h("span", { class: "muted" }, `${item.region === "Other" ? "" : `${t(`tzRegion_${item.region}`)} · `}${formatOffset(item.offset)} · ${timeIn(item)}`)]
+      : [h("strong", {}, zone)];
+  };
+  const paintSummary = () => summary.replaceChildren(...describe(input.value));
+
+  const choose = (zone) => {
+    const changed = input.value !== zone;
+    input.value = zone;
+    paintSummary();
+    close();
+    trigger.focus();
+    if (changed) {
+      // Hidden inputs don't fire events, so tell the form (and its save bar) ourselves.
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+  };
+
+  const optionId = (index) => `${id}Option${index}`;
+  // Scrolls the list (never the page) so the highlighted zone shows: in the middle
+  // when the picker opens, otherwise just enough.
+  const reveal = (row, centre) => {
+    const top = row.offsetTop;
+    const bottom = top + row.offsetHeight;
+    const header = list.querySelector(".tz-group")?.offsetHeight ?? 0;
+    if (centre) {
+      list.scrollTop = top - (list.clientHeight - row.offsetHeight) / 2;
+    } else if (top - header < list.scrollTop) {
+      list.scrollTop = top - header;
+    } else if (bottom > list.scrollTop + list.clientHeight) {
+      list.scrollTop = bottom - list.clientHeight;
+    }
+  };
+  const paint = (centre = false) => {
+    const rows = [];
+    let region = null;
+    shown.forEach((item, index) => {
+      if (item.region !== region) {
+        region = item.region;
+        rows.push(h("li", { class: "tz-group", role: "presentation" }, t(`tzRegion_${region}`)));
+      }
+      const selected = item.zone === input.value;
+      const row = h(
+        "li",
+        {
+          id: optionId(index),
+          role: "option",
+          class: `tz-option${index === active ? " active" : ""}`,
+          "aria-selected": String(selected),
+          onmousedown: (event) => event.preventDefault(),
+          onclick: () => choose(item.zone),
+          onmousemove: () => {
+            if (active !== index) {
+              list.querySelector(".tz-option.active")?.classList.remove("active");
+              row.classList.add("active");
+              active = index;
+              search.setAttribute("aria-activedescendant", optionId(index));
+            }
+          },
+        },
+        h("span", { class: "tz-city" }, item.zone === "UTC" ? t("tzUtc") : item.city),
+        h("span", { class: "tz-offset" }, formatOffset(item.offset)),
+        h("span", { class: "tz-time muted" }, timeIn(item)),
+        selected ? icon("check", "icon small tz-tick") : h("span", { class: "tz-tick" }),
+      );
+      rows.push(row);
+    });
+    if (shown.length === 0) {
+      rows.push(h("li", { class: "muted empty", role: "presentation" }, t("nothingMatches")));
+    }
+    list.replaceChildren(...rows);
+    count.textContent = t("tzCount", { count: shown.length });
+    if (shown[active]) {
+      search.setAttribute("aria-activedescendant", optionId(active));
+      reveal(list.querySelector(".tz-option.active"), centre);
+    } else {
+      search.removeAttribute("aria-activedescendant");
+    }
+  };
+
+  const filter = () => {
+    const words = searchWords(search.value);
+    shown = words.length ? sorted.filter((item) => matchesWords(item.text, words)) : sorted;
+    const current = shown.findIndex((item) => item.zone === input.value);
+    active = words.length || current < 0 ? 0 : current;
+    paint(!words.length);
+  };
+
+  const paintQuick = () => {
+    const picks = [mine, "UTC"].filter((zone, index, all) => zone && byZone.has(zone) && all.indexOf(zone) === index);
+    quick.replaceChildren(
+      ...picks.map((zone) =>
+        h(
+          "button",
+          { type: "button", class: `tz-chip${zone === input.value ? " on" : ""}`, onmousedown: (event) => event.preventDefault(), onclick: () => choose(zone) },
+          zone === mine ? t("tzMine", { zone: byZone.get(zone).city }) : t("tzUtc"),
+        ),
+      ),
+    );
+  };
+
+  const open = () => {
+    panel.hidden = false;
+    trigger.setAttribute("aria-expanded", "true");
+    root.classList.add("open");
+    search.value = "";
+    paintQuick();
+    filter();
+    search.focus();
+  };
+  function close() {
+    panel.hidden = true;
+    trigger.setAttribute("aria-expanded", "false");
+    root.classList.remove("open");
+  }
+
+  trigger.addEventListener("click", () => (panel.hidden ? open() : close()));
+  search.addEventListener("input", filter);
+  search.addEventListener("keydown", (event) => {
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      const step = event.key === "ArrowDown" ? 1 : -1;
+      active = shown.length === 0 ? 0 : (active + step + shown.length) % shown.length;
+      paint();
+    } else if (event.key === "Enter") {
+      // Enter picks the highlighted zone and must never submit the settings form.
+      event.preventDefault();
+      if (shown[active]) {
+        choose(shown[active].zone);
+      }
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      if (search.value) {
+        search.value = "";
+        filter();
+      } else {
+        close();
+        trigger.focus();
+      }
+    }
+  });
+  // Leaving the picker (Tab, or a click elsewhere) closes it.
+  root.addEventListener("focusout", (event) => {
+    if (!panel.hidden && !root.contains(event.relatedTarget)) {
+      close();
+    }
+  });
+
+  // Keep "the time there now" current while the page is open.
+  const timer = setInterval(() => {
+    if (!root.isConnected) {
+      clearInterval(timer);
+    } else if (panel.hidden) {
+      paintSummary();
+    }
+  }, 30_000);
+
+  paintSummary();
+  return root;
+}
+
 function birthdayCard(data, postable, defaults) {
   const saved = data.settings.birthdays ?? {};
   const roles = data.roles
     .filter((role) => role.id !== data.guild.id && !role.managed && (BigInt(role.permissions ?? 0) & BIRTHDAY_ROLE_FORBIDDEN) === 0n)
     .map((role) => roleItem(role));
-  const zones = h("datalist", { id: "birthdayZones" }, ["UTC", ...Intl.supportedValuesOf("timeZone")].map((zone) => h("option", { value: zone })));
   return card(
     t("sectionBirthdays"),
     "cake",
@@ -2505,20 +3086,8 @@ function birthdayCard(data, postable, defaults) {
       { class: "rule-body" },
       field("birthdayChannel", "birthdayChannelHelp", picker({ id: "birthdayChannelId", options: postable, value: saved.channelId, emptyLabel: t("communityOff") })),
       field("birthdayRole", "birthdayRoleHelp", picker({ id: "birthdayRoleId", options: roles, value: saved.roleId, emptyLabel: t("communityOff") })),
-      field(
-        "birthdayTimezone",
-        "birthdayTimezoneHelp",
-        h("input", {
-          id: "birthdayTimezone",
-          list: "birthdayZones",
-          maxLength: 64,
-          spellcheck: false,
-          value: saved.timezone ?? "UTC",
-          placeholder: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        }),
-      ),
     ),
-    zones,
+    timeZonePicker({ id: "birthdayTimezone", value: saved.timezone ?? "UTC", labelKey: "birthdayTimezone", helpKey: "birthdayTimezoneHelp" }),
     field("birthdayMessage", "birthdayMessageHelp", messageBox("birthdayMessage", saved.message, defaults.birthdayMessage, MAX_BIRTHDAY_MESSAGE_LENGTH)),
   );
 }
@@ -2668,7 +3237,11 @@ async function showStarboard(guildId) {
               value: starboard.threshold ?? STARBOARD_DEFAULTS.threshold,
             }),
           ),
-          field("starboardEmoji", "starboardEmojiHelp", h("input", { id: "starboardEmoji", maxLength: 64, value: starboard.emoji ?? STARBOARD_DEFAULTS.emoji })),
+          field(
+            "starboardEmoji",
+            "starboardEmojiHelp",
+            emojiInput(data, { id: "starboardEmoji", value: starboard.emoji ?? STARBOARD_DEFAULTS.emoji, placeholder: STARBOARD_DEFAULTS.emoji }),
+          ),
         ),
       ),
     ],
@@ -2910,13 +3483,13 @@ function scheduledRow(guildId, message, channels, onDeleted) {
     if (!confirm(t("scheduledDeleteConfirm", { number: message.id }))) {
       return;
     }
-    remove.disabled = true;
+    setBusy(remove, true);
     try {
       await api(`/api/guilds/${guildId}/scheduled/${message.id}`, { method: "DELETE" });
       toast(t("scheduledDeleted"));
       onDeleted();
     } catch (error) {
-      remove.disabled = false;
+      setBusy(remove, false);
       failed(error);
     }
   });
@@ -2985,7 +3558,7 @@ async function showScheduled(guildId) {
           toast(t("scheduledPast"));
           return;
         }
-        submit.disabled = true;
+        setBusy(submit, true);
         try {
           await api(`/api/guilds/${guildId}/scheduled`, {
             method: "POST",
@@ -2997,7 +3570,7 @@ async function showScheduled(guildId) {
         } catch (error) {
           failed(error);
         } finally {
-          submit.disabled = false;
+          setBusy(submit, false);
         }
       },
     },
@@ -3468,7 +4041,7 @@ async function showCountry(guildId) {
           toast(t("embedPickChannel"), "error");
           return;
         }
-        postButton.disabled = true;
+        setBusy(postButton, true);
         try {
           const result = await api(`/api/guilds/${guildId}/country-guide`, { method: "POST", body: { channelId } });
           info.post = result.post;
@@ -3478,7 +4051,7 @@ async function showCountry(guildId) {
         } catch (error) {
           failed(error);
         } finally {
-          postButton.disabled = false;
+          setBusy(postButton, false);
         }
       },
     },
@@ -3558,15 +4131,50 @@ async function showCountry(guildId) {
   drawPreview();
 }
 
-const hasPermission = (role, bit) => (BigInt(role.permissions) & (1n << bit)) !== 0n;
+// Every Discord permission by bit, for the permission groups on the
+// Permissions page. Staff permissions come first, most powerful first; they
+// match permissions/moderatorPermissions.js plus the voice moderation ones.
+const PERMISSION_BITS = {
+  0: "CreateInstantInvite", 1: "KickMembers", 2: "BanMembers", 4: "ManageChannels", 5: "ManageGuild", 6: "AddReactions",
+  7: "ViewAuditLog", 8: "PrioritySpeaker", 9: "Stream", 10: "ViewChannel", 11: "SendMessages", 12: "SendTTSMessages",
+  13: "ManageMessages", 14: "EmbedLinks", 15: "AttachFiles", 16: "ReadMessageHistory", 17: "MentionEveryone",
+  18: "UseExternalEmojis", 19: "ViewGuildInsights", 20: "Connect", 21: "Speak", 22: "MuteMembers", 23: "DeafenMembers",
+  24: "MoveMembers", 25: "UseVAD", 26: "ChangeNickname", 27: "ManageNicknames", 28: "ManageRoles", 29: "ManageWebhooks",
+  30: "ManageGuildExpressions", 31: "UseApplicationCommands", 32: "RequestToSpeak", 33: "ManageEvents", 34: "ManageThreads",
+  35: "CreatePublicThreads", 36: "CreatePrivateThreads", 37: "UseExternalStickers", 38: "SendMessagesInThreads",
+  39: "UseEmbeddedActivities", 40: "ModerateMembers", 41: "ViewCreatorMonetizationAnalytics", 42: "UseSoundboard",
+  43: "CreateGuildExpressions", 44: "CreateEvents", 45: "UseExternalSounds", 46: "SendVoiceMessages",
+  48: "SetVoiceChannelStatus", 49: "SendPolls", 50: "UseExternalApps", 51: "PinMessages", 52: "BypassSlowmode",
+};
+const STAFF_PERMISSION_BITS = [5, 28, 4, 2, 1, 40, 13, 27, 34, 51, 29, 30, 33, 7, 17, 22, 23, 24].map(BigInt);
+const permissionLabel = (bit) => (PERMISSION_BITS[bit] ? t(`permBit_${PERMISSION_BITS[bit]}`) : t("permBitUnknown", { bit: String(bit) }));
 
-// How many permission badges a role shows before "+N more".
-const SHOWN_PERMISSIONS = 3;
+// A role's permission value split into Administrator, staff permissions and
+// everyday ones (bits Discord adds later show as "Unknown permission").
+function describePermissions(bits) {
+  const has = (bit) => (bits & (1n << bit)) !== 0n;
+  const staff = STAFF_PERMISSION_BITS.filter(has);
+  const everyday = [];
+  for (let bit = 0n; bits >> bit > 0n; bit += 1n) {
+    if (has(bit) && bit !== ADMINISTRATOR && !STAFF_PERMISSION_BITS.includes(bit)) {
+      everyday.push(bit);
+    }
+  }
+  return { admin: has(ADMINISTRATOR), staff, everyday };
+}
 
-// Every role, sorted into groups: roles with moderation powers, roles the bot
-// uses, bot roles, everyday roles, and country roles. Country roles are folded
-// into one row of chips, since there can be dozens of them and they rarely
-// carry permissions. A name filter and a group filter narrow it down.
+// How many groups show before "Show more", how many role names a closed group
+// previews, and how many an open group lists before "Show all".
+const GROUPS_PER_PAGE = 8;
+const PREVIEW_ROLES = 6;
+const OPEN_ROLES = 40;
+const ROLE_GROUP_KINDS = ["admin", "power", "basic"];
+
+// Every role, grouped by its exact permissions: roles that can do exactly the
+// same things share one row, so dozens of country or color roles are one line.
+// Groups are sorted Administrator, staff permissions, then everything else,
+// each by its highest role. A search (role or permission names) and a filter
+// narrow it down, and the list is paged so it never turns into a long scroll.
 function rolesTable(data) {
   const { settings } = data;
   const usedAs = (role) =>
@@ -3577,101 +4185,242 @@ function rolesTable(data) {
     ].filter(Boolean);
   const nameOf = (role) => (role.emoji ? `${role.emoji} ${role.name}` : role.name);
 
-  const described = data.roles.map((role) => {
-    const admin = hasPermission(role, ADMINISTRATOR);
-    const powers = admin ? [] : PERMISSIONS.filter((permission) => hasPermission(role, permission.bit));
-    const used = usedAs(role);
-    const kind = role.managed ? "bot" : admin || powers.length > 0 ? "power" : used.length > 0 ? "used" : role.country ? "country" : "other";
-    return { role, admin, powers, used, kind, search: searchable(role.name) };
-  });
-
-  const permissionBadges = ({ role, admin, powers }) => {
-    const extra = powers.slice(SHOWN_PERMISSIONS);
-    return h(
-      "div",
-      { class: "badges" },
-      admin ? h("span", { class: "badge badge-red" }, t("permAdmin")) : null,
-      powers.slice(0, SHOWN_PERMISSIONS).map((permission) => h("span", { class: "badge badge-amber" }, t(permission.key))),
-      extra.length > 0
-        ? h("span", { class: "badge", title: extra.map((permission) => t(permission.key)).join(", ") }, t("morePermissions", { count: extra.length }))
-        : null,
-      !admin && powers.length === 0 && !role.managed ? h("span", { class: "muted" }, "—") : null,
-    );
-  };
-  const roleRow = (entry) => {
-    const row = h(
-      "tr",
-      {},
-      h("td", { class: "role-name" }, roleDot(entry.role), h("span", {}, nameOf(entry.role))),
-      h("td", {}, permissionBadges(entry)),
-      h("td", {}, h("div", { class: "badges" }, entry.used.map((key) => h("span", { class: "badge badge-accent" }, t(key))))),
-    );
-    entry.element = row;
-    return row;
-  };
-  const countryChip = (entry) => {
-    entry.element = h("span", { class: "role-chip" }, roleDot(entry.role), nameOf(entry.role));
-    return entry.element;
-  };
-
-  const groups = ["power", "used", "bot", "other", "country"].map((kind) => {
-    const entries = described.filter((entry) => entry.kind === kind);
-    const heading = h("th", { colspan: 3, scope: "colgroup" });
-    const rows = kind === "country"
-      ? [h("tr", {}, h("td", { colspan: 3 }, h("div", { class: "role-chips" }, entries.map(countryChip))))]
-      : entries.map(roleRow);
-    return { kind, entries, heading, body: h("tbody", { class: "role-group" }, h("tr", { class: "group-row" }, heading), rows) };
-  });
-
-  const shownCount = h("span", { class: "count-pill" });
-  const empty = h("tbody", { hidden: true }, h("tr", {}, h("td", { colspan: 3, class: "muted empty" }, t("nothingMatches"))));
-  const search = h("input", { type: "search", class: "grow", placeholder: t("filterRoles"), "aria-label": t("filterRoles") });
-  const kind = h(
-    "select",
-    { "aria-label": t("roleKind"), class: "auto" },
-    ["all", ...groups.filter((group) => group.entries.length > 0).map((group) => group.kind)].map((value) =>
-      h("option", { value }, t(`roleKind_${value}`)),
-    ),
-  );
-  const filterRoles = () => {
-    const words = searchWords(search.value);
-    let shown = 0;
-    for (const group of groups) {
-      const groupShown = kind.value === "all" || kind.value === group.kind;
-      let inGroup = 0;
-      for (const entry of group.entries) {
-        entry.element.hidden = !groupShown || !matchesWords(entry.search, words);
-        inGroup += entry.element.hidden ? 0 : 1;
-      }
-      group.body.hidden = inGroup === 0;
-      group.heading.textContent = `${t(`roleKind_${group.kind}`)} · ${inGroup}`;
-      shown += inGroup;
+  // data.roles is sorted highest first, so a group's first role is its highest.
+  const byBits = new Map();
+  for (const role of data.roles) {
+    let bits;
+    try {
+      bits = BigInt(role.permissions ?? 0);
+    } catch {
+      bits = 0n;
     }
-    empty.hidden = shown > 0;
-    shownCount.textContent = t("rolesShown", { shown, total: described.length });
+    const key = bits.toString();
+    if (!byBits.has(key)) {
+      const described = describePermissions(bits);
+      const names = [described.admin ? t("permAdmin") : null, ...[...described.staff, ...described.everyday].map(permissionLabel)].filter(Boolean);
+      byBits.set(key, {
+        key,
+        bits,
+        ...described,
+        kind: described.admin ? "admin" : described.staff.length > 0 ? "power" : "basic",
+        permissionSearch: searchable(names.join(" ")),
+        roles: [],
+      });
+    }
+    const used = usedAs(role);
+    byBits.get(key).roles.push({ role, used, search: searchable(nameOf(role)) });
+  }
+  // A stable sort, so each kind keeps Discord's order (highest role first).
+  const groups = [...byBits.values()].sort((a, b) => ROLE_GROUP_KINDS.indexOf(a.kind) - ROLE_GROUP_KINDS.indexOf(b.kind));
+
+  const roleMatchesKind = (entry, group, kind) => {
+    switch (kind) {
+      case "all":
+        return true;
+      case "bot":
+        return entry.role.managed;
+      case "used":
+        return entry.used.length > 0;
+      case "country":
+        return Boolean(entry.role.country);
+      default:
+        return group.kind === kind;
+    }
   };
-  search.addEventListener("input", filterRoles);
-  filterKeys(search, filterRoles);
-  kind.addEventListener("change", filterRoles);
-  filterRoles();
+  const kindsPresent = ["all", ...ROLE_GROUP_KINDS.filter((kind) => groups.some((group) => group.kind === kind))];
+  for (const extra of ["bot", "used", "country"]) {
+    if (groups.some((group) => group.roles.some((entry) => roleMatchesKind(entry, group, extra)))) {
+      kindsPresent.push(extra);
+    }
+  }
+
+  const opened = new Set();
+  const allRolesShown = new Set();
+  let limit = GROUPS_PER_PAGE;
+
+  const roleChip = (entry) =>
+    h(
+      "span",
+      { class: "role-chip" },
+      roleDot(entry.role),
+      h("span", {}, nameOf(entry.role)),
+      entry.role.managed ? h("span", { class: "badge" }, t("roleBot")) : null,
+      entry.used.map((key) => h("span", { class: "badge badge-accent" }, t(key))),
+    );
+  const moreChip = (count) => h("span", { class: "role-chip more" }, t("morePermissions", { count }));
+
+  const permissionBadges = (group) => {
+    if (group.admin) {
+      return [h("span", { class: "badge badge-red" }, t("permAdmin"))];
+    }
+    const badges = group.staff.slice(0, 3).map((bit) => h("span", { class: "badge badge-amber" }, permissionLabel(bit)));
+    if (group.staff.length > 3) {
+      badges.push(h("span", { class: "badge badge-amber" }, t("morePermissions", { count: group.staff.length - 3 })));
+    }
+    if (group.everyday.length > 0) {
+      badges.push(h("span", { class: "muted perm-group-everyday" }, t("permGroupEverydayCount", { count: group.everyday.length })));
+    } else if (group.staff.length === 0) {
+      badges.push(h("span", { class: "muted perm-group-everyday" }, t("permGroupNone")));
+    }
+    return badges;
+  };
+
+  const groupRow = (group, roles) => {
+    const filtered = roles.length < group.roles.length;
+    const preview = roles.slice(0, PREVIEW_ROLES).map(roleChip);
+    const body = h("div", { class: "perm-group-body" });
+    const details = h(
+      "details",
+      { class: `perm-group kind-${group.kind}`, open: opened.has(group.key) },
+      h(
+        "summary",
+        {},
+        h(
+          "span",
+          { class: "perm-group-head" },
+          h("span", { class: "badges" }, permissionBadges(group)),
+          h(
+            "span",
+            { class: "count-pill", title: t("permGroupRolesIn") },
+            filtered ? t("rolesShown", { shown: roles.length, total: group.roles.length }) : t("permGroupRoleCount", { count: group.roles.length }),
+          ),
+        ),
+        h("span", { class: "role-chips perm-group-preview" }, preview, roles.length > PREVIEW_ROLES ? moreChip(roles.length - PREVIEW_ROLES) : null),
+      ),
+      body,
+    );
+    const drawBody = () => {
+      const showAll = allRolesShown.has(group.key) || roles.length <= OPEN_ROLES;
+      const permissionList = (titleKey, bits, tone) =>
+        bits.length > 0
+          ? h(
+              "div",
+              { class: "perm-group-list" },
+              h("h4", {}, t(titleKey)),
+              h("div", { class: "badges" }, bits.map((bit) => h("span", { class: `badge ${tone}` }, permissionLabel(bit)))),
+            )
+          : null;
+      body.replaceChildren(
+        h("h4", {}, t("permGroupRolesIn")),
+        h(
+          "div",
+          { class: "role-chips" },
+          (showAll ? roles : roles.slice(0, OPEN_ROLES)).map(roleChip),
+          showAll
+            ? null
+            : h(
+                "button",
+                {
+                  type: "button",
+                  class: "button ghost small",
+                  onclick: () => {
+                    allRolesShown.add(group.key);
+                    drawBody();
+                  },
+                },
+                t("permGroupShowAllRoles", { count: roles.length }),
+              ),
+        ),
+        group.admin
+          ? h("p", { class: "tip" }, icon("shield"), h("span", {}, t("permGroupAdminNote")))
+          : h(
+              "div",
+              { class: "perm-group-lists" },
+              permissionList("permGroupStaffPermissions", group.staff, "badge-amber"),
+              permissionList("permGroupEverydayPermissions", group.everyday, ""),
+              group.staff.length === 0 && group.everyday.length === 0 ? h("p", { class: "muted" }, t("permGroupNoneHelp")) : null,
+            ),
+      );
+    };
+    details.addEventListener("toggle", () => {
+      if (details.open) {
+        opened.add(group.key);
+        if (body.childElementCount === 0) {
+          drawBody();
+        }
+      } else {
+        opened.delete(group.key);
+      }
+    });
+    if (details.open) {
+      drawBody();
+    }
+    return details;
+  };
+
+  const list = h("div", { class: "perm-groups" });
+  const summary = h("span", { class: "count-pill" });
+  const search = h("input", { type: "search", class: "grow", placeholder: t("filterRolesOrPermissions"), "aria-label": t("filterRolesOrPermissions") });
+  const kind = h("select", { "aria-label": t("roleKind"), class: "auto" }, kindsPresent.map((value) => h("option", { value }, t(`roleKind_${value}`))));
+
+  const draw = () => {
+    const words = searchWords(search.value);
+    const matches = [];
+    for (const group of groups) {
+      // Words can be role or permission names: "mod ban" finds Moderator roles that can ban.
+      const roles = group.roles.filter(
+        (entry) => roleMatchesKind(entry, group, kind.value) && matchesWords(`${entry.search} ${group.permissionSearch}`, words),
+      );
+      if (roles.length > 0) {
+        matches.push({ group, roles });
+      }
+    }
+    const shownRoles = matches.reduce((sum, match) => sum + match.roles.length, 0);
+    summary.textContent = t("permGroupSummary", { roles: shownRoles, groups: matches.length });
+
+    const children = [];
+    let section = null;
+    for (const { group, roles } of matches.slice(0, limit)) {
+      if (group.kind !== section) {
+        section = group.kind;
+        const inSection = matches.filter((match) => match.group.kind === section);
+        children.push(h("h3", { class: "perm-group-section" }, t(`roleKind_${section}`), h("span", { class: "muted" }, ` · ${inSection.length}`)));
+      }
+      children.push(groupRow(group, roles));
+    }
+    if (matches.length === 0) {
+      children.push(h("p", { class: "muted empty" }, t("nothingMatches")));
+    }
+    const left = matches.length - limit;
+    if (left > 0) {
+      children.push(
+        h(
+          "div",
+          { class: "perm-group-more" },
+          h(
+            "button",
+            {
+              type: "button",
+              class: "button ghost small",
+              onclick: () => {
+                limit += GROUPS_PER_PAGE;
+                draw();
+              },
+            },
+            t("permGroupShowMore", { count: Math.min(left, GROUPS_PER_PAGE) }),
+          ),
+          h("span", { class: "muted" }, t("rolesShown", { shown: limit, total: matches.length })),
+        ),
+      );
+    }
+    list.replaceChildren(...children);
+  };
+  const refilter = () => {
+    limit = GROUPS_PER_PAGE;
+    draw();
+  };
+  search.addEventListener("input", refilter);
+  filterKeys(search, refilter);
+  kind.addEventListener("change", refilter);
+  draw();
 
   return card(
     t("allRoles"),
     "tag",
     "blue",
     h("p", { class: "help" }, t("allRolesHelp")),
-    h("div", { class: "toolbar" }, search, kind, shownCount),
-    h(
-      "div",
-      { class: "table-wrap" },
-      h(
-        "table",
-        { class: "table roles" },
-        h("thead", {}, h("tr", {}, ["roleColumn", "rolePowers", "roleUsedAs"].map((key) => h("th", { scope: "col" }, t(key))))),
-        groups.map((group) => group.body),
-        empty,
-      ),
-    ),
+    h("div", { class: "toolbar" }, search, kind, summary),
+    list,
   );
 }
 
@@ -3854,7 +4603,7 @@ function showSimplePermissions(data) {
     }
     const apply = h("button", { class: "primary", type: "button" }, icon("check", "icon small"), t("permApply"));
     apply.addEventListener("click", async () => {
-      apply.disabled = true;
+      setBusy(apply, true);
       try {
         await api(`/api/guilds/${guildId}/permissions/preset`, { method: "POST", body: { ...body(), dryRun: false } });
         toast(t("permApplied"));
@@ -3862,7 +4611,7 @@ function showSimplePermissions(data) {
         route();
       } catch (error) {
         failed(error);
-        apply.disabled = false;
+        setBusy(apply, false);
       }
     });
     review.replaceChildren(
@@ -3891,12 +4640,13 @@ function showSimplePermissions(data) {
   }
 
   previewButton.addEventListener("click", async () => {
-    previewButton.disabled = true;
+    setBusy(previewButton, true);
     try {
       showPlan(await api(`/api/guilds/${guildId}/permissions/preset`, { method: "POST", body: body() }));
     } catch (error) {
       failed(error);
     } finally {
+      setBusy(previewButton, false);
       previewButton.disabled = !data.canManagePermissions;
     }
   });
@@ -4406,7 +5156,7 @@ function setupCard(data, { open = false } = {}) {
   let section;
   const redraw = (options) => section.replaceWith(setupCard(data, options));
   const saveSkipped = async (ids, button) => {
-    button.disabled = true;
+    setBusy(button, true);
     try {
       const result = await api(`/api/guilds/${guild.id}/settings`, { method: "PUT", body: { setupSkipped: ids } });
       data.settings = result.settings;
@@ -4414,7 +5164,7 @@ function setupCard(data, { open = false } = {}) {
       redraw({ open: open || todo.length > 0 });
     } catch (error) {
       failed(error);
-      button.disabled = false;
+      setBusy(button, false);
     }
   };
   const currentSkips = steps.filter((step) => step.skipped).map((step) => step.id);
@@ -5302,7 +6052,7 @@ function readTicketLook(form) {
   return {
     title: value("tkTitle"),
     description: value("tkDescription"),
-    color: form.querySelector("#tkUseColor").checked ? colorNumber(form.querySelector("#tkColor").value) : null,
+    color: readColorChooser(form, "tkColor"),
     authorName: value("tkAuthor"),
     authorIconUrl: value("tkAuthorIcon"),
     imageUrl: value("tkImage"),
@@ -5432,7 +6182,130 @@ function ticketWelcomePreview(look, category, data, defaults) {
   );
 }
 
-// The Tickets page's editor, for people who can change settings.
+// A colour chooser: the browser's colour picker (it has an eyedropper in most
+// browsers), an eyedropper button where the browser offers one, a hex code box and
+// quick swatches. With nothing chosen it shows `fallback` and follows it; read the
+// choice back with readColorChooser(). Every change fires "input" so forms refresh.
+const HEX_COLOR = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i;
+
+function normalHex(text) {
+  const match = HEX_COLOR.exec(text.trim());
+  if (!match) {
+    return null;
+  }
+  const digits = match[1].length === 3 ? [...match[1]].map((digit) => digit + digit).join("") : match[1];
+  return `#${digits.toLowerCase()}`;
+}
+
+function colorChooser({ id, value, fallback, followKey, resetKey }) {
+  const native = h("input", { id, type: "color", value: hexColor(value ?? fallback), "aria-label": t("embedColor") });
+  const hex = h("input", {
+    id: `${id}Hex`,
+    class: "color-hex",
+    type: "text",
+    value: hexColor(value ?? fallback).toUpperCase(),
+    maxLength: 7,
+    spellcheck: false,
+    autocomplete: "off",
+    "aria-label": t("colorHex"),
+  });
+  const status = h("span", { class: "help color-status" });
+  const reset = h("button", { type: "button", class: "ghost small" }, icon("refresh", "icon small"), h("span", {}, t(resetKey)));
+  const element = h("div", { class: "color-chooser" });
+  element.dataset.custom = String(value !== null && value !== undefined);
+
+  const update = () => {
+    const custom = element.dataset.custom === "true";
+    reset.hidden = !custom;
+    status.textContent = custom ? "" : t(followKey, { hex: hexColor(fallback).toUpperCase() });
+  };
+  // Sets the colour from the picker, a swatch, the eyedropper or a reset.
+  const choose = (color, custom) => {
+    native.value = color;
+    hex.value = color.toUpperCase();
+    hex.setCustomValidity("");
+    element.dataset.custom = String(custom);
+    update();
+    element.dispatchEvent(new Event("input", { bubbles: true }));
+  };
+
+  native.addEventListener("input", (event) => {
+    event.stopPropagation();
+    choose(native.value, true);
+  });
+  // Typing: a full hex code applies straight away; anything else is flagged and
+  // the last good colour stays until it's fixed.
+  hex.addEventListener("input", () => {
+    const color = normalHex(hex.value);
+    hex.setCustomValidity(color ? "" : t("colorHexInvalid"));
+    if (color) {
+      native.value = color;
+      element.dataset.custom = "true";
+      update();
+    }
+  });
+  hex.addEventListener("blur", () => {
+    const color = normalHex(hex.value);
+    if (color) {
+      hex.value = color.toUpperCase();
+    }
+  });
+  reset.addEventListener("click", () => choose(hexColor(fallback), false));
+
+  const swatches = EMBED_SWATCHES.map((swatch) => {
+    const button = h("button", { type: "button", class: "swatch", title: swatch, "aria-label": swatch, onclick: () => choose(swatch, true) });
+    button.style.setProperty("--swatch", swatch);
+    return button;
+  });
+  // Chrome and Edge can pick any colour on the screen; elsewhere the colour box's
+  // own picker is the way in.
+  const dropper =
+    "EyeDropper" in window
+      ? h(
+          "button",
+          {
+            type: "button",
+            class: "ghost small icon-button",
+            title: t("colorEyedropper"),
+            "aria-label": t("colorEyedropper"),
+            onclick: async () => {
+              try {
+                const { sRGBHex } = await new window.EyeDropper().open();
+                const color = normalHex(sRGBHex);
+                if (color) {
+                  choose(color, true);
+                }
+              } catch {
+                // Closed with Escape: keep the colour as it was.
+              }
+            },
+          },
+          icon("pipette", "icon small"),
+        )
+      : null;
+
+  element.append(h("div", { class: "color-chooser-row" }, native, hex, dropper, h("div", { class: "swatches" }, swatches), reset), status);
+  update();
+  return element;
+}
+
+// The chosen colour as a number, or null while it follows the fallback.
+function readColorChooser(form, id) {
+  const chooser = form.querySelector(`#${id}`).closest(".color-chooser");
+  return chooser.dataset.custom === "true" ? colorNumber(form.querySelector(`#${id}`).value) : null;
+}
+
+// The Tickets page's editor, for people who can change settings: a wizard that
+// walks through the panel one step at a time, with the previews alongside. Every
+// step can be opened from the step bar, and Save works from any of them.
+const TICKET_STEPS = [
+  { id: "panel", titleKey: "ticketSectionPanel", helpKey: "ticketStepPanelHelp", icon: "image", tone: "purple" },
+  { id: "types", titleKey: "ticketCategories", helpKey: "ticketCategoriesHelp", icon: "layers", tone: "purple" },
+  { id: "pick", titleKey: "ticketSectionPick", helpKey: "ticketStepPickHelp", icon: "list", tone: "blue" },
+  { id: "new", titleKey: "ticketSectionNew", helpKey: "ticketStepNewHelp", icon: "ticket", tone: "cyan" },
+  { id: "review", titleKey: "ticketSectionReview", helpKey: "ticketStepReviewHelp", icon: "check", tone: "green" },
+];
+
 function ticketPanelEditor(guildId, data) {
   const defaults = data.ticketDefaults;
   const look = data.settings.ticketPanel ?? {};
@@ -5448,30 +6321,14 @@ function ticketPanelEditor(guildId, data) {
   });
   const input = (id, current, attributes = {}) => h("input", { id, type: "text", value: current ?? "", ...attributes });
 
-  const startColor = look.color ?? defaults.color;
-  const colorInput = h("input", { id: "tkColor", type: "color", value: hexColor(startColor), "aria-label": t("embedColor") });
-  const useColor = h("input", { id: "tkUseColor", type: "checkbox", checked: look.color !== null && look.color !== undefined });
-  const swatches = EMBED_SWATCHES.map((swatch) => {
-    const button = h("button", {
-      type: "button",
-      class: "swatch",
-      title: swatch,
-      "aria-label": swatch,
-      onclick: () => {
-        colorInput.value = swatch;
-        useColor.checked = true;
-        refresh();
-      },
-    });
-    button.style.setProperty("--swatch", swatch);
-    return button;
-  });
+  const color = colorChooser({ id: "tkColor", value: look.color, fallback: defaults.color, followKey: "ticketColorFollowing", resetKey: "ticketColorReset" });
   const layout = h(
     "select",
     { id: "tkLayout" },
     h("option", { value: "buttons", selected: look.layout !== "menu" }, t("ticketLayoutButtons")),
     h("option", { value: "menu", selected: look.layout === "menu" }, t("ticketLayoutMenu")),
   );
+  const layoutField = field("ticketLayout", "ticketLayoutHelp", layout);
   const menuField = field("ticketMenuPlaceholder", null, input("tkMenuPlaceholder", look.menuPlaceholder, { maxLength: 150, placeholder: defaults.menuPlaceholder }));
   const singleButton = h(
     "div",
@@ -5489,19 +6346,116 @@ function ticketPanelEditor(guildId, data) {
 
   const panelPreview = h("div", { class: "embed-preview" });
   const welcomePreview = h("div", { class: "embed-preview" });
+  const reviewList = h("dl", { class: "wizard-review" });
   const save = h("button", { class: "primary", type: "submit" }, t("save"));
+  const back = h("button", { class: "ghost", type: "button", onclick: () => go(current - 1) }, icon("chevronLeft", "icon small"), h("span", {}, t("wizardBack")));
+  const next = h("button", { class: "primary", type: "button", onclick: () => checkStep(current) && go(current + 1) }, h("span", {}, t("wizardNext")), icon("chevronRight", "icon small"));
+  const position = h("span", { class: "muted wizard-position" });
   const summaryCount = h("span", { class: "muted" });
-  const section = (titleKey, iconName, tone, ...children) => h("div", { class: "editor-section" }, h("h3", { class: "editor-section-title" }, iconChip(iconName, tone, "sm"), t(titleKey)), ...children);
+
+  const stepBodies = {
+    panel: [
+      h("div", { class: "field" }, h("span", { class: "field-label" }, t("embedColor")), color),
+      h("p", { class: "help" }, t("ticketColorHelp")),
+      h("div", { class: "embed-grid" }, field("embedAuthor", null, input("tkAuthor", look.authorName, { maxLength: 256 })), field("embedAuthorIcon", null, input("tkAuthorIcon", look.authorIconUrl, { placeholder: "https://…" }))),
+      field("embedTitle", null, input("tkTitle", look.title, { maxLength: 256, placeholder: defaults.title })),
+      field("embedDescription", "embedDescriptionHelp", h("textarea", { id: "tkDescription", rows: 4, maxLength: 4096, placeholder: defaults.description }, look.description ?? "")),
+      h("div", { class: "embed-grid" }, field("embedImage", null, input("tkImage", look.imageUrl, { placeholder: "https://…" })), field("embedThumbnail", null, input("tkThumbnail", look.thumbnailUrl, { placeholder: "https://…" }))),
+      field("embedFooter", null, input("tkFooter", look.footer, { maxLength: 2048 })),
+    ],
+    types: [h("div", { class: "toolbar" }, h("span", { class: "grow" }), categories.count, categories.addButton), categories.empty, categories.list],
+    pick: [layoutField, menuField, singleHelp, singleButton],
+    new: [
+      field("ticketIntro", null, h("textarea", { id: "tkIntro", rows: 3, maxLength: 1500, placeholder: defaults.intro }, look.intro ?? "")),
+      h("p", { class: "help" }, t("ticketPlaceholdersHelp", { placeholders: TICKET_PLACEHOLDERS })),
+      field("ticketNameFormat", "ticketNameFormatHelp", input("tkNameFormat", look.nameFormat, { maxLength: 90, placeholder: defaults.nameFormat })),
+      h(
+        "label",
+        { class: "switch-card" },
+        h("span", { class: "switch-text" }, h("strong", {}, t("ticketPingStaff")), h("span", { class: "help" }, t("ticketPingStaffHelp"))),
+        h("span", { class: "switch" }, pingStaff),
+      ),
+    ],
+    review: [reviewList, h("p", { class: "help" }, t(defaults.posted ? "ticketSaveUpdatesPanel" : "ticketSaveNoPanel"))],
+  };
+  const sections = TICKET_STEPS.map((step, index) =>
+    h(
+      "div",
+      { class: "editor-section wizard-panel", id: `tk-step-${step.id}`, role: "group", "aria-labelledby": `tk-step-title-${step.id}`, hidden: index !== 0 },
+      h("h3", { class: "editor-section-title", id: `tk-step-title-${step.id}` }, iconChip(step.icon, step.tone, "sm"), t(step.titleKey)),
+      h("p", { class: "help" }, t(step.helpKey)),
+      ...stepBodies[step.id],
+    ),
+  );
+  const stepButtons = TICKET_STEPS.map((step, index) =>
+    h(
+      "button",
+      { type: "button", class: "wizard-step", "aria-controls": `tk-step-${step.id}`, onclick: () => go(index) },
+      h("span", { class: "wizard-step-number", "aria-hidden": "true" }, String(index + 1)),
+      h("span", { class: "wizard-step-label" }, t(step.titleKey)),
+    ),
+  );
+  const stepBar = h("ol", { class: "wizard-steps", "aria-label": t("ticketPanelEditor") }, stepButtons.map((button) => h("li", {}, button)));
+
+  // Steps you've been through are ticked; the open one is marked current.
+  let current = 0;
+  const seen = new Set([0]);
+  function go(index, focus = true) {
+    current = Math.max(0, Math.min(TICKET_STEPS.length - 1, index));
+    seen.add(current);
+    sections.forEach((section, number) => (section.hidden = number !== current));
+    stepButtons.forEach((button, number) => {
+      button.classList.toggle("done", seen.has(number) && number !== current);
+      if (number === current) {
+        button.setAttribute("aria-current", "step");
+      } else {
+        button.removeAttribute("aria-current");
+      }
+    });
+    const last = current === TICKET_STEPS.length - 1;
+    back.disabled = current === 0;
+    next.hidden = last;
+    save.classList.toggle("primary", last);
+    save.classList.toggle("ghost", !last);
+    position.textContent = t("wizardPosition", { step: current + 1, total: TICKET_STEPS.length });
+    if (focus) {
+      sections[current].querySelector(".editor-section-title").scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
+  }
+
+  // Shows the browser's message on the step's first unfinished field.
+  const firstInvalid = (root) => [...root.querySelectorAll("input, select, textarea")].find((element) => !element.checkValidity());
+  function showInvalid(element) {
+    const step = sections.findIndex((section) => section.contains(element));
+    go(step, false);
+    element.closest("details")?.setAttribute("open", "");
+    element.reportValidity();
+  }
+  function checkStep(index) {
+    const invalid = firstInvalid(sections[index]);
+    if (invalid) {
+      showInvalid(invalid);
+      return false;
+    }
+    return true;
+  }
 
   const form = h(
     "form",
     {
-      class: "ticket-editor",
+      class: "ticket-editor wizard",
+      noValidate: true,
       oninput: () => refresh(),
       onchange: () => refresh(),
       onsubmit: async (event) => {
         event.preventDefault();
-        save.disabled = true;
+        // Hidden steps can't show the browser's message, so open the step first.
+        const invalid = firstInvalid(form);
+        if (invalid) {
+          showInvalid(invalid);
+          return;
+        }
+        setBusy(save, true);
         try {
           const result = await api(`/api/guilds/${guildId}/settings`, {
             method: "PUT",
@@ -5515,75 +6469,45 @@ function ticketPanelEditor(guildId, data) {
         } catch (error) {
           failed(error);
         } finally {
-          save.disabled = false;
+          setBusy(save, false);
         }
       },
     },
-    section(
-      "ticketSectionPanel",
-      "image",
-      "purple",
-      h(
-        "div",
-        { class: "embed-color-row" },
-        h("label", { class: "switch" }, useColor, h("span", {}, t("ticketOwnColor"))),
-        colorInput,
-        h("div", { class: "swatches" }, swatches),
-      ),
-      h("p", { class: "help" }, t("ticketColorHelp")),
-      h("div", { class: "embed-grid" }, field("embedAuthor", null, input("tkAuthor", look.authorName, { maxLength: 256 })), field("embedAuthorIcon", null, input("tkAuthorIcon", look.authorIconUrl, { placeholder: "https://…" }))),
-      field("embedTitle", null, input("tkTitle", look.title, { maxLength: 256, placeholder: defaults.title })),
-      field("embedDescription", "embedDescriptionHelp", h("textarea", { id: "tkDescription", rows: 4, maxLength: 4096, placeholder: defaults.description }, look.description ?? "")),
-      h("div", { class: "embed-grid" }, field("embedImage", null, input("tkImage", look.imageUrl, { placeholder: "https://…" })), field("embedThumbnail", null, input("tkThumbnail", look.thumbnailUrl, { placeholder: "https://…" }))),
-      field("embedFooter", null, input("tkFooter", look.footer, { maxLength: 2048 })),
-    ),
-    section(
-      "ticketSectionPick",
-      "layers",
-      "blue",
-      field("ticketLayout", "ticketLayoutHelp", layout),
-      menuField,
-      singleHelp,
-      singleButton,
-    ),
-    section(
-      "ticketSectionNew",
-      "ticket",
-      "cyan",
-      field("ticketIntro", null, h("textarea", { id: "tkIntro", rows: 3, maxLength: 1500, placeholder: defaults.intro }, look.intro ?? "")),
-      h("p", { class: "help" }, t("ticketPlaceholdersHelp", { placeholders: TICKET_PLACEHOLDERS })),
-      field("ticketNameFormat", "ticketNameFormatHelp", input("tkNameFormat", look.nameFormat, { maxLength: 90, placeholder: defaults.nameFormat })),
-      h(
-        "label",
-        { class: "switch-card" },
-        h("span", { class: "switch-text" }, h("strong", {}, t("ticketPingStaff")), h("span", { class: "help" }, t("ticketPingStaffHelp"))),
-        h("span", { class: "switch" }, pingStaff),
-      ),
-    ),
-    section(
-      "ticketCategories",
-      "layers",
-      "purple",
-      h("div", { class: "toolbar" }, h("p", { class: "help grow" }, t("ticketCategoriesHelp")), categories.count, categories.addButton),
-      categories.empty,
-      categories.list,
-    ),
-    h("div", { class: "toolbar" }, h("p", { class: "help grow" }, t(defaults.posted ? "ticketSaveUpdatesPanel" : "ticketSaveNoPanel")), save),
+    stepBar,
+    ...sections,
+    h("div", { class: "toolbar wizard-nav" }, back, position, h("span", { class: "grow" }), save, next),
   );
 
+  // The last step: everything at a glance, each line a way back to its step.
+  function review(now, kinds) {
+    const edit = (stepId) =>
+      h("button", { type: "button", class: "ghost small", onclick: () => go(TICKET_STEPS.findIndex((step) => step.id === stepId)) }, icon("edit", "icon small"), h("span", {}, t("wizardEdit")));
+    const chip = h("span", { class: "color-dot" });
+    chip.style.setProperty("--swatch", hexColor(now.color ?? defaults.color));
+    const lines = [
+      ["panel", t("ticketSectionPanel"), h("span", {}, chip, `${now.title || defaults.title} · ${hexColor(now.color ?? defaults.color).toUpperCase()}`)],
+      ["types", t("ticketCategories"), kinds.length > 0 ? kinds.map((kind) => `${kind.emoji ? `${kind.emoji} ` : ""}${kind.label || t("ticketCategoryNew")}`).join(", ") : t("ticketReviewNoTypes")],
+      ["pick", t("ticketSectionPick"), kinds.length === 0 ? t("ticketReviewSingle", { label: now.buttonLabel || defaults.buttonLabel }) : t(now.layout === "menu" ? "ticketLayoutMenu" : "ticketLayoutButtons")],
+      ["new", t("ticketNameFormat"), now.nameFormat || defaults.nameFormat],
+      ["new", t("ticketPingStaff"), t(now.pingStaff ? "featureOn" : "featureOff")],
+    ];
+    reviewList.replaceChildren(...lines.map(([stepId, label, value]) => h("div", { class: "wizard-review-row" }, h("dt", {}, label), h("dd", {}, value), edit(stepId))));
+  }
+
   function refresh(changed = true) {
-    const current = readTicketLook(form);
+    const now = readTicketLook(form);
     const kinds = readTicketCategories(form) ?? [];
     const hasCategories = kinds.length > 0;
-    menuField.hidden = !hasCategories || current.layout !== "menu";
+    menuField.hidden = !hasCategories || now.layout !== "menu";
+    layoutField.hidden = !hasCategories;
     singleButton.hidden = hasCategories;
     singleHelp.hidden = hasCategories;
-    layout.disabled = !hasCategories;
-    panelPreview.replaceChildren(ticketPanelPreview(current, kinds, data, defaults));
-    welcomePreview.replaceChildren(ticketWelcomePreview(current, kinds[0] ?? null, data, defaults));
+    panelPreview.replaceChildren(ticketPanelPreview(now, kinds, data, defaults));
+    welcomePreview.replaceChildren(ticketWelcomePreview(now, kinds[0] ?? null, data, defaults));
     for (const preview of [panelPreview, welcomePreview]) {
       preview.querySelectorAll("[data-color]").forEach((element) => element.style.setProperty("--embed-color", element.dataset.color || "transparent"));
     }
+    review(now, kinds);
     summaryCount.textContent = t("ticketCategoriesSummary", { count: kinds.length });
     if (changed) {
       state.unsaved = true;
@@ -5606,6 +6530,7 @@ function ticketPanelEditor(guildId, data) {
       ),
     ),
   );
+  go(0, false);
   refresh(false);
   return editor;
 }
@@ -5650,21 +6575,24 @@ async function showTicketList(guildId, data, query) {
   const empty = h("p", { class: "muted empty", hidden: true }, t("ticketsNone"));
   let before = null;
   const load = async () => {
-    more.disabled = true;
-    const params = new URLSearchParams({ status });
-    if (userId) {
-      params.set("user", userId);
+    setBusy(more, true);
+    try {
+      const params = new URLSearchParams({ status });
+      if (userId) {
+        params.set("user", userId);
+      }
+      if (before) {
+        params.set("before", before);
+      }
+      const page = await api(`/api/guilds/${guildId}/tickets?${params}`);
+      list.append(...page.tickets.map((ticket) => ticketRow(guildId, ticket)));
+      summary.textContent = t(page.panel ? "ticketsSummary" : "ticketsSummaryNoPanel", { count: formatNumber(page.openCount) });
+      empty.hidden = list.children.length > 0;
+      before = page.next;
+      more.hidden = !page.next;
+    } finally {
+      setBusy(more, false);
     }
-    if (before) {
-      params.set("before", before);
-    }
-    const page = await api(`/api/guilds/${guildId}/tickets?${params}`);
-    list.append(...page.tickets.map((ticket) => ticketRow(guildId, ticket)));
-    summary.textContent = t(page.panel ? "ticketsSummary" : "ticketsSummaryNoPanel", { count: formatNumber(page.openCount) });
-    empty.hidden = list.children.length > 0;
-    before = page.next;
-    more.hidden = !page.next;
-    more.disabled = false;
   };
   more.addEventListener("click", () => load().catch(failed));
   show(
@@ -5832,19 +6760,22 @@ function appealList(guildId) {
       page = 0;
       list.replaceChildren();
     }
-    more.disabled = true;
-    const params = new URLSearchParams({ page: String(page) });
-    if (status !== "all") {
-      params.set("status", status);
+    setBusy(more, true);
+    try {
+      const params = new URLSearchParams({ page: String(page) });
+      if (status !== "all") {
+        params.set("status", status);
+      }
+      const result = await api(`/api/guilds/${guildId}/appeals?${params}`);
+      list.append(...result.appeals.map((appeal) => appealRow(guildId, appeal)));
+      summary.textContent = t("appealsOpenCount", { count: formatNumber(result.openCount) });
+      empty.textContent = t(status === "open" ? "appealsNoneOpen" : "appealsNone");
+      empty.hidden = list.children.length > 0;
+      page += 1;
+      more.hidden = !result.more;
+    } finally {
+      setBusy(more, false);
     }
-    const result = await api(`/api/guilds/${guildId}/appeals?${params}`);
-    list.append(...result.appeals.map((appeal) => appealRow(guildId, appeal)));
-    summary.textContent = t("appealsOpenCount", { count: formatNumber(result.openCount) });
-    empty.textContent = t(status === "open" ? "appealsNoneOpen" : "appealsNone");
-    empty.hidden = list.children.length > 0;
-    page += 1;
-    more.hidden = !result.more;
-    more.disabled = false;
   };
   more.addEventListener("click", () => load().catch(failed));
   const filter = segmented(
@@ -5883,14 +6814,14 @@ async function showAppeal(guildId, data, number) {
         if (decision === "accept" && !confirm(t("appealsAcceptConfirm"))) {
           return;
         }
-        buttons.forEach((button) => (button.disabled = true));
+        buttons.forEach((button) => setBusy(button, true));
         try {
           ({ appeal } = await api(`/api/guilds/${guildId}/appeals/${number}`, { method: "POST", body: { decision, reason: reason.value } }));
           toast(t(decision === "accept" ? "appealsAccepted" : "appealsDenied"));
           render();
         } catch (error) {
           failed(error);
-          buttons.forEach((button) => (button.disabled = false));
+          buttons.forEach((button) => setBusy(button, false));
         }
       };
       buttons.push(
@@ -6035,13 +6966,13 @@ async function showAppealForm(guildId) {
           toast(t("appealAnswerAll"), "error");
           return;
         }
-        submit.disabled = true;
+        setBusy(submit, true);
         try {
           await api(`/api/appeals/${guildId}`, { method: "POST", body: { answers } });
           notice("appealSent");
         } catch (error) {
           failed(error);
-          submit.disabled = false;
+          setBusy(submit, false);
         }
       },
     },
@@ -6344,7 +7275,7 @@ async function showEmbeds(guildId) {
 
   async function submit() {
     const message = readEmbedForm(form);
-    send.disabled = true;
+    setBusy(send, true);
     try {
       if (editing) {
         await api(`/api/guilds/${guildId}/messages/${editing.channelId}/${editing.messageId}`, { method: "PUT", body: { message } });
@@ -6363,7 +7294,7 @@ async function showEmbeds(guildId) {
     } catch (error) {
       failed(error);
     } finally {
-      send.disabled = false;
+      setBusy(send, false);
     }
   }
 
@@ -6462,6 +7393,50 @@ const feedPingLabel = (guildId, roleId, data) => {
   return role ? `@${role.name}` : t("unknownOption", { id: roleId });
 };
 
+// A feed's message box. Its placeholder is what the feed posts while the box is
+// empty (the default for its kind, in the server's language), and one button
+// either copies that default in to edit or clears a custom message back to it.
+// setKind() swaps the default when the type changes on the add form.
+function feedMessageField(data, { id, kind, value }) {
+  const defaults = data.communityDefaults?.feedMessages ?? {};
+  const max = 500;
+  let current = kind;
+  const defaultFor = () => defaults[current] ?? defaults.rss ?? "";
+  const box = h("textarea", { id, rows: 3, maxLength: max });
+  box.value = value ?? "";
+  const count = h("span", { class: "char-count" });
+  const status = h("span", { class: "help grow" });
+  const toggle = h("button", { class: "ghost small", type: "button" });
+  const update = () => {
+    const custom = box.value.trim() !== "";
+    box.placeholder = defaultFor();
+    count.textContent = `${box.value.length}/${max}`;
+    status.textContent = t(custom ? "feedsMessageCustom" : "feedsMessageUsingDefault");
+    toggle.replaceChildren(icon(custom ? "refresh" : "edit", "icon small"), t(custom ? "feedsMessageReset" : "feedsMessageEditDefault"));
+  };
+  toggle.addEventListener("click", () => {
+    const custom = box.value.trim() !== "";
+    box.value = custom ? "" : defaultFor();
+    update();
+    box.focus();
+  });
+  box.addEventListener("input", update);
+  update();
+  return {
+    box,
+    setKind(next) {
+      current = next;
+      update();
+    },
+    element: h(
+      "div",
+      { class: "feed-message" },
+      field("feedsMessage", "feedsMessageHelp", h("span", { class: "message-box" }, box, count)),
+      h("div", { class: "toolbar" }, status, toggle),
+    ),
+  };
+}
+
 // One followed feed. Edit opens a form under it for where it posts, who it
 // pings and its message; what it follows stays (that's a new feed).
 function feedRow(guildId, feed, data, roles, onChanged) {
@@ -6470,6 +7445,7 @@ function feedRow(guildId, feed, data, roles, onChanged) {
     channel ? `#${channel.name}` : t("unknownOption", { id: feed.channelId }),
     feedPingLabel(guildId, feed.roleId, data),
     feed.postedAt ? t("feedsLastPost", { date: formatAgo(feed.postedAt) }) : t("feedsNoPostYet"),
+    t(feed.message ? "feedsCustomMessage" : "feedsDefaultMessage"),
   ].filter(Boolean);
   const editor = h("div", { class: "feed-editor", hidden: true });
   const editButton = h("button", { class: "ghost small", type: "button", "aria-expanded": "false" }, t("embedEdit"));
@@ -6484,15 +7460,15 @@ function feedRow(guildId, feed, data, roles, onChanged) {
     const channelPicker = picker({ id: `feedChannel-${feed.id}`, options: postableChannels(data), value: feed.channelId, emptyLabel: t("embedPickChannel") });
     channelPicker.required = true;
     const rolePicker = picker({ id: `feedRole-${feed.id}`, options: roles, value: feed.roleId, emptyLabel: t("feedsNoRole") });
-    const messageInput = h("textarea", { rows: 2, maxLength: 500, placeholder: t("feedsMessagePlaceholder") });
-    messageInput.value = feed.message ?? "";
+    const message = feedMessageField(data, { id: `feedMessage-${feed.id}`, kind: feed.kind, value: feed.message });
+    const messageInput = message.box;
     const save = h("button", { class: "primary small", type: "submit" }, t("feedsSave"));
     const form = h(
       "form",
       {
         onsubmit: async (event) => {
           event.preventDefault();
-          save.disabled = true;
+          setBusy(save, true);
           try {
             await api(`/api/guilds/${guildId}/feeds/${feed.id}`, {
               method: "PATCH",
@@ -6502,7 +7478,7 @@ function feedRow(guildId, feed, data, roles, onChanged) {
             onChanged();
           } catch (error) {
             failed(error);
-            save.disabled = false;
+            setBusy(save, false);
           }
         },
       },
@@ -6512,7 +7488,7 @@ function feedRow(guildId, feed, data, roles, onChanged) {
         field("feedsChannel", null, channelPicker),
         field("feedsRole", "feedsRoleHelp", rolePicker),
       ),
-      field("feedsMessage", "feedsMessageHelp", messageInput),
+      message.element,
       h("div", { class: "toolbar" }, h("span", { class: "grow" }), h("button", { class: "ghost small", type: "button", onclick: closeEditor }, t("cancel")), save),
     );
     editor.replaceChildren(form);
@@ -6580,11 +7556,13 @@ async function showFeeds(guildId) {
     const off = kind in FEED_KEYS_OFF && liveReady[kind] === false;
     sourceHelp.textContent = off ? t(FEED_KEYS_OFF[kind]) : t(`feedsSourceHelp_${kind}`);
     sourceHelp.classList.toggle("danger-text", off);
+    message.setKind(kind);
   };
   // @everyone is the role with the server's ID; listed first.
   const roles = [{ id: guildId, label: t("feedsEveryone") }, ...data.roles.filter((role) => role.id !== guildId && !role.managed).map((role) => roleItem(role))];
   const add = h("button", { class: "primary", type: "submit" }, icon("plus", "icon small"), t("feedsAdd"));
-  const messageInput = h("textarea", { id: "feedMessage", rows: 2, maxLength: 500, placeholder: t("feedsMessagePlaceholder") });
+  const message = feedMessageField(data, { id: "feedMessage", kind, value: null });
+  const messageInput = message.box;
 
   async function load() {
     const result = await api(`/api/guilds/${guildId}/feeds`);
@@ -6601,7 +7579,7 @@ async function showFeeds(guildId) {
     {
       onsubmit: async (event) => {
         event.preventDefault();
-        add.disabled = true;
+        setBusy(add, true);
         add.lastChild.textContent = t("feedsAdding");
         try {
           const result = await api(`/api/guilds/${guildId}/feeds`, {
@@ -6617,12 +7595,15 @@ async function showFeeds(guildId) {
           toast(t("feedsAdded", { name: result.feed.name }));
           sourceInput.value = "";
           messageInput.value = "";
+          message.setKind(kind);
+          add.lastChild.textContent = t("feedsAdd");
+          // load() then disables the button again if the limit is reached.
+          setBusy(add, false);
           await load();
         } catch (error) {
-          failed(error);
-        } finally {
           add.lastChild.textContent = t("feedsAdd");
-          add.disabled = false;
+          setBusy(add, false);
+          failed(error);
         }
       },
     },
@@ -6649,7 +7630,7 @@ async function showFeeds(guildId) {
       field("feedsChannel", null, picker({ id: "feedChannel", options: postableChannels(data), value: null, emptyLabel: t("embedPickChannel") })),
       field("feedsRole", "feedsRoleHelp", picker({ id: "feedRole", options: roles, value: null, emptyLabel: t("feedsNoRole") })),
     ),
-    field("feedsMessage", "feedsMessageHelp", messageInput),
+    message.element,
     h("div", { class: "toolbar" }, h("span", { class: "grow" }), add),
   );
   form.querySelector("#feedChannel").required = true;
@@ -6744,7 +7725,7 @@ async function showStickies(guildId) {
       onsubmit: async (event) => {
         event.preventDefault();
         const channelId = form.querySelector("#stickyChannel").value;
-        save.disabled = true;
+        setBusy(save, true);
         try {
           const replacing = current.some((sticky) => sticky.channelId === channelId);
           await api(`/api/guilds/${guildId}/stickies/${channelId}`, { method: "PUT", body: { content: content.value } });
@@ -6755,7 +7736,7 @@ async function showStickies(guildId) {
         } catch (error) {
           failed(error);
         } finally {
-          save.disabled = false;
+          setBusy(save, false);
         }
       },
     },
@@ -6790,7 +7771,9 @@ async function showBackup(guildId) {
   const download = h("a", { class: "button primary", href: `/api/guilds/${guildId}/backup`, download: "" }, icon("download", "icon small"), t("backupDownload"));
   const file = h("input", { id: "backupFile", type: "file", accept: ".json,application/json" });
   const review = h("div", { class: "backup-review", hidden: true });
-  let backup = null;
+  // The chosen file as uploaded: { file: its text, fileName }. The server
+  // checks it again in full; these checks only spare a pointless upload.
+  let upload = null;
 
   const itemList = (items, line) => h("ul", { class: "backup-list" }, ...items.map((item) => h("li", {}, line(item))));
 
@@ -6816,14 +7799,14 @@ async function showBackup(guildId) {
         if (!confirm(t("backupRestoreConfirm", { count: plan.changes.length }))) {
           return;
         }
-        confirmButton.disabled = true;
+        setBusy(confirmButton, true);
         try {
-          const result = await api(`/api/guilds/${guildId}/backup/restore`, { method: "POST", body: { backup, dryRun: false } });
+          const result = await api(`/api/guilds/${guildId}/backup/restore`, { method: "POST", body: { ...upload, dryRun: false } });
           toast(t("backupRestored", { count: result.changes.length }));
           await showBackup(guildId);
         } catch (error) {
           failed(error);
-          confirmButton.disabled = false;
+          setBusy(confirmButton, false);
         }
       });
       parts.push(h("div", { class: "toolbar" }, h("span", { class: "grow" }), confirmButton));
@@ -6834,23 +7817,32 @@ async function showBackup(guildId) {
 
   file.addEventListener("change", async () => {
     review.hidden = true;
-    backup = null;
+    upload = null;
     const chosen = file.files?.[0];
     if (!chosen) {
       return;
     }
-    if (chosen.size > 1_000_000) {
+    if (chosen.size > 512 * 1024) {
       toast(t("backupTooBig"), "error");
       return;
     }
-    try {
-      backup = JSON.parse(await chosen.text());
-    } catch {
+    // Only a .json file whose type is JSON or unknown (some systems give none).
+    if (!/\.json$/i.test(chosen.name) || !["", "application/json", "text/json"].includes(chosen.type)) {
       toast(t("backupNotJson"), "error");
+      file.value = "";
       return;
     }
+    const text = await chosen.text();
     try {
-      showPlan(await api(`/api/guilds/${guildId}/backup/restore`, { method: "POST", body: { backup, dryRun: true } }));
+      JSON.parse(text.replace(/^\uFEFF/, ""));
+    } catch {
+      toast(t("backupNotJson"), "error");
+      file.value = "";
+      return;
+    }
+    upload = { file: text, fileName: chosen.name };
+    try {
+      showPlan(await api(`/api/guilds/${guildId}/backup/restore`, { method: "POST", body: { ...upload, dryRun: true } }));
     } catch (error) {
       failed(error);
     }
@@ -7067,7 +8059,7 @@ async function showBranding(guildId) {
       toast(t("brandingNothing"));
       return;
     }
-    saveButton.disabled = true;
+    setBusy(saveButton, true);
     try {
       saved = await api(`/api/guilds/${guildId}/branding`, { method: "PATCH", body });
       state.cache = null;
@@ -7075,6 +8067,8 @@ async function showBranding(guildId) {
       toast(t("brandingSaved"));
     } catch (error) {
       failed(error);
+    } finally {
+      setBusy(saveButton, false);
       refresh();
     }
   });
@@ -7149,14 +8143,14 @@ function counterRow(guildId, counter, data, onChanged) {
     save.hidden = input.value.trim() === counter.template;
   });
   save.addEventListener("click", async () => {
-    save.disabled = true;
+    setBusy(save, true);
     try {
       await api(`/api/guilds/${guildId}/counters/${counter.id}`, { method: "PATCH", body: { template: input.value } });
       toast(t("countersSaved"));
       onChanged();
     } catch (error) {
       failed(error);
-      save.disabled = false;
+      setBusy(save, false);
     }
   });
   const remove = h(
@@ -7240,17 +8234,19 @@ async function showCounters(guildId) {
     {
       onsubmit: async (event) => {
         event.preventDefault();
-        add.disabled = true;
+        setBusy(add, true);
         try {
           await api(`/api/guilds/${guildId}/counters`, {
             method: "POST",
             body: { template: nameInput.value, categoryId: form.querySelector("#counterCategory").value || null },
           });
           toast(t("countersAdded"));
+          // load() then disables the button again if the limit is reached.
+          setBusy(add, false);
           await load();
         } catch (error) {
+          setBusy(add, false);
           failed(error);
-          add.disabled = false;
         }
       },
     },
@@ -7337,13 +8333,16 @@ async function showActivity(guildId) {
   const more = h("button", { class: "ghost", type: "button", hidden: true }, t("loadMore"));
   let before = null;
   const load = async () => {
-    more.disabled = true;
-    const page = await api(`/api/guilds/${guildId}/activity${before ? `?before=${before}` : ""}`);
-    list.append(...page.entries.map((entry) => activityRow(entry, data)));
-    empty.hidden = list.children.length > 0;
-    before = page.next;
-    more.hidden = !page.next;
-    more.disabled = false;
+    setBusy(more, true);
+    try {
+      const page = await api(`/api/guilds/${guildId}/activity${before ? `?before=${before}` : ""}`);
+      list.append(...page.entries.map((entry) => activityRow(entry, data)));
+      empty.hidden = list.children.length > 0;
+      before = page.next;
+      more.hidden = !page.next;
+    } finally {
+      setBusy(more, false);
+    }
   };
   more.addEventListener("click", () => load().catch(failed));
   show(guildLayout(data, "activity", pageHero("activity", t("activityIntro"), data), h("section", { class: "card" }, empty, list, h("div", { class: "center" }, more))));

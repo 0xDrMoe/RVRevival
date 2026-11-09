@@ -455,6 +455,11 @@ button:active,
 
 button:disabled {
   opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* Only a button waiting on a request shows the progress cursor (setBusy in app.js). */
+button[aria-busy="true"] {
   cursor: progress;
 }
 
@@ -2105,24 +2110,123 @@ a.stat:hover {
   color: color-mix(in srgb, var(--act) 68%, var(--ink));
 }
 
-.roles .role-name {
+/* Roles grouped by their exact permissions (Permissions page). */
+.perm-groups {
+  display: grid;
+  gap: 6px;
+}
+
+.perm-group-section {
+  margin: 12px 0 2px;
+  font-size: 0.9rem;
+}
+
+.perm-group-section:first-child {
+  margin-top: 4px;
+}
+
+.perm-group {
+  border: 1px solid var(--border);
+  border-inline-start: 4px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+
+.perm-group.kind-admin {
+  border-inline-start-color: rgb(239 68 68 / 70%);
+}
+
+.perm-group.kind-power {
+  border-inline-start-color: rgb(245 158 11 / 70%);
+}
+
+.perm-group > summary {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.perm-group > summary::-webkit-details-marker {
+  display: none;
+}
+
+.perm-group-head {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+
+.perm-group-head .badges {
+  flex: 1;
+  min-width: 0;
+}
+
+/* The arrow that shows a group opens. */
+.perm-group-head::after {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-right: 2px solid var(--muted);
+  border-bottom: 2px solid var(--muted);
+  transform: rotate(45deg);
+  transition: transform 0.15s ease;
+}
+
+.perm-group[open] .perm-group-head::after {
+  transform: rotate(-135deg);
+}
+
+.perm-group-everyday {
+  font-size: 0.82rem;
+}
+
+/* An open group lists all its roles below, so the preview hides. */
+.perm-group[open] .perm-group-preview {
+  display: none;
+}
+
+.perm-group .role-chip {
+  background: var(--surface);
+}
+
+.perm-group .role-chip .badge {
+  padding: 0 6px;
+  font-size: 0.72rem;
+}
+
+.perm-group .role-chip.more {
+  color: var(--muted);
+}
+
+.perm-group-body {
+  display: grid;
+  gap: 10px;
+  padding: 0 12px 12px;
+}
+
+.perm-group-body h4 {
+  margin: 0 0 6px;
+  font-size: 0.8rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.perm-group-lists {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 10px 16px;
+}
+
+.perm-group-more {
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
-  font-weight: 600;
-  min-width: 160px;
-}
-
-/* Each group of roles starts with its name and how many roles it shows. */
-.roles .group-row th {
-  padding-top: 16px;
-  background: transparent;
-  color: var(--ink);
-  border-bottom: 2px solid var(--border);
-}
-
-.roles .group-row:hover th {
-  background: transparent;
+  margin-top: 6px;
 }
 
 /* --- Case filters ----------------------------------------------------------------- */
@@ -2418,6 +2522,210 @@ dialog textarea {
 
 .rule-body .field {
   margin-bottom: 0;
+}
+
+/* Time zone picker: a button showing the chosen zone, opening a search box,
+   quick picks and every zone grouped by region (offset and time there now). */
+.tz-field {
+  margin-top: 16px;
+}
+
+.tz-trigger {
+  justify-content: flex-start;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 7px 11px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow);
+  color: var(--text);
+  font-weight: 400;
+  text-align: start;
+}
+
+.tz-trigger:hover {
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+}
+
+.tz-field.open .tz-trigger {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+.tz-summary {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
+  min-width: 0;
+}
+
+.tz-summary .muted {
+  font-size: 0.85rem;
+}
+
+.tz-chevron {
+  transition: transform 0.15s ease;
+}
+
+.tz-field.open .tz-chevron {
+  transform: rotate(180deg);
+}
+
+.tz-panel {
+  display: grid;
+  gap: 8px;
+  padding: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lift);
+  animation: pop 0.12s ease-out;
+}
+
+.tz-panel[hidden] {
+  display: none;
+}
+
+.tz-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.tz-search > .icon {
+  position: absolute;
+  inset-inline-start: 11px;
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.tz-search input {
+  padding-inline-start: 36px;
+}
+
+.tz-quick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tz-quick:empty {
+  display: none;
+}
+
+.tz-chip {
+  min-height: 30px;
+  padding: 4px 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text);
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.tz-chip:hover {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+}
+
+.tz-chip.on {
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+  border-color: var(--accent);
+}
+
+.tz-list {
+  position: relative;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: min(340px, 50vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.tz-group {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 8px 10px 4px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.tz-option {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 8rem 16px;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.tz-option.active {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.tz-option[aria-selected="true"] .tz-city {
+  font-weight: 700;
+}
+
+.tz-city {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tz-offset {
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.tz-time {
+  font-size: 0.85rem;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  text-align: end;
+}
+
+.tz-tick {
+  color: var(--accent);
+}
+
+.tz-list .empty {
+  padding: 16px;
+  text-align: center;
+}
+
+.tz-count {
+  font-size: 0.8rem;
+  text-align: end;
+}
+
+@media (max-width: 520px) {
+  .tz-option {
+    grid-template-columns: minmax(0, 1fr) auto 16px;
+    row-gap: 0;
+  }
+
+  .tz-time {
+    grid-row: 2;
+    grid-column: 1;
+    text-align: start;
+  }
+
+  .tz-tick {
+    grid-row: 1;
+    grid-column: 3;
+  }
 }
 
 .rule-body .field.wide {
@@ -3155,6 +3463,215 @@ dialog textarea {
   max-width: none;
 }
 
+/* Step-by-step editors (the ticket panel): a numbered step bar, one step shown at
+   a time, and Back / Next / Save underneath. */
+.wizard .wizard-panel {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.wizard-panel > .help:first-of-type {
+  margin-top: -4px;
+}
+
+.wizard-steps {
+  display: flex;
+  gap: 4px;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.wizard-steps li {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.wizard-step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 36px;
+  padding: 6px 10px;
+  color: var(--muted);
+  font-size: 0.88rem;
+  font-weight: 600;
+  line-height: 1.2;
+  text-align: start;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+}
+
+.wizard-step:hover {
+  color: var(--text);
+  background: var(--surface);
+}
+
+.wizard-step[aria-current="step"] {
+  color: var(--text);
+  background: var(--surface);
+  border-color: var(--border);
+  box-shadow: var(--shadow);
+}
+
+.wizard-step-number {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  font-size: 0.78rem;
+  border: 1.5px solid currentColor;
+  border-radius: 50%;
+}
+
+.wizard-step[aria-current="step"] .wizard-step-number {
+  color: var(--accent-text);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.wizard-step.done .wizard-step-number {
+  color: var(--accent-text);
+  background: var(--ok);
+  border-color: var(--ok);
+}
+
+.wizard-nav {
+  padding-top: var(--gap);
+  border-top: 1px solid var(--border);
+}
+
+.wizard-nav button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.wizard-position {
+  font-size: 0.85rem;
+}
+
+/* On phones only the open step keeps its name. */
+@media (max-width: 640px) {
+  .wizard-steps li {
+    flex: 0 0 auto;
+    min-width: 0;
+  }
+
+  .wizard-step:not([aria-current="step"]) .wizard-step-label {
+    display: none;
+  }
+
+  .wizard-position {
+    display: none;
+  }
+}
+
+.wizard-review {
+  display: grid;
+  margin: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.wizard-review-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.6fr) 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+}
+
+.wizard-review-row + .wizard-review-row {
+  border-top: 1px solid var(--border);
+}
+
+.wizard-review dt {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.wizard-review dd {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.wizard-review dd > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+@media (max-width: 640px) {
+  .wizard-review-row {
+    grid-template-columns: 1fr auto;
+  }
+
+  .wizard-review dt {
+    grid-column: 1 / -1;
+  }
+}
+
+.color-dot {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  background: var(--swatch);
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px var(--border);
+}
+
+/* Colour chooser: picker, hex box, eyedropper, swatches and a reset. */
+.color-chooser {
+  display: grid;
+  gap: 6px;
+}
+
+.color-chooser-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.color-chooser input[type="color"] {
+  width: 44px;
+  min-height: 36px;
+  padding: 2px;
+  cursor: pointer;
+}
+
+.color-chooser .color-hex {
+  width: calc(7ch + 32px);
+  min-width: calc(7ch + 32px);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  text-transform: uppercase;
+}
+
+.color-chooser .color-hex:invalid {
+  border-color: var(--danger);
+}
+
+.color-chooser .swatch {
+  cursor: pointer;
+}
+
+.color-status:empty {
+  display: none;
+}
+
 .category-row {
   padding: 12px;
   background: var(--surface-2);
@@ -3471,6 +3988,20 @@ dialog textarea {
 /* A feed's edit form opens under its row, full width. */
 .feed-row {
   flex-wrap: wrap;
+}
+
+/* A feed's message box with its "using the default" note and reset button. */
+.feed-message {
+  max-width: 760px;
+  margin-bottom: 16px;
+}
+
+.feed-message .field {
+  margin-bottom: 0;
+}
+
+.feed-message .toolbar {
+  margin: 8px 0 0;
 }
 
 .feed-editor {
@@ -5691,4 +6222,186 @@ dialog textarea {
 .brand-embed p {
   margin: 4px 0 0;
   font-size: 0.9rem;
+}
+
+/* --- Emoji picker (emojiInput) ---------------------------------------------------- */
+
+.emoji-input {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.emoji-input .emoji-value {
+  flex: 1;
+  min-width: 0;
+}
+
+/* The button comes after the text box in the page (so a click on the field's label
+   focuses the text box), but shows first. */
+.emoji-trigger {
+  order: -1;
+  flex: none;
+  width: 38px;
+  min-height: 38px;
+  padding: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  color: var(--muted);
+}
+
+.emoji-trigger:hover,
+.emoji-trigger[aria-expanded="true"] {
+  border-color: var(--accent);
+  background: var(--surface-2);
+}
+
+.emoji-shown {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.emoji-char {
+  font-size: 1.35rem;
+  line-height: 1;
+  font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", "Twemoji Mozilla", sans-serif;
+}
+
+.emoji-img {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+}
+
+.emoji-picker {
+  position: absolute;
+  z-index: 45;
+  top: calc(100% + 6px);
+  inset-inline-start: 0;
+  display: flex;
+  flex-direction: column;
+  /* As wide as the field on phones, at most 352px. */
+  width: min(352px, 100%);
+  min-width: 260px;
+  max-height: min(420px, 70vh);
+  padding: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lift);
+  animation: pop 0.12s ease-out;
+}
+
+.emoji-picker[hidden] {
+  display: none;
+}
+
+.emoji-search,
+.emoji-tabs,
+.emoji-hint {
+  flex: none;
+}
+
+.emoji-tabs {
+  display: flex;
+  gap: 2px;
+  margin: 6px 0 4px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+}
+
+.emoji-tabs[hidden] {
+  display: none;
+}
+
+.emoji-tab {
+  flex: none;
+  width: 32px;
+  min-height: 32px;
+  padding: 0;
+  background: none;
+}
+
+.emoji-tab .emoji-char {
+  font-size: 1.1rem;
+}
+
+.emoji-tab:hover {
+  background: var(--surface-2);
+}
+
+.emoji-list {
+  position: relative;
+  flex: 1;
+  min-height: 120px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.emoji-section-title {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  margin: 0;
+  padding: 6px 2px 4px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.emoji-section .help {
+  margin: 2px 2px 8px;
+}
+
+.emoji-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(36px, 1fr));
+  gap: 2px;
+  padding-bottom: 6px;
+}
+
+.emoji-option {
+  min-height: 36px;
+  padding: 0;
+  background: none;
+  border-radius: var(--radius-sm);
+}
+
+.emoji-option:hover,
+.emoji-option:focus-visible {
+  background: var(--surface-3);
+  outline: none;
+}
+
+.emoji-option:focus-visible {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.emoji-option[aria-disabled="true"] {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.emoji-hint {
+  min-height: 1.5em;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 0.8rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.emoji-none {
+  padding: 16px 4px;
+  text-align: center;
 }

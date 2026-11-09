@@ -63,6 +63,10 @@ function fakeDiscord() {
         { id, name: "@everyone", color: 0, position: 0, managed: false },
         { id: ROLE_ID, name: "Mods", color: 0, position: 3, managed: false },
       ],
+      emojis: [
+        { id: "800000000000000001", name: "pog", animated: false, available: true, roles: [] },
+        { id: "800000000000000002", name: "dance", animated: true, available: false, roles: [] },
+      ],
     })),
     channels: vi.fn(async () => [
       { id: TEXT_ID, name: "general", type: ChannelType.GuildText, position: 1 },
@@ -273,6 +277,10 @@ describe("dashboard", () => {
       { id: ROLE_ID, name: "Mods", country: false, color: 0, position: 3, managed: false, hoist: false, mentionable: false, permissions: "0", emoji: null },
     ]);
     expect(ok.json().channels.map((channel) => channel.id)).toEqual([TEXT_ID, LOGS_ID, VOICE_ID]);
+    expect(ok.json().emojis).toEqual([
+      { id: "800000000000000001", name: "pog", animated: false, available: true },
+      { id: "800000000000000002", name: "dance", animated: true, available: false },
+    ]);
 
     expect((await app.inject({ method: "GET", url: `/api/guilds/${OTHER_GUILD_ID}`, cookies })).statusCode).toBe(403);
     expect((await app.inject({ method: "GET", url: `/api/guilds/${NO_BOT_GUILD_ID}`, cookies })).statusCode).toBe(404);
@@ -392,7 +400,7 @@ describe("dashboard", () => {
     expect(discord.member).toHaveBeenCalledWith(OTHER_GUILD_ID, USER_ID);
 
     const guild = await app.inject({ method: "GET", url: `/api/guilds/${OTHER_GUILD_ID}`, cookies });
-    expect(guild.json()).toMatchObject({ access: "cases", settings: null, channels: [], roles: [] });
+    expect(guild.json()).toMatchObject({ access: "cases", settings: null, channels: [], roles: [], emojis: [] });
     expect((await app.inject({ method: "GET", url: `/api/guilds/${OTHER_GUILD_ID}/cases`, cookies })).statusCode).toBe(200);
     expect((await app.inject({ method: "GET", url: `/api/guilds/${OTHER_GUILD_ID}/stats`, cookies })).statusCode).toBe(200);
     const settings = await write(cookies, "PUT", `/api/guilds/${OTHER_GUILD_ID}/settings`, { modRoleId: ROLE_ID });
@@ -530,6 +538,9 @@ describe("dashboard", () => {
     const cookies = await login();
     const guild = await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}`, cookies });
     expect(guild.json().communityDefaults.welcomeMessage).toContain("{user}");
+    // The Feeds page shows these as each message box's placeholder.
+    expect(guild.json().communityDefaults.feedMessages.twitch).toContain("Twitch");
+    expect(guild.json().communityDefaults.feedMessages.youtube).toContain("{title}");
     expect(guild.json().guild.community).toBe(false);
 
     const saved = await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, {
@@ -1363,21 +1374,34 @@ describe("dashboard", () => {
 
     await guildSettings.set(GUILD_ID, Setting.LOGS_CHANNEL, TEXT_ID);
     const url = `/api/guilds/${GUILD_ID}/backup/restore`;
-    backup.settings[Setting.MOD_LOG_CHANNEL] = VOICE_ID;
-    const preview = (await write(cookies, "POST", url, { backup, dryRun: true })).json();
+    // An edited file is refused: the checksum no longer matches.
+    const edited = { ...backup, settings: { ...backup.settings, [Setting.MOD_LOG_CHANNEL]: VOICE_ID } };
+    const tampered = await write(cookies, "POST", url, { file: JSON.stringify(edited), fileName: "settings.json", dryRun: true });
+    expect(tampered.statusCode).toBe(400);
+    expect(tampered.json().message).toMatch(/changed or damaged/);
+
+    // The file is sent as uploaded, not as an object the browser parsed.
+    const upload = { file: download.body, fileName: "settings.json" };
+    expect((await write(cookies, "POST", url, { backup, dryRun: true })).statusCode).toBe(400);
+    expect((await write(cookies, "POST", url, { ...upload, fileName: "settings.exe" })).statusCode).toBe(400);
+    expect((await write(cookies, "POST", url, { ...upload, dryRun: "no" })).statusCode).toBe(400);
+
+    await guildSettings.set(GUILD_ID, Setting.MOD_LOG_CHANNEL, LOGS_ID);
+    const preview = (await write(cookies, "POST", url, { ...upload, dryRun: true })).json();
     expect(preview).toMatchObject({
       dryRun: true,
       changes: [{ setting: Setting.LOGS_CHANNEL, label: "Logs channel" }],
-      skipped: [{ setting: Setting.MOD_LOG_CHANNEL, reason: "invalid", label: "Mod-log channel" }],
+      skipped: [],
       unchanged: 1,
     });
     expect(guildSettings.get(GUILD_ID, Setting.LOGS_CHANNEL)).toBe(TEXT_ID);
 
-    expect((await write(cookies, "POST", url, { backup, dryRun: false })).json()).toMatchObject({ dryRun: false, changes: [{ setting: Setting.LOGS_CHANNEL }] });
+    expect((await write(cookies, "POST", url, { ...upload, dryRun: false })).json()).toMatchObject({ dryRun: false, changes: [{ setting: Setting.LOGS_CHANNEL }] });
     expect(guildSettings.get(GUILD_ID, Setting.LOGS_CHANNEL)).toBe(LOGS_ID);
-    expect(guildSettings.get(GUILD_ID, Setting.MOD_LOG_CHANNEL)).toBeUndefined();
+    // Settings missing from the file stay as they are.
+    expect(guildSettings.get(GUILD_ID, Setting.MOD_LOG_CHANNEL)).toBe(LOGS_ID);
 
-    const refused = await write(cookies, "POST", url, { backup: { format: "nope" } });
+    const refused = await write(cookies, "POST", url, { file: JSON.stringify({ format: "nope" }), fileName: "x.json" });
     expect(refused.statusCode).toBe(400);
     expect(refused.json()).toMatchObject({ error: "invalid-backup" });
   });

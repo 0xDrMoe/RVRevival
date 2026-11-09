@@ -1,4 +1,5 @@
 import { readdirSync, readFileSync } from "node:fs";
+import { PermissionFlagsBits } from "discord.js";
 import { describe, expect, it } from "vitest";
 
 const folder = new URL("../src/dashboard/public/locales/", import.meta.url);
@@ -29,6 +30,22 @@ describe("dashboard language files", () => {
       .filter(Boolean);
     for (const key of new Set(named)) {
       expect(english, key).toHaveProperty(key);
+    }
+  });
+
+  it("names every Discord permission on the Permissions page's role groups", () => {
+    const page = readFileSync(new URL("../src/dashboard/public/app.js", import.meta.url), "utf8");
+    const table = page.match(/const PERMISSION_BITS = \{([^}]+)\}/)[1];
+    const named = Object.fromEntries([...table.matchAll(/(\d+): "(\w+)"/g)].map((match) => [match[1], match[2]]));
+    for (const [name, value] of Object.entries(PermissionFlagsBits)) {
+      const bit = String(value.toString(2).length - 1);
+      if (name === "Administrator" || name === "ManageEmojisAndStickers") {
+        continue;
+      }
+      expect(named[bit], name).toBe(name);
+    }
+    for (const name of Object.values(named)) {
+      expect(english, name).toHaveProperty(`permBit_${name}`);
     }
   });
 });
