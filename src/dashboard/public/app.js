@@ -4,6 +4,7 @@
 //   #/                     your servers
 //   #/g/<id>/overview      a server's numbers at a glance, and which features are on
 //   #/g/<id>/guide         how to use the bot and every feature (?part=, or ?topic=)
+//   #/guide                the same guide for everyone, no login (also /guide)
 //   #/g/<id>/activity      every change made on the dashboard (?before=)
 //   #/g/<id>/cases         moderation cases (?q=&action=&user=&moderator=&from=&to=)
 //   #/g/<id>/members       find a member (?q=), or one member's history (?user=)
@@ -1080,21 +1081,23 @@ function showLogin() {
 
 // --- Landing page ----------------------------------------------------------------
 
-// What the bot does, for the landing page: [icon, tone, string key, commands].
-// tests/dashboardGuide.test.js checks every icon and command is a real one.
+// What the bot does, for the landing page: [icon, tone, string key, commands,
+// guide page]. The guide page is a topic id, or a part id for cards that cover
+// several topics. tests/dashboardGuide.test.js checks every icon, command and
+// guide page is a real one.
 const LANDING_FEATURES = [
-  ["gavel", "red", "landingModeration", ["/ban", "/timeout", "/warn", "/case"]],
-  ["shield", "amber", "landingAutomod", ["/settings automod", "/mediaonly"]],
-  ["shieldCheck", "purple", "landingProtection", ["/raid", "/antinuke", "/quarantine"]],
-  ["ticket", "cyan", "landingTickets", ["/tickets"]],
-  ["trophy", "green", "landingLeveling", ["/rank", "/leaderboard", "/levels"]],
-  ["users", "pink", "landingCommunity", ["/welcome", "/rolepanel", "/country"]],
-  ["list", "blue", "landingLogs", ["/modlogs"]],
-  ["calendar", "accent", "landingMessages", ["/schedule", "/feed", "/sticky"]],
-  ["gift", "amber", "landingGiveaways", ["/giveaway", "/starboard"]],
-  ["tag", "purple", "landingTags", ["/tag", "/tags", "/autoresponder"]],
-  ["volume", "cyan", "landingVoice", ["/voice"]],
-  ["bell", "pink", "landingTools", ["/remind", "/birthday", "/afk", "/highlight"]],
+  ["gavel", "red", "landingModeration", ["/ban", "/timeout", "/warn", "/case"], "moderation"],
+  ["shield", "amber", "landingAutomod", ["/settings automod", "/mediaonly"], "automod"],
+  ["shieldCheck", "purple", "landingProtection", ["/raid", "/antinuke", "/quarantine"], "raid"],
+  ["ticket", "cyan", "landingTickets", ["/tickets"], "tickets"],
+  ["trophy", "green", "landingLeveling", ["/rank", "/leaderboard", "/levels"], "levels"],
+  ["users", "pink", "landingCommunity", ["/welcome", "/rolepanel", "/country"], "community"],
+  ["list", "blue", "landingLogs", ["/modlogs"], "logs"],
+  ["calendar", "accent", "landingMessages", ["/schedule", "/feed", "/sticky"], "messages"],
+  ["gift", "amber", "landingGiveaways", ["/giveaway", "/starboard"], "giveaways"],
+  ["tag", "purple", "landingTags", ["/tag", "/tags", "/autoresponder"], "tags"],
+  ["volume", "cyan", "landingVoice", ["/voice"], "voice"],
+  ["bell", "pink", "landingTools", ["/remind", "/birthday", "/afk", "/highlight"], "reminders"],
 ];
 
 // The three steps from invite to a working setup: [icon, string key].
@@ -1267,6 +1270,17 @@ const landingJump = (id, label) =>
     label,
   );
 
+// A feature card's page in the public guide: a topic, or else a whole part.
+const landingGuideHref = (id) => (GUIDE_TOPICS.some((topic) => topic.id === id) ? guideLink(null, id) : guidePartLink(null, id));
+
+// A command on the landing page, linking to its page in the public guide
+// ("/settings automod" opens the /settings page).
+function landingCommand(command) {
+  const page = commandPageOf(command);
+  const code = h("code", { dir: "ltr" }, command);
+  return page ? h("a", { class: "landing-command", href: guideLink(null, page.id), title: t("landingCommandGuide", { command }) }, code) : code;
+}
+
 function showLanding(failedLogin = false) {
   const inviteButton = (extra = "") =>
     h(
@@ -1300,6 +1314,12 @@ function showLanding(failedLogin = false) {
   topnav.hidden = false;
   const dashboardHref = state.me ? "#/servers" : "/auth/login";
   const login = () => h("a", { class: "button landing-login big", href: dashboardHref }, icon("home"), t("landingDashboard"));
+  // Step 1 invites the bot, step 2 opens the dashboard, step 3 the public guide.
+  const stepActions = [
+    invites[2],
+    h("a", { class: "button big landing-step-action", href: dashboardHref }, icon("home"), t("landingDashboard")),
+    h("a", { class: "button big landing-step-action", href: "#/guide" }, icon("book"), t("landingOpenGuide")),
+  ];
   const status = h("span", { class: "landing-status" }, t("loading"));
   const stats = h("div", { class: "landing-stats", "aria-busy": "true" }, Array.from({ length: 6 }, () => h("span", { class: "sk sk-stat" })));
   const statsBand = h("section", { class: "landing-stats-band", "aria-label": t("landingStatsTitle") }, stats);
@@ -1341,14 +1361,15 @@ function showLanding(failedLogin = false) {
         h(
           "div",
           { class: "landing-features" },
-          LANDING_FEATURES.map(([iconName, tone, key, commands]) =>
+          LANDING_FEATURES.map(([iconName, tone, key, commands, guidePage]) =>
             h(
               "article",
               { class: `landing-feature card tone-${tone}` },
               iconChip(iconName, tone),
-              h("h3", {}, t(`${key}_title`)),
+              // The title's link covers the whole card; the commands sit above it.
+              h("h3", {}, h("a", { class: "landing-feature-link", href: landingGuideHref(guidePage) }, t(`${key}_title`))),
               h("p", {}, t(`${key}_text`)),
-              h("div", { class: "landing-commands" }, commands.map((command) => h("code", { dir: "ltr" }, command))),
+              h("div", { class: "landing-commands" }, commands.map(landingCommand)),
             ),
           ),
         ),
@@ -1367,7 +1388,7 @@ function showLanding(failedLogin = false) {
               h("span", { class: "landing-step-number" }, formatNumber(index + 1)),
               h("h3", {}, icon(iconName), t(`${key}_title`)),
               h("p", {}, t(`${key}_text`)),
-              index === 0 ? invites[2] : null,
+              stepActions[index],
             ),
           ),
         ),
@@ -1417,6 +1438,7 @@ function showLanding(failedLogin = false) {
           landingJump("dashboard", t("landingNavDashboard")),
           landingJump("faq", t("landingNavFaq")),
           h("a", { href: "/auth/login" }, t("landingDashboard")),
+          h("a", { href: "#/guide" }, t("page_guide")),
           h("a", { href: "/terms" }, t("landingTerms")),
           h("a", { href: "/privacy" }, t("landingPrivacy")),
         ),
@@ -9814,12 +9836,14 @@ async function showActivity(guildId) {
 
 // Every topic in guide.js, in order, with the part it's in.
 const GUIDE_TOPICS = GUIDE.flatMap(({ id, part, sections }) => sections.map((section) => ({ ...section, part, partId: id })));
-const guideLink = (guildId, topicId) => `#/g/${guildId}/guide${topicId ? `?topic=${topicId}` : ""}`;
+// Inside a server (#/g/<id>/guide) or the public guide (#/guide) when guildId is null.
+const guideRoot = (guildId) => (guildId ? `#/g/${guildId}/guide` : "#/guide");
+const guideLink = (guildId, topicId) => `${guideRoot(guildId)}${topicId ? `?topic=${topicId}` : ""}`;
 // The command reference's page for each slash command, by name ("/ban").
 const COMMAND_PAGES = new Map(GUIDE_TOPICS.filter((topic) => topic.command).map((topic) => [topic.command, topic]));
 // The command page a usage line ("/case view number") belongs to.
 const commandPageOf = (usage) => COMMAND_PAGES.get(usage.split(" ")[0]);
-const guidePartLink = (guildId, partId) => `#/g/${guildId}/guide?part=${partId}`;
+const guidePartLink = (guildId, partId) => `${guideRoot(guildId)}?part=${partId}`;
 
 // Guide text: `code`, **bold** and *italic* become elements, everything else stays text.
 function guideText(text) {
@@ -9997,7 +10021,7 @@ function guideTopicBody(topic, guildId) {
 
 // The guide's first page: one card per part, and a search over every topic.
 function guideHome(data) {
-  const guildId = data.guild.id;
+  const guildId = data?.guild?.id ?? null;
   const searchTexts = GUIDE_TOPICS.map((topic) => ({ topic, text: guideSearchText(topic) }));
   const partCard = (part) =>
     h(
@@ -10036,7 +10060,7 @@ function guideHome(data) {
 
 // One part: its topics, one row each.
 function guidePart(data, part) {
-  const guildId = data.guild.id;
+  const guildId = data?.guild?.id ?? null;
   const index = GUIDE.indexOf(part);
   const pagerEntry = (entry) => entry && { href: guidePartLink(guildId, entry.id), title: entry.part };
   return [
@@ -10054,10 +10078,10 @@ function guidePart(data, part) {
 
 // One topic: the other topics in its part, what it says, and the topics before and after it.
 function guideTopicPage(data, topic) {
-  const guildId = data.guild.id;
+  const guildId = data?.guild?.id ?? null;
   const part = GUIDE.find((entry) => entry.id === topic.partId);
   const index = GUIDE_TOPICS.indexOf(topic);
-  const page = topic.page && visiblePages(data).find((entry) => entry.id === topic.page);
+  const page = guildId && topic.page && visiblePages(data).find((entry) => entry.id === topic.page);
   const openPage = page ? h("a", { class: "button ghost small", href: `#/g/${guildId}/${page.id}` }, icon(page.icon, "icon small"), t("guideOpenPage", { page: t(`page_${page.id}`) })) : null;
   const pagerEntry = (entry) => entry && { href: guideLink(guildId, entry.id), title: entry.title };
   return [
@@ -10078,14 +10102,31 @@ function guideTopicPage(data, topic) {
   ];
 }
 
-// The guide: #/g/<id>/guide, ?part=<id> for one part, ?topic=<id> for one topic.
-async function showGuide(guildId) {
-  const data = await loadGuild(guildId);
+// The page a guide address asks for: ?topic=<id>, ?part=<id>, or the first page.
+function guideContent(data) {
   const query = new URLSearchParams(location.hash.split("?")[1] ?? "");
   const topic = GUIDE_TOPICS.find((entry) => entry.id === query.get("topic"));
   const part = !topic && GUIDE.find((entry) => entry.id === query.get("part"));
-  const content = topic ? guideTopicPage(data, topic) : part ? guidePart(data, part) : guideHome(data);
-  show(guildLayout(data, "guide", content));
+  return topic ? guideTopicPage(data, topic) : part ? guidePart(data, part) : guideHome(data);
+}
+
+// The guide inside a server: #/g/<id>/guide.
+async function showGuide(guildId) {
+  const data = await loadGuild(guildId);
+  show(guildLayout(data, "guide", guideContent(data)));
+}
+
+// The public guide: #/guide, readable without logging in. Its links stay in
+// the public guide; logged in, the top bar still has the account menu.
+async function showPublicGuide() {
+  await loadMeQuietly();
+  const back = h(
+    "div",
+    { class: "public-guide-bar" },
+    h("a", { class: "button ghost small", href: "#/" }, icon("chevronLeft", "icon small"), t("guideBackHome")),
+    h("a", { class: "button ghost small", href: state.me ? "#/servers" : "/auth/login" }, icon("home", "icon small"), t("landingDashboard")),
+  );
+  show(h("div", { class: "public-guide" }, back, guideContent(null)));
 }
 
 // --- Routing -----------------------------------------------------------------
@@ -10143,12 +10184,17 @@ function takeReturn() {
 
 // The landing page is for everyone, logged in or not. Logged in, it shows
 // the account menu and a link to the dashboard.
-async function showHome() {
+// Finds out whether someone is logged in, without sending them to log in.
+async function loadMeQuietly() {
   if (!state.me) {
     const response = await fetch("/api/me", { credentials: "same-origin" }).catch(() => null);
     state.me = response?.ok ? await response.json().catch(() => null) : null;
     renderChrome();
   }
+}
+
+async function showHome() {
+  await loadMeQuietly();
   const failedLogin = new URLSearchParams(location.hash.split("?")[1] ?? "").get("login") === "failed";
   showLanding(failedLogin);
 }
@@ -10191,6 +10237,8 @@ async function route() {
       await SHOW_PAGE[pageId](match[1]);
     } else if (path === "/servers") {
       await showServers();
+    } else if (path === "/guide") {
+      await showPublicGuide();
     } else {
       await showHome();
     }

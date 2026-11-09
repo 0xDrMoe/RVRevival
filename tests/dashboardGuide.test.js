@@ -149,16 +149,22 @@ describe("dashboard guide", () => {
 
   it("shows only real icons and commands on the landing page", () => {
     const block = page.slice(page.indexOf("const LANDING_FEATURES = ["), page.indexOf("const LANDING_STEPS"));
-    const features = [...block.matchAll(/^ {2}\["(\w+)", "\w+", "(\w+)", \[([^\]]*)\]\],$/gm)];
+    const features = [...block.matchAll(/^ {2}\["(\w+)", "\w+", "(\w+)", \[([^\]]*)\], "(\w+)"\],$/gm)];
+    expect(features.length).toBe(block.match(/^ {2}\[/gm).length);
     expect(features.length).toBeGreaterThan(8);
     const names = commandNames();
-    for (const [, iconName, key, list] of features) {
+    // Each command links to its command reference page, and each card to a guide topic or part.
+    const commandPages = new Set(topics.filter((topic) => topic.command).map((topic) => topic.command));
+    const guideIds = new Set([...topics.map((topic) => topic.id), ...GUIDE.map((part) => part.id)]);
+    for (const [, iconName, key, list, guidePage] of features) {
       expect(icons.has(iconName), `${key} icon ${iconName}`).toBe(true);
+      expect(guideIds.has(guidePage), `${key} guide page ${guidePage}`).toBe(true);
       for (const [, command] of list.matchAll(/"([^"]+)"/g)) {
         expect(
           names.some((name) => name === command || name.startsWith(`${command} `)),
           `${key} command ${command}`,
         ).toBe(true);
+        expect(commandPages.has(command.split(" ")[0]), `${key} command page ${command}`).toBe(true);
       }
     }
   });
