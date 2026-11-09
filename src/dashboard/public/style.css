@@ -2425,6 +2425,210 @@ dialog textarea {
   margin-bottom: 0;
 }
 
+/* Time zone picker: a button showing the chosen zone, opening a search box,
+   quick picks and every zone grouped by region (offset and time there now). */
+.tz-field {
+  margin-top: 16px;
+}
+
+.tz-trigger {
+  justify-content: flex-start;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 7px 11px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow);
+  color: var(--text);
+  font-weight: 400;
+  text-align: start;
+}
+
+.tz-trigger:hover {
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+}
+
+.tz-field.open .tz-trigger {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+.tz-summary {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
+  min-width: 0;
+}
+
+.tz-summary .muted {
+  font-size: 0.85rem;
+}
+
+.tz-chevron {
+  transition: transform 0.15s ease;
+}
+
+.tz-field.open .tz-chevron {
+  transform: rotate(180deg);
+}
+
+.tz-panel {
+  display: grid;
+  gap: 8px;
+  padding: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lift);
+  animation: pop 0.12s ease-out;
+}
+
+.tz-panel[hidden] {
+  display: none;
+}
+
+.tz-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.tz-search > .icon {
+  position: absolute;
+  inset-inline-start: 11px;
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.tz-search input {
+  padding-inline-start: 36px;
+}
+
+.tz-quick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tz-quick:empty {
+  display: none;
+}
+
+.tz-chip {
+  min-height: 30px;
+  padding: 4px 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text);
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.tz-chip:hover {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+}
+
+.tz-chip.on {
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+  border-color: var(--accent);
+}
+
+.tz-list {
+  position: relative;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: min(340px, 50vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.tz-group {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 8px 10px 4px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.tz-option {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 8rem 16px;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.tz-option.active {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.tz-option[aria-selected="true"] .tz-city {
+  font-weight: 700;
+}
+
+.tz-city {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tz-offset {
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.tz-time {
+  font-size: 0.85rem;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  text-align: end;
+}
+
+.tz-tick {
+  color: var(--accent);
+}
+
+.tz-list .empty {
+  padding: 16px;
+  text-align: center;
+}
+
+.tz-count {
+  font-size: 0.8rem;
+  text-align: end;
+}
+
+@media (max-width: 520px) {
+  .tz-option {
+    grid-template-columns: minmax(0, 1fr) auto 16px;
+    row-gap: 0;
+  }
+
+  .tz-time {
+    grid-row: 2;
+    grid-column: 1;
+    text-align: start;
+  }
+
+  .tz-tick {
+    grid-row: 1;
+    grid-column: 3;
+  }
+}
+
 .rule-body .field.wide {
   grid-column: 1 / -1;
   max-width: none;
