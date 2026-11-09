@@ -1,16 +1,21 @@
 // The /country command: a member picks the country they live in and gets a
 // role with that country's name. They can only pick once; after that, only
-// staff can change it (see countryStaff.js).
+// staff can change it (see countryStaff.js), unless the server lets members
+// remove their own role.
+//
+// Servers that pick continents and regions instead (countries/options.js)
+// offer those here, and places the server took off its list aren't offered.
 
 import { MessageFlags, SlashCommandBuilder, InteractionContextType } from "discord.js";
 import { countryList, MAX_NAME_LENGTH } from "../countries/countries.js";
+import { kindOf, normalizeCountryOptions, PlaceMode, placesFor, regionList } from "../countries/options.js";
 import { discordLocalizations, pickLanguage, translate } from "../i18n/i18n.js";
 import { result, Status, statusForOutcome } from "../logs/actionLog.js";
 import { CountryRoleService, Outcome } from "../roles/countryRoles.js";
 import { wrapMember, wrapServer } from "../roles/discordAdapters.js";
 import { Setting } from "../settings/guildSettings.js";
 import { isExpiredInteractionError } from "../utils/discordErrors.js";
-import { createCountryPicker } from "./countryPicker.js";
+import { createCountryPicker, placeMessageKey } from "./countryPicker.js";
 
 const COMMAND_NAME = "country";
 const OPTION_NAME = "country";
@@ -41,8 +46,15 @@ function isInChannel(interaction, channelId) {
   return interaction.channelId === channelId || interaction.channel?.parentId === channelId;
 }
 
-// Answers an autocomplete request with countries matching what was typed.
+// The places this server's members can pick, from Setting.COUNTRY_ROLES.
 // Shared with /country-staff.
+export function serverPlaces(guildSettings, guildId, { countries = countryList, regions = regionList } = {}) {
+  const options = normalizeCountryOptions(guildSettings?.get(guildId, Setting.COUNTRY_ROLES));
+  return { options, places: placesFor(options, { countries, regions }), all: options.mode === PlaceMode.REGIONS ? regions : countries };
+}
+
+// Answers an autocomplete request with places matching what was typed
+// (`countries`: the list to search). Shared with /country-staff.
 export async function suggestCountries(interaction, { countries, logger }) {
   let suggestions = [];
   try {
@@ -79,7 +91,8 @@ export function createCountryCommand(options) {
     forcedLanguage,
     confirmations,
     countries = countryList,
-    roleService = new CountryRoleService(logger, countries),
+    regions = regionList,
+    roleService = new CountryRoleService(logger, countries, regions),
     wrapServer: toServer = wrapServer,
     wrapMember: toMember = wrapMember,
   } = options;
@@ -104,15 +117,24 @@ export function createCountryCommand(options) {
     // aren't acknowledged within 3 seconds, and role changes can be slower.
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
+    const { options: placeOptions, places, all } = serverPlaces(guildSettings, interaction.guildId, { countries, regions });
     const typed = interaction.options.getString(OPTION_NAME);
-    const country = countries.find(typed);
+    const country = places.find(typed);
     if (!country) {
+      // A real place the server took off its list.
+      const known = all.find(typed);
+      if (known) {
+        const values = { country: known.name };
+        await interaction.editReply(message("placeNotOffered", values));
+        return result(Status.REFUSED, "placeNotOffered", values);
+      }
       logger.debug("Rejected an unknown country", {
         userId: interaction.user.id,
         inputLength: typed?.length ?? 0,
       });
-      await interaction.editReply(message("invalidCountry"));
-      return result(Status.REFUSED, "invalidCountry");
+      const key = placeOptions.mode === PlaceMode.REGIONS ? "invalidRegion" : "invalidCountry";
+      await interaction.editReply(message(key));
+      return result(Status.REFUSED, key);
     }
 
     const { outcome, role } = await roleService.giveCountryRole(
@@ -122,11 +144,12 @@ export function createCountryCommand(options) {
     );
     // When they already have a country, name the one they have.
     const values = { country: outcome === Outcome.LOCKED ? role.name : country.name };
-    await interaction.editReply(message(outcome, values));
+    await interaction.editReply(message(placeMessageKey(outcome, kindOf(country), placeOptions.memberRemove), values));
     return result(statusForOutcome(outcome), outcome, values);
   }
 
-  const autocomplete = (interaction) => suggestCountries(interaction, { countries, logger });
+  const autocomplete = (interaction) =>
+    suggestCountries(interaction, { countries: serverPlaces(guildSettings, interaction.guildId, { countries, regions }).places, logger });
 
   // The buttons on the /country-help guide do the same job without typing a command.
   const { components, componentPrefixes } = createCountryPicker({
@@ -134,8 +157,10 @@ export function createCountryCommand(options) {
     roleService,
     wrapServer: toServer,
     wrapMember: toMember,
+    guildSettings,
     forcedLanguage,
     confirmations,
+    regions,
   });
 
   return { name: COMMAND_NAME, data: buildCountryCommandData(), execute, autocomplete, components, componentPrefixes };

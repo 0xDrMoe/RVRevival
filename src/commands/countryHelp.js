@@ -11,7 +11,9 @@
 // Only members with the Manage Server permission can see or use it.
 //
 // The guide's wording and colour can be changed on the dashboard (see
-// countries/guide.js); the buttons can't. The last guide posted is remembered
+// countries/guide.js); the buttons can't, but they follow what the server
+// offers (countries or regions, hidden places, "Remove my country"; see
+// countries/options.js). The last guide posted is remembered
 // (Setting.COUNTRY_GUIDE_POST) so the dashboard can update it.
 
 import {
@@ -27,6 +29,7 @@ import {
 } from "discord.js";
 import { discordLocalizations, pickLanguage, SUPPORTED_LANGUAGES, translate } from "../i18n/i18n.js";
 import { DEFAULT_GUIDE_COLOR, normalizeGuide } from "../countries/guide.js";
+import { normalizeCountryOptions, PlaceMode } from "../countries/options.js";
 import { result, Status } from "../logs/actionLog.js";
 import { Setting } from "../settings/guildSettings.js";
 import { isPermissionError } from "../utils/discordErrors.js";
@@ -50,19 +53,38 @@ export function buildCountryHelpCommandData() {
     .toJSON();
 }
 
+// The built-in wording's translation keys, for servers that pick countries or regions.
+export const BUILT_IN_GUIDE_KEYS = Object.freeze({
+  [PlaceMode.COUNTRIES]: { title: "helpTitle", intro: "helpIntro", stepsTitle: "helpStepsTitle", steps: "helpSteps", notesTitle: "helpNotesTitle", notes: "helpNotes" },
+  [PlaceMode.REGIONS]: { title: "helpRegionTitle", intro: "helpRegionIntro", stepsTitle: "helpStepsTitle", steps: "helpRegionSteps", notesTitle: "helpNotesTitle", notes: "helpRegionNotes" },
+});
+
+// The notes the bot adds under the server's own: /country, "Remove my
+// country" (when members may) and the channel rule.
+export function guideExtraNotes(language, { isCountryChannel = false, places } = {}) {
+  const options = normalizeCountryOptions(places);
+  return [
+    translate(language, "helpFallbackNote"),
+    ...(options.memberRemove ? [translate(language, options.mode === PlaceMode.REGIONS ? "helpRemoveRegionNote" : "helpRemoveNote")] : []),
+    ...(isCountryChannel ? [translate(language, "helpChannelNote")] : []),
+  ];
+}
+
 // The guide's text in `language`: the server's own wording where it has one
-// (`guide`, see countries/guide.js), else the built-in translation.
-export function guideText(language, { isCountryChannel = false, guide } = {}) {
+// (`guide`, see countries/guide.js), else the built-in translation for what the
+// server offers (`places`: Setting.COUNTRY_ROLES).
+export function guideText(language, { isCountryChannel = false, guide, places } = {}) {
   const custom = normalizeGuide(guide);
-  const part = (name, key) => custom[name] ?? translate(language, key);
-  const notes = [part("notes", "helpNotes"), translate(language, "helpFallbackNote"), ...(isCountryChannel ? [translate(language, "helpChannelNote")] : [])].join("\n");
+  const keys = BUILT_IN_GUIDE_KEYS[normalizeCountryOptions(places).mode];
+  const part = (name) => custom[name] ?? translate(language, keys[name]);
+  const notes = [part("notes"), ...guideExtraNotes(language, { isCountryChannel, places })].join("\n");
   return {
     color: custom.color ?? DEFAULT_GUIDE_COLOR,
-    title: part("title", "helpTitle"),
-    intro: part("intro", "helpIntro"),
-    stepsTitle: part("stepsTitle", "helpStepsTitle"),
-    steps: part("steps", "helpSteps"),
-    notesTitle: part("notesTitle", "helpNotesTitle"),
+    title: part("title"),
+    intro: part("intro"),
+    stepsTitle: part("stepsTitle"),
+    steps: part("steps"),
+    notesTitle: part("notesTitle"),
     notes: notes.slice(0, 1024),
   };
 }
@@ -85,22 +107,19 @@ export function buildHelpEmbed(language, options = {}) {
 export function buildPostedGuide(language, options = {}) {
   return {
     embeds: [buildHelpEmbed(language, options).toJSON()],
-    components: buildPostedRows(language).map((row) => row.toJSON()),
+    components: buildPostedRows(language, options.places).map((row) => row.toJSON()),
   };
 }
 
 // The public guide's buttons: the picker's rows, with "Translate this message"
-// next to "Type my country".
-export function buildPostedRows(language) {
-  const rows = buildGuideRows(language);
-  rows.at(-1).addComponents(
-    new ButtonBuilder()
-      .setCustomId(TranslateId.BUTTON)
-      .setStyle(ButtonStyle.Secondary)
-      .setEmoji("🌐")
-      .setLabel(translate(language, "translateButtonLabel")),
-  );
-  return rows;
+// next to "Type my country". `places` is the server's Setting.COUNTRY_ROLES.
+export function buildPostedRows(language, places = undefined) {
+  const translateButton = new ButtonBuilder()
+    .setCustomId(TranslateId.BUTTON)
+    .setStyle(ButtonStyle.Secondary)
+    .setEmoji("🌐")
+    .setLabel(translate(language, "translateButtonLabel"));
+  return buildGuideRows(language, places, [translateButton]);
 }
 
 // The menu under a translated copy. Each language is listed in its own name
@@ -124,7 +143,7 @@ export function buildLanguageMenuRow(language) {
 export function buildTranslatedGuide(language, options = {}) {
   return {
     embeds: [buildHelpEmbed(language, options)],
-    components: [...buildGuideRows(language), buildLanguageMenuRow(language)],
+    components: [...buildGuideRows(language, options.places), buildLanguageMenuRow(language)],
   };
 }
 
@@ -169,9 +188,10 @@ export function createCountryHelpCommand({ guildSettings, forcedLanguage } = {})
     const isCountryChannel = countryChannelId !== undefined && countryChannelId === channel.id;
     let posted;
     try {
+      const places = placesFor(interaction);
       posted = await channel.send({
-        embeds: [buildHelpEmbed(serverLanguage, { isCountryChannel, guide: guideFor(interaction) })],
-        components: buildPostedRows(serverLanguage),
+        embeds: [buildHelpEmbed(serverLanguage, { isCountryChannel, guide: guideFor(interaction), places })],
+        components: buildPostedRows(serverLanguage, places),
       });
     } catch (error) {
       // Permissions can change between the check above and the send.
@@ -198,6 +218,8 @@ export function createCountryHelpCommand({ guildSettings, forcedLanguage } = {})
     return guide?.color === undefined ? undefined : { color: guide.color };
   }
 
+  const placesFor = (interaction) => guildSettings?.get(interaction.guildId, Setting.COUNTRY_ROLES);
+
   const isCountryChannel = (interaction) => {
     const countryChannelId = guildSettings?.get(interaction.guildId, Setting.COUNTRY_CHANNEL);
     return countryChannelId !== undefined && countryChannelId === interaction.channelId;
@@ -208,7 +230,7 @@ export function createCountryHelpCommand({ guildSettings, forcedLanguage } = {})
   async function showTranslation(interaction) {
     const language = pickLanguage(interaction.locale);
     await interaction.reply({
-      ...buildTranslatedGuide(language, { isCountryChannel: isCountryChannel(interaction), guide: guideFor(interaction, language) }),
+      ...buildTranslatedGuide(language, { isCountryChannel: isCountryChannel(interaction), guide: guideFor(interaction, language), places: placesFor(interaction) }),
       flags: MessageFlags.Ephemeral,
     });
     return null; // not worth a log entry
@@ -219,7 +241,7 @@ export function createCountryHelpCommand({ guildSettings, forcedLanguage } = {})
     const picked = interaction.values?.[0];
     // The menu only holds supported codes, but the value still comes from the client.
     const language = SUPPORTED_LANGUAGES.includes(picked) ? picked : pickLanguage(interaction.locale);
-    await interaction.update(buildTranslatedGuide(language, { isCountryChannel: isCountryChannel(interaction), guide: guideFor(interaction, language) }));
+    await interaction.update(buildTranslatedGuide(language, { isCountryChannel: isCountryChannel(interaction), guide: guideFor(interaction, language), places: placesFor(interaction) }));
     return null;
   }
 

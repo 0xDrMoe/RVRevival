@@ -3,6 +3,9 @@
 //   /country-staff set member:@someone country:Canada   make Canada their only country role
 //   /country-staff remove member:@someone               remove their country role
 //
+// On servers that pick continents and regions (countries/options.js), `set`
+// takes a region instead, and `remove` takes off region roles.
+//
 // Only members with the staff role chosen in /settings can use it. Discord
 // can't hide a command by role, so everyone sees it, but the bot refuses
 // anyone without the staff role. Admins can also hide it in Server Settings >
@@ -15,7 +18,8 @@ import { result, Status, statusForOutcome } from "../logs/actionLog.js";
 import { CountryRoleService, Outcome } from "../roles/countryRoles.js";
 import { wrapMember, wrapServer } from "../roles/discordAdapters.js";
 import { Setting } from "../settings/guildSettings.js";
-import { suggestCountries } from "./country.js";
+import { PlaceKind, PlaceMode, regionList } from "../countries/options.js";
+import { serverPlaces, suggestCountries } from "./country.js";
 
 const COMMAND_NAME = "country-staff";
 const MEMBER_OPTION = "member";
@@ -68,7 +72,8 @@ export function createCountryStaffCommand(options) {
     guildSettings,
     forcedLanguage,
     countries = countryList,
-    roleService = new CountryRoleService(logger, countries),
+    regions = regionList,
+    roleService = new CountryRoleService(logger, countries, regions),
     wrapServer: toServer = wrapServer,
     wrapMember: toMember = wrapMember,
   } = options;
@@ -107,22 +112,27 @@ export function createCountryStaffCommand(options) {
     const subcommand = interaction.options.getSubcommand();
     let country;
     if (subcommand === "set") {
-      country = countries.find(interaction.options.getString(COUNTRY_OPTION));
+      const { places, all } = serverPlaces(guildSettings, interaction.guildId, { countries, regions });
+      const typed = interaction.options.getString(COUNTRY_OPTION);
+      country = places.find(typed);
       if (!country) {
-        return refuse("invalidCountry");
+        const known = all.find(typed);
+        return known ? refuse("placeNotOffered", { country: known.name }) : refuse("invalidCountry");
       }
     }
 
     // Role changes can take longer than Discord's 3-second limit.
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
+    const { options: placeOptions } = serverPlaces(guildSettings, interaction.guildId, { countries, regions });
+    const placeKind = placeOptions.mode === PlaceMode.REGIONS ? PlaceKind.REGION : PlaceKind.COUNTRY;
     const server = toServer(interaction.guild);
     const member = toMember(target);
     const staffUserId = interaction.user.id;
     const change =
       subcommand === "set"
         ? await roleService.setCountryRole(server, member, country, staffUserId)
-        : await roleService.removeCountryRoles(server, member, staffUserId);
+        : await roleService.removeCountryRoles(server, member, staffUserId, [placeKind]);
 
     if (change.outcome === Outcome.ASSIGNED || change.outcome === Outcome.REMOVED) {
       logger.info("Staff changed a member's country role", {
@@ -146,7 +156,8 @@ export function createCountryStaffCommand(options) {
     return result(statusForOutcome(change.outcome), key, values);
   }
 
-  const autocomplete = (interaction) => suggestCountries(interaction, { countries, logger });
+  const autocomplete = (interaction) =>
+    suggestCountries(interaction, { countries: serverPlaces(guildSettings, interaction.guildId, { countries, regions }).places, logger });
 
   return { name: COMMAND_NAME, data: buildCountryStaffCommandData(), execute, autocomplete };
 }

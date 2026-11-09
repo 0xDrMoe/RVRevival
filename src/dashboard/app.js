@@ -71,7 +71,11 @@ import { BotStatsStore } from "../stats/botStats.js";
 import { checkTemplate, COUNTER_PRESETS, InvalidCounter, MAX_COUNTERS, newCounterId, normalizeCounters } from "../stats/statsCounters.js";
 import { buildPanelComponents, buildPanelMessage, panelLook, TICKET_COLOR } from "../tickets/tickets.js";
 import { DEFAULT_NAME_FORMAT, normalizeLook } from "../tickets/panel.js";
-import { buildPostedGuide, buildPostedRows, guideText } from "../commands/countryHelp.js";
+import { BUILT_IN_GUIDE_KEYS, buildPostedGuide } from "../commands/countryHelp.js";
+import { CONTINENT_EMOJI } from "../commands/countryPicker.js";
+import { continentOf, CONTINENTS } from "../countries/continents.js";
+import { DEFAULT_GUIDE_COLOR } from "../countries/guide.js";
+import { REGION_KEYS, regionList } from "../countries/options.js";
 import { ScheduledMessageStore } from "../scheduled/scheduledMessageStore.js";
 import { MAX_DELAY_MS, MAX_INTERVAL_MS, MAX_SCHEDULED, MAX_SCHEDULED_LENGTH, MIN_INTERVAL_MS } from "../scheduled/scheduler.js";
 import { buildCaseEmbed } from "../moderation/modLog.js";
@@ -555,7 +559,7 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
       }
       lines.push(`**${SETTING_RULES[setting].label}:** ${describeValue(setting, before)} → ${describeValue(setting, value)}`);
       ticketPanelChanged ||= TICKET_PANEL_SETTINGS.includes(setting);
-      if ((setting === Setting.COUNTRY_GUIDE || setting === Setting.COUNTRY_CHANNEL) && !(await redrawCountryGuide(guildId, guild))) {
+      if ([Setting.COUNTRY_GUIDE, Setting.COUNTRY_CHANNEL, Setting.COUNTRY_ROLES].includes(setting) && !(await redrawCountryGuide(guildId, guild))) {
         lines.push("The posted country guide couldn't be updated; post it again from the Country page.");
       }
     }
@@ -618,18 +622,27 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     };
   };
 
-  // The country guide's built-in text and its fixed buttons, in the server's
-  // language, for the Country page's form and preview.
+  // The country guide's built-in text (for countries and for regions), the
+  // labels of its fixed buttons and the places members can pick, in the
+  // server's language, for the Country page's form, place list and preview.
   const countryGuideInfo = (guildId, guild) => {
     const language = pickLanguage(guild.preferred_locale, config.forcedLanguage);
-    const { color, ...defaults } = guideText(language);
+    const builtIn = (keys) => ({ ...Object.fromEntries(Object.entries(keys).map(([part, key]) => [part, translate(language, key)])), color: DEFAULT_GUIDE_COLOR });
     return {
-      defaults: { ...defaults, notes: translate(language, "helpNotes"), color },
+      defaults: Object.fromEntries(Object.entries(BUILT_IN_GUIDE_KEYS).map(([mode, keys]) => [mode, builtIn(keys)])),
       fallbackNote: translate(language, "helpFallbackNote"),
       channelNote: translate(language, "helpChannelNote"),
-      buttons: buildPostedRows(language).map((row) =>
-        row.toJSON().components.map((button) => ({ label: button.label, emoji: button.emoji?.name ?? null, primary: button.style === 1 })),
-      ),
+      removeNotes: { countries: translate(language, "helpRemoveNote"), regions: translate(language, "helpRemoveRegionNote") },
+      labels: {
+        type: translate(language, "pickButtonLabel"),
+        remove: { countries: translate(language, "pickRemoveLabel"), regions: translate(language, "pickRemoveRegionLabel") },
+        translate: translate(language, "translateButtonLabel"),
+      },
+      continents: CONTINENTS.map((id) => ({ id, label: translate(language, REGION_KEYS[id]), emoji: CONTINENT_EMOJI[id] })),
+      places: {
+        countries: countryList.countries.map((country) => ({ code: country.code, name: country.name, continent: continentOf(country.code) ?? null })),
+        regions: regionList.countries.map((region) => ({ code: region.code, name: region.name })),
+      },
       post: guildSettings.get(guildId, Setting.COUNTRY_GUIDE_POST) ?? null,
     };
   };
@@ -638,6 +651,7 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     buildPostedGuide(pickLanguage(guild.preferred_locale, config.forcedLanguage), {
       isCountryChannel: channelId === guildSettings.get(guildId, Setting.COUNTRY_CHANNEL),
       guide: guildSettings.get(guildId, Setting.COUNTRY_GUIDE),
+      places: guildSettings.get(guildId, Setting.COUNTRY_ROLES),
     });
 
   // Gives the last posted country guide the saved wording. Returns false if

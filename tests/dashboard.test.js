@@ -1149,9 +1149,39 @@ describe("dashboard", () => {
   it("shows the country guide's built-in text and fixed buttons", async () => {
     const cookies = await login();
     const { countryGuide } = (await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}`, cookies })).json();
-    expect(countryGuide.defaults).toMatchObject({ title: "Get your country role", stepsTitle: "How to get it", color: 0x5865f2 });
-    expect(countryGuide.buttons.flat().map((button) => button.label)).toContain("Type my country");
+    expect(countryGuide.defaults.countries).toMatchObject({ title: "Get your country role", stepsTitle: "How to get it", color: 0x5865f2 });
+    expect(countryGuide.defaults.regions).toMatchObject({ title: "Get your region role", color: 0x5865f2 });
+    expect(countryGuide.labels).toMatchObject({ type: "Type my country", remove: { countries: "Remove my country", regions: "Remove my region" } });
+    expect(countryGuide.continents.map((continent) => continent.id)).toContain("europe");
+    expect(countryGuide.places.countries).toContainEqual({ code: "DE", name: "Germany", continent: "europe" });
+    expect(countryGuide.places.regions).toContainEqual({ code: "north-america", name: "North America" });
     expect(countryGuide.post).toBeNull();
+  });
+
+  it("saves what members pick and redraws the posted guide's buttons", async () => {
+    const cookies = await login();
+    discord.postMessage = vi.fn(async () => ({ id: "610000000000000002" }));
+    await write(cookies, "POST", `/api/guilds/${GUILD_ID}/country-guide`, { channelId: TEXT_ID });
+
+    const saved = await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, {
+      countryRoles: { mode: "regions", hidden: ["oceania"], memberRemove: true },
+    });
+    expect(saved.statusCode).toBe(200);
+    expect(saved.json().settings.countryRoles).toEqual({ mode: "regions", hidden: ["oceania"], memberRemove: true });
+    const [, , edit] = discord.editMessage.mock.calls.at(-1);
+    expect(edit.embeds[0].title).toBe("Get your region role");
+    const ids = edit.components.flatMap((row) => row.components.map((button) => button.custom_id));
+    expect(ids).toContain("country-picker:continent:europe");
+    expect(ids).not.toContain("country-picker:continent:oceania");
+    expect(ids).not.toContain("country-picker:open");
+    expect(ids).toContain("country-picker:remove");
+
+    // Defaults are saved as nothing; unknown places and empty lists are refused.
+    const reset = await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, { countryRoles: { mode: "countries", hidden: [], memberRemove: false } });
+    expect(reset.json().settings.countryRoles).toBeUndefined();
+    expect((await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, { countryRoles: { hidden: ["XX"] } })).statusCode).toBe(400);
+    const everyRegion = ["africa", "asia", "europe", "north-america", "south-america", "oceania"];
+    expect((await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, { countryRoles: { mode: "regions", hidden: everyRegion } })).statusCode).toBe(400);
   });
 
   it("posts the country guide and updates it when its wording is saved", async () => {

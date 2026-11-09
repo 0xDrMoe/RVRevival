@@ -155,7 +155,7 @@ describe("Pick my country button", () => {
       const outcome = await run(interaction);
 
       expect(interaction.deferReply).toHaveBeenCalledWith({ flags: MessageFlags.Ephemeral });
-      expect(lastEdit(interaction)).toEqual({ content: translate("en", "assigned", { country: "United States" }) });
+      expect(lastEdit(interaction)).toEqual({ content: translate("en", "assigned", { country: "United States" }), components: [] });
       expect(server.roles.map((role) => role.name)).toEqual(["United States"]);
       expect(outcome).toEqual({
         status: Status.SUCCESS,

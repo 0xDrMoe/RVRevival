@@ -19,6 +19,7 @@ import { checkCategories, describeCategories, InvalidCategories } from "../ticke
 import { checkLook, describeLook, InvalidPanel } from "../tickets/panel.js";
 import { checkJoinGate, InvalidJoinGate } from "../raid/raid.js";
 import { checkGuide, describeGuide, InvalidGuide } from "../countries/guide.js";
+import { checkCountryOptions, describeCountryOptions, InvalidCountryOptions } from "../countries/options.js";
 import { LogEvent } from "../logs/serverLog.js";
 import { TICKET_EVENTS } from "../tickets/ticketLog.js";
 import { checkLogRoutes, describeLogRoutes, InvalidLogRoutes } from "../logs/logRoutes.js";
@@ -64,6 +65,7 @@ export const SETTING_RULES = Object.freeze({
   [Setting.MOD_ROLE]: { kind: "role", label: "Mod role" },
   [Setting.COUNTRY_CHANNEL]: { kind: "channel", types: POSTING_CHANNELS, label: "/country channel" },
   [Setting.COUNTRY_GUIDE]: { kind: "countryGuide", label: "Country guide" },
+  [Setting.COUNTRY_ROLES]: { kind: "countryRoles", label: "Country roles" },
   [Setting.LOGS_CHANNEL]: { kind: "channel", types: POSTING_CHANNELS, label: "Logs channel" },
   [Setting.QUARANTINE_ROLE]: { kind: "role", label: "Quarantine role" },
   [Setting.MOD_LOG_CHANNEL]: { kind: "channel", types: POSTING_CHANNELS, label: "Mod-log channel" },
@@ -382,6 +384,15 @@ function checkValue(setting, value, { guildId, channels, roles }) {
         throw new InvalidSetting(setting, "Unknown permission setup.");
       }
       return value;
+    case "countryRoles":
+      try {
+        return checkCountryOptions(value);
+      } catch (error) {
+        if (error instanceof InvalidCountryOptions) {
+          throw new InvalidSetting(setting, error.message);
+        }
+        throw error;
+      }
     case "countryGuide":
       try {
         return checkGuide(value);
@@ -418,6 +429,9 @@ export function checkSettingChanges(changes, server) {
 
 // "<@&123>", "<#456>", "<@&1>, <@&2>", "Edited messages, Members joining" or "none", for the log entry.
 export function describeValue(setting, value) {
+  if (SETTING_RULES[setting]?.kind === "countryRoles") {
+    return describeCountryOptions(value);
+  }
   if (SETTING_RULES[setting]?.kind === "nativePermissions") {
     return value === false ? "off (the bot's roles only)" : "on";
   }

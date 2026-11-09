@@ -7,15 +7,20 @@
 //   4. Add the role to the member who ran the command (and nobody else).
 //
 // Staff can then set a member's country (replacing any country role they have)
-// or remove it.
+// or remove it. Servers can also let members remove their own.
 //
 // A "country role" is any role named after a country in the country list.
+// Servers that pick continents and regions instead (countries/options.js) give
+// region roles ("Europe") the same way; a "place" is a country or a region, and
+// the two kinds are counted apart, so a server's other roles named like a
+// region don't count as a country.
 //
 // This file doesn't use discord.js directly. It works with two small objects,
 // a "server" and a "member" (see discordAdapters.js), so the tests can use
 // fake ones instead of a real Discord server.
 
 import { countryList, normalizeName } from "../countries/countries.js";
+import { kindOf, PlaceKind, regionList } from "../countries/options.js";
 import { getDiscordErrorCode, isPermissionError, isRoleLimitError } from "../utils/discordErrors.js";
 import { KeyedLock } from "../utils/keyedLock.js";
 
@@ -38,15 +43,20 @@ export const Outcome = Object.freeze({
 const CREATE_REASON = "Country role created by /country";
 const ASSIGN_REASON = "Country role selected with /country";
 const STAFF_REASON = "Country role changed by staff";
+const SELF_REMOVE_REASON = "Country role removed by the member";
 
 export class CountryRoleService {
   #logger;
-  #countryNames;
+  // kind -> normalized role names
+  #names;
   #lock = new KeyedLock();
 
-  constructor(logger, countries = countryList) {
+  constructor(logger, countries = countryList, regions = regionList) {
     this.#logger = logger;
-    this.#countryNames = new Set(countries.countries.map((country) => normalizeName(country.name)));
+    this.#names = {
+      [PlaceKind.COUNTRY]: new Set(countries.countries.map((country) => normalizeName(country.name))),
+      [PlaceKind.REGION]: new Set(regions.countries.map((region) => normalizeName(region.name))),
+    };
   }
 
   // /country: gives a member their first country role. Returns { outcome, role?, created? }.
@@ -56,8 +66,8 @@ export class CountryRoleService {
     // One change per member at a time, so two quick /country commands can't
     // both see "no country yet" and give two roles.
     return this.#lock.run(memberKey(server, member), async () => {
-      // 1. Already has a country?
-      const heldRoles = this.heldCountryRoles(server, member);
+      // 1. Already has a country (or region, when the server picks regions)?
+      const heldRoles = this.heldCountryRoles(server, member, [kindOf(country)]);
       const sameCountry = heldRoles.find((role) => normalizeName(role.name) === normalizeName(country.name));
       if (sameCountry) {
         return { outcome: Outcome.ALREADY_ASSIGNED, role: sameCountry };
@@ -82,7 +92,7 @@ export class CountryRoleService {
     const details = { guildId: server.guildId, userId: member.userId, staffUserId, country: country.name };
 
     return this.#lock.run(memberKey(server, member), async () => {
-      const heldRoles = this.heldCountryRoles(server, member);
+      const heldRoles = this.heldCountryRoles(server, member, [kindOf(country)]);
       const keep = heldRoles.find((role) => normalizeName(role.name) === normalizeName(country.name));
       const toRemove = heldRoles.filter((role) => role !== keep);
       if (keep && toRemove.length === 0) {
@@ -123,12 +133,14 @@ export class CountryRoleService {
     });
   }
 
-  // Staff: removes every country role from the member. Returns { outcome, role?, removed? }.
-  async removeCountryRoles(server, member, staffUserId) {
+  // Removes the member's country roles (or region roles: `kinds`).
+  // Without `staffUserId` the member removed their own. Returns { outcome, role?, removed? }.
+  async removeCountryRoles(server, member, staffUserId, kinds = [PlaceKind.COUNTRY]) {
     const details = { guildId: server.guildId, userId: member.userId, staffUserId };
+    const reason = staffUserId ? STAFF_REASON : SELF_REMOVE_REASON;
 
     return this.#lock.run(memberKey(server, member), async () => {
-      const heldRoles = this.heldCountryRoles(server, member);
+      const heldRoles = this.heldCountryRoles(server, member, kinds);
       if (heldRoles.length === 0) {
         return { outcome: Outcome.NOTHING_TO_REMOVE };
       }
@@ -141,7 +153,7 @@ export class CountryRoleService {
         return { outcome: Outcome.HIERARCHY, role: blocked };
       }
 
-      const removed = await this.#removeRoles(member, heldRoles, details);
+      const removed = await this.#removeRoles(member, heldRoles, details, reason);
       if (removed.outcome) {
         return removed;
       }
@@ -149,11 +161,12 @@ export class CountryRoleService {
     });
   }
 
-  // The country roles this member has, oldest first.
-  heldCountryRoles(server, member) {
+  // The country roles (or region roles, or both: `kinds`) this member has, oldest first.
+  heldCountryRoles(server, member, kinds = [PlaceKind.COUNTRY]) {
+    const names = kinds.map((kind) => this.#names[kind]);
     return server
       .listRoles()
-      .filter((role) => !role.managed && member.hasRole(role.id) && this.#countryNames.has(normalizeName(role.name)))
+      .filter((role) => !role.managed && member.hasRole(role.id) && names.some((set) => set.has(normalizeName(role.name))))
       .sort(oldestFirst);
   }
 
@@ -259,10 +272,10 @@ export class CountryRoleService {
   }
 
   // Returns {} when every role was removed, or { outcome, role } for the first failure.
-  async #removeRoles(member, roles, details) {
+  async #removeRoles(member, roles, details, reason = STAFF_REASON) {
     for (const role of roles) {
       try {
-        await member.removeRole(role.id, STAFF_REASON);
+        await member.removeRole(role.id, reason);
       } catch (error) {
         this.#logger.error("Couldn't remove the country role", {
           ...details,
