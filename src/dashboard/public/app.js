@@ -38,6 +38,7 @@ import {
 } from "./automodPresets.js";
 import { CHANGELOG } from "./changelog.js";
 import { GUIDE } from "./guide.js";
+import { PAGE_ALIASES, pageMeta } from "./pageMeta.js";
 import { RESPONDER_TEMPLATES, TAG_TEMPLATES, responderFromTemplate, tagFromTemplate } from "./customCommandTemplates.js";
 import { buildCurve, CURVE_PRESETS, MAX_FORMULA_LENGTH, STANDARD_FORMULA, standardCurve as standardLevelCurve, tryBuildCurve } from "./levelCurve.js";
 import { contextsUsing, exampleValues, fillVariables, findVariableProblems, variablesFor } from "./variables.js";
@@ -181,8 +182,6 @@ const NAV = [
   },
 ];
 const PAGES = NAV.flatMap((section) => section.pages.map((page) => ({ ...page, group: section.group })));
-// Addresses from older versions of the dashboard.
-const PAGE_ALIASES = { settings: "moderation", community: "welcome" };
 
 // Icons: the inside of a 24×24 stroked SVG. Fixed markup, never built from data.
 const ICONS = {
@@ -10672,6 +10671,45 @@ async function showPublicGuide() {
 
 // --- Routing -----------------------------------------------------------------
 
+// A dashboard page's name in the reader's language, for the tab title.
+function pageLabel(pageId) {
+  const key = `page_${pageId}`;
+  const label = t(key);
+  return label === key ? undefined : label;
+}
+
+// Sets one tag in <head>, adding it when the page has none; null removes it.
+function setHeadTag(selector, create, attribute, value) {
+  const found = document.head.querySelector(selector);
+  if (value === null) {
+    found?.remove();
+    return;
+  }
+  (found ?? document.head.appendChild(create())).setAttribute(attribute, value);
+}
+
+// Keeps the tab title and the <head> tags in step with the page shown. The
+// server fills in the same tags for the address a visit starts on (seo.js);
+// both read them from pageMeta.js.
+function updatePageMeta() {
+  const meta = pageMeta(location.pathname, location.search, pageLabel);
+  const address = meta.path === null ? null : `${location.origin}${meta.path}`;
+  const metaTag = (attribute, name) => () => h("meta", { [attribute]: name });
+  document.title = meta.title;
+  for (const [attribute, name, content] of [
+    ["name", "description", meta.description],
+    ["name", "robots", meta.index ? null : "noindex"],
+    ["property", "og:title", meta.heading],
+    ["property", "og:description", meta.description],
+    ["property", "og:url", address],
+    ["name", "twitter:title", meta.heading],
+    ["name", "twitter:description", meta.description],
+  ]) {
+    setHeadTag(`meta[${attribute}="${name}"]`, metaTag(attribute, name), "content", content);
+  }
+  setHeadTag('link[rel="canonical"]', () => h("link", { rel: "canonical" }), "href", address);
+}
+
 const SHOW_PAGE = {
   overview: showOverview,
   guide: showGuide,
@@ -10756,8 +10794,8 @@ async function route() {
   state.unsaved = false;
   state.lastUrl = currentUrl();
   closeMenus();
-  const pageId = match && (PAGE_ALIASES[match[2]] ?? match[2] ?? "overview");
-  if (match && PAGE_ALIASES[match[2]]) {
+  const pageId = match && (PAGE_ALIASES.get(match[2]) ?? match[2] ?? "overview");
+  if (match && PAGE_ALIASES.has(match[2])) {
     history.replaceState(null, "", `/g/${match[1]}/${pageId}${location.search}`);
     state.lastUrl = currentUrl();
   }
@@ -10773,6 +10811,7 @@ async function route() {
     show(skeleton());
   }
   window.scrollTo({ top: 0 });
+  updatePageMeta();
   try {
     if (appeal) {
       await showAppealForm(appeal[1]);

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { loadDashboardConfig } from "../src/config.js";
-import { assetVersion, buildDashboard, idCreatedAt, PUBLIC_PAGES } from "../src/dashboard/app.js";
+import { assetVersion, buildDashboard, idCreatedAt } from "../src/dashboard/app.js";
 import { canManage, DiscordApiError } from "../src/dashboard/discordApi.js";
 import { SessionStore } from "../src/dashboard/sessions.js";
 import { checkSettingChanges, InvalidSetting } from "../src/dashboard/settingsRules.js";
@@ -182,7 +182,7 @@ describe("dashboard", () => {
     const page = await app.inject({ method: "GET", url: "/" });
     const version = page.body.match(/app\.js\?v=([0-9a-f]{12})/)[1];
     expect(page.body).toContain(`/style.css?v=${version}`);
-    expect(page.body).toContain('"@type": "SoftwareApplication"');
+    expect(page.body).toContain('"@type":"SoftwareApplication"');
     expect(page.body).toContain('<meta name="theme-color" content="#7c5cff" />');
     const script = await app.inject({ method: "GET", url: `/app.js?v=${version}` });
     expect(script.headers["cache-control"]).toBe("public, max-age=31536000, immutable");
@@ -193,6 +193,36 @@ describe("dashboard", () => {
     expect(assetVersion()).toBe(version);
   });
 
+  it("gives each page its own title and link preview in the HTML", async () => {
+    const pageAt = async (url) => (await app.inject({ method: "GET", url })).body;
+    const home = await pageAt("/");
+    expect(home).toContain("<title>Rabble: Discord bot and dashboard</title>");
+    expect(home).toContain(`<link rel="canonical" href="${URL_ORIGIN}/" />`);
+    expect(await pageAt("/index.html")).toBe(home);
+    const topic = await pageAt("/guide?topic=cmdban&utm_source=discord");
+    expect(topic).toContain("<title>/ban command · Rabble Guide</title>");
+    expect(topic).toContain(`<link rel="canonical" href="${URL_ORIGIN}/guide?topic=cmdban" />`);
+    expect(topic).toContain(`<meta property="og:url" content="${URL_ORIGIN}/guide?topic=cmdban" />`);
+    expect(topic).toContain('<meta property="og:title" content="/ban command · Rabble Guide" />');
+    expect(topic).not.toContain('"@type":"SoftwareApplication"');
+    expect(await pageAt("/guide?topic=nope")).toBe(await pageAt("/guide"));
+    expect(await pageAt("/status")).toContain('<meta property="og:title" content="Rabble status" />');
+    expect(await pageAt("/changelog")).toContain("<title>What&#39;s new · Rabble</title>");
+    expect(await pageAt("/terms")).toContain('<meta property="og:title" content="Rabble Terms of Service" />');
+    expect(await pageAt("/privacy")).toContain(`<meta property="og:url" content="${URL_ORIGIN}/privacy" />`);
+    const cases = await pageAt(`/g/${GUILD_ID}/cases?user=1`);
+    expect(cases).toContain("<title>Cases · Rabble dashboard</title>");
+    expect(cases).toContain('<meta name="robots" content="noindex" />');
+    expect(cases).not.toContain(GUILD_ID);
+    expect(cases).not.toContain('rel="canonical"');
+    for (const url of ["/", "/guide?part=moderation", "/servers", `/appeal/${GUILD_ID}`, "/terms"]) {
+      const page = await pageAt(url);
+      expect(page, url).not.toMatch(/%[A-Z_]+%/);
+      expect(page.match(/<title>/g), url).toHaveLength(1);
+      expect(page.match(/<meta name="description"/g), url).toHaveLength(1);
+    }
+  });
+
   it("tells search engines what to crawl", async () => {
     const robots = await app.inject({ method: "GET", url: "/robots.txt" });
     expect(robots.statusCode).toBe(200);
@@ -200,9 +230,11 @@ describe("dashboard", () => {
     expect(robots.body).toContain(`Sitemap: ${URL_ORIGIN}/sitemap.xml`);
     const sitemap = await app.inject({ method: "GET", url: "/sitemap.xml" });
     expect(sitemap.headers["content-type"]).toContain("application/xml");
-    for (const path of PUBLIC_PAGES) {
+    for (const path of ["/", "/guide", "/status", "/changelog", "/terms", "/privacy", "/guide?part=moderation", "/guide?topic=cmdban"]) {
       expect(sitemap.body).toContain(`<loc>${URL_ORIGIN}${path}</loc>`);
     }
+    expect(sitemap.body).not.toContain("/servers");
+    expect(sitemap.body).not.toContain("/g/");
   });
 
   it("answers uptime monitors, with a 503 while the bot is offline", async () => {

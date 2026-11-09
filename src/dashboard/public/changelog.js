@@ -4,6 +4,14 @@
 export const CHANGELOG = [
   {
     date: "2026-11-09",
+    title: "Link previews for every page",
+    items: [
+      "Share a link to a guide page, a command's page, the status page or What's new, and the preview in Discord shows that page's own title and description instead of the home page's.",
+      "Browser tabs are named after the page you're on, and search engines can find every guide page.",
+    ],
+  },
+  {
+    date: "2026-11-09",
     title: "Error codes",
     items: ["When something breaks, the error message now shows a short code (like E-7F3A9C). Give it to staff or support and they can find exactly what went wrong."],
   },

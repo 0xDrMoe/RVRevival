@@ -95,16 +95,16 @@ import { brandingOf, InvalidBranding, planBrandingChange } from "../branding/bra
 import { botCommandCatalog } from "../permissions/catalog.js";
 import { normalizeCommandRules } from "../permissions/commandRules.js";
 import { CUSTOM, InvalidPreset, planPreset } from "../permissions/presets.js";
+import { pageRenderer, publicRobots, publicSitemap } from "./seo.js";
 
 const PUBLIC_FOLDER = fileURLToPath(new URL("./public/", import.meta.url));
 
 // For text put into the page's HTML.
 const escapeHtml = (text) => text.replace(/[&<>"']/g, (char) => `&#${char.charCodeAt(0)};`);
 
-// Addresses the page draws itself (public/app.js routes them).
+// Addresses the page draws itself (public/app.js routes them). Each one is
+// named in public/pageMeta.js, for its title and link preview.
 export const PAGE_PATHS = ["/servers", "/guide", "/status", "/changelog", "/appeal/:guildId", "/g/:guildId", "/g/:guildId/:page"];
-// The pages anyone can read, for the sitemap.
-export const PUBLIC_PAGES = ["/", "/guide", "/status", "/changelog", "/terms", "/privacy"];
 const VERSIONED_ASSET = /^\/[\w./-]+\.(?:js|css)\?v=[0-9a-f]{12}$/;
 const LONG_LIVED_ASSET = /^\/(?:fonts\/[\w.-]+|og-image\.jpg|favicon\.svg)$/;
 
@@ -124,27 +124,6 @@ export function assetVersion(folder = PUBLIC_FOLDER) {
   walk(folder.endsWith("/") ? folder : `${folder}/`);
   return hash.digest("hex").slice(0, 12);
 }
-
-export function publicRobots(baseUrl) {
-  return [
-    "User-agent: *",
-    "Disallow: /api/",
-    "Disallow: /auth/",
-    "Disallow: /g/",
-    "Disallow: /servers",
-    "Disallow: /appeal/",
-    "Allow: /",
-    "",
-    `Sitemap: ${baseUrl}/sitemap.xml`,
-    "",
-  ].join("\n");
-}
-
-export function publicSitemap(baseUrl) {
-  const urls = PUBLIC_PAGES.map((path) => `  <url><loc>${escapeHtml(baseUrl + path)}</loc></url>`).join("\n");
-  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>\n`;
-}
-
 
 // LEGAL_CONTACT as shown on the Terms and Privacy pages: an email address or
 // web address becomes a link. Until it's set, the pages say so plainly.
@@ -329,16 +308,25 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
   await app.register(fastifyCompress, { brotliOptions: { params: { [zlib.BROTLI_PARAM_QUALITY]: 5 } } });
   await app.register(fastifyStatic, { root: PUBLIC_FOLDER, index: false });
 
-  // The page itself, with the site's address filled in for link previews
-  // (Discord and other sites want absolute URLs there). Always revalidated, so
-  // a deploy shows at once.
+  // The page itself. Each address gets its own title, description, canonical
+  // address and link preview tags (seo.js), since Discord and search engines
+  // read them from this HTML. Always revalidated, so a deploy shows at once.
   // %VERSION% changes whenever a file in public/ does, so the page's script
   // and stylesheet links can be cached for a year and still update on deploy.
   const baseUrl = config.url.replace(/\/+$/, "");
-  const page = readFileSync(new URL("./public/index.html", import.meta.url), "utf8")
-    .replaceAll("%BASE_URL%", escapeHtml(baseUrl))
-    .replaceAll("%VERSION%", assetVersion());
-  const sendPage = (request, reply) => reply.header("Cache-Control", "no-cache").type("text/html; charset=utf-8").send(page);
+  const renderPage = pageRenderer(
+    readFileSync(new URL("./public/index.html", import.meta.url), "utf8").replaceAll("%VERSION%", assetVersion()),
+    baseUrl,
+  );
+  const sendPage = (request, reply) => {
+    const queryAt = request.url.indexOf("?");
+    const pathname = queryAt === -1 ? request.url : request.url.slice(0, queryAt);
+    const search = queryAt === -1 ? "" : request.url.slice(queryAt);
+    return reply
+      .header("Cache-Control", "no-cache")
+      .type("text/html; charset=utf-8")
+      .send(renderPage(pathname === "/index.html" ? "/" : pathname, search));
+  };
   app.get("/", sendPage);
   app.get("/index.html", sendPage);
   // Addresses the page draws itself (public/app.js routes them). Anything else
@@ -372,9 +360,12 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
   // The Terms of Service and Privacy Policy, linked from the landing page and
   // given to Discord in the Developer Portal. Plain pages, readable without JavaScript.
   for (const name of ["terms", "privacy"]) {
-    const legalPage = readFileSync(new URL(`./legal/${name}.html`, import.meta.url), "utf8")
-      .replaceAll("%BASE_URL%", escapeHtml(config.url.replace(/\/+$/, "")))
-      .replaceAll("%CONTACT%", contactHtml(config.legalContact));
+    const legalPage = pageRenderer(
+      readFileSync(new URL(`./legal/${name}.html`, import.meta.url), "utf8")
+        .replaceAll("%BASE_URL%", escapeHtml(baseUrl))
+        .replaceAll("%CONTACT%", contactHtml(config.legalContact)),
+      baseUrl,
+    )(`/${name}`);
     app.get(`/${name}`, (request, reply) => reply.header("Cache-Control", "no-cache").type("text/html; charset=utf-8").send(legalPage));
   }
 
