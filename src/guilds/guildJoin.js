@@ -81,7 +81,7 @@ export function createGuildJoinHandler({ guildSettings, logger, dashboardUrl, fo
       return;
     }
     const language = pickLanguage(guild.preferredLocale, forcedLanguage);
-    const base = dashboardUrl ? `${dashboardUrl}/#/g/${guild.id}` : undefined;
+    const base = dashboardUrl ? `${dashboardUrl}/g/${guild.id}` : undefined;
     await channel.send({
       embeds: [introEmbed({ language, dashboardUrl: base, countriesOff })],
       components: base ? [dashboardButtonRow(base, translate(language, "dashboardOpen"))] : [],

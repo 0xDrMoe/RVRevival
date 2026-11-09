@@ -19,7 +19,7 @@ const COMMAND_NAME = "dashboard";
 
 // The server's page on the dashboard, or null when there's no dashboard.
 export function dashboardLink(dashboardUrl, guildId) {
-  return dashboardUrl && guildId ? `${dashboardUrl}/#/g/${guildId}` : null;
+  return dashboardUrl && guildId ? `${dashboardUrl}/g/${guildId}` : null;
 }
 
 // A row with one link button, for any message that should point at the dashboard.

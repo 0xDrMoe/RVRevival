@@ -198,7 +198,7 @@ async function start() {
     // Ban DMs link the dashboard's appeal form when the server takes appeals.
     appealLink: (guild) =>
       config.dashboardUrl && normalizeAppeals(guildSettings.get(guild.id, Setting.APPEALS)).enabled
-        ? `${config.dashboardUrl}/#/appeal/${guild.id}`
+        ? `${config.dashboardUrl}/appeal/${guild.id}`
         : null,
   });
   // Quarantined members' roles (/quarantine), saved so they can be given back.

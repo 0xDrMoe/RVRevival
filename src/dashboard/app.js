@@ -285,8 +285,11 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
   const sendPage = (request, reply) => reply.header("Cache-Control", "no-cache").type("text/html; charset=utf-8").send(page);
   app.get("/", sendPage);
   app.get("/index.html", sendPage);
-  // The guide is public: /guide is a short address for the page's #/guide.
-  app.get("/guide", (request, reply) => reply.redirect("/#/guide"));
+  // Addresses the page draws itself (public/app.js routes them). Anything else
+  // that isn't a file or an API route stays a 404.
+  for (const path of ["/servers", "/guide", "/appeal/:guildId", "/g/:guildId", "/g/:guildId/:page"]) {
+    app.get(path, sendPage);
+  }
 
   // The Terms of Service and Privacy Policy, linked from the landing page and
   // given to Discord in the Developer Portal. Plain pages, readable without JavaScript.
@@ -359,7 +362,7 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     const saved = request.unsignCookie(request.cookies[STATE_COOKIE] ?? "");
     reply.clearCookie(STATE_COOKIE, cookieOptions);
     if (error || !code || !saved.valid || !sameText(saved.value, state)) {
-      return reply.redirect("/#/?login=failed");
+      return reply.redirect("/?login=failed");
     }
     let token;
     let user;
@@ -368,7 +371,7 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
       user = await discord.fetchUser(token.accessToken);
     } catch (loginError) {
       logger.warn("Dashboard login failed", { error: loginError });
-      return reply.redirect("/#/?login=failed");
+      return reply.redirect("/?login=failed");
     }
     // Logging in again replaces this browser's old login instead of leaving it behind.
     // (Its Discord token isn't revoked: Discord may end the new one with it.)
@@ -382,7 +385,7 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     });
     reply.setCookie(SESSION_COOKIE, sessionToken, { ...cookieOptions, maxAge: SESSION_DAYS * 24 * 60 * 60 });
     logger.info("Dashboard login", { userId: user.id });
-    return reply.redirect("/#/servers");
+    return reply.redirect("/servers");
   });
 
   app.post("/auth/logout", async (request, reply) => {
@@ -1434,7 +1437,7 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
         fields: [
           { name: "Ban reason", value: (appeal.banReason ?? "*none given*").slice(0, 1024) },
           ...appeal.answers.map((entry) => ({ name: (entry.question ?? "Why should the ban be lifted?").slice(0, 256), value: entry.answer.slice(0, 1024) })),
-          { name: "Decide", value: `${config.url}/#/g/${guild.id}/appeals?appeal=${appeal.number}` },
+          { name: "Decide", value: `${config.url}/g/${guild.id}/appeals?appeal=${appeal.number}` },
         ],
         footer: { text: `User ID ${session.userId}` },
         timestamp: new Date(appeal.createdAt).toISOString(),
