@@ -1115,7 +1115,6 @@
   "feedErrorNotAFeed": "Ce lien n'est pas un flux RSS ou Atom. Cherche le lien RSS du site.",
   "feedErrorNoTwitchAccount": "Aucune chaîne Twitch ne porte ce nom.",
   "feedErrorTwitchOff": "Les notifications Twitch ne sont pas encore activées sur ce bot : son propriétaire doit d'abord ajouter des clés Twitch.",
-  "feedErrorNoShorts": "YouTube n'a pas de liste de Shorts pour cette chaîne. Réessaie quand elle aura publié un Short.",
   "feedErrorKickOff": "Les notifications Kick ne sont pas encore activées sur ce bot : son propriétaire doit d'abord ajouter des clés Kick.",
   "feedErrorNoKickAccount": "Aucune chaîne Kick ne porte ce nom.",
   "feedAdded": "Je suis **{name}** dans {channel} (flux `{id}`). Les nouveaux posts arrivent en moins de 10 minutes, les lives YouTube en moins de 3 et ceux de Twitch ou Kick en moins de 2 ; les anciens ne sont pas publiés.",

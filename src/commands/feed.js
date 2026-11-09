@@ -68,7 +68,6 @@ const FEED_ERROR_KEYS = {
   blocked: "feedErrorBlocked",
   unreachable: "feedErrorUnreachable",
   "not-a-feed": "feedErrorNotAFeed",
-  "no-shorts": "feedErrorNoShorts",
 };
 
 // Errors that name the platform: Twitch or Kick.

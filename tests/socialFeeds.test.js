@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { createFeedCommand } from "../src/commands/feed.js";
-import { FeedStore } from "../src/feeds/feedStore.js";
-import { createFeedPoller, LIVE_CHECK_EVERY_MS as YOUTUBE_LIVE_EVERY_MS } from "../src/feeds/feedPoller.js";
+import { FeedStore, PENDING_FIRST_READ } from "../src/feeds/feedStore.js";
+import { CHECK_EVERY_MS, createFeedPoller, LIVE_CHECK_EVERY_MS as YOUTUBE_LIVE_EVERY_MS } from "../src/feeds/feedPoller.js";
 import { addFeed, buildFeedPost } from "../src/feeds/feeds.js";
 import { kickSlug, resolveSource, twitchLogin } from "../src/feeds/fetchFeed.js";
 import { createKickApi } from "../src/feeds/kick.js";
@@ -355,6 +355,7 @@ function fakeNet(pages) {
       return page === undefined ? new Response("nope", { status: 404 }) : new Response(page, { status: 200 });
     }),
     lookup: vi.fn(async () => [{ address: "93.184.216.34" }]),
+    retryDelayMs: 0,
   };
 }
 
@@ -377,12 +378,52 @@ describe("YouTube videos, Shorts and live", () => {
     await expect(addFeed({ ...base, store, guildId: OTHER_GUILD, kind: "youtube", source: CHANNEL, fetchOptions: net })).rejects.toThrow(/already posts/);
   });
 
-  it("follows Shorts, and says when a channel has none", async () => {
+  it("follows Shorts", async () => {
     const store = new FeedStore();
     const shorts = `https://www.youtube.com/feeds/videos.xml?playlist_id=UUSH${REST}`;
     const feed = await addFeed({ ...base, store, kind: "youtube_shorts", source: CHANNEL, fetchOptions: fakeNet({ [shorts]: atom("Shorts", ["s1"]), [channelFeed]: atom("Rabble", []) }) });
     expect(feed).toMatchObject({ url: shorts, name: "Rabble", seen: ["s1"] });
-    await expect(addFeed({ ...base, store, guildId: OTHER_GUILD, kind: "youtube_shorts", source: CHANNEL, fetchOptions: fakeNet({}) })).rejects.toMatchObject({ reason: "no-shorts" });
+  });
+
+  it("tries YouTube's flaky feed server again before giving up", async () => {
+    const store = new FeedStore();
+    const shorts = `https://www.youtube.com/feeds/videos.xml?playlist_id=UUSH${REST}`;
+    const net = fakeNet({ [shorts]: atom("Shorts", ["s1"]), [channelFeed]: atom("Rabble", []) });
+    const answers = [404, 500];
+    const real = net.fetchImpl.getMockImplementation();
+    net.fetchImpl.mockImplementation(async (url, init) => (String(url) === shorts && answers.length ? new Response("oops", { status: answers.shift() }) : real(url, init)));
+    const feed = await addFeed({ ...base, store, kind: "youtube_shorts", source: CHANNEL, fetchOptions: net });
+    expect(feed).toMatchObject({ url: shorts, seen: ["s1"] });
+    expect(net.fetchImpl.mock.calls.filter(([url]) => String(url) === shorts)).toHaveLength(3);
+  });
+
+  it("saves Shorts YouTube won't serve yet and posts only Shorts made after", async () => {
+    const store = new FeedStore();
+    const shorts = `https://www.youtube.com/feeds/videos.xml?playlist_id=UUSH${REST}`;
+    const feed = await addFeed({ ...base, store, kind: "youtube_shorts", source: CHANNEL, fetchOptions: fakeNet({ [channelFeed]: atom("Rabble", ["v1", "s1"]) }), now: () => 1000 });
+    expect(feed).toMatchObject({ url: shorts, name: "Rabble", seen: [PENDING_FIRST_READ, "v1", "s1"] });
+
+    const channel = { isTextBased: () => true, send: vi.fn(async () => {}) };
+    let time = CHECK_EVERY_MS + 1000;
+    const item = (id, publishedAt) => ({ id, title: `Short ${id}`, link: `https://www.youtube.com/shorts/${id}`, author: "Rabble", publishedAt });
+    const read = vi.fn(async () => ({ title: "Shorts", items: [item("new", 2000), item("old", 500), item("s1", 400), item("undated", null)] }));
+    const poller = createFeedPoller({ client: fakeClient(channel), store, logger: fakeLogger(), fetchFeed: read, now: () => time });
+    await poller.tick();
+    expect(channel.send).toHaveBeenCalledTimes(1);
+    expect(channel.send.mock.calls[0][0].content).toContain("https://www.youtube.com/shorts/new");
+    expect(store.get(feed.id).seen).toEqual(["new", "old", "undated", "v1", "s1"]);
+
+    // After that first read it's an ordinary feed.
+    read.mockResolvedValue({ title: "Shorts", items: [item("older-but-unseen", 100), item("new", 2000)] });
+    time += CHECK_EVERY_MS;
+    await poller.tick();
+    expect(channel.send).toHaveBeenCalledTimes(2);
+  });
+
+  it("says so when YouTube won't answer at all", async () => {
+    const store = new FeedStore();
+    await expect(addFeed({ ...base, store, kind: "youtube_shorts", source: CHANNEL, fetchOptions: fakeNet({}) })).rejects.toMatchObject({ reason: "unreachable" });
+    expect(store.count(GUILD_ID)).toBe(0);
   });
 
   it("reads the /live page", () => {

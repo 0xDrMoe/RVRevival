@@ -6,7 +6,7 @@
 import { fillVariables } from "../dashboard/public/variables.js";
 import { translate } from "../i18n/i18n.js";
 import { FeedError, FeedKind, fetchFeed, resolveSource } from "./fetchFeed.js";
-import { MAX_FEEDS } from "./feedStore.js";
+import { MAX_FEEDS, PENDING_FIRST_READ } from "./feedStore.js";
 import { fetchYoutubeLive } from "./youtubeLive.js";
 
 export const MAX_FEED_MESSAGE_LENGTH = 500;
@@ -41,10 +41,33 @@ export function defaultFeedMessages(language) {
 
 const PLATFORM_NAMES = { twitch: "Twitch", kick: "Kick" };
 
+// YouTube's feed server often answers 404 or 500 for a feed that's fine and
+// then 200 a second later, so its feeds get a few tries before giving up.
+const YOUTUBE_TRIES = 4;
+const YOUTUBE_RETRY_MS = 1000;
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function fetchYoutubeFeed(url, options = {}) {
+  const delay = options.retryDelayMs ?? YOUTUBE_RETRY_MS;
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await fetchFeed(url, options);
+    } catch (error) {
+      if (attempt >= YOUTUBE_TRIES || !(error instanceof FeedError) || error.reason !== "unreachable") {
+        throw error;
+      }
+      await sleep(delay * attempt);
+    }
+  }
+}
+
 // What's in a feed now: { title, items }. YouTube live reads the channel's
 // /live page, everything else is RSS or Atom. Used by feeds/feedPoller.js.
 export function readFeed(url, kind, options) {
-  return kind === FeedKind.YOUTUBE_LIVE ? fetchYoutubeLive(url, options) : fetchFeed(url, options);
+  if (kind === FeedKind.YOUTUBE_LIVE) {
+    return fetchYoutubeLive(url, options);
+  }
+  return kind === FeedKind.YOUTUBE || kind === FeedKind.YOUTUBE_SHORTS ? fetchYoutubeFeed(url, options) : fetchFeed(url, options);
 }
 
 // A Twitch or Kick channel: checks it exists and counts a stream that's
@@ -63,19 +86,32 @@ async function readLiveChannel(kind, api, login) {
 }
 
 // A YouTube feed. Videos fall back to all uploads if YouTube has no
-// long-videos list for the channel; Shorts have no fallback. The name comes
-// from the channel's own feed, since a list's title is just "Videos".
+// long-videos list for the channel. Shorts keep their own list even when
+// YouTube won't serve it yet (a channel with no Shorts, or a feed server
+// having a bad minute): the feed is saved with everything in the channel's
+// uploads counted as seen and marked PENDING_FIRST_READ, so its first good read
+// only posts Shorts made after it was added (feeds/feedPoller.js). The name
+// comes from the channel's own feed, since a list's title is just "Videos".
 async function readYoutube(kind, resolved, fetchOptions) {
   let url = resolved.url;
   let feed;
   try {
     feed = await readFeed(url, kind, fetchOptions);
   } catch (error) {
-    if (!(error instanceof FeedError) || !resolved.fallbackUrl) {
-      throw kind === FeedKind.YOUTUBE_SHORTS && error instanceof FeedError ? new FeedError("no-shorts", "YouTube has no Shorts list for that channel.") : error;
+    if (!(error instanceof FeedError)) {
+      throw error;
+    }
+    if (kind === FeedKind.YOUTUBE_SHORTS) {
+      const uploads = await fetchYoutubeFeed(resolved.channelFeed, fetchOptions).catch(() => {
+        throw new FeedError("unreachable", "YouTube isn't answering right now. Try again in a minute.");
+      });
+      return { url, feed: { title: uploads.title || uploads.items[0]?.author || "", items: uploads.items }, pending: true };
+    }
+    if (!resolved.fallbackUrl) {
+      throw error;
     }
     url = resolved.fallbackUrl;
-    feed = await fetchFeed(url, fetchOptions);
+    feed = await fetchYoutubeFeed(url, fetchOptions);
   }
   const channel = url === resolved.channelFeed ? feed : await fetchFeed(resolved.channelFeed, fetchOptions).catch(() => null);
   return { url, feed: { ...feed, title: channel?.title || feed.items[0]?.author || "" } };
@@ -98,10 +134,11 @@ export async function addFeed({ store, guildId, kind, source, channelId, roleId 
   }
   let url = resolved.url;
   let feed;
+  let pending = false;
   if (kind in PLATFORM_NAMES) {
     feed = await readLiveChannel(kind, live[kind], resolved.login);
   } else if (YOUTUBE_KINDS.has(kind)) {
-    ({ url, feed } = await readYoutube(kind, resolved, fetchOptions));
+    ({ url, feed, pending = false } = await readYoutube(kind, resolved, fetchOptions));
     if (url !== resolved.url && store.find(guildId, url, channelId)) {
       throw new FeedDuplicate("That feed already posts in that channel.");
     }
@@ -119,7 +156,7 @@ export async function addFeed({ store, guildId, kind, source, channelId, roleId 
     channelId,
     roleId,
     message: message?.trim().slice(0, MAX_FEED_MESSAGE_LENGTH) || null,
-    seen: feed.items.map((item) => item.id),
+    seen: [...(pending ? [PENDING_FIRST_READ] : []), ...feed.items.map((item) => item.id)],
     createdBy,
     createdAt: now(),
   });
