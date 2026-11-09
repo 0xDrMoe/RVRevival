@@ -4,8 +4,9 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="light dark" />
-    <meta name="theme-color" content="#5865f2" />
+    <meta name="theme-color" content="#7c5cff" />
     <title>Rabble: Discord bot and dashboard</title>
+    <link rel="canonical" href="%BASE_URL%/" />
     <meta
       name="description"
       content="The all-in-one Discord bot for your community. Moderation, automod, tickets, leveling and more, all set up from one dashboard."
@@ -25,12 +26,27 @@
     <meta property="og:image:alt" content="Rabble: the all-in-one Discord bot" />
     <meta name="twitter:card" content="summary_large_image" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="/style.css" />
+    <link rel="stylesheet" href="/style.css?v=%VERSION%" />
     <!-- Fetched at once instead of after app.js has loaded. -->
     <link rel="modulepreload" href="/guide.js" />
     <link rel="modulepreload" href="/guideCommands.js" />
     <link rel="preload" href="/locales/en.json" as="fetch" crossorigin="anonymous" />
-    <script type="module" src="/app.js"></script>
+    <script type="module" src="/app.js?v=%VERSION%"></script>
+    <!-- For search engines. A data block, not a script, so the page's CSP allows it. -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "Rabble",
+        "applicationCategory": "CommunicationApplication",
+        "operatingSystem": "Discord",
+        "url": "%BASE_URL%/",
+        "image": "%BASE_URL%/og-image.jpg",
+        "description": "The all-in-one Discord bot for your community. Moderation, automod, tickets, leveling and more, all set up from one dashboard.",
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+        "publisher": { "@type": "Organization", "name": "Cedar Tech Solutions" }
+      }
+    </script>
   </head>
   <body>
     <header class="topbar">

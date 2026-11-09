@@ -32,8 +32,8 @@
 // the member (re-read at most every 30 seconds).
 // Every change is posted in the server's logs channel, like bot commands are.
 
-import { randomBytes, timingSafeEqual } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { constants as zlib } from "node:zlib";
 import fastifyCompress from "@fastify/compress";
@@ -95,6 +95,51 @@ const PUBLIC_FOLDER = fileURLToPath(new URL("./public/", import.meta.url));
 
 // For text put into the page's HTML.
 const escapeHtml = (text) => text.replace(/[&<>"']/g, (char) => `&#${char.charCodeAt(0)};`);
+
+// Addresses the page draws itself (public/app.js routes them).
+export const PAGE_PATHS = ["/servers", "/guide", "/status", "/changelog", "/appeal/:guildId", "/g/:guildId", "/g/:guildId/:page"];
+// The pages anyone can read, for the sitemap.
+export const PUBLIC_PAGES = ["/", "/guide", "/status", "/changelog", "/terms", "/privacy"];
+const VERSIONED_ASSET = /^\/[\w./-]+\.(?:js|css)\?v=[0-9a-f]{12}$/;
+const LONG_LIVED_ASSET = /^\/(?:fonts\/[\w.-]+|og-image\.jpg|favicon\.svg)$/;
+
+// A short hash of everything in public/, so links carrying it change on deploy.
+export function assetVersion(folder = PUBLIC_FOLDER) {
+  const hash = createHash("sha256");
+  const walk = (path) => {
+    for (const entry of readdirSync(path, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+      const full = `${path}${entry.name}`;
+      if (entry.isDirectory()) {
+        walk(`${full}/`);
+      } else {
+        hash.update(entry.name).update(readFileSync(full));
+      }
+    }
+  };
+  walk(folder.endsWith("/") ? folder : `${folder}/`);
+  return hash.digest("hex").slice(0, 12);
+}
+
+export function publicRobots(baseUrl) {
+  return [
+    "User-agent: *",
+    "Disallow: /api/",
+    "Disallow: /auth/",
+    "Disallow: /g/",
+    "Disallow: /servers",
+    "Disallow: /appeal/",
+    "Allow: /",
+    "",
+    `Sitemap: ${baseUrl}/sitemap.xml`,
+    "",
+  ].join("\n");
+}
+
+export function publicSitemap(baseUrl) {
+  const urls = PUBLIC_PAGES.map((path) => `  <url><loc>${escapeHtml(baseUrl + path)}</loc></url>`).join("\n");
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>\n`;
+}
+
 
 // LEGAL_CONTACT as shown on the Terms and Privacy pages: an email address or
 // web address becomes a link. Until it's set, the pages say so plainly.
@@ -281,15 +326,42 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
   // The page itself, with the site's address filled in for link previews
   // (Discord and other sites want absolute URLs there). Always revalidated, so
   // a deploy shows at once.
-  const page = readFileSync(new URL("./public/index.html", import.meta.url), "utf8").replaceAll("%BASE_URL%", escapeHtml(config.url.replace(/\/+$/, "")));
+  // %VERSION% changes whenever a file in public/ does, so the page's script
+  // and stylesheet links can be cached for a year and still update on deploy.
+  const baseUrl = config.url.replace(/\/+$/, "");
+  const page = readFileSync(new URL("./public/index.html", import.meta.url), "utf8")
+    .replaceAll("%BASE_URL%", escapeHtml(baseUrl))
+    .replaceAll("%VERSION%", assetVersion());
   const sendPage = (request, reply) => reply.header("Cache-Control", "no-cache").type("text/html; charset=utf-8").send(page);
   app.get("/", sendPage);
   app.get("/index.html", sendPage);
   // Addresses the page draws itself (public/app.js routes them). Anything else
   // that isn't a file or an API route stays a 404.
-  for (const path of ["/servers", "/guide", "/appeal/:guildId", "/g/:guildId", "/g/:guildId/:page"]) {
+  for (const path of PAGE_PATHS) {
     app.get(path, sendPage);
   }
+
+  // For search engines: the public pages, and the ones not worth crawling.
+  const robots = publicRobots(baseUrl);
+  const sitemap = publicSitemap(baseUrl);
+  app.get("/robots.txt", (request, reply) => reply.header("Cache-Control", "public, max-age=86400").type("text/plain; charset=utf-8").send(robots));
+  app.get("/sitemap.xml", (request, reply) => reply.header("Cache-Control", "public, max-age=86400").type("application/xml; charset=utf-8").send(sitemap));
+
+  // For uptime monitors (UptimeRobot, Better Stack and so on): 200 while the
+  // dashboard answers. /healthz/bot is 503 while the bot has missed its
+  // heartbeats, so a monitor can alert when the bot itself is down.
+  const health = { config: { rateLimit: { max: 120, timeWindow: "1 minute" } } };
+  app.get("/healthz", health, async (request, reply) => {
+    const { online, upSince } = botStats.totals();
+    return reply.header("Cache-Control", "no-store").send({ dashboard: "ok", bot: online ? "online" : "offline", upSince });
+  });
+  app.get("/healthz/bot", health, async (request, reply) => {
+    const { online, upSince, ping } = botStats.totals();
+    return reply
+      .header("Cache-Control", "no-store")
+      .code(online ? 200 : 503)
+      .send({ bot: online ? "online" : "offline", upSince, ping });
+  });
 
   // The Terms of Service and Privacy Policy, linked from the landing page and
   // given to Discord in the Developer Portal. Plain pages, readable without JavaScript.
@@ -318,6 +390,11 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     }
     if (request.url.startsWith("/api/") || request.url.startsWith("/auth/")) {
       reply.header("Cache-Control", "no-store");
+    } else if (reply.statusCode === 200 && VERSIONED_ASSET.test(request.url)) {
+      // Linked with ?v=<version of public/>: a new deploy changes the link.
+      reply.header("Cache-Control", "public, max-age=31536000, immutable");
+    } else if (reply.statusCode === 200 && LONG_LIVED_ASSET.test(request.url)) {
+      reply.header("Cache-Control", "public, max-age=604800");
     }
     return payload;
   });

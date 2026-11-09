@@ -36,6 +36,7 @@ import {
   matchingPreset as matchingAutomodPreset,
   RECOMMENDED_PRESET as RECOMMENDED_AUTOMOD,
 } from "./automodPresets.js";
+import { CHANGELOG } from "./changelog.js";
 import { GUIDE } from "./guide.js";
 import { RESPONDER_TEMPLATES, TAG_TEMPLATES, responderFromTemplate, tagFromTemplate } from "./customCommandTemplates.js";
 import { buildCurve, CURVE_PRESETS, MAX_FORMULA_LENGTH, STANDARD_FORMULA, standardCurve as standardLevelCurve, tryBuildCurve } from "./levelCurve.js";
@@ -1123,6 +1124,27 @@ const LANDING_DASHBOARD = [
 
 const LANDING_FAQ = ["landingFaqNative", "landingFaqAccess", "landingFaqCommands", "landingFaqPermissions"];
 
+// What Rabble stands for, under the features: [icon, tone, string key].
+const LANDING_WHY = [
+  ["gift", "green", "landingWhyFree"],
+  ["sparkles", "accent", "landingWhyNative"],
+  ["key", "amber", "landingWhyNoAdmin"],
+  ["eyeOff", "pink", "landingWhyPrivacy"],
+];
+
+// Every permission the invite link asks for, grouped by what it's for:
+// [icon, tone, string key, Discord permission names]. The invite asks for
+// exactly these (tests/dashboardGuide.test.js checks the two match), never Administrator.
+const LANDING_PERMISSIONS = [
+  ["gavel", "red", "landingPermModeration", ["KickMembers", "BanMembers", "ModerateMembers", "ManageMessages", "ManageNicknames"]],
+  ["users", "pink", "landingPermRoles", ["ManageRoles"]],
+  ["hash", "blue", "landingPermChannels", ["ManageChannels"]],
+  ["list", "amber", "landingPermLogs", ["ViewAuditLog", "ManageWebhooks"]],
+  ["message", "accent", "landingPermMessages", ["ViewChannel", "SendMessages", "EmbedLinks", "AttachFiles", "ReadMessageHistory"]],
+  ["ticket", "cyan", "landingPermThreads", ["ManageThreads", "CreatePrivateThreads", "SendMessagesInThreads"]],
+  ["volume", "green", "landingPermVoice", ["Connect", "MoveMembers"]],
+];
+
 // Big numbers shortened (12.4K), small ones in full.
 const formatCount = (value) =>
   value === null || value === undefined
@@ -1285,6 +1307,158 @@ function landingCommand(command) {
   return page ? h("a", { class: "landing-command", href: guideLink(null, page.id), title: t("landingCommandGuide", { command }) }, code) : code;
 }
 
+// The footer on every public page: the landing page, the guide, status and
+// What's new.
+function siteFooter() {
+  const column = (title, ...links) => h("div", { class: "site-footer-column" }, h("h3", {}, title), ...links);
+  return h(
+    "footer",
+    { class: "landing-footer site-footer" },
+    h(
+      "div",
+      { class: "site-footer-about" },
+      h("span", { class: "landing-footer-brand" }, h("img", { src: "/favicon.svg", alt: "", width: 24, height: 24 }), "Rabble"),
+      h("p", {}, t("footerAbout")),
+    ),
+    h(
+      "nav",
+      { class: "site-footer-columns", "aria-label": t("footerNav") },
+      column(
+        t("footerProduct"),
+        h("a", { href: "/" }, t("topHome")),
+        h("a", { href: state.me ? "/servers" : "/auth/login" }, t("landingDashboard")),
+        h("a", { href: "/changelog" }, t("navChangelog")),
+      ),
+      column(t("footerHelp"), h("a", { href: "/guide" }, t("page_guide")), h("a", { href: "/status" }, t("navStatus"))),
+      column(t("footerLegal"), h("a", { href: "/terms" }, t("landingTerms")), h("a", { href: "/privacy" }, t("landingPrivacy"))),
+    ),
+  );
+}
+
+// A small top bar for the public pages that aren't the landing page.
+function publicBar() {
+  return h(
+    "div",
+    { class: "public-guide-bar" },
+    h("a", { class: "button ghost small", href: "/" }, icon("chevronLeft", "icon small"), t("guideBackHome")),
+    h("a", { class: "button ghost small", href: state.me ? "/servers" : "/auth/login" }, icon("home", "icon small"), t("landingDashboard")),
+  );
+}
+
+// /status: is the bot up, its ping and the last 30 days. Refreshes every
+// minute while it's open.
+const STATUS_REFRESH_MS = 60 * 1000;
+async function showStatus() {
+  await loadMeQuietly();
+  const body = h("div", { class: "status-body", "aria-busy": "true" }, h("span", { class: "sk sk-stat" }));
+  const page = h(
+    "div",
+    { class: "public-page status-page" },
+    publicBar(),
+    h("h1", {}, t("statusTitle")),
+    h("p", { class: "landing-intro" }, t("statusIntro")),
+    body,
+    siteFooter(),
+  );
+  show(page);
+  const refresh = async () => {
+    if (!page.isConnected) {
+      return;
+    }
+    let data;
+    try {
+      data = await loadPublicStats();
+    } catch {
+      body.replaceChildren(h("div", { class: "status-banner down" }, icon("alert"), t("statusUnknown")));
+      return;
+    }
+    body.removeAttribute("aria-busy");
+    body.replaceChildren(...statusContent(data));
+    setTimeout(refresh, STATUS_REFRESH_MS);
+  };
+  await refresh();
+}
+
+function statusContent(data) {
+  const checked = new Intl.DateTimeFormat(state.language, { timeStyle: "short" }).format(new Date());
+  const component = (name, ok, detail) =>
+    h(
+      "div",
+      { class: `status-component ${ok ? "up" : "down"}` },
+      h("span", { class: "status-dot", "aria-hidden": "true" }),
+      h("strong", {}, name),
+      h("span", { class: "muted" }, detail),
+      h("span", { class: `badge ${ok ? "badge-green" : "badge-red"}` }, t(ok ? "statusWorking" : "statusDown")),
+    );
+  const botDetail = data.online
+    ? [data.upSince ? t("landingUpFor", { time: formatDuration(Date.now() - data.upSince) }) : null, data.ping === null || data.ping === undefined ? null : t("landingPing", { ms: formatNumber(data.ping) })]
+        .filter(Boolean)
+        .join(" · ")
+    : t("landingOffline");
+  const monitorUrl = `${location.origin}/healthz/bot`;
+  return [
+    h(
+      "div",
+      { class: `status-banner ${data.online ? "up" : "down"}`, role: "status" },
+      icon(data.online ? "check" : "alert"),
+      h("strong", {}, t(data.online ? "statusAllGood" : "statusBotDown")),
+      h("span", { class: "muted" }, t("statusChecked", { time: checked })),
+    ),
+    h(
+      "div",
+      { class: "card status-components" },
+      component(t("statusBot"), data.online, botDetail),
+      component(t("statusDashboard"), true, t("statusDashboardOk")),
+      component(t("statusCommands"), data.online, t("statusCommandsRun", { count: formatCount(data.commandsRun) })),
+    ),
+    h(
+      "div",
+      { class: "card status-uptime" },
+      data.uptime?.percent === null || data.uptime?.percent === undefined
+        ? null
+        : h("p", { class: "status-uptime-total" }, h("strong", {}, formatUptime(data.uptime.percent)), " ", t("landingUptimeShort")),
+      landingUptimeStrip(data),
+    ),
+    h(
+      "div",
+      { class: "card status-monitor" },
+      h("h2", {}, t("statusMonitorTitle")),
+      h("p", {}, t("statusMonitorText")),
+      h("code", { dir: "ltr" }, monitorUrl),
+    ),
+  ];
+}
+
+// /changelog: what changed lately, newest first. The entries live in
+// public/changelog.js, in English like the guide.
+async function showChangelog() {
+  await loadMeQuietly();
+  const dateFormat = new Intl.DateTimeFormat(state.language, { dateStyle: "long", timeZone: "UTC" });
+  show(
+    h(
+      "div",
+      { class: "public-page changelog-page" },
+      publicBar(),
+      h("h1", {}, t("navChangelog")),
+      h("p", { class: "landing-intro" }, t("changelogIntro")),
+      h(
+        "ol",
+        { class: "changelog" },
+        CHANGELOG.map((entry) =>
+          h(
+            "li",
+            { class: "card changelog-entry", id: `v-${entry.date}` },
+            h("time", { datetime: entry.date, class: "muted" }, dateFormat.format(new Date(`${entry.date}T00:00:00Z`))),
+            h("h2", {}, entry.title),
+            h("ul", {}, entry.items.map((item) => h("li", {}, item))),
+          ),
+        ),
+      ),
+      siteFooter(),
+    ),
+  );
+}
+
 function showLanding(failedLogin = false) {
   const inviteButton = (extra = "") =>
     h(
@@ -1311,6 +1485,7 @@ function showLanding(failedLogin = false) {
       landingJump("dashboard", t("landingNavDashboard")),
       landingJump("faq", t("landingNavFaq")),
       h("a", { class: "link-button topnav-guide", href: "/guide" }, t("page_guide")),
+      h("a", { class: "link-button topnav-guide", href: "/status" }, t("navStatus")),
     ),
     topInvite,
     // replaceChildren would print a null as "null", so only add the button when logged in.
@@ -1380,6 +1555,23 @@ function showLanding(failedLogin = false) {
         ),
       ),
       landingSection(
+        "why",
+        t("landingWhyTitle"),
+        t("landingWhyIntro"),
+        h(
+          "div",
+          { class: "landing-dash landing-why" },
+          LANDING_WHY.map(([iconName, tone, key]) =>
+            h(
+              "div",
+              { class: "landing-dash-item" },
+              iconChip(iconName, tone),
+              h("div", {}, h("h3", {}, t(`${key}_title`)), h("p", {}, t(`${key}_text`))),
+            ),
+          ),
+        ),
+      ),
+      landingSection(
         "steps",
         t("landingStepsTitle"),
         t("landingStepsIntro"),
@@ -1416,6 +1608,24 @@ function showLanding(failedLogin = false) {
         ),
       ),
       landingSection(
+        "permissions",
+        t("landingPermsTitle"),
+        t("landingPermsIntro"),
+        h(
+          "div",
+          { class: "landing-perms" },
+          LANDING_PERMISSIONS.map(([iconName, tone, key, permissions]) =>
+            h(
+              "article",
+              { class: `landing-perm card tone-${tone}` },
+              h("h3", {}, iconChip(iconName, tone, "sm"), t(`${key}_title`)),
+              h("p", {}, t(`${key}_text`)),
+              h("div", { class: "landing-perm-list" }, permissions.map((name) => h("span", { class: "badge" }, t(`permBit_${name}`)))),
+            ),
+          ),
+        ),
+      ),
+      landingSection(
         "faq",
         t("landingFaqTitle"),
         null,
@@ -1431,23 +1641,7 @@ function showLanding(failedLogin = false) {
         h("div", {}, h("h2", {}, t("landingCtaTitle")), h("p", {}, t("landingCtaText"))),
         h("div", { class: "landing-actions" }, invites[1], login()),
       ),
-      h(
-        "footer",
-        { class: "landing-footer" },
-        h("span", { class: "landing-footer-brand" }, h("img", { src: "/favicon.svg", alt: "", width: 24, height: 24 }), "Rabble"),
-        h(
-          "nav",
-          { "aria-label": t("landingFooterNav") },
-          landingJump("features", t("landingNavFeatures")),
-          landingJump("steps", t("landingNavSteps")),
-          landingJump("dashboard", t("landingNavDashboard")),
-          landingJump("faq", t("landingNavFaq")),
-          h("a", { href: "/auth/login" }, t("landingDashboard")),
-          h("a", { href: "/guide" }, t("page_guide")),
-          h("a", { href: "/terms" }, t("landingTerms")),
-          h("a", { href: "/privacy" }, t("landingPrivacy")),
-        ),
-      ),
+      siteFooter(),
     ),
   );
 
@@ -10125,13 +10319,7 @@ async function showGuide(guildId) {
 // the public guide; logged in, the top bar still has the account menu.
 async function showPublicGuide() {
   await loadMeQuietly();
-  const back = h(
-    "div",
-    { class: "public-guide-bar" },
-    h("a", { class: "button ghost small", href: "/" }, icon("chevronLeft", "icon small"), t("guideBackHome")),
-    h("a", { class: "button ghost small", href: state.me ? "/servers" : "/auth/login" }, icon("home", "icon small"), t("landingDashboard")),
-  );
-  show(h("div", { class: "public-guide" }, back, guideContent(null)));
+  show(h("div", { class: "public-guide" }, publicBar(), guideContent(null), siteFooter()));
 }
 
 // --- Routing -----------------------------------------------------------------
@@ -10246,6 +10434,10 @@ async function route() {
       await showServers();
     } else if (path === "/guide") {
       await showPublicGuide();
+    } else if (path === "/status") {
+      await showStatus();
+    } else if (path === "/changelog") {
+      await showChangelog();
     } else {
       if (path !== "/") {
         history.replaceState(null, "", `/${location.search}`);
@@ -10277,7 +10469,7 @@ function navigate(url, { replace = false } = {}) {
 
 // Pages the app draws itself. Every other address on the site (/auth/login,
 // /terms, files) is a normal link that loads from the server.
-const APP_PATH = /^\/(?:|servers|guide|appeal\/\d{17,20}|g\/\d{17,20}(?:\/\w+)?)\/?$/;
+const APP_PATH = /^\/(?:|servers|guide|status|changelog|appeal\/\d{17,20}|g\/\d{17,20}(?:\/\w+)?)\/?$/;
 
 // Same-site links to app pages open without reloading the page.
 function onLinkClick(event) {
