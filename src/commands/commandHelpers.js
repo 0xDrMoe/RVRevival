@@ -2,6 +2,7 @@
 // refuse outside servers and refuse members who may not use it.
 
 import { MessageFlags } from "discord.js";
+import { findVariableProblems, token, VARIABLE_CONTEXTS } from "../dashboard/public/variables.js";
 import { pickLanguage, translate } from "../i18n/i18n.js";
 import { result, Status } from "../logs/actionLog.js";
 import { isModerator } from "../moderation/checks.js";
@@ -30,4 +31,18 @@ export function beginModerationCommand(interaction, { permission, permissionKey,
     refusal = () => answer(Status.REFUSED, "modNoPermission", { permission: text(permissionKey) });
   }
   return { language, text, answer, refusal };
+}
+
+// When a message uses a variable its place doesn't have ({usr}, or {level} in
+// a welcome message), the values for the "variablesRefused" reply; else null.
+// Variables are listed in dashboard/public/variables.js.
+export function variableRefusal(template, context) {
+  const problems = findVariableProblems(template, context);
+  if (problems.length === 0) {
+    return null;
+  }
+  return {
+    bad: problems.map((problem) => (problem.suggestion ? `${problem.token} (→ ${problem.suggestion})` : problem.token)).join(", "),
+    allowed: VARIABLE_CONTEXTS[context].variables.map(token).join(" "),
+  };
 }

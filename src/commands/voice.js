@@ -12,6 +12,7 @@
 import { ChannelType, InteractionContextType, MessageFlags, PermissionFlagsBits, SlashCommandBuilder } from "discord.js";
 import { discordLocalizations, pickLanguage, translate } from "../i18n/i18n.js";
 import { result, Status } from "../logs/actionLog.js";
+import { variableRefusal } from "./commandHelpers.js";
 import { Setting } from "../settings/guildSettings.js";
 import {
   DEFAULT_NAME_TEMPLATE,
@@ -58,6 +59,10 @@ export function createVoiceCommand({ guildSettings, store, forcedLanguage }) {
     const hub = interaction.options.getChannel("hub", true);
     const category = interaction.options.getChannel("category");
     const nameTemplate = interaction.options.getString("name")?.trim() || DEFAULT_NAME_TEMPLATE;
+    const refusal = variableRefusal(nameTemplate, "voice");
+    if (refusal) {
+      return answer(Status.REFUSED, "variablesRefused", refusal);
+    }
     const userLimit = interaction.options.getInteger("limit") ?? 0;
     const parent = category ?? guild.channels.cache.get(hub.parentId ?? "") ?? hub;
     const me = guild.members.me;

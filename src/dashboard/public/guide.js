@@ -18,6 +18,7 @@
 // Command pages also have command, related and usages (see guideCommands.js).
 
 import { COMMAND_PARTS } from "./guideCommands.js";
+import { VARIABLE_CONTEXTS, VARIABLES, contextsUsing } from "./variables.js";
 
 const FEATURE_PARTS = [
   {
@@ -574,8 +575,8 @@ const FEATURE_PARTS = [
           ["/welcome test", "Previews everything privately, with you as the new member."],
           ["/welcome show", "Shows the setup."],
         ],
-        example: ["/welcome channel channel:#welcome", "/welcome message text:Welcome {user} to {server}! You're member #{count}."],
-        tips: ["Messages can use `{user}` (a mention), `{username}`, `{server}` and `{count}`. Type `\\n` for a new line. Only `{user}` pings anyone."],
+        example: ["/welcome channel channel:#welcome", "/welcome message text:Welcome {user} to {server}! You're member #{members}."],
+        tips: ["Messages can use `{user}` (a mention), `{username}`, `{server}` and `{members}` (see **Message variables**). Type `\\n` for a new line. Only `{user}` pings anyone."],
       },
       {
         id: "roles",
@@ -738,7 +739,7 @@ const FEATURE_PARTS = [
           "On the dashboard's Leveling page, XP rates sets the XP per message (1 to 100), the seconds between messages that earn XP (10 to 600) and voice XP (1 to 50 a minute).",
           "Level curve picks how much XP each level takes: a ready-made curve, or your own formula under Advanced. The graph shows XP per level and in total, and the table estimates how long each level takes. Members keep their XP when you change it.",
           "Boosts go from 1x to 5x and don't add up: a member gets their highest one.",
-          "Message placeholders: `{user}`, `{username}`, `{level}`, `{server}`.",
+          "Message variables: `{user}`, `{username}`, `{level}` and `{server}` (see **Message variables**).",
           "Reward roles must be below the bot's role. Only use `set` and `reset` to fix mistakes or cheating.",
         ],
       },
@@ -766,7 +767,7 @@ const FEATURE_PARTS = [
         summary: "Members join a hub channel (like \"➕ Create a channel\") and get their own voice channel, deleted when it empties.",
         who: "Admins set it up. The channel's owner uses the rest.",
         commands: [
-          ["/voice setup hub [category] [name] [limit]", "Turns it on. `name` can use `{name}` (default `🔊 {name}`). **Admins.**"],
+          ["/voice setup hub [category] [name] [limit]", "Turns it on. `name` can use `{username}`, the member's display name (default `🔊 {username}`). **Admins.**"],
           ["/voice off", "Turns it off. **Admins.**"],
           ["/voice lock", "Only the people inside (and staff) can join."],
           ["/voice unlock", "Anyone can join again."],
@@ -910,8 +911,37 @@ const FEATURE_PARTS = [
     part: "Messages",
     icon: "message",
     tone: "amber",
-    about: "Custom commands, auto-responders, scheduled posts, embeds, feeds and stickies.",
+    about: "Message variables, custom commands, auto-responders, scheduled posts, embeds, feeds and stickies.",
     sections: [
+      {
+        id: "variables",
+        title: "Message variables",
+        icon: "hash",
+        tone: "amber",
+        summary:
+          "Variables are words in curly brackets, like `{user}`, that the bot fills in when it posts a message. Each one means the same thing everywhere, and every message box on the dashboard lists the ones it can use under it: click one to add it.",
+        who: "Anyone who writes the bot's messages.",
+        steps: [
+          "**Type it exactly**: lowercase, in single curly brackets, no spaces, like `{user}`.",
+          "**Use the ones listed under the box.** Each kind of message has its own (the table below). The dashboard warns you as you type, and the bot refuses to save a message with a variable it can't fill, so a typo never reaches your members.",
+          "**Check the preview** under the box. It shows the message with example values.",
+        ],
+        table: {
+          head: ["Variable", "What it is", "Works in"],
+          rows: Object.entries(VARIABLES).map(([name, variable]) => [
+            `\`{${name}}\``,
+            variable.about,
+            contextsUsing(name)
+              .map((context) => VARIABLE_CONTEXTS[context].where)
+              .join(", "),
+          ]),
+        },
+        tips: [
+          "Mentions from variables never ping anyone in these messages, except the role ping you pick for a feed and the staff ping on tickets.",
+          "Older spellings still work in saved messages: `{count}` in welcome messages is `{members}`, and `{name}` in voice channel names is `{username}`.",
+          "Other curly brackets, like `{1,2}`, are left alone.",
+        ],
+      },
       {
         id: "tags",
         title: "Custom commands",

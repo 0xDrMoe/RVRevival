@@ -59,6 +59,7 @@ import { checkMessage, editableMessage, InvalidMessage, messageSummary, parseMes
 import { inviteLink } from "../guilds/invite.js";
 import { SentMessageStore } from "../messages/sentMessageStore.js";
 import { addFeed, defaultFeedMessages, FeedDuplicate, FeedError, FeedLimit, MAX_FEED_MESSAGE_LENGTH } from "../feeds/feeds.js";
+import { variableError } from "./public/variables.js";
 import { FEED_KINDS } from "../feeds/fetchFeed.js";
 import { FeedStore, MAX_FEEDS } from "../feeds/feedStore.js";
 import { createLiveApis } from "../feeds/liveApis.js";
@@ -1832,6 +1833,11 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     }
     if (message !== null && (typeof message !== "string" || message.length > MAX_FEED_MESSAGE_LENGTH)) {
       reply.code(400).send({ error: "bad-message", message: `The message is at most ${MAX_FEED_MESSAGE_LENGTH} characters.` });
+      return true;
+    }
+    const variableProblem = message !== null && variableError(message, "feed");
+    if (variableProblem) {
+      reply.code(400).send({ error: "bad-message", message: variableProblem });
       return true;
     }
     return false;

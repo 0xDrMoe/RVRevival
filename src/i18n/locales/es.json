@@ -399,13 +399,13 @@
   "settingsAutomodCleared": "El automod se ha desactivado y toda su configuración se ha restablecido.",
   "settingsShowAutomod": "Automod: {status} (detalles: `/settings automod show`)",
 
-  "welcomeDefaultWelcome": "¡Bienvenido a {server}, {user}! Eres el miembro n.º {count}.",
+  "welcomeDefaultWelcome": "¡Bienvenido a {server}, {user}! Eres el miembro n.º {members}.",
   "welcomeDefaultLeave": "{username} ha salido del servidor.",
   "welcomeCommandDescription": "Solo admins: mensajes de bienvenida y despedida, un MD de bienvenida y roles para nuevos.",
   "welcomeChannelDescription": "Publica un mensaje de bienvenida en un canal cuando alguien entra.",
   "welcomeChannelOptionDescription": "El canal para los mensajes de bienvenida.",
   "welcomeMessageDescription": "Escribe tu propio mensaje de bienvenida.",
-  "welcomeTextOptionDescription": "Puede usar {user}, {username}, {server} y {count}. Escribe \\n para una línea nueva.",
+  "welcomeTextOptionDescription": "Puede usar {user}, {username}, {server} y {members}. Escribe \\n para una línea nueva.",
   "welcomeLeaveChannelDescription": "Publica un mensaje en un canal cuando alguien se va.",
   "welcomeLeaveChannelOptionDescription": "El canal para los mensajes de despedida.",
   "welcomeLeaveMessageDescription": "Escribe tu propio mensaje de despedida.",
@@ -872,7 +872,7 @@
   "voiceSetupDescription": "Activa los canales temporales: unirse al canal base crea un canal de voz para ese miembro.",
   "voiceHubOptionDescription": "El canal de voz al que se unen para tener su propio canal.",
   "voiceCategoryOptionDescription": "Dónde se crean los canales (por defecto: la categoría del canal base).",
-  "voiceNameOptionDescription": "Nombre del canal; {name} es el nombre del miembro (por defecto: 🔊 {name}).",
+  "voiceNameOptionDescription": "Nombre del canal; {username} es el nombre del miembro (por defecto: 🔊 {username}).",
   "voiceLimitOptionDescription": "Límite de usuarios de los canales nuevos (0 = sin límite).",
   "voiceOffDescription": "Desactiva los canales temporales.",
   "voiceLockDescription": "Solo quienes están en tu canal pueden unirse.",
@@ -1451,5 +1451,6 @@
   "eightBall_17": "Mi respuesta es no.",
   "eightBall_18": "Mis fuentes dicen que no.",
   "eightBall_19": "Las perspectivas no son buenas.",
-  "eightBall_20": "Muy dudoso."
+  "eightBall_20": "Muy dudoso.",
+  "variablesRefused": "{bad} no se puede usar aquí, así que no se guardó nada. Este mensaje puede usar: {allowed}"
 }

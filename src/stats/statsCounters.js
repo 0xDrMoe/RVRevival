@@ -4,12 +4,12 @@
 // channels.
 
 import { randomBytes } from "node:crypto";
+import { fillVariables, usedVariables, variableError, VARIABLE_CONTEXTS } from "../dashboard/public/variables.js";
 
 export const MAX_COUNTERS = 5;
 export const MAX_TEMPLATE_LENGTH = 60;
 
-export const COUNTER_KEYS = ["members", "humans", "bots", "boosts", "tier", "channels", "roles"];
-const PLACEHOLDER = /\{(members|humans|bots|boosts|tier|channels|roles)\}/g;
+export const COUNTER_KEYS = VARIABLE_CONTEXTS.counter.variables;
 
 // The ready-made counters /stats and the dashboard offer.
 export const COUNTER_PRESETS = Object.freeze({
@@ -30,13 +30,19 @@ const SNOWFLAKE = /^\d{17,20}$/;
 
 export const newCounterId = () => randomBytes(4).toString("hex");
 
-// A template, trimmed. Throws InvalidCounter unless it has a placeholder and fits.
-export function checkTemplate(template) {
+// A template, trimmed. Throws InvalidCounter unless it has a variable and fits.
+// `strict` also refuses unknown variables, for new names (saved ones made
+// before that check are kept).
+export function checkTemplate(template, { strict = true } = {}) {
   const text = typeof template === "string" ? template.replace(/\s+/g, " ").trim() : "";
   if (!text || text.length > MAX_TEMPLATE_LENGTH) {
     throw new InvalidCounter(`A counter's name is 1 to ${MAX_TEMPLATE_LENGTH} characters.`);
   }
-  if (!text.match(PLACEHOLDER)) {
+  const problem = strict && variableError(text, "counter");
+  if (problem) {
+    throw new InvalidCounter(problem);
+  }
+  if (usedVariables(text, "counter").length === 0) {
     throw new InvalidCounter("A counter's name needs a number, like {members}.");
   }
   return text;
@@ -57,7 +63,7 @@ export function normalizeCounters(value) {
     }
     let template;
     try {
-      template = checkTemplate(counter.template);
+      template = checkTemplate(counter.template, { strict: false });
     } catch {
       continue;
     }
@@ -76,7 +82,8 @@ const format = (number) => Number(number ?? 0).toLocaleString("en-US");
 
 // The channel name for a template and the counts, within Discord's 100 characters.
 export function counterName(template, counts) {
-  return template.replace(PLACEHOLDER, (whole, key) => format(counts[key])).slice(0, 100);
+  const values = Object.fromEntries(COUNTER_KEYS.map((key) => [key, format(counts[key])]));
+  return fillVariables(template, "counter", values).slice(0, 100);
 }
 
 // The counts for a server. Bots come from the member cache, so `humans` is

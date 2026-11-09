@@ -1090,7 +1090,7 @@ export const COMMAND_PARTS = [
           {
             usage: "/welcome message text",
             what: "Your own welcome message, instead of the default.",
-            options: [["text", "Up to 1000 characters. Can use `{user}` (a mention), `{username}`, `{server}` and `{count}`. Type `\\n` for a new line."]],
+            options: [["text", "Up to 1000 characters. Can use `{user}` (a mention), `{username}`, `{server}` and `{members}`. Type `\\n` for a new line."]],
           },
           {
             usage: "/welcome leave-channel channel",
@@ -1100,12 +1100,12 @@ export const COMMAND_PARTS = [
           {
             usage: "/welcome leave-message text",
             what: "Your own leave message.",
-            options: [["text", "Up to 1000 characters, with the same placeholders."]],
+            options: [["text", "Up to 1000 characters, with the same variables."]],
           },
           {
             usage: "/welcome dm text",
             what: "Sends new members a private message when they join.",
-            options: [["text", "Up to 1000 characters, with the same placeholders. Members with closed DMs don't get it."]],
+            options: [["text", "Up to 1000 characters, with the same variables. Members with closed DMs don't get it."]],
           },
           {
             usage: "/welcome autorole role",
@@ -1133,7 +1133,7 @@ export const COMMAND_PARTS = [
             options: [],
           },
         ],
-        example: ["/welcome channel channel:#welcome", "/welcome message text:Welcome {user} to {server}! You're member #{count}.\\nRead #rules first.", "/welcome autorole role:@Member"],
+        example: ["/welcome channel channel:#welcome", "/welcome message text:Welcome {user} to {server}! You're member #{members}.\\nRead #rules first.", "/welcome autorole role:@Member"],
         tips: [
           "Only `{user}` pings anyone.",
           "If members must accept the rules first (Rules Screening), autoroles wait until they do.",
@@ -1459,7 +1459,7 @@ export const COMMAND_PARTS = [
             what: "Creates a locked voice channel that shows the count. Up to 5.",
             options: [
               ["counter", "Members, humans (without bots), bots, server boosts, channels or roles."],
-              ["name", "Your own name, up to 60 characters, like `🎮 Players: {members}`. Can use `{members}`, `{humans}`, `{bots}` and `{boosts}`."],
+              ["name", "Your own name, up to 60 characters, like `🎮 Players: {members}`. Can use `{members}`, `{humans}`, `{bots}`, `{boosts}`, `{tier}`, `{channels}` and `{roles}`."],
               ["category", "The category to put the channel in. Leave it out to put it at the top of the channel list."],
             ],
           },
@@ -1493,7 +1493,7 @@ export const COMMAND_PARTS = [
             options: [
               ["hub", "The voice channel people join to get their own, like *➕ Create a channel*."],
               ["category", "Where new channels go. Defaults to the hub's category."],
-              ["name", "The new channels' name, up to 80 characters. `{name}` is the member's name. Default: `🔊 {name}`."],
+              ["name", "The new channels' name, up to 80 characters. `{username}` is the member's display name. Default: `🔊 {username}`."],
               ["limit", "The user limit for new channels, 0 to 99. `0` means no limit."],
             ],
           },

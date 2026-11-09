@@ -7,7 +7,9 @@
 // it to one channel or category (null = everywhere). Managed with
 // /autoresponder or on the dashboard's Custom commands page.
 
+import { escapeMarkdown } from "discord.js";
 import { derivedSetting, Setting } from "../settings/guildSettings.js";
+import { fillVariables, variableError } from "../dashboard/public/variables.js";
 
 export const MAX_RESPONDERS = 25;
 // Short enough to fit in the /autoresponder form's custom ID.
@@ -111,6 +113,10 @@ export function checkResponders(value, channelOk) {
     if (!responder.reply || responder.reply.length > MAX_REPLY_LENGTH) {
       throw new InvalidResponders(`"${responder.trigger}" needs a reply of 1 to ${MAX_REPLY_LENGTH} characters.`);
     }
+    const variableProblem = variableError(responder.reply, "responder");
+    if (variableProblem) {
+      throw new InvalidResponders(`"${responder.trigger}": ${variableProblem}`);
+    }
     if (responder.channelId && !channelOk(responder.channelId)) {
       throw new InvalidResponders(`"${responder.trigger}" needs a text channel or category from this server, or everywhere.`);
     }
@@ -123,13 +129,15 @@ export function checkResponders(value, channelOk) {
   return responders.length > 0 ? sortResponders(responders) : null;
 }
 
-// {user} → a mention (it doesn't ping), {server} → the server's name, {channel} → the channel.
+// The "responder" variables: {user} → a mention (it doesn't ping), {username}
+// → the author's display name, {server} → the server's name, {channel} → the channel.
 export const fillReply = (reply, message) =>
-  reply
-    .replaceAll("{user}", `<@${message.author.id}>`)
-    .replaceAll("{server}", message.guild?.name ?? "")
-    .replaceAll("{channel}", `<#${message.channelId}>`)
-    .slice(0, 2000);
+  fillVariables(reply, "responder", {
+    user: `<@${message.author.id}>`,
+    username: escapeMarkdown(message.member?.displayName ?? message.author.globalName ?? message.author.username ?? ""),
+    server: escapeMarkdown(message.guild?.name ?? ""),
+    channel: `<#${message.channelId}>`,
+  }).slice(0, 2000);
 
 // Whether a responder limited to a channel or category applies to where the
 // message was posted (a thread counts as its channel).

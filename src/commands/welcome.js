@@ -18,6 +18,7 @@ import { ChannelType, InteractionContextType, MessageFlags, PermissionFlagsBits,
 import { MAX_AUTOROLES, MAX_MESSAGE_LENGTH, renderTemplate, welcomeText } from "../community/welcome.js";
 import { discordLocalizations, pickLanguage, translate } from "../i18n/i18n.js";
 import { result, Status } from "../logs/actionLog.js";
+import { variableRefusal } from "./commandHelpers.js";
 import { normalizeRolePersist } from "../members/rolePersistence.js";
 import { isModeratorRole } from "../permissions/moderatorPermissions.js";
 import { Setting } from "../settings/guildSettings.js";
@@ -156,6 +157,10 @@ export function createWelcomeCommand({ guildSettings, forcedLanguage }) {
       const value = withNewLines(interaction.options.getString("text", true));
       if (!value) {
         return reply(Status.REFUSED, "welcomeEmptyText");
+      }
+      const refusal = variableRefusal(value, "welcome");
+      if (refusal) {
+        return reply(Status.REFUSED, "variablesRefused", refusal);
       }
       await guildSettings.set(guildId, setting, value);
       const preview = renderTemplate(value, { member: interaction.member, guild });

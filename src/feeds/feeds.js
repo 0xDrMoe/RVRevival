@@ -3,6 +3,7 @@
 // feeds: adding one (from /feed or the dashboard), reading one, and writing the
 // post for a new item.
 
+import { fillVariables } from "../dashboard/public/variables.js";
 import { translate } from "../i18n/i18n.js";
 import { FeedError, FeedKind, fetchFeed, resolveSource } from "./fetchFeed.js";
 import { MAX_FEEDS } from "./feedStore.js";
@@ -124,8 +125,6 @@ export async function addFeed({ store, guildId, kind, source, channelId, roleId 
   });
 }
 
-const fill = (template, values) => template.replace(/\{(title|link|author|feed|game)\}/g, (whole, key) => values[key] ?? whole);
-
 // The message posted for a new item: the feed's own message or the default
 // for its kind, with the role ping in front.
 export function buildFeedPost(feed, item, language) {
@@ -137,7 +136,7 @@ export function buildFeedPost(feed, item, language) {
     game: item.game || "",
   };
   const template = feed.message || translate(language, DEFAULT_MESSAGE_KEYS[feed.kind] ?? DEFAULT_MESSAGE_KEYS.rss);
-  const text = fill(template, values).trim();
+  const text = fillVariables(template, "feed", values).trim();
   // The @everyone role has the server's ID, and Discord only pings it as
   // plain "@everyone" (a <@&id> mention of it shows but pings no one).
   if (feed.roleId && feed.roleId === feed.guildId) {

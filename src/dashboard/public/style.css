@@ -2860,6 +2860,87 @@ dialog textarea {
   font-variant-numeric: tabular-nums;
 }
 
+/* The variable picker under message boxes (variableTools in app.js). */
+.message-with-variables {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.variable-tools {
+  display: grid;
+  gap: 6px;
+}
+
+.variable-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.variable-bar-label {
+  font-size: 12px;
+  color: var(--muted);
+  margin-inline-end: 2px;
+  cursor: help;
+}
+
+button.variable-chip {
+  min-height: 0;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text);
+  font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  cursor: pointer;
+}
+
+button.variable-chip:hover,
+button.variable-chip:focus-visible {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface-2));
+}
+
+.variable-warning {
+  display: grid;
+  gap: 2px;
+  font-size: 13px;
+  color: var(--danger);
+}
+
+.variable-warning[hidden],
+.variable-preview[hidden] {
+  display: none;
+}
+
+.variable-warning > span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.variable-preview {
+  font-size: 13px;
+  color: var(--muted);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.variable-preview-label {
+  font-weight: 600;
+  margin-inline-end: 6px;
+}
+
+textarea.has-variable-problem,
+input.has-variable-problem {
+  border-color: var(--danger);
+}
+
 .panel-list {
   list-style: none;
   margin: 12px 0 0;
@@ -6917,4 +6998,8 @@ dialog textarea {
 .curve-table td,
 .curve-table th {
   white-space: nowrap;
+}
+
+.counter-edit .message-with-variables {
+  flex: 1;
 }

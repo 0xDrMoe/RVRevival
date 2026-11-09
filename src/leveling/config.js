@@ -10,6 +10,8 @@
 
 import { buildCurve, InvalidFormula, MAX_FORMULA_LENGTH, progressOnCurve, STANDARD_FORMULA, standardCurve, tryBuildCurve } from "../dashboard/public/levelCurve.js";
 
+import { variableError } from "../dashboard/public/variables.js";
+
 export const Announce = Object.freeze({
   HERE: "here", // in the channel where they leveled up
   CHANNEL: "channel", // in one chosen channel
@@ -190,6 +192,10 @@ export function checkLeveling(value, { isRole, isRewardRole, isChannel }) {
   }
   if (value.message !== null && (typeof value.message !== "string" || value.message.trim().length > MAX_LEVEL_MESSAGE_LENGTH)) {
     throw new InvalidLeveling(`Keep the level-up message under ${MAX_LEVEL_MESSAGE_LENGTH} characters.`);
+  }
+  const variableProblem = value.message !== null && variableError(value.message, "levelUp");
+  if (variableProblem) {
+    throw new InvalidLeveling(variableProblem);
   }
   if (!Array.isArray(value.rewards) || value.rewards.length > MAX_REWARDS) {
     throw new InvalidLeveling(`Add at most ${MAX_REWARDS} level rewards.`);

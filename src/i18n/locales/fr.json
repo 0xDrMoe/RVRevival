@@ -399,13 +399,13 @@
   "settingsAutomodCleared": "L'automod a été désactivé et tous ses réglages réinitialisés.",
   "settingsShowAutomod": "Automod : {status} (détails : `/settings automod show`)",
 
-  "welcomeDefaultWelcome": "Bienvenue sur {server}, {user} ! Tu es le membre n° {count}.",
+  "welcomeDefaultWelcome": "Bienvenue sur {server}, {user} ! Tu es le membre n° {members}.",
   "welcomeDefaultLeave": "{username} a quitté le serveur.",
   "welcomeCommandDescription": "Admins : messages d'arrivée et de départ, MP de bienvenue et rôles pour les nouveaux.",
   "welcomeChannelDescription": "Poster un message de bienvenue dans un salon quand quelqu'un arrive.",
   "welcomeChannelOptionDescription": "Le salon des messages de bienvenue.",
   "welcomeMessageDescription": "Écrire ton propre message de bienvenue.",
-  "welcomeTextOptionDescription": "Peut utiliser {user}, {username}, {server} et {count}. Tape \\n pour aller à la ligne.",
+  "welcomeTextOptionDescription": "Peut utiliser {user}, {username}, {server} et {members}. Tape \\n pour aller à la ligne.",
   "welcomeLeaveChannelDescription": "Poster un message dans un salon quand quelqu'un part.",
   "welcomeLeaveChannelOptionDescription": "Le salon des messages de départ.",
   "welcomeLeaveMessageDescription": "Écrire ton propre message de départ.",
@@ -872,7 +872,7 @@
   "voiceSetupDescription": "Active les salons temporaires : rejoindre le hub crée un salon vocal pour ce membre.",
   "voiceHubOptionDescription": "Le salon vocal à rejoindre pour obtenir son propre salon.",
   "voiceCategoryOptionDescription": "Où vont les nouveaux salons (par défaut : la catégorie du hub).",
-  "voiceNameOptionDescription": "Nom du salon ; {name} est le nom du membre (par défaut : 🔊 {name}).",
+  "voiceNameOptionDescription": "Nom du salon ; {username} est le nom du membre (par défaut : 🔊 {username}).",
   "voiceLimitOptionDescription": "Limite d'utilisateurs des nouveaux salons (0 = aucune).",
   "voiceOffDescription": "Désactive les salons temporaires.",
   "voiceLockDescription": "Seules les personnes dans ton salon peuvent le rejoindre.",
@@ -1451,5 +1451,6 @@
   "eightBall_17": "Ma réponse est non.",
   "eightBall_18": "Mes sources disent non.",
   "eightBall_19": "Les perspectives ne sont pas bonnes.",
-  "eightBall_20": "Très douteux."
+  "eightBall_20": "Très douteux.",
+  "variablesRefused": "{bad} ne peut pas être utilisé ici, rien n'a donc été enregistré. Ce message peut utiliser : {allowed}"
 }

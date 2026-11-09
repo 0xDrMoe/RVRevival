@@ -7,13 +7,14 @@
 // /voice adds lock, unlock and claim (see commands/voice.js).
 
 import { ChannelType, PermissionFlagsBits } from "discord.js";
+import { fillVariables } from "../dashboard/public/variables.js";
 import { Setting } from "../settings/guildSettings.js";
 import { KeyedLock } from "../utils/keyedLock.js";
 
 export const MAX_TEMP_CHANNELS = 50;
 export const MAX_NAME_TEMPLATE_LENGTH = 80;
 export const MAX_USER_LIMIT = 99;
-export const DEFAULT_NAME_TEMPLATE = "🔊 {name}";
+export const DEFAULT_NAME_TEMPLATE = "🔊 {username}";
 
 // What the owner may do in their own channel.
 export const OWNER_PERMISSIONS = { ViewChannel: true, Connect: true, Speak: true, ManageChannels: true, MoveMembers: true };
@@ -32,10 +33,11 @@ export function tempVoiceSettings(guildSettings, guildId) {
   return saved?.hubChannelId ? saved : undefined;
 }
 
-// "🔊 {name}" → "🔊 Rumbler", within Discord's 100 characters.
+// "🔊 {username}" → "🔊 Rumbler", within Discord's 100 characters. {username} is
+// the display name; the old {name} means the same.
 export function channelName(template, member) {
   const name = member.displayName ?? member.user?.globalName ?? member.user?.username ?? "voice";
-  return (template || DEFAULT_NAME_TEMPLATE).replaceAll("{name}", name).replaceAll("{username}", member.user?.username ?? name).slice(0, 100);
+  return fillVariables(template || DEFAULT_NAME_TEMPLATE, "voice", { username: name }).slice(0, 100);
 }
 
 // Options: guildSettings, store (TempVoiceStore), logger, now

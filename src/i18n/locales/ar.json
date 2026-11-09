@@ -399,13 +399,13 @@
   "settingsAutomodCleared": "تم إيقاف الإشراف التلقائي وإعادة ضبط كل إعداداته.",
   "settingsShowAutomod": "الإشراف التلقائي: {status} (التفاصيل: `/settings automod show`)",
 
-  "welcomeDefaultWelcome": "أهلًا بك في {server} يا {user}! أنت العضو رقم {count}.",
+  "welcomeDefaultWelcome": "أهلًا بك في {server} يا {user}! أنت العضو رقم {members}.",
   "welcomeDefaultLeave": "غادر {username} الخادم.",
   "welcomeCommandDescription": "للمشرفين فقط: رسائل الترحيب والمغادرة ورسالة خاصة ورتب للأعضاء الجدد.",
   "welcomeChannelDescription": "نشر رسالة ترحيب في قناة عندما ينضم شخص.",
   "welcomeChannelOptionDescription": "قناة رسائل الترحيب.",
   "welcomeMessageDescription": "اكتب رسالة الترحيب الخاصة بك.",
-  "welcomeTextOptionDescription": "يمكن استخدام {user} و{username} و{server} و{count}. اكتب \\n لسطر جديد.",
+  "welcomeTextOptionDescription": "يمكن استخدام {user} و{username} و{server} و{members}. اكتب \\n لسطر جديد.",
   "welcomeLeaveChannelDescription": "نشر رسالة في قناة عندما يغادر شخص.",
   "welcomeLeaveChannelOptionDescription": "قناة رسائل المغادرة.",
   "welcomeLeaveMessageDescription": "اكتب رسالة المغادرة الخاصة بك.",
@@ -872,7 +872,7 @@
   "voiceSetupDescription": "شغّل القنوات المؤقتة: دخول القناة الرئيسية ينشئ قناة صوتية لذلك العضو.",
   "voiceHubOptionDescription": "القناة الصوتية التي يدخلها الأعضاء ليحصلوا على قناتهم.",
   "voiceCategoryOptionDescription": "مكان القنوات الجديدة (الافتراضي: فئة القناة الرئيسية).",
-  "voiceNameOptionDescription": "اسم القناة؛ {name} هو اسم العضو (الافتراضي: 🔊 {name}).",
+  "voiceNameOptionDescription": "اسم القناة؛ {username} هو اسم العضو (الافتراضي: 🔊 {username}).",
   "voiceLimitOptionDescription": "حد المستخدمين للقنوات الجديدة (0 = بلا حد).",
   "voiceOffDescription": "أوقف القنوات المؤقتة.",
   "voiceLockDescription": "لا يدخل قناتك إلا من فيها الآن.",
@@ -1451,5 +1451,6 @@
   "eightBall_17": "جوابي لا.",
   "eightBall_18": "مصادري تقول لا.",
   "eightBall_19": "التوقعات ليست جيدة.",
-  "eightBall_20": "مشكوك فيه جدًا."
+  "eightBall_20": "مشكوك فيه جدًا.",
+  "variablesRefused": "لا يمكن استخدام {bad} هنا، لذلك لم يُحفظ شيء. يمكن لهذه الرسالة استخدام: {allowed}"
 }

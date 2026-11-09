@@ -10,6 +10,7 @@
 import { ChannelType, InteractionContextType, MessageFlags, PermissionFlagsBits, SlashCommandBuilder } from "discord.js";
 import { discordLocalizations, pickLanguage, translate } from "../i18n/i18n.js";
 import { result, Status } from "../logs/actionLog.js";
+import { variableRefusal } from "./commandHelpers.js";
 import { Setting } from "../settings/guildSettings.js";
 import {
   checkTemplate,
@@ -64,9 +65,14 @@ export function createStatsCommand({ guildSettings, updater, forcedLanguage, log
       return answer(Status.REFUSED, "statsNeedsManageChannels");
     }
     const preset = interaction.options.getString("counter", true);
+    const name = interaction.options.getString("name");
+    const refusal = name && variableRefusal(name, "counter");
+    if (refusal) {
+      return answer(Status.REFUSED, "variablesRefused", refusal);
+    }
     let template;
     try {
-      template = checkTemplate(interaction.options.getString("name") ?? COUNTER_PRESETS[preset] ?? COUNTER_PRESETS.members);
+      template = checkTemplate(name ?? COUNTER_PRESETS[preset] ?? COUNTER_PRESETS.members);
     } catch (error) {
       if (error instanceof InvalidCounter) {
         return answer(Status.REFUSED, "statsBadName", { max: MAX_TEMPLATE_LENGTH });

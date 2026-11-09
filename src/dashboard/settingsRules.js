@@ -28,6 +28,7 @@ import { checkCommandRules, describeCommandRules, InvalidCommandRules } from "..
 import { isModeratorRole } from "../permissions/moderatorPermissions.js";
 import { CUSTOM, PRESETS } from "../permissions/presets.js";
 import { Setting } from "../settings/guildSettings.js";
+import { variableError } from "./public/variables.js";
 
 export class InvalidSetting extends Error {
   name = "InvalidSetting";
@@ -75,10 +76,10 @@ export const SETTING_RULES = Object.freeze({
   [Setting.DASHBOARD_ROLES]: { kind: "roles", label: "Dashboard access roles" },
   [Setting.AUTOMOD]: { kind: "automod", label: "Automod" },
   [Setting.WELCOME_CHANNEL]: { kind: "channel", types: POSTING_CHANNELS, label: "Welcome channel" },
-  [Setting.WELCOME_MESSAGE]: { kind: "text", label: "Welcome message" },
+  [Setting.WELCOME_MESSAGE]: { kind: "text", variables: "welcome", label: "Welcome message" },
   [Setting.LEAVE_CHANNEL]: { kind: "channel", types: POSTING_CHANNELS, label: "Leave channel" },
-  [Setting.LEAVE_MESSAGE]: { kind: "text", label: "Leave message" },
-  [Setting.WELCOME_DM]: { kind: "text", label: "Welcome DM" },
+  [Setting.LEAVE_MESSAGE]: { kind: "text", variables: "welcome", label: "Leave message" },
+  [Setting.WELCOME_DM]: { kind: "text", variables: "welcome", label: "Welcome DM" },
   [Setting.AUTOROLES]: { kind: "autoroles", label: "Autoroles" },
   [Setting.ROLE_CONFIRM]: { kind: "onByDefault", label: "Role pick confirmations" },
   [Setting.ROLE_PERSIST]: { kind: "rolePersist", label: "Roles on rejoin" },
@@ -177,6 +178,10 @@ function checkValue(setting, value, { guildId, channels, roles }) {
       if (text.length > MAX_MESSAGE_LENGTH) {
         throw new InvalidSetting(setting, `Keep the message under ${MAX_MESSAGE_LENGTH} characters.`);
       }
+      const variableProblem = rule.variables && variableError(text, rule.variables);
+      if (variableProblem) {
+        throw new InvalidSetting(setting, variableProblem);
+      }
       return text || null;
     }
     case "autoroles": {
@@ -246,6 +251,10 @@ function checkValue(setting, value, { guildId, channels, roles }) {
       const message = typeof value.message === "string" ? value.message.replace(/\r\n?/g, "\n").trim() : "";
       if (message.length > MAX_BIRTHDAY_MESSAGE_LENGTH) {
         throw new InvalidSetting(setting, `Keep the birthday message under ${MAX_BIRTHDAY_MESSAGE_LENGTH} characters.`);
+      }
+      const variableProblem = variableError(message, "birthday");
+      if (variableProblem) {
+        throw new InvalidSetting(setting, variableProblem);
       }
       return channelId || roleId ? { channelId, roleId, message: message || null, timezone } : null;
     }
