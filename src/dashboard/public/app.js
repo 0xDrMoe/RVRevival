@@ -1306,6 +1306,7 @@ function showLanding(failedLogin = false) {
       landingJump("steps", t("landingNavSteps")),
       landingJump("dashboard", t("landingNavDashboard")),
       landingJump("faq", t("landingNavFaq")),
+      h("a", { class: "link-button topnav-guide", href: "#/guide" }, t("page_guide")),
     ),
     topInvite,
     // replaceChildren would print a null as "null", so only add the button when logged in.
