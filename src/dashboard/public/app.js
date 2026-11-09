@@ -372,6 +372,18 @@ function show(...children) {
 }
 
 let toastTimer;
+// Marks a button as waiting on a request: disabled, with aria-busy so the
+// progress cursor shows only then. A button that is simply unavailable (at a
+// limit, no permission, nothing to save) stays disabled without the spinner.
+function setBusy(button, busy) {
+  button.disabled = busy;
+  if (busy) {
+    button.setAttribute("aria-busy", "true");
+  } else {
+    button.removeAttribute("aria-busy");
+  }
+}
+
 function toast(message, kind = "ok") {
   const element = document.getElementById("toast");
   element.textContent = message;
@@ -1689,7 +1701,7 @@ function settingsPage({ data, pageId, intro, cards, fields, after = null, heroEx
           toast(t("noChanges"));
           return;
         }
-        saveButton.disabled = true;
+        setBusy(saveButton, true);
         try {
           const result = await api(`/api/guilds/${guildId}/settings`, { method: "PUT", body: pending });
           Object.keys(saved).forEach((key) => delete saved[key]);
@@ -1704,7 +1716,7 @@ function settingsPage({ data, pageId, intro, cards, fields, after = null, heroEx
         } catch (error) {
           failed(error);
         } finally {
-          saveButton.disabled = false;
+          setBusy(saveButton, false);
         }
       },
     },
@@ -2743,13 +2755,13 @@ function scheduledRow(guildId, message, channels, onDeleted) {
     if (!confirm(t("scheduledDeleteConfirm", { number: message.id }))) {
       return;
     }
-    remove.disabled = true;
+    setBusy(remove, true);
     try {
       await api(`/api/guilds/${guildId}/scheduled/${message.id}`, { method: "DELETE" });
       toast(t("scheduledDeleted"));
       onDeleted();
     } catch (error) {
-      remove.disabled = false;
+      setBusy(remove, false);
       failed(error);
     }
   });
@@ -2818,7 +2830,7 @@ async function showScheduled(guildId) {
           toast(t("scheduledPast"));
           return;
         }
-        submit.disabled = true;
+        setBusy(submit, true);
         try {
           await api(`/api/guilds/${guildId}/scheduled`, {
             method: "POST",
@@ -2830,7 +2842,7 @@ async function showScheduled(guildId) {
         } catch (error) {
           failed(error);
         } finally {
-          submit.disabled = false;
+          setBusy(submit, false);
         }
       },
     },
@@ -3301,7 +3313,7 @@ async function showCountry(guildId) {
           toast(t("embedPickChannel"), "error");
           return;
         }
-        postButton.disabled = true;
+        setBusy(postButton, true);
         try {
           const result = await api(`/api/guilds/${guildId}/country-guide`, { method: "POST", body: { channelId } });
           info.post = result.post;
@@ -3311,7 +3323,7 @@ async function showCountry(guildId) {
         } catch (error) {
           failed(error);
         } finally {
-          postButton.disabled = false;
+          setBusy(postButton, false);
         }
       },
     },
@@ -3693,7 +3705,7 @@ function showSimplePermissions(data) {
     }
     const apply = h("button", { class: "primary", type: "button" }, icon("check", "icon small"), t("permApply"));
     apply.addEventListener("click", async () => {
-      apply.disabled = true;
+      setBusy(apply, true);
       try {
         await api(`/api/guilds/${guildId}/permissions/preset`, { method: "POST", body: { ...body(), dryRun: false } });
         toast(t("permApplied"));
@@ -3701,7 +3713,7 @@ function showSimplePermissions(data) {
         route();
       } catch (error) {
         failed(error);
-        apply.disabled = false;
+        setBusy(apply, false);
       }
     });
     review.replaceChildren(
@@ -3730,12 +3742,13 @@ function showSimplePermissions(data) {
   }
 
   previewButton.addEventListener("click", async () => {
-    previewButton.disabled = true;
+    setBusy(previewButton, true);
     try {
       showPlan(await api(`/api/guilds/${guildId}/permissions/preset`, { method: "POST", body: body() }));
     } catch (error) {
       failed(error);
     } finally {
+      setBusy(previewButton, false);
       previewButton.disabled = !data.canManagePermissions;
     }
   });
@@ -4273,7 +4286,7 @@ function setupCard(data, { open = false } = {}) {
   let section;
   const redraw = (options) => section.replaceWith(setupCard(data, options));
   const saveSkipped = async (ids, button) => {
-    button.disabled = true;
+    setBusy(button, true);
     try {
       const result = await api(`/api/guilds/${guild.id}/settings`, { method: "PUT", body: { setupSkipped: ids } });
       data.settings = result.settings;
@@ -4281,7 +4294,7 @@ function setupCard(data, { open = false } = {}) {
       redraw({ open: open || todo.length > 0 });
     } catch (error) {
       failed(error);
-      button.disabled = false;
+      setBusy(button, false);
     }
   };
   const currentSkips = steps.filter((step) => step.skipped).map((step) => step.id);
@@ -5368,7 +5381,7 @@ function ticketPanelEditor(guildId, data) {
       onchange: () => refresh(),
       onsubmit: async (event) => {
         event.preventDefault();
-        save.disabled = true;
+        setBusy(save, true);
         try {
           const result = await api(`/api/guilds/${guildId}/settings`, {
             method: "PUT",
@@ -5382,7 +5395,7 @@ function ticketPanelEditor(guildId, data) {
         } catch (error) {
           failed(error);
         } finally {
-          save.disabled = false;
+          setBusy(save, false);
         }
       },
     },
@@ -5517,21 +5530,24 @@ async function showTicketList(guildId, data, query) {
   const empty = h("p", { class: "muted empty", hidden: true }, t("ticketsNone"));
   let before = null;
   const load = async () => {
-    more.disabled = true;
-    const params = new URLSearchParams({ status });
-    if (userId) {
-      params.set("user", userId);
+    setBusy(more, true);
+    try {
+      const params = new URLSearchParams({ status });
+      if (userId) {
+        params.set("user", userId);
+      }
+      if (before) {
+        params.set("before", before);
+      }
+      const page = await api(`/api/guilds/${guildId}/tickets?${params}`);
+      list.append(...page.tickets.map((ticket) => ticketRow(guildId, ticket)));
+      summary.textContent = t(page.panel ? "ticketsSummary" : "ticketsSummaryNoPanel", { count: formatNumber(page.openCount) });
+      empty.hidden = list.children.length > 0;
+      before = page.next;
+      more.hidden = !page.next;
+    } finally {
+      setBusy(more, false);
     }
-    if (before) {
-      params.set("before", before);
-    }
-    const page = await api(`/api/guilds/${guildId}/tickets?${params}`);
-    list.append(...page.tickets.map((ticket) => ticketRow(guildId, ticket)));
-    summary.textContent = t(page.panel ? "ticketsSummary" : "ticketsSummaryNoPanel", { count: formatNumber(page.openCount) });
-    empty.hidden = list.children.length > 0;
-    before = page.next;
-    more.hidden = !page.next;
-    more.disabled = false;
   };
   more.addEventListener("click", () => load().catch(failed));
   show(
@@ -5699,19 +5715,22 @@ function appealList(guildId) {
       page = 0;
       list.replaceChildren();
     }
-    more.disabled = true;
-    const params = new URLSearchParams({ page: String(page) });
-    if (status !== "all") {
-      params.set("status", status);
+    setBusy(more, true);
+    try {
+      const params = new URLSearchParams({ page: String(page) });
+      if (status !== "all") {
+        params.set("status", status);
+      }
+      const result = await api(`/api/guilds/${guildId}/appeals?${params}`);
+      list.append(...result.appeals.map((appeal) => appealRow(guildId, appeal)));
+      summary.textContent = t("appealsOpenCount", { count: formatNumber(result.openCount) });
+      empty.textContent = t(status === "open" ? "appealsNoneOpen" : "appealsNone");
+      empty.hidden = list.children.length > 0;
+      page += 1;
+      more.hidden = !result.more;
+    } finally {
+      setBusy(more, false);
     }
-    const result = await api(`/api/guilds/${guildId}/appeals?${params}`);
-    list.append(...result.appeals.map((appeal) => appealRow(guildId, appeal)));
-    summary.textContent = t("appealsOpenCount", { count: formatNumber(result.openCount) });
-    empty.textContent = t(status === "open" ? "appealsNoneOpen" : "appealsNone");
-    empty.hidden = list.children.length > 0;
-    page += 1;
-    more.hidden = !result.more;
-    more.disabled = false;
   };
   more.addEventListener("click", () => load().catch(failed));
   const filter = segmented(
@@ -5750,14 +5769,14 @@ async function showAppeal(guildId, data, number) {
         if (decision === "accept" && !confirm(t("appealsAcceptConfirm"))) {
           return;
         }
-        buttons.forEach((button) => (button.disabled = true));
+        buttons.forEach((button) => setBusy(button, true));
         try {
           ({ appeal } = await api(`/api/guilds/${guildId}/appeals/${number}`, { method: "POST", body: { decision, reason: reason.value } }));
           toast(t(decision === "accept" ? "appealsAccepted" : "appealsDenied"));
           render();
         } catch (error) {
           failed(error);
-          buttons.forEach((button) => (button.disabled = false));
+          buttons.forEach((button) => setBusy(button, false));
         }
       };
       buttons.push(
@@ -5902,13 +5921,13 @@ async function showAppealForm(guildId) {
           toast(t("appealAnswerAll"), "error");
           return;
         }
-        submit.disabled = true;
+        setBusy(submit, true);
         try {
           await api(`/api/appeals/${guildId}`, { method: "POST", body: { answers } });
           notice("appealSent");
         } catch (error) {
           failed(error);
-          submit.disabled = false;
+          setBusy(submit, false);
         }
       },
     },
@@ -6211,7 +6230,7 @@ async function showEmbeds(guildId) {
 
   async function submit() {
     const message = readEmbedForm(form);
-    send.disabled = true;
+    setBusy(send, true);
     try {
       if (editing) {
         await api(`/api/guilds/${guildId}/messages/${editing.channelId}/${editing.messageId}`, { method: "PUT", body: { message } });
@@ -6230,7 +6249,7 @@ async function showEmbeds(guildId) {
     } catch (error) {
       failed(error);
     } finally {
-      send.disabled = false;
+      setBusy(send, false);
     }
   }
 
@@ -6359,7 +6378,7 @@ function feedRow(guildId, feed, data, roles, onChanged) {
       {
         onsubmit: async (event) => {
           event.preventDefault();
-          save.disabled = true;
+          setBusy(save, true);
           try {
             await api(`/api/guilds/${guildId}/feeds/${feed.id}`, {
               method: "PATCH",
@@ -6369,7 +6388,7 @@ function feedRow(guildId, feed, data, roles, onChanged) {
             onChanged();
           } catch (error) {
             failed(error);
-            save.disabled = false;
+            setBusy(save, false);
           }
         },
       },
@@ -6468,7 +6487,7 @@ async function showFeeds(guildId) {
     {
       onsubmit: async (event) => {
         event.preventDefault();
-        add.disabled = true;
+        setBusy(add, true);
         add.lastChild.textContent = t("feedsAdding");
         try {
           const result = await api(`/api/guilds/${guildId}/feeds`, {
@@ -6484,12 +6503,14 @@ async function showFeeds(guildId) {
           toast(t("feedsAdded", { name: result.feed.name }));
           sourceInput.value = "";
           messageInput.value = "";
+          add.lastChild.textContent = t("feedsAdd");
+          // load() then disables the button again if the limit is reached.
+          setBusy(add, false);
           await load();
         } catch (error) {
-          failed(error);
-        } finally {
           add.lastChild.textContent = t("feedsAdd");
-          add.disabled = false;
+          setBusy(add, false);
+          failed(error);
         }
       },
     },
@@ -6611,7 +6632,7 @@ async function showStickies(guildId) {
       onsubmit: async (event) => {
         event.preventDefault();
         const channelId = form.querySelector("#stickyChannel").value;
-        save.disabled = true;
+        setBusy(save, true);
         try {
           const replacing = current.some((sticky) => sticky.channelId === channelId);
           await api(`/api/guilds/${guildId}/stickies/${channelId}`, { method: "PUT", body: { content: content.value } });
@@ -6622,7 +6643,7 @@ async function showStickies(guildId) {
         } catch (error) {
           failed(error);
         } finally {
-          save.disabled = false;
+          setBusy(save, false);
         }
       },
     },
@@ -6683,14 +6704,14 @@ async function showBackup(guildId) {
         if (!confirm(t("backupRestoreConfirm", { count: plan.changes.length }))) {
           return;
         }
-        confirmButton.disabled = true;
+        setBusy(confirmButton, true);
         try {
           const result = await api(`/api/guilds/${guildId}/backup/restore`, { method: "POST", body: { backup, dryRun: false } });
           toast(t("backupRestored", { count: result.changes.length }));
           await showBackup(guildId);
         } catch (error) {
           failed(error);
-          confirmButton.disabled = false;
+          setBusy(confirmButton, false);
         }
       });
       parts.push(h("div", { class: "toolbar" }, h("span", { class: "grow" }), confirmButton));
@@ -6934,7 +6955,7 @@ async function showBranding(guildId) {
       toast(t("brandingNothing"));
       return;
     }
-    saveButton.disabled = true;
+    setBusy(saveButton, true);
     try {
       saved = await api(`/api/guilds/${guildId}/branding`, { method: "PATCH", body });
       state.cache = null;
@@ -6942,6 +6963,8 @@ async function showBranding(guildId) {
       toast(t("brandingSaved"));
     } catch (error) {
       failed(error);
+    } finally {
+      setBusy(saveButton, false);
       refresh();
     }
   });
@@ -7016,14 +7039,14 @@ function counterRow(guildId, counter, data, onChanged) {
     save.hidden = input.value.trim() === counter.template;
   });
   save.addEventListener("click", async () => {
-    save.disabled = true;
+    setBusy(save, true);
     try {
       await api(`/api/guilds/${guildId}/counters/${counter.id}`, { method: "PATCH", body: { template: input.value } });
       toast(t("countersSaved"));
       onChanged();
     } catch (error) {
       failed(error);
-      save.disabled = false;
+      setBusy(save, false);
     }
   });
   const remove = h(
@@ -7107,17 +7130,19 @@ async function showCounters(guildId) {
     {
       onsubmit: async (event) => {
         event.preventDefault();
-        add.disabled = true;
+        setBusy(add, true);
         try {
           await api(`/api/guilds/${guildId}/counters`, {
             method: "POST",
             body: { template: nameInput.value, categoryId: form.querySelector("#counterCategory").value || null },
           });
           toast(t("countersAdded"));
+          // load() then disables the button again if the limit is reached.
+          setBusy(add, false);
           await load();
         } catch (error) {
+          setBusy(add, false);
           failed(error);
-          add.disabled = false;
         }
       },
     },
@@ -7204,13 +7229,16 @@ async function showActivity(guildId) {
   const more = h("button", { class: "ghost", type: "button", hidden: true }, t("loadMore"));
   let before = null;
   const load = async () => {
-    more.disabled = true;
-    const page = await api(`/api/guilds/${guildId}/activity${before ? `?before=${before}` : ""}`);
-    list.append(...page.entries.map((entry) => activityRow(entry, data)));
-    empty.hidden = list.children.length > 0;
-    before = page.next;
-    more.hidden = !page.next;
-    more.disabled = false;
+    setBusy(more, true);
+    try {
+      const page = await api(`/api/guilds/${guildId}/activity${before ? `?before=${before}` : ""}`);
+      list.append(...page.entries.map((entry) => activityRow(entry, data)));
+      empty.hidden = list.children.length > 0;
+      before = page.next;
+      more.hidden = !page.next;
+    } finally {
+      setBusy(more, false);
+    }
   };
   more.addEventListener("click", () => load().catch(failed));
   show(guildLayout(data, "activity", pageHero("activity", t("activityIntro"), data), h("section", { class: "card" }, empty, list, h("div", { class: "center" }, more))));

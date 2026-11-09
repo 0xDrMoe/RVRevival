@@ -455,6 +455,11 @@ button:active,
 
 button:disabled {
   opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* Only a button waiting on a request shows the progress cursor (setBusy in app.js). */
+button[aria-busy="true"] {
   cursor: progress;
 }
 
