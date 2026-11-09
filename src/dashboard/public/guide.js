@@ -920,7 +920,11 @@ const FEATURE_PARTS = [
           ["/tags list", "Lists them all."],
         ],
         example: ["/tag name:download user:@Player", "/tags add name:bug-report"],
-        tips: ["Names are lowercase letters, numbers and dashes, up to 50 per server.", "The saved text never pings anyone. Only the member picked with `user` is pinged."],
+        tips: [
+          "Names are lowercase letters, numbers and dashes, up to 50 per server.",
+          "The saved text never pings anyone. Only the member picked with `user` is pinged.",
+          "No idea where to start? The **Custom commands** page has templates (rules, how to ask for help, reporting, roles, invite link, socials). **Use** adds one to the list so you can edit it before saving.",
+        ],
       },
       {
         id: "responders",
@@ -941,6 +945,7 @@ const FEATURE_PARTS = [
           "`match` is anywhere in the message (default), whole words, the whole message, or the start. Case and spaces don't matter.",
           "Replies can use `{user}`, `{server}` and `{channel}`, and never ping.",
           "Each answers at most once every 30 seconds per channel, never answers bots, and stays quiet when automod acted. Up to 25.",
+          "The **Auto-responders** page has templates (say hello back, where to get roles, the rules, the invite link, how to report, quiet chat). **Use** adds one to the list so you can edit it before saving.",
         ],
       },
       {
