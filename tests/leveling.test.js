@@ -569,3 +569,29 @@ describe("level commands", () => {
     expect((await t.run({ name: "levels", subcommand: "on", manageGuild: false })).outcome.key).toBe("modNoPermission");
   });
 });
+
+describe("custom XP rates and level curve", () => {
+  it("uses the server's XP per message, cooldown and curve", async () => {
+    const t = setup({ config: { xpMin: 40, xpMax: 50, cooldownSeconds: 10, levelFormula: "100" } });
+    expect(await t.leveling.handleMessage(t.message())).toMatchObject({ xp: 50, level: 0 });
+    t.advance(9_000);
+    expect(await t.leveling.handleMessage(t.message())).toBeUndefined();
+    t.advance(1_000);
+    expect(await t.leveling.handleMessage(t.message())).toMatchObject({ xp: 100, level: 1, leveledUp: true });
+    t.advance(10_000);
+    expect(await t.leveling.handleMessage(t.message())).toMatchObject({ xp: 150, level: 1, leveledUp: false });
+  });
+
+  it("gives the server's voice XP per minute", async () => {
+    const t = setup({ config: { voiceXp: true, voiceXpPerMinute: 3 } });
+    const other = { ...t.member, id: "300000000000000003", user: { id: "300000000000000003", username: "o", bot: false } };
+    t.guild.voiceStates = {
+      cache: new Map([
+        ["a", { channelId: CHANNEL_ID, member: t.member, deaf: false }],
+        ["b", { channelId: CHANNEL_ID, member: other, deaf: false }],
+      ]),
+    };
+    await t.leveling.awardVoice(t.guild);
+    expect(t.store.get(GUILD_ID, MEMBER_ID).xp).toBe(3);
+  });
+});

@@ -37,6 +37,7 @@ import {
 } from "./automodPresets.js";
 import { GUIDE } from "./guide.js";
 import { RESPONDER_TEMPLATES, TAG_TEMPLATES, responderFromTemplate, tagFromTemplate } from "./customCommandTemplates.js";
+import { buildCurve, CURVE_PRESETS, MAX_FORMULA_LENGTH, STANDARD_FORMULA, standardCurve as standardLevelCurve, tryBuildCurve } from "./levelCurve.js";
 
 const LANGUAGES = { en: "English", es: "Español", de: "Deutsch", fr: "Français", pt: "Português", it: "Italiano", ar: "العربية" };
 const LOG_EVENTS = ["messageEdit", "messageDelete", "bulkDelete", "memberJoin", "memberLeave", "memberUpdate"];
@@ -65,6 +66,12 @@ const MAX_LEVEL = 500;
 const MAX_LEVEL_REWARDS = 25;
 const MAX_LEVEL_MESSAGE_LENGTH = 500;
 const LEVEL_ANNOUNCE = ["here", "channel", "dm", "off"];
+// The ranges servers may pick XP rates from (XP_LIMITS in leveling/config.js).
+const XP_LIMITS = {
+  xpPerMessage: { min: 1, max: 100 },
+  cooldownSeconds: { min: 10, max: 600 },
+  voiceXpPerMinute: { min: 1, max: 50 },
+};
 const MAX_TAGS = 50;
 const MAX_TAG_LENGTH = 2000;
 const MAX_AUTOROLES = 10;
@@ -4288,6 +4295,11 @@ function readLeveling(form, saved) {
     noXpChannelIds: [...form.querySelectorAll('input[name="noXpChannel"]:checked')].map((box) => box.value),
     noXpRoleIds: [...form.querySelectorAll('input[name="noXpRole"]:checked')].map((box) => box.value),
     voiceXp: form.querySelector("#levelsVoice").checked,
+    xpMin: Number(form.querySelector("#levelsXpMin").value),
+    xpMax: Number(form.querySelector("#levelsXpMax").value),
+    cooldownSeconds: Number(form.querySelector("#levelsCooldown").value),
+    voiceXpPerMinute: Number(form.querySelector("#levelsVoiceRate").value),
+    levelFormula: form.querySelector("#levelsCurvePreset").value === "standard" ? null : form.querySelector("#levelsFormula").value.trim() || null,
     boosterMultiplier: Number(form.querySelector("#levelsBooster").value) || 1,
     roleMultipliers: [...form.querySelectorAll(".boost-row")]
       .map((row) => ({ roleId: row.querySelector("select").value, multiplier: Number(row.querySelector(".boost-multiplier").value) }))
@@ -4364,6 +4376,332 @@ async function leaderboardCard(guildId, page, period) {
         )
       : null,
   );
+}
+
+// --- Leveling: XP rates and the level curve -------------------------------------------
+
+// The levels the curve table shows, up to the graph's range.
+const CURVE_MILESTONES = [1, 5, 10, 20, 30, 50, 75, 100, 150, 200, 300, 400, 500];
+const CURVE_RANGES = [25, 50, 100, 250, 500];
+const DEFAULT_MESSAGES_PER_DAY = 30;
+const YEAR_MS = 365 * DAY_MS;
+
+// formatDuration, with years for very long waits.
+const longDuration = (ms) =>
+  ms >= YEAR_MS
+    ? new Intl.NumberFormat(state.language, { style: "unit", unit: "year", unitDisplay: "short", maximumFractionDigits: 1 }).format(ms / YEAR_MS)
+    : formatDuration(Math.max(ms, 60 * 1000));
+const compactNumber = (value) => new Intl.NumberFormat(state.language, { notation: "compact", maximumFractionDigits: 1 }).format(value);
+
+// A rounded top for the y axis: 1, 2 or 5 times a power of ten.
+function niceCeiling(value) {
+  if (value <= 0) {
+    return 1;
+  }
+  const power = 10 ** Math.floor(Math.log10(value));
+  return [1, 2, 5, 10].map((step) => step * power).find((nice) => nice >= value);
+}
+
+// A whole number input with its allowed range.
+function rangeInput(id, value, { min, max }) {
+  return h("input", { id, type: "number", min, max, step: 1, required: true, inputmode: "numeric", value });
+}
+
+// The line graph: XP for each level, or the total XP, for levels 1 to `upTo`.
+// Axis labels are HTML so they stay readable while the SVG stretches.
+function curveChart({ curve, standard, mode, upTo, average }) {
+  const W = 1000;
+  const H = 300;
+  const valueAt = (c, level) => (mode === "total" ? c.totals[level] : c.steps[level - 1]);
+  const series = [curve, standard].filter(Boolean);
+  const top = niceCeiling(Math.max(...series.flatMap((c) => Array.from({ length: upTo }, (_, i) => valueAt(c, i + 1)))));
+  const x = (level) => (upTo === 1 ? 0 : ((level - 1) / (upTo - 1)) * W);
+  const y = (value) => H - (value / top) * H;
+  const path = (c) =>
+    Array.from({ length: upTo }, (_, i) => `${i === 0 ? "M" : "L"}${x(i + 1).toFixed(1)},${y(valueAt(c, i + 1)).toFixed(1)}`).join("");
+  const gridValues = [0.25, 0.5, 0.75, 1].map((part) => top * part);
+  const guide = svg("line", { class: "curve-guide", x1: 0, x2: 0, y1: 0, y2: H, hidden: "" });
+  const dot = svg("line", { class: "curve-dot", x1: 0, x2: 0, y1: 0, y2: 0, hidden: "" });
+  const tip = h("div", { class: "curve-tip", hidden: true, role: "status" });
+  const plot = svg(
+    "svg",
+    { viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: "none", role: "img", "aria-label": t("levelsChartLabel") },
+    gridValues.map((value) => svg("line", { class: "grid", x1: 0, x2: W, y1: y(value), y2: y(value) })),
+    svg("line", { class: "curve-base", x1: 0, x2: W, y1: H, y2: H }),
+    standard ? svg("path", { class: "curve-line curve-standard", d: path(standard) }) : null,
+    svg("path", { class: "curve-line curve-this", d: path(curve) }),
+    guide,
+    dot,
+  );
+  const area = h(
+    "div",
+    { class: "curve-plot" },
+    plot,
+    gridValues.map((value) => h("span", { class: "curve-y", style: `top:${(y(value) / H) * 100}%` }, compactNumber(value))),
+    tip,
+  );
+  // Crosshair and tooltip for the level under the pointer.
+  const point = (event) => {
+    const box = plot.getBoundingClientRect();
+    const share = Math.min(Math.max((event.clientX - box.left) / box.width, 0), 1);
+    const level = Math.round(share * (upTo - 1)) + 1;
+    const value = valueAt(curve, level);
+    for (const [element, attrs] of [
+      [guide, { x1: x(level), x2: x(level) }],
+      [dot, { x1: x(level), x2: x(level), y1: y(value), y2: y(value) }],
+    ]) {
+      Object.entries(attrs).forEach(([name, v]) => element.setAttribute(name, v));
+      element.removeAttribute("hidden");
+    }
+    tip.textContent = t("levelsChartTip", {
+      level: formatNumber(level),
+      step: formatNumber(curve.steps[level - 1]),
+      total: formatNumber(curve.totals[level]),
+      messages: formatNumber(Math.ceil(curve.totals[level] / average)),
+    });
+    tip.hidden = false;
+    tip.style.insetInlineStart = `${Math.min(Math.max(share * 100, 12), 88)}%`;
+  };
+  const leave = () => {
+    guide.setAttribute("hidden", "");
+    dot.setAttribute("hidden", "");
+    tip.hidden = true;
+  };
+  area.addEventListener("pointermove", point);
+  area.addEventListener("pointerdown", point);
+  area.addEventListener("pointerleave", leave);
+  const ticks = [...new Set([1, ...[0.25, 0.5, 0.75].map((part) => Math.round(1 + part * (upTo - 1))), upTo])];
+  return h(
+    "div",
+    { class: "curve-chart" },
+    area,
+    h(
+      "div",
+      { class: "curve-x" },
+      ticks.map((level) => h("span", { style: `inset-inline-start:${(x(level) / W) * 100}%` }, formatNumber(level))),
+    ),
+    standard
+      ? h(
+          "div",
+          { class: "curve-legend" },
+          h("span", {}, h("i", { class: "curve-key curve-key-this" }), t("levelsChartThis")),
+          h("span", {}, h("i", { class: "curve-key curve-key-standard" }), t("levelsChartStandard")),
+        )
+      : null,
+  );
+}
+
+// The "XP rates" and "Level curve" cards. The curve card redraws its graph,
+// math and table as the settings change, using the same code as the bot.
+function levelCurveCards(config) {
+  const limits = XP_LIMITS;
+  const xpMin = rangeInput("levelsXpMin", config.xpMin ?? 15, limits.xpPerMessage);
+  const xpMax = rangeInput("levelsXpMax", config.xpMax ?? 25, limits.xpPerMessage);
+  const cooldown = rangeInput("levelsCooldown", config.cooldownSeconds ?? 60, limits.cooldownSeconds);
+  const ratesCard = card(
+    t("levelsRatesTitle"),
+    "zap",
+    "blue",
+    h("p", { class: "help" }, t("levelsRatesHelp")),
+    h(
+      "div",
+      { class: "rule-body" },
+      field("levelsXpMin", null, xpMin),
+      field("levelsXpMax", null, xpMax),
+    ),
+    h("p", { class: "help" }, t("levelsXpRangeHelp", { low: limits.xpPerMessage.min, high: limits.xpPerMessage.max })),
+    h("label", { class: "field" }, h("span", { class: "field-label" }, t("levelsCooldown")), cooldown,
+      h("span", { class: "help" }, t("levelsCooldownHelp", { low: limits.cooldownSeconds.min, high: limits.cooldownSeconds.max }))),
+  );
+
+  const formula = h("input", {
+    id: "levelsFormula",
+    type: "text",
+    maxlength: MAX_FORMULA_LENGTH,
+    spellcheck: false,
+    autocomplete: "off",
+    class: "mono",
+    value: config.levelFormula ?? STANDARD_FORMULA,
+    "aria-describedby": "levelsFormulaStatus",
+  });
+  const presetOf = (text) => CURVE_PRESETS.find((preset) => preset.formula === text.trim())?.id ?? "custom";
+  const preset = h(
+    "select",
+    { id: "levelsCurvePreset" },
+    [...CURVE_PRESETS.map((item) => item.id), "custom"].map((id) =>
+      h("option", { value: id, selected: id === presetOf(formula.value) }, t(`levelsCurve_${id}`)),
+    ),
+  );
+  const status = h("p", { id: "levelsFormulaStatus", class: "help", role: "status" });
+  const advanced = h(
+    "details",
+    { class: "curve-advanced", open: presetOf(formula.value) === "custom" },
+    h("summary", {}, t("levelsCurveAdvanced")),
+    field("levelsFormula", "levelsFormulaHelp", formula),
+    status,
+    h(
+      "button",
+      {
+        class: "ghost small",
+        type: "button",
+        onclick: () => {
+          formula.value = STANDARD_FORMULA;
+          formula.dispatchEvent(new Event("input", { bubbles: true }));
+        },
+      },
+      t("levelsFormulaReset"),
+    ),
+  );
+
+  let mode = "step";
+  let upTo = 100;
+  const perDay = h("input", { id: "levelsPerDay", type: "number", min: 1, max: 1440, step: 1, value: DEFAULT_MESSAGES_PER_DAY });
+  const rangeSelect = h(
+    "select",
+    { id: "levelsChartUpTo" },
+    CURVE_RANGES.map((value) => h("option", { value, selected: value === upTo }, formatNumber(value))),
+  );
+  const modeTabs = h(
+    "div",
+    { class: "segmented", role: "group", "aria-label": t("levelsCurveTitle") },
+    ["step", "total"].map((value) =>
+      h(
+        "button",
+        {
+          class: "button segment",
+          type: "button",
+          "data-mode": value,
+          "aria-pressed": String(value === mode),
+          onclick: () => {
+            mode = value;
+            modeTabs.querySelectorAll("button").forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.mode === mode)));
+            redraw();
+          },
+        },
+        t(value === "step" ? "levelsChartPerLevel" : "levelsChartTotal"),
+      ),
+    ),
+  );
+  const chartSlot = h("div");
+  const mathSlot = h("div", { class: "curve-math" });
+  const tableSlot = h("div", { class: "table-wrap" });
+  let lastGood = tryBuildCurve(formula.value) ?? standardLevelCurve;
+
+  // Whole numbers inside the allowed range, else the default (the server says what's wrong on save).
+  const rate = (input, { min, max }, fallback) => {
+    const value = Number(input.value);
+    return Number.isInteger(value) && value >= min && value <= max ? value : fallback;
+  };
+
+  function redraw() {
+    let curve = lastGood;
+    try {
+      curve = buildCurve(formula.value);
+      lastGood = curve;
+      const sample = Math.min(10, MAX_LEVEL);
+      status.textContent = t("levelsFormulaOk", { level: sample, xp: formatNumber(curve.steps[sample - 1]) });
+      status.classList.remove("error");
+    } catch (error) {
+      status.textContent = t("levelsFormulaBad", { error: error.message });
+      status.classList.add("error");
+    }
+    const low = rate(xpMin, limits.xpPerMessage, 15);
+    const high = Math.max(low, rate(xpMax, limits.xpPerMessage, 25));
+    const seconds = rate(cooldown, limits.cooldownSeconds, 60);
+    const average = (low + high) / 2;
+    const daily = Math.min(Math.max(Math.round(Number(perDay.value)) || DEFAULT_MESSAGES_PER_DAY, 1), 1440);
+    const isStandard = curve.formula === STANDARD_FORMULA;
+
+    chartSlot.replaceChildren(curveChart({ curve, standard: isStandard ? null : standardLevelCurve, mode, upTo, average }));
+
+    const example = Math.min(10, upTo);
+    mathSlot.replaceChildren(
+      h("h3", {}, t("levelsMathTitle")),
+      h("p", {}, t("levelsMathSteps", { formula: curve.formula })),
+      h("p", {}, t("levelsMathTotal", { level: example, step: formatNumber(curve.steps[example - 1]), total: formatNumber(curve.totals[example]) })),
+      h("p", {}, t("levelsMathRate", {
+        min: low,
+        max: high,
+        avg: formatNumber(average),
+        seconds,
+        perHour: formatNumber(Math.round((average * 3600) / seconds)),
+      })),
+    );
+
+    const rows = CURVE_MILESTONES.filter((level) => level <= upTo).map((level) => {
+      const messages = Math.ceil(curve.totals[level] / average);
+      return h(
+        "tr",
+        {},
+        h("td", {}, formatNumber(level)),
+        h("td", {}, formatNumber(curve.steps[level - 1])),
+        h("td", {}, formatNumber(curve.totals[level])),
+        h("td", {}, formatNumber(messages)),
+        h("td", {}, longDuration(messages * seconds * 1000)),
+        h("td", {}, longDuration((messages / daily) * DAY_MS)),
+      );
+    });
+    tableSlot.replaceChildren(
+      h(
+        "table",
+        { class: "table curve-table" },
+        h(
+          "thead",
+          {},
+          h(
+            "tr",
+            {},
+            ["levelsTableLevel", "levelsTableStep", "levelsTableTotal", "levelsTableMessages", "levelsTableFastest"].map((key) => h("th", {}, t(key))),
+            h("th", {}, t("levelsTablePerDay", { count: formatNumber(daily) })),
+          ),
+        ),
+        h("tbody", {}, rows),
+      ),
+    );
+  }
+
+  preset.addEventListener("change", () => {
+    const chosen = CURVE_PRESETS.find((item) => item.id === preset.value);
+    if (chosen) {
+      formula.value = chosen.formula;
+    } else {
+      advanced.open = true;
+      formula.focus();
+    }
+    redraw();
+  });
+  formula.addEventListener("input", () => {
+    preset.value = presetOf(formula.value);
+    redraw();
+  });
+  [xpMin, xpMax, cooldown, perDay].forEach((input) => input.addEventListener("input", redraw));
+  rangeSelect.addEventListener("change", () => {
+    upTo = Number(rangeSelect.value);
+    redraw();
+  });
+  redraw();
+
+  const curveCard = card(
+    t("levelsCurveTitle"),
+    "chart",
+    "green",
+    h("p", { class: "help" }, t("levelsCurveHelp")),
+    field("levelsCurvePreset", null, preset),
+    advanced,
+    h(
+      "div",
+      { class: "toolbar curve-toolbar" },
+      modeTabs,
+      h("span", { class: "grow" }),
+      h("label", { class: "inline-field" }, h("span", { class: "muted" }, t("levelsChartUpTo")), rangeSelect),
+    ),
+    chartSlot,
+    mathSlot,
+    h("label", { class: "inline-field" }, h("span", { class: "muted" }, t("levelsPerDay")), perDay),
+    tableSlot,
+  );
+  curveCard.classList.add("curve-card");
+  return { ratesCard, curveCard };
 }
 
 async function showLevels(guildId) {
@@ -4449,6 +4787,8 @@ async function showLevels(guildId) {
     addKey: "levelsBoostAdd",
   });
 
+  const { ratesCard, curveCard } = levelCurveCards(config);
+
   const board = await leaderboardCard(guildId, page, period).catch((error) => {
     failed(error);
     return null;
@@ -4460,6 +4800,8 @@ async function showLevels(guildId) {
     intro: t("levelsIntro"),
     cards: [
       card(t("levelsMaster"), "trophy", "green", toggle("levelsEnabled", config.enabled, "levelsMaster", "levelsMasterHelp"), h("p", { class: "help" }, t("levelsHowXp"))),
+      ratesCard,
+      curveCard,
       card(
         t("levelsAnnounceTitle"),
         "sparkles",
@@ -4485,6 +4827,13 @@ async function showLevels(guildId) {
         "mic",
         "purple",
         toggle("levelsVoice", config.voiceXp ?? false, "levelsVoice", "levelsVoiceHelp"),
+        h(
+          "label",
+          { class: "field" },
+          h("span", { class: "field-label" }, t("levelsVoiceRate")),
+          rangeInput("levelsVoiceRate", config.voiceXpPerMinute ?? 10, XP_LIMITS.voiceXpPerMinute),
+          h("span", { class: "help" }, t("levelsVoiceRateHelp", { low: XP_LIMITS.voiceXpPerMinute.min, high: XP_LIMITS.voiceXpPerMinute.max })),
+        ),
         field(
           "levelsBooster",
           "levelsBoosterHelp",

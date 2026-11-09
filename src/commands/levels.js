@@ -200,7 +200,7 @@ export function createLevelCommands({ levels, leveling, guildSettings, forcedLan
     if (!entry || entry.xp <= 0) {
       return answer(Status.SUCCESS, user.id === interaction.user.id ? "rankNoXpYou" : "rankNoXp", { member: `<@${user.id}>` });
     }
-    const { level, current, needed } = levelProgress(entry.xp);
+    const { level, current, needed } = levelProgress(entry.xp, configFor(interaction.guildId));
     const member = interaction.options.getMember?.("member") ?? (user.id === interaction.user.id ? interaction.member : null);
     const embed = new EmbedBuilder()
       .setColor(accentColor(guildSettings, interaction.guildId, LEVEL_COLOR))
@@ -225,7 +225,8 @@ export function createLevelCommands({ levels, leveling, guildSettings, forcedLan
     if (!interaction.inCachedGuild()) {
       return answer(Status.REFUSED, "guildOnly");
     }
-    if (!configFor(interaction.guildId).enabled) {
+    const config = configFor(interaction.guildId);
+    if (!config.enabled) {
       return answer(Status.REFUSED, "levelsDisabled");
     }
     const period = PERIODS.includes(interaction.options.getString("period")) ? interaction.options.getString("period") : Period.ALL;
@@ -244,7 +245,7 @@ export function createLevelCommands({ levels, leveling, guildSettings, forcedLan
       const values = {
         place: medals[place - 1] ?? `**${place}.**`,
         member: `<@${entry.userId}>`,
-        level: number(levelProgress(entry.xp).level),
+        level: number(levelProgress(entry.xp, config).level),
         xp: number(entry.xp),
       };
       return since === undefined ? text("leaderboardLine", values) : text("leaderboardLinePeriod", { ...values, gained: number(entry.gained) });
@@ -280,6 +281,12 @@ export function createLevelCommands({ levels, leveling, guildSettings, forcedLan
       voice: text(config.voiceXp ? "levelsStateOn" : "levelsStateOff"),
       booster: config.boosterMultiplier > 1 ? `×${config.boosterMultiplier}` : text("levelsNone"),
       roles: boosts.length > 0 ? boosts.join(", ") : text("levelsNone"),
+    })}\n${text("levelsShowRates", {
+      min: config.xpMin,
+      max: config.xpMax,
+      seconds: config.cooldownSeconds,
+      voice: config.voiceXpPerMinute,
+      curve: config.levelFormula ? `\`${config.levelFormula}\`` : text("levelsCurveStandard"),
     })}`;
   }
 
@@ -303,7 +310,7 @@ export function createLevelCommands({ levels, leveling, guildSettings, forcedLan
         return result(Status.SUCCESS);
       case "on":
         await save({ enabled: true });
-        return answer(Status.SUCCESS, "levelsTurnedOn");
+        return answer(Status.SUCCESS, "levelsTurnedOn", { min: config.xpMin, max: config.xpMax, seconds: config.cooldownSeconds });
       case "off":
         await save({ enabled: false });
         return answer(Status.SUCCESS, "levelsTurnedOff");
@@ -375,7 +382,7 @@ export function createLevelCommands({ levels, leveling, guildSettings, forcedLan
       case "voice": {
         const enabled = interaction.options.getBoolean("enabled", true);
         await save({ voiceXp: enabled });
-        return answer(Status.SUCCESS, enabled ? "levelsVoiceOn" : "levelsVoiceOff");
+        return answer(Status.SUCCESS, enabled ? "levelsVoiceOn" : "levelsVoiceOff", { xp: config.voiceXpPerMinute });
       }
       case "boost": {
         const multiplier = interaction.options.getNumber("multiplier", true);
@@ -400,7 +407,7 @@ export function createLevelCommands({ levels, leveling, guildSettings, forcedLan
           return answer(Status.REFUSED, "levelsNoBots");
         }
         const level = interaction.options.getInteger("level", true);
-        levels.setXp(guildId, user.id, totalXpForLevel(level), user.username);
+        levels.setXp(guildId, user.id, totalXpForLevel(level, config), user.username);
         const member = interaction.options.getMember?.("member");
         if (member) {
           await leveling.syncRewards(member, level, config);

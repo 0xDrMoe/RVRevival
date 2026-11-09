@@ -10,7 +10,7 @@ import { cleanEmoji } from "../community/rolePanels.js";
 import { MAX_THRESHOLD, MIN_THRESHOLD } from "../community/starboard.js";
 import { cleanTagContent, cleanTagName, MAX_TAG_LENGTH, MAX_TAGS, sortTags } from "../community/tags.js";
 import { MAX_AUTOROLES, MAX_MESSAGE_LENGTH } from "../community/welcome.js";
-import { checkLeveling, InvalidLeveling, normalizeLeveling } from "../leveling/config.js";
+import { checkLeveling, DEFAULT_LEVELING, InvalidLeveling, normalizeLeveling } from "../leveling/config.js";
 import { checkAntiNuke, describeAntiNuke, InvalidAntiNuke } from "../raid/antiNuke.js";
 import { checkRolePersist, InvalidRolePersist } from "../members/rolePersistence.js";
 import { checkMediaOnly, describeMediaOnly, InvalidMediaOnly } from "../community/mediaOnly.js";
@@ -487,7 +487,11 @@ export function describeValue(setting, value) {
     case "leveling": {
       const config = normalizeLeveling(value);
       const rewards = config.rewards.map((reward) => `${reward.level}: <@&${reward.roleId}>`);
-      return `${config.enabled ? "on" : "off"} · announce ${config.announce}${rewards.length > 0 ? ` · rewards ${rewards.join(", ")}` : ""}`;
+      // XP rates and the curve only when they're not the defaults, so the log stays short.
+      const ratesChanged = ["xpMin", "xpMax", "cooldownSeconds", "voiceXpPerMinute"].some((key) => config[key] !== DEFAULT_LEVELING[key]);
+      const rates = ratesChanged ? ` · ${config.xpMin}-${config.xpMax} XP every ${config.cooldownSeconds}s, voice ${config.voiceXpPerMinute}/min` : "";
+      const curve = config.levelFormula ? ` · curve ${config.levelFormula}` : "";
+      return `${config.enabled ? "on" : "off"} · announce ${config.announce}${rates}${curve}${rewards.length > 0 ? ` · rewards ${rewards.join(", ")}` : ""}`;
     }
     case "automod": {
       const config = normalizeAutomod(value);

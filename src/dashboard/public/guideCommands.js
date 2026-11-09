@@ -1319,7 +1319,7 @@ export const COMMAND_PARTS = [
           },
         ],
         example: ["/rank", "/rank member:@Player"],
-        tips: ["Members earn 15 to 25 XP per message, at most once a minute, so spamming doesn't help."],
+        tips: ["By default members earn 15 to 25 XP per message, at most once a minute, so spamming doesn't help. The dashboard's Leveling page can change the amounts and the level curve."],
       },
       {
         id: "cmdleaderboard",
@@ -1412,7 +1412,7 @@ export const COMMAND_PARTS = [
           {
             usage: "/levels voice enabled",
             what: "Switches XP for time in voice channels on or off.",
-            options: [["enabled", "`True` for on. Members earn 10 XP a minute with someone else in the channel, not deafened and not in the AFK channel."]],
+            options: [["enabled", "`True` for on. Members earn 10 XP a minute by default (set it on the dashboard) with someone else in the channel, not deafened and not in the AFK channel."]],
           },
           {
             usage: "/levels boost multiplier [role]",
