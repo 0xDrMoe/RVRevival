@@ -12,6 +12,9 @@ import { DEFAULT_NAME_FORMAT, fillTemplate, formatThreadName, normalizeLook, PAN
 
 export const OPEN_BUTTON = "tk:open";
 export const CLOSE_BUTTON = "tk:close";
+export const CLAIM_BUTTON = "tk:claim";
+// "tk:rate:<ticket id>:<1-5>", sent by DM when a ticket closes (tickets/support.js).
+export const RATE_PREFIX = "tk:rate:";
 export const FORM_ID = "tk:form";
 export const FORM_INPUT = "subject";
 // A category's button and form: "tk:open:<category id>", "tk:form:<category id>".
@@ -41,6 +44,23 @@ export const TICKET_PERMISSIONS = [
 ];
 
 export const TICKET_COLOR = 0x5865f2;
+
+// The DM asking a member to rate the help they got, 1 to 5 stars.
+export function buildRatingRequest(language, { ticket, serverName }) {
+  const row = new ActionRowBuilder().addComponents(
+    [1, 2, 3, 4, 5].map((stars) =>
+      new ButtonBuilder()
+        .setCustomId(`${RATE_PREFIX}${ticket.id}:${stars}`)
+        .setStyle(stars >= 4 ? ButtonStyle.Success : ButtonStyle.Secondary)
+        .setLabel("⭐".repeat(stars)),
+    ),
+  );
+  return {
+    content: translate(language, "ticketRatingAsk", { number: ticket.number, server: serverName }),
+    components: [row],
+    allowedMentions: { parse: [] },
+  };
+}
 const BUTTONS_PER_ROW = 5;
 const MAX_MENU_DESCRIPTION = 100;
 
@@ -228,11 +248,16 @@ export function buildTicketWelcome(language, { ticket, staffRoleId, color = TICK
     .setStyle(ButtonStyle.Secondary)
     .setEmoji("🔒")
     .setLabel(translate(language, "ticketCloseButton"));
+  const claim = new ButtonBuilder()
+    .setCustomId(CLAIM_BUTTON)
+    .setStyle(ButtonStyle.Primary)
+    .setEmoji("🙋")
+    .setLabel(translate(language, "ticketClaimButton"));
   const pingsStaff = Boolean(ping && staffMention);
   return {
     content: content.slice(0, 2000),
     embeds: [embed],
-    components: [new ActionRowBuilder().addComponents(button)],
+    components: [new ActionRowBuilder().addComponents(button, claim)],
     allowedMentions: { users: [ticket.userId], roles: pingsStaff ? [staffRoleId] : [] },
   };
 }

@@ -957,7 +957,18 @@ describe("dashboard", () => {
     const first = (await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}/tickets`, cookies })).json();
     expect(first.tickets).toHaveLength(25);
     expect(first.tickets[0]).toMatchObject({ number: 30, userId: MEMBER_ID, userName: "Champ", closedAt: null, hasTranscript: false });
-    expect(first).toMatchObject({ next: 6, openCount: 2, panel: false });
+    expect(first).toMatchObject({ next: 6, openCount: 2, panel: false, stats: { opened: 0, closed: 0, averageRating: null } });
+    ticketStore.claim(ticketStore.byNumber(GUILD_ID, 30).id, MEMBER_ID);
+    const claimed = (await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}/tickets?status=open`, cookies })).json();
+    expect(claimed.tickets[0]).toMatchObject({ claimedBy: MEMBER_ID, claimedByName: "Champ", rating: null });
+
+    const saved = await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, { ticketSupport: { autoCloseHours: 48, ratings: true } });
+    expect(saved.statusCode).toBe(200);
+    expect(saved.json().settings.ticketSupport).toEqual({ autoCloseHours: 48, ratings: true });
+    const refused = await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, { ticketSupport: { autoCloseHours: -1, ratings: true } });
+    expect(refused.statusCode).toBe(400);
+    await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, { ticketSupport: { autoCloseHours: 0, ratings: false } });
+    expect(guildSettings.get(GUILD_ID, Setting.TICKET_SUPPORT)).toBeUndefined();
     const rest = (await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}/tickets?before=6`, cookies })).json();
     expect(rest.tickets.map((ticket) => ticket.number)).toEqual([5, 4, 3, 2, 1]);
     expect(rest.next).toBeNull();

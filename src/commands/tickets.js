@@ -44,8 +44,11 @@ import {
   addStaff,
   buildPanelComponents,
   buildPanelMessage,
+  buildRatingRequest,
   buildTicketWelcome,
+  CLAIM_BUTTON,
   CLOSE_BUTTON,
+  RATE_PREFIX,
   FORM_ID,
   FORM_INPUT,
   isTicketStaff,
@@ -68,6 +71,7 @@ import {
   ticketThreadName,
 } from "../tickets/tickets.js";
 import { isDefaultLook } from "../tickets/panel.js";
+import { idleStep, MAX_AUTO_CLOSE_HOURS, normalizeTicketSupport, warningHours } from "../tickets/support.js";
 import { findCategory, subjectFromAnswers } from "../tickets/categories.js";
 import { buildTicketTranscript, fetchThreadMessages } from "../tickets/transcript.js";
 import { noTicketLog, TICKET_EVENTS, TicketEvent } from "../tickets/ticketLog.js";
@@ -141,6 +145,20 @@ export function buildTicketsCommandData() {
     .addSubcommand((sub) => withDescription(sub.setName("add"), "ticketsAddDescription").addUserOption(memberOption))
     .addSubcommand((sub) => withDescription(sub.setName("remove"), "ticketsRemoveDescription").addUserOption(memberOption))
     .addSubcommand((sub) => withDescription(sub.setName("list"), "ticketsListDescription"))
+    .addSubcommand((sub) => withDescription(sub.setName("claim"), "ticketsClaimDescription"))
+    .addSubcommand((sub) =>
+      withDescription(sub.setName("auto-close"), "ticketsAutoCloseDescription").addIntegerOption((option) =>
+        withDescription(option.setName("hours"), "ticketsAutoCloseHoursOptionDescription")
+          .setRequired(true)
+          .setMinValue(0)
+          .setMaxValue(MAX_AUTO_CLOSE_HOURS),
+      ),
+    )
+    .addSubcommand((sub) =>
+      withDescription(sub.setName("ratings"), "ticketsRatingsDescription").addBooleanOption((option) =>
+        withDescription(option.setName("enabled"), "ticketsRatingsEnabledOptionDescription").setRequired(true),
+      ),
+    )
     .addSubcommand((sub) =>
       withDescription(sub.setName("log"), "ticketsLogDescription").addChannelOption((option) =>
         withDescription(option.setName("channel"), "ticketsLogChannelOptionDescription").addChannelTypes(
@@ -367,7 +385,143 @@ export function createTicketsCommand({
       .edit({ locked: true, archived: true, reason: `Ticket #${ticket.number} closed by ${interaction.user.id}` })
       .catch((error) => logger.warn("Couldn't lock and archive a closed ticket", { guildId: ticket.guildId, ticket: ticket.number, error }));
     logger.info("Ticket closed", { guildId: ticket.guildId, ticket: ticket.number });
+    await askForRating(interaction.guild, closed);
     return result(Status.SUCCESS, "ticketClosedLog", { number: ticket.number });
+  }
+
+  // Claims the ticket for whoever asked, or lets go of it if they had it.
+  // Someone else's claim can only be taken over with Manage Server.
+  async function claimTicket(interaction, ticket) {
+    const { answer } = answerer(interaction);
+    const userId = interaction.user.id;
+    const language = serverLanguage(interaction.guild, forcedLanguage);
+    if (ticket.claimedBy && ticket.claimedBy !== userId && !interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
+      return answer(Status.REFUSED, "ticketClaimedByOther", { user: `<@${ticket.claimedBy}>` });
+    }
+    const releasing = ticket.claimedBy === userId;
+    const updated = tickets.claim(ticket.id, releasing ? null : userId, now());
+    if (!updated) {
+      return answer(Status.REFUSED, "ticketAlreadyClosed");
+    }
+    await interaction.reply({
+      content: translate(language, releasing ? "ticketUnclaimedMessage" : "ticketClaimedMessage", { user: `<@${userId}>`, number: ticket.number }),
+      allowedMentions: { parse: [] },
+    });
+    await ticketLog.record(interaction.guild, updated, {
+      event: releasing ? TicketEvent.UNCLAIMED : TicketEvent.CLAIMED,
+      actorId: userId,
+      detail: !releasing && ticket.claimedBy ? `Taken over from <@${ticket.claimedBy}>` : null,
+    });
+    return result(Status.SUCCESS, releasing ? "ticketUnclaimedLog" : "ticketClaimedLog", { number: ticket.number });
+  }
+
+  // "Claim" in a ticket's first message.
+  async function handleClaimButton(interaction) {
+    const { answer } = answerer(interaction);
+    const ticket = tickets.byThread(interaction.channelId);
+    if (!interaction.inCachedGuild() || !ticket || ticket.guildId !== interaction.guildId) {
+      return answer(Status.REFUSED, "ticketNotATicket");
+    }
+    if (!isTicketStaff(interaction, guildSettings, ticket)) {
+      return answer(Status.REFUSED, "ticketStaffOnly");
+    }
+    if (ticket.closedAt !== null) {
+      return answer(Status.REFUSED, "ticketAlreadyClosed");
+    }
+    return claimTicket(interaction, ticket);
+  }
+
+  // Sends the member a 1-5 star rating request by DM, when the server has
+  // ratings on. Never throws: closed DMs only mean no rating.
+  async function askForRating(guild, ticket) {
+    if (!guild || !normalizeTicketSupport(guildSettings.get(guild.id, Setting.TICKET_SUPPORT)).ratings) {
+      return;
+    }
+    try {
+      const user = await guild.client.users.fetch(ticket.userId);
+      await user.send(buildRatingRequest(serverLanguage(guild, forcedLanguage), { ticket, serverName: guild.name }));
+    } catch (error) {
+      logger.debug("Couldn't ask for a ticket rating", { guildId: guild.id, ticket: ticket.number, error });
+    }
+  }
+
+  // A star button in the rating DM.
+  async function handleRating(interaction) {
+    const language = pickLanguage(interaction.locale, forcedLanguage);
+    const [ticketId, stars] = interaction.customId.slice(RATE_PREFIX.length).split(":").map(Number);
+    if (!Number.isInteger(ticketId) || !Number.isInteger(stars) || stars < 1 || stars > 5) {
+      return undefined;
+    }
+    const rated = tickets.rate(ticketId, interaction.user.id, stars);
+    if (!rated) {
+      await interaction.reply({ content: translate(language, "ticketRatingAlready"), flags: MessageFlags.Ephemeral });
+      return result(Status.REFUSED, "ticketRatingAlready");
+    }
+    await interaction.update({ content: translate(language, "ticketRatingThanks", { stars: "⭐".repeat(stars) }), components: [] });
+    const guild = interaction.client.guilds.cache.get(rated.guildId);
+    if (guild) {
+      await ticketLog.record(guild, rated, { event: TicketEvent.RATED, actorId: interaction.user.id, detail: `${"⭐".repeat(stars)} (${stars}/5)` });
+    }
+    return result(Status.SUCCESS, "ticketRatedLog", { number: rated.number, stars });
+  }
+
+  // A message in a ticket keeps it from closing for inactivity and, from
+  // anyone but the member, counts as the first response.
+  function messageCreated(message) {
+    if (message.author?.bot || !message.inGuild?.() || !message.channel?.isThread?.()) {
+      return;
+    }
+    const ticket = tickets.byThread(message.channelId);
+    if (ticket && ticket.closedAt === null && ticket.guildId === message.guildId) {
+      tickets.noteActivity(ticket.id, message.author.id, message.createdTimestamp ?? now());
+    }
+  }
+
+  // Warns, then closes, tickets that went quiet, on servers with auto-close
+  // on. Run every few minutes. Never throws.
+  async function sweepIdle(client) {
+    for (const ticket of tickets.allOpen()) {
+      try {
+        const support = normalizeTicketSupport(guildSettings.get(ticket.guildId, Setting.TICKET_SUPPORT));
+        const step = idleStep(ticket, support.autoCloseHours, now());
+        const guild = step && client.guilds.cache.get(ticket.guildId);
+        const thread = guild?.channels.cache.get(ticket.threadId);
+        if (!thread || thread.archived) {
+          continue;
+        }
+        const language = serverLanguage(guild, forcedLanguage);
+        if (step === "warn") {
+          tickets.markIdleWarned(ticket.id, now());
+          await thread.send({
+            content: translate(language, "ticketIdleWarning", { user: `<@${ticket.userId}>`, hours: warningHours(support.autoCloseHours) }),
+            allowedMentions: { users: [ticket.userId] },
+          });
+          continue;
+        }
+        const reason = `No messages for ${support.autoCloseHours} hours`;
+        const closed = tickets.close(ticket.id, { closedBy: null, reason, closedAt: now() });
+        if (!closed) {
+          continue;
+        }
+        await thread
+          .send({ content: translate(language, "ticketIdleClosed", { hours: support.autoCloseHours }), allowedMentions: { parse: [] } })
+          .catch(() => {});
+        const saved = await saveTranscript(thread, closed, guild);
+        await ticketLog.record(guild, closed, {
+          event: TicketEvent.CLOSED,
+          detail: reason,
+          transcript: saved?.transcript,
+          messageCount: saved?.messageCount,
+        });
+        await thread
+          .edit({ locked: true, archived: true, reason: `Ticket #${ticket.number} closed for inactivity` })
+          .catch((error) => logger.warn("Couldn't lock and archive an idle ticket", { guildId: ticket.guildId, ticket: ticket.number, error }));
+        logger.info("Ticket closed for inactivity", { guildId: ticket.guildId, ticket: ticket.number });
+        await askForRating(guild, closed);
+      } catch (error) {
+        logger.warn("Couldn't check a ticket for inactivity", { guildId: ticket.guildId, ticket: ticket.number, error });
+      }
+    }
   }
 
   async function execute(interaction) {
@@ -379,9 +533,28 @@ export function createTicketsCommand({
     const guildId = interaction.guildId;
     const subcommand = interaction.options.getSubcommand();
 
-    if (["log", "log-event"].includes(subcommand)) {
+    if (["log", "log-event", "auto-close", "ratings"].includes(subcommand)) {
       if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
         return answer(Status.REFUSED, "modNoPermission", { permission: text("permManageGuild") });
+      }
+      if (subcommand === "auto-close" || subcommand === "ratings") {
+        const support = normalizeTicketSupport(guildSettings.get(guildId, Setting.TICKET_SUPPORT));
+        if (subcommand === "auto-close") {
+          support.autoCloseHours = interaction.options.getInteger("hours", true);
+        } else {
+          support.ratings = interaction.options.getBoolean("enabled", true);
+        }
+        if (support.autoCloseHours === 0 && !support.ratings) {
+          await guildSettings.clear(guildId, Setting.TICKET_SUPPORT);
+        } else {
+          await guildSettings.set(guildId, Setting.TICKET_SUPPORT, support);
+        }
+        if (subcommand === "ratings") {
+          return answer(Status.SUCCESS, support.ratings ? "ticketRatingsOn" : "ticketRatingsOff");
+        }
+        return support.autoCloseHours
+          ? answer(Status.SUCCESS, "ticketAutoCloseOn", { hours: support.autoCloseHours, warning: warningHours(support.autoCloseHours) })
+          : answer(Status.SUCCESS, "ticketAutoCloseOff");
       }
       if (subcommand === "log") {
         const picked = interaction.options.getChannel("channel");
@@ -519,6 +692,9 @@ export function createTicketsCommand({
     }
     if (ticket.closedAt !== null) {
       return answer(Status.REFUSED, "ticketAlreadyClosed");
+    }
+    if (subcommand === "claim") {
+      return claimTicket(interaction, ticket);
     }
     const user = interaction.options.getUser("member", true);
     const values = { member: `<@${user.id}>`, number: ticket.number };
@@ -779,7 +955,10 @@ export function createTicketsCommand({
     threadDeleted,
     threadUpdated,
     threadMembersUpdated,
+    messageCreated,
+    sweepIdle,
     components: {
+      [CLAIM_BUTTON]: { label: "Claim ticket button", handle: handleClaimButton },
       [OPEN_BUTTON]: { label: "Open ticket button", handle: handleOpenButton },
       [FORM_ID]: { label: "Ticket form", handle: handleForm },
       [CLOSE_BUTTON]: { label: "Close ticket button", handle: handleCloseButton },
@@ -788,6 +967,7 @@ export function createTicketsCommand({
     componentPrefixes: {
       [OPEN_PREFIX]: { label: "Open ticket category button", handle: handleOpenButton },
       [FORM_PREFIX]: { label: "Ticket category form", handle: handleForm },
+      [RATE_PREFIX]: { label: "Ticket rating", handle: handleRating },
     },
   };
 }

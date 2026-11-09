@@ -22,6 +22,12 @@ function toTicket(row) {
         closeReason: row.close_reason ?? null,
         hasTranscript: row.transcript !== null && row.transcript !== undefined,
         messageCount: row.message_count ?? null,
+        claimedBy: row.claimed_by ?? null,
+        claimedAt: row.claimed_at ?? null,
+        firstResponseAt: row.first_response_at ?? null,
+        lastActivityAt: row.last_activity_at ?? null,
+        idleWarnedAt: row.idle_warned_at ?? null,
+        rating: row.rating ?? null,
       }
     : undefined;
 }
@@ -84,6 +90,28 @@ export class TicketStore {
           AND (:before IS NULL OR number < :before)
         ORDER BY number DESC
         LIMIT :limit`),
+      claim: this.#db.prepare("UPDATE tickets SET claimed_by = ?, claimed_at = ? WHERE id = ? AND closed_at IS NULL RETURNING *"),
+      // A message in the ticket: it's active again (any idle warning is
+      // forgotten), and the first message by someone other than the member is
+      // the first response.
+      activity: this.#db.prepare(`
+        UPDATE tickets SET
+          last_activity_at = :at,
+          idle_warned_at = NULL,
+          first_response_at = CASE WHEN first_response_at IS NULL AND :authorId <> user_id THEN :at ELSE first_response_at END
+        WHERE id = :id AND closed_at IS NULL`),
+      allOpen: this.#db.prepare("SELECT * FROM tickets WHERE closed_at IS NULL AND thread_id IS NOT NULL"),
+      warned: this.#db.prepare("UPDATE tickets SET idle_warned_at = ? WHERE id = ? AND closed_at IS NULL"),
+      rate: this.#db.prepare(`
+        UPDATE tickets SET rating = ? WHERE id = ? AND user_id = ? AND closed_at IS NOT NULL AND rating IS NULL RETURNING *`),
+      stats: this.#db.prepare(`
+        SELECT
+          SUM(CASE WHEN created_at >= :since THEN 1 ELSE 0 END) AS opened,
+          SUM(CASE WHEN closed_at >= :since THEN 1 ELSE 0 END) AS closed,
+          AVG(CASE WHEN created_at >= :since AND first_response_at IS NOT NULL THEN first_response_at - created_at END) AS first_response,
+          AVG(CASE WHEN closed_at >= :since AND rating IS NOT NULL THEN rating END) AS rating,
+          SUM(CASE WHEN closed_at >= :since AND rating IS NOT NULL THEN 1 ELSE 0 END) AS ratings
+        FROM tickets WHERE guild_id = :guildId AND (created_at >= :since OR closed_at >= :since)`),
     };
   }
 
@@ -191,6 +219,45 @@ export class TicketStore {
       );
       return toEvent(row);
     });
+  }
+
+  // Claims an open ticket for a staff member (null unclaims it). Returns the
+  // ticket, or undefined if it's closed.
+  claim(id, userId, at = Date.now()) {
+    return toTicket(this.#statements.claim.get(userId, userId ? at : null, id));
+  }
+
+  // Someone wrote in the ticket.
+  noteActivity(id, authorId, at = Date.now()) {
+    this.#statements.activity.run({ id, authorId, at });
+  }
+
+  // Every open ticket with a thread, for the auto-close check.
+  allOpen() {
+    return this.#statements.allOpen.all().map(toTicket);
+  }
+
+  markIdleWarned(id, at = Date.now()) {
+    this.#statements.warned.run(at, id);
+  }
+
+  // The member's rating of their closed ticket, once. Returns the ticket, or
+  // undefined if it's someone else's, still open or already rated.
+  rate(id, userId, rating) {
+    return toTicket(this.#statements.rate.get(rating, id, userId));
+  }
+
+  // Since `since`: tickets opened and closed, the average time to the first
+  // reply from someone else (ms) and the average rating, or null without any.
+  stats(guildId, since) {
+    const row = this.#statements.stats.get({ guildId, since });
+    return {
+      opened: Number(row.opened ?? 0),
+      closed: Number(row.closed ?? 0),
+      averageFirstResponseMs: row.first_response === null ? null : Math.round(row.first_response),
+      averageRating: row.rating === null ? null : Math.round(row.rating * 10) / 10,
+      ratings: Number(row.ratings ?? 0),
+    };
   }
 
   // A ticket's history, oldest first.

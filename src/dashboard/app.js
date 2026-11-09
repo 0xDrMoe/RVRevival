@@ -72,6 +72,7 @@ import { BotStatsStore } from "../stats/botStats.js";
 import { checkTemplate, COUNTER_PRESETS, InvalidCounter, MAX_COUNTERS, newCounterId, normalizeCounters } from "../stats/statsCounters.js";
 import { buildPanelComponents, buildPanelMessage, panelLook, TICKET_COLOR } from "../tickets/tickets.js";
 import { DEFAULT_NAME_FORMAT, normalizeLook } from "../tickets/panel.js";
+import { checkTicketSupport, normalizeTicketSupport } from "../tickets/support.js";
 import { BUILT_IN_GUIDE_KEYS, buildPostedGuide } from "../commands/countryHelp.js";
 import { CONTINENT_EMOJI } from "../commands/countryPicker.js";
 import { continentOf, CONTINENTS } from "../countries/continents.js";
@@ -602,6 +603,7 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     [Setting.MEDIA_ONLY]: normalizeMediaOnly(guildSettings.get(guildId, Setting.MEDIA_ONLY)),
     // With the title and text of panels set up before the look was saved on its own.
     [Setting.TICKET_PANEL]: panelLook(guildSettings, guildId),
+    [Setting.TICKET_SUPPORT]: normalizeTicketSupport(guildSettings.get(guildId, Setting.TICKET_SUPPORT)),
   });
 
   // Settings saved in a fuller form than the dashboard sends, made comparable.
@@ -617,6 +619,7 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     [Setting.MEDIA_ONLY]: normalizeMediaOnly,
     [Setting.COMMAND_RULES]: rulesOrNull,
     [Setting.TICKET_PANEL]: (saved) => (saved ? normalizeLook(saved) : null),
+    [Setting.TICKET_SUPPORT]: (saved) => checkTicketSupport(normalizeTicketSupport(saved)),
   };
   const savedValue = (guildId, setting) => {
     const saved = guildSettings.get(guildId, setting);
@@ -696,6 +699,7 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
       staffWord: text("ticketStaffWord"),
       subject: text("ticketSubject"),
       closeButton: text("ticketCloseButton"),
+      claimButton: text("ticketClaimButton"),
       nameFormat: DEFAULT_NAME_FORMAT,
       // The colour panels use when neither the look nor Branding sets one.
       color: brandingOf(guildSettings, guildId).color ?? TICKET_COLOR,
@@ -1185,6 +1189,10 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     closeReason: ticket.closeReason,
     hasTranscript: ticket.hasTranscript,
     messageCount: ticket.messageCount,
+    claimedBy: ticket.claimedBy,
+    claimedByName: names[ticket.claimedBy] ?? null,
+    firstResponseAt: ticket.firstResponseAt,
+    rating: ticket.rating,
   });
 
   app.get("/api/guilds/:id/tickets", async (request, reply) => {
@@ -1207,11 +1215,12 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
       limit: TICKETS_PAGE + 1,
     });
     const page = found.slice(0, TICKETS_PAGE);
-    const names = await peopleNames(guildId, page.flatMap((ticket) => [ticket.userId, ticket.closedBy]));
+    const names = await peopleNames(guildId, page.flatMap((ticket) => [ticket.userId, ticket.closedBy, ticket.claimedBy]));
     return {
       tickets: page.map((ticket) => ticketJson(ticket, names)),
       next: found.length > TICKETS_PAGE ? page.at(-1).number : null,
       openCount: tickets.countOpen(guildId),
+      stats: tickets.stats(guildId, Date.now() - STATS_DAYS * DAY_MS),
       panel: Boolean(guildSettings.get(guildId, Setting.TICKETS)?.channelId),
     };
   });
@@ -1239,7 +1248,7 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     }
     const events = tickets.events(ticket.id);
     // Names for the first people only, so a busy ticket can't make hundreds of Discord requests.
-    const people = [...new Set([ticket.userId, ticket.closedBy, ...events.flatMap((event) => [event.actorId, ...event.userIds])].filter(Boolean))];
+    const people = [...new Set([ticket.userId, ticket.closedBy, ticket.claimedBy, ...events.flatMap((event) => [event.actorId, ...event.userIds])].filter(Boolean))];
     const names = await peopleNames(guildId, people.slice(0, MAX_TICKET_NAMES));
     return {
       ticket: ticketJson(ticket, names),

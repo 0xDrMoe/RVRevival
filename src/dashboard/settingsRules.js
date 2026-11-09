@@ -17,6 +17,7 @@ import { checkMediaOnly, describeMediaOnly, InvalidMediaOnly } from "../communit
 import { checkAppeals, InvalidAppeals } from "../appeals/config.js";
 import { checkCategories, describeCategories, InvalidCategories } from "../tickets/categories.js";
 import { checkLook, describeLook, InvalidPanel } from "../tickets/panel.js";
+import { checkTicketSupport, describeTicketSupport, InvalidTicketSupport } from "../tickets/support.js";
 import { checkJoinGate, InvalidJoinGate } from "../raid/raid.js";
 import { checkGuide, describeGuide, InvalidGuide } from "../countries/guide.js";
 import { checkCountryOptions, describeCountryOptions, InvalidCountryOptions } from "../countries/options.js";
@@ -89,6 +90,7 @@ export const SETTING_RULES = Object.freeze({
   [Setting.TICKET_CATEGORIES]: { kind: "ticketCategories", label: "Ticket categories" },
   [Setting.TICKET_LOG_CHANNEL]: { kind: "channel", types: POSTING_CHANNELS, label: "Ticket log channel" },
   [Setting.DISABLED_TICKET_LOG_EVENTS]: { kind: "ticketEvents", label: "Switched-off ticket log events" },
+  [Setting.TICKET_SUPPORT]: { kind: "ticketSupport", label: "Ticket auto-close and ratings" },
   [Setting.STARBOARD]: { kind: "starboard", types: POSTING_CHANNELS, label: "Starboard" },
   [Setting.LEVELING]: { kind: "leveling", label: "Leveling" },
   [Setting.JOIN_GATE]: { kind: "joinGate", label: "Raid protection" },
@@ -376,6 +378,15 @@ function checkValue(setting, value, { guildId, channels, roles }) {
         }
         throw error;
       }
+    case "ticketSupport":
+      try {
+        return checkTicketSupport(value);
+      } catch (error) {
+        if (error instanceof InvalidTicketSupport) {
+          throw new InvalidSetting(setting, error.message);
+        }
+        throw error;
+      }
     case "onByDefault":
       if (typeof value !== "boolean") {
         throw new InvalidSetting(setting, "Send true or false.");
@@ -443,6 +454,9 @@ export function describeValue(setting, value) {
   }
   if (SETTING_RULES[setting]?.kind === "nativePermissions") {
     return value === false ? "off (the bot's roles only)" : "on";
+  }
+  if (SETTING_RULES[setting]?.kind === "ticketSupport") {
+    return describeTicketSupport(value);
   }
   if (SETTING_RULES[setting]?.kind === "onByDefault") {
     return value === false ? "off" : "on";
