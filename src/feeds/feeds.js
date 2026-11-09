@@ -31,6 +31,13 @@ const DEFAULT_MESSAGE_KEYS = {
   rss: "feedDefaultRss",
 };
 
+// What each kind of feed posts when it has no message of its own, in a
+// language: { youtube: "📺 **{author}** uploaded…", … }. The dashboard shows
+// these as the message box's placeholder.
+export function defaultFeedMessages(language) {
+  return Object.fromEntries(Object.entries(DEFAULT_MESSAGE_KEYS).map(([kind, key]) => [kind, translate(language, key)]));
+}
+
 const PLATFORM_NAMES = { twitch: "Twitch", kick: "Kick" };
 
 // What's in a feed now: { title, items }. YouTube live reads the channel's
@@ -129,7 +136,7 @@ export function buildFeedPost(feed, item, language) {
     feed: feed.name,
     game: item.game || "",
   };
-  const template = feed.message ?? translate(language, DEFAULT_MESSAGE_KEYS[feed.kind] ?? DEFAULT_MESSAGE_KEYS.rss);
+  const template = feed.message || translate(language, DEFAULT_MESSAGE_KEYS[feed.kind] ?? DEFAULT_MESSAGE_KEYS.rss);
   const text = fill(template, values).trim();
   // The @everyone role has the server's ID, and Discord only pings it as
   // plain "@everyone" (a <@&id> mention of it shows but pings no one).

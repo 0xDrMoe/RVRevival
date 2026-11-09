@@ -373,6 +373,18 @@ function show(...children) {
 }
 
 let toastTimer;
+// Marks a button as waiting on a request: disabled, with aria-busy so the
+// progress cursor shows only then. A button that is simply unavailable (at a
+// limit, no permission, nothing to save) stays disabled without the spinner.
+function setBusy(button, busy) {
+  button.disabled = busy;
+  if (busy) {
+    button.setAttribute("aria-busy", "true");
+  } else {
+    button.removeAttribute("aria-busy");
+  }
+}
+
 function toast(message, kind = "ok") {
   const element = document.getElementById("toast");
   element.textContent = message;
@@ -1943,7 +1955,7 @@ function settingsPage({ data, pageId, intro, cards, fields, after = null, heroEx
           toast(t("noChanges"));
           return;
         }
-        saveButton.disabled = true;
+        setBusy(saveButton, true);
         try {
           const result = await api(`/api/guilds/${guildId}/settings`, { method: "PUT", body: pending });
           Object.keys(saved).forEach((key) => delete saved[key]);
@@ -1958,7 +1970,7 @@ function settingsPage({ data, pageId, intro, cards, fields, after = null, heroEx
         } catch (error) {
           failed(error);
         } finally {
-          saveButton.disabled = false;
+          setBusy(saveButton, false);
         }
       },
     },
@@ -2578,12 +2590,325 @@ function readBirthdays(form) {
   };
 }
 
+// --- Time zone picker -------------------------------------------------------------
+
+// The regions a time zone's name starts with, in the order the picker lists them.
+// Zones outside these (UTC, old aliases) go under "Other".
+const TIME_ZONE_REGIONS = ["America", "Europe", "Africa", "Asia", "Australia", "Pacific", "Atlantic", "Indian", "Antarctica", "Arctic"];
+
+// Minutes ahead of UTC for a zone at the given moment, from "GMT+05:30" style names.
+function timeZoneOffset(zone, at) {
+  const name = new Intl.DateTimeFormat("en-US", { timeZone: zone, timeZoneName: "longOffset" })
+    .formatToParts(at)
+    .find((part) => part.type === "timeZoneName")?.value;
+  const match = /GMT([+-])(\d{2}):?(\d{2})?/.exec(name ?? "");
+  return match ? (match[1] === "-" ? -1 : 1) * (Number(match[2]) * 60 + Number(match[3] ?? 0)) : 0;
+}
+
+// "UTC+5:30", "UTC−3", "UTC+0".
+function formatOffset(minutes) {
+  const sign = minutes < 0 ? "−" : "+";
+  const hours = Math.floor(Math.abs(minutes) / 60);
+  const rest = Math.abs(minutes) % 60;
+  return `UTC${sign}${hours}${rest ? `:${String(rest).padStart(2, "0")}` : ""}`;
+}
+
+// Browsers still list some zones by their old names. They work the same (the bot
+// accepts both), but people search for and recognise the new ones.
+const TIME_ZONE_NEW_NAMES = {
+  "Africa/Asmera": "Africa/Asmara",
+  "America/Buenos_Aires": "America/Argentina/Buenos_Aires",
+  "America/Godthab": "America/Nuuk",
+  "America/Indianapolis": "America/Indiana/Indianapolis",
+  "America/Louisville": "America/Kentucky/Louisville",
+  "Asia/Calcutta": "Asia/Kolkata",
+  "Asia/Katmandu": "Asia/Kathmandu",
+  "Asia/Rangoon": "Asia/Yangon",
+  "Asia/Saigon": "Asia/Ho_Chi_Minh",
+  "Atlantic/Faeroe": "Atlantic/Faroe",
+  "Europe/Kiev": "Europe/Kyiv",
+  "Pacific/Enderbury": "Pacific/Kanton",
+  "Pacific/Ponape": "Pacific/Pohnpei",
+  "Pacific/Truk": "Pacific/Chuuk",
+};
+const newTimeZoneName = (zone) => TIME_ZONE_NEW_NAMES[zone] ?? zone;
+
+// The zone's name without its region, readable: "America/Argentina/Buenos_Aires" → "Argentina › Buenos Aires".
+const timeZoneCity = (zone) => {
+  const name = newTimeZoneName(zone);
+  return (name.includes("/") ? name.split("/").slice(1) : [name]).join(" › ").replaceAll("_", " ");
+};
+const timeZoneRegion = (zone) => (TIME_ZONE_REGIONS.includes(zone.split("/")[0]) && zone.includes("/") ? zone.split("/")[0] : "Other");
+
+// Every zone the browser knows, with its offset and search text, worked out once
+// a page load (an offset only moves with daylight saving). `extra` adds a saved
+// zone the list doesn't have, such as an old alias like "US/Eastern".
+let timeZoneCache = null;
+function timeZoneList(extra) {
+  if (!timeZoneCache) {
+    const now = new Date();
+    const names = (zone, locale, style) =>
+      new Intl.DateTimeFormat(locale, { timeZone: zone, timeZoneName: style }).formatToParts(now).find((part) => part.type === "timeZoneName")?.value ?? "";
+    const make = (zone) => {
+      const offset = timeZoneOffset(zone, now);
+      const plain = formatOffset(offset).replace("−", "-");
+      const hours = plain.slice(3);
+      return {
+        zone,
+        offset,
+        city: timeZoneCity(zone),
+        region: timeZoneRegion(zone),
+        text: searchable(
+          [zone.replaceAll("_", " "), newTimeZoneName(zone).replaceAll("_", " "), plain, `GMT${hours}`, hours, names(zone, "en-US", "short"), names(zone, "en-US", "long"), names(zone, state.language, "long")].join(" "),
+        ),
+      };
+    };
+    const zones = Intl.supportedValuesOf?.("timeZone") ?? [];
+    timeZoneCache = { make, items: ["UTC", ...zones.filter((zone) => zone !== "UTC")].map(make) };
+  }
+  const { make, items } = timeZoneCache;
+  if (!extra || items.some((item) => item.zone === extra)) {
+    return items;
+  }
+  // A saved new name ("Asia/Kolkata") takes the place of the browser's old one, so it isn't listed twice.
+  const old = items.findIndex((item) => newTimeZoneName(item.zone) === extra);
+  return old >= 0 ? items.map((item, index) => (index === old ? make(extra) : item)) : [...items, make(extra)];
+}
+
+// The time now in a zone, as "4:32 PM", with the weekday added when it's a
+// different day there than here ("Tue 4:32 PM") – which matters for birthdays.
+function timeIn(item) {
+  const now = Date.now();
+  const there = new Date(now + item.offset * 60_000);
+  const here = new Date(now - new Date(now).getTimezoneOffset() * 60_000);
+  const otherDay = there.getUTCDate() !== here.getUTCDate();
+  return new Intl.DateTimeFormat(state.language, { timeZone: "UTC", hour: "numeric", minute: "2-digit", weekday: otherDay ? "short" : undefined }).format(there);
+}
+
+// A searchable time zone picker that keeps its value in a hidden input `id`, so
+// forms read it like any other field. A button shows the chosen zone with its
+// offset and time there now; opening it shows a search box, quick picks (your
+// own zone, UTC) and every zone grouped by region, sorted by offset. Arrow keys,
+// Enter and Esc work in the search box.
+function timeZonePicker({ id, value, labelKey, helpKey }) {
+  const fallback = "UTC";
+  const mine = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const items = timeZoneList(value);
+  const byZone = new Map(items.map((item) => [item.zone, item]));
+  const regionRank = (region) => (region === "Other" ? -1 : TIME_ZONE_REGIONS.indexOf(region));
+  const sorted = [...items].sort((a, b) => regionRank(a.region) - regionRank(b.region) || a.offset - b.offset || a.city.localeCompare(b.city));
+
+  const labelId = `${id}Label`;
+  const listId = `${id}List`;
+  const input = h("input", { type: "hidden", id, value: value || fallback });
+  const summary = h("span", { class: "tz-summary" });
+  const trigger = h("button", {
+    type: "button",
+    class: "tz-trigger",
+    "aria-haspopup": "listbox",
+    "aria-expanded": "false",
+    "aria-controls": listId,
+    "aria-labelledby": `${labelId} ${id}Summary`,
+  });
+  summary.id = `${id}Summary`;
+  trigger.append(icon("globe"), summary, icon("chevronDown", "icon small tz-chevron"));
+  const search = h("input", {
+    type: "search",
+    role: "combobox",
+    autocomplete: "off",
+    spellcheck: false,
+    "aria-controls": listId,
+    "aria-expanded": "true",
+    "aria-autocomplete": "list",
+    placeholder: t("tzSearch"),
+    "aria-label": t("tzSearch"),
+  });
+  const list = h("ul", { id: listId, class: "tz-list", role: "listbox", "aria-labelledby": labelId });
+  const count = h("span", { class: "muted tz-count", "aria-live": "polite" });
+  const quick = h("div", { class: "tz-quick" });
+  const panel = h("div", { class: "tz-panel", hidden: true }, h("div", { class: "tz-search" }, icon("search"), search), quick, list, count);
+  const root = h(
+    "div",
+    { class: "field tz-field" },
+    h("span", { class: "field-label", id: labelId }, t(labelKey)),
+    input,
+    trigger,
+    panel,
+    helpKey ? h("span", { class: "help" }, t(helpKey)) : null,
+  );
+
+  let shown = [];
+  let active = 0;
+
+  const describe = (zone) => {
+    const item = byZone.get(zone);
+    return item
+      ? [h("strong", {}, item.zone === "UTC" ? "UTC" : item.city), h("span", { class: "muted" }, `${item.region === "Other" ? "" : `${t(`tzRegion_${item.region}`)} · `}${formatOffset(item.offset)} · ${timeIn(item)}`)]
+      : [h("strong", {}, zone)];
+  };
+  const paintSummary = () => summary.replaceChildren(...describe(input.value));
+
+  const choose = (zone) => {
+    const changed = input.value !== zone;
+    input.value = zone;
+    paintSummary();
+    close();
+    trigger.focus();
+    if (changed) {
+      // Hidden inputs don't fire events, so tell the form (and its save bar) ourselves.
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+  };
+
+  const optionId = (index) => `${id}Option${index}`;
+  // Scrolls the list (never the page) so the highlighted zone shows: in the middle
+  // when the picker opens, otherwise just enough.
+  const reveal = (row, centre) => {
+    const top = row.offsetTop;
+    const bottom = top + row.offsetHeight;
+    const header = list.querySelector(".tz-group")?.offsetHeight ?? 0;
+    if (centre) {
+      list.scrollTop = top - (list.clientHeight - row.offsetHeight) / 2;
+    } else if (top - header < list.scrollTop) {
+      list.scrollTop = top - header;
+    } else if (bottom > list.scrollTop + list.clientHeight) {
+      list.scrollTop = bottom - list.clientHeight;
+    }
+  };
+  const paint = (centre = false) => {
+    const rows = [];
+    let region = null;
+    shown.forEach((item, index) => {
+      if (item.region !== region) {
+        region = item.region;
+        rows.push(h("li", { class: "tz-group", role: "presentation" }, t(`tzRegion_${region}`)));
+      }
+      const selected = item.zone === input.value;
+      const row = h(
+        "li",
+        {
+          id: optionId(index),
+          role: "option",
+          class: `tz-option${index === active ? " active" : ""}`,
+          "aria-selected": String(selected),
+          onmousedown: (event) => event.preventDefault(),
+          onclick: () => choose(item.zone),
+          onmousemove: () => {
+            if (active !== index) {
+              list.querySelector(".tz-option.active")?.classList.remove("active");
+              row.classList.add("active");
+              active = index;
+              search.setAttribute("aria-activedescendant", optionId(index));
+            }
+          },
+        },
+        h("span", { class: "tz-city" }, item.zone === "UTC" ? t("tzUtc") : item.city),
+        h("span", { class: "tz-offset" }, formatOffset(item.offset)),
+        h("span", { class: "tz-time muted" }, timeIn(item)),
+        selected ? icon("check", "icon small tz-tick") : h("span", { class: "tz-tick" }),
+      );
+      rows.push(row);
+    });
+    if (shown.length === 0) {
+      rows.push(h("li", { class: "muted empty", role: "presentation" }, t("nothingMatches")));
+    }
+    list.replaceChildren(...rows);
+    count.textContent = t("tzCount", { count: shown.length });
+    if (shown[active]) {
+      search.setAttribute("aria-activedescendant", optionId(active));
+      reveal(list.querySelector(".tz-option.active"), centre);
+    } else {
+      search.removeAttribute("aria-activedescendant");
+    }
+  };
+
+  const filter = () => {
+    const words = searchWords(search.value);
+    shown = words.length ? sorted.filter((item) => matchesWords(item.text, words)) : sorted;
+    const current = shown.findIndex((item) => item.zone === input.value);
+    active = words.length || current < 0 ? 0 : current;
+    paint(!words.length);
+  };
+
+  const paintQuick = () => {
+    const picks = [mine, "UTC"].filter((zone, index, all) => zone && byZone.has(zone) && all.indexOf(zone) === index);
+    quick.replaceChildren(
+      ...picks.map((zone) =>
+        h(
+          "button",
+          { type: "button", class: `tz-chip${zone === input.value ? " on" : ""}`, onmousedown: (event) => event.preventDefault(), onclick: () => choose(zone) },
+          zone === mine ? t("tzMine", { zone: byZone.get(zone).city }) : t("tzUtc"),
+        ),
+      ),
+    );
+  };
+
+  const open = () => {
+    panel.hidden = false;
+    trigger.setAttribute("aria-expanded", "true");
+    root.classList.add("open");
+    search.value = "";
+    paintQuick();
+    filter();
+    search.focus();
+  };
+  function close() {
+    panel.hidden = true;
+    trigger.setAttribute("aria-expanded", "false");
+    root.classList.remove("open");
+  }
+
+  trigger.addEventListener("click", () => (panel.hidden ? open() : close()));
+  search.addEventListener("input", filter);
+  search.addEventListener("keydown", (event) => {
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      const step = event.key === "ArrowDown" ? 1 : -1;
+      active = shown.length === 0 ? 0 : (active + step + shown.length) % shown.length;
+      paint();
+    } else if (event.key === "Enter") {
+      // Enter picks the highlighted zone and must never submit the settings form.
+      event.preventDefault();
+      if (shown[active]) {
+        choose(shown[active].zone);
+      }
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      if (search.value) {
+        search.value = "";
+        filter();
+      } else {
+        close();
+        trigger.focus();
+      }
+    }
+  });
+  // Leaving the picker (Tab, or a click elsewhere) closes it.
+  root.addEventListener("focusout", (event) => {
+    if (!panel.hidden && !root.contains(event.relatedTarget)) {
+      close();
+    }
+  });
+
+  // Keep "the time there now" current while the page is open.
+  const timer = setInterval(() => {
+    if (!root.isConnected) {
+      clearInterval(timer);
+    } else if (panel.hidden) {
+      paintSummary();
+    }
+  }, 30_000);
+
+  paintSummary();
+  return root;
+}
+
 function birthdayCard(data, postable, defaults) {
   const saved = data.settings.birthdays ?? {};
   const roles = data.roles
     .filter((role) => role.id !== data.guild.id && !role.managed && (BigInt(role.permissions ?? 0) & BIRTHDAY_ROLE_FORBIDDEN) === 0n)
     .map((role) => roleItem(role));
-  const zones = h("datalist", { id: "birthdayZones" }, ["UTC", ...Intl.supportedValuesOf("timeZone")].map((zone) => h("option", { value: zone })));
   return card(
     t("sectionBirthdays"),
     "cake",
@@ -2593,20 +2918,8 @@ function birthdayCard(data, postable, defaults) {
       { class: "rule-body" },
       field("birthdayChannel", "birthdayChannelHelp", picker({ id: "birthdayChannelId", options: postable, value: saved.channelId, emptyLabel: t("communityOff") })),
       field("birthdayRole", "birthdayRoleHelp", picker({ id: "birthdayRoleId", options: roles, value: saved.roleId, emptyLabel: t("communityOff") })),
-      field(
-        "birthdayTimezone",
-        "birthdayTimezoneHelp",
-        h("input", {
-          id: "birthdayTimezone",
-          list: "birthdayZones",
-          maxLength: 64,
-          spellcheck: false,
-          value: saved.timezone ?? "UTC",
-          placeholder: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        }),
-      ),
     ),
-    zones,
+    timeZonePicker({ id: "birthdayTimezone", value: saved.timezone ?? "UTC", labelKey: "birthdayTimezone", helpKey: "birthdayTimezoneHelp" }),
     field("birthdayMessage", "birthdayMessageHelp", messageBox("birthdayMessage", saved.message, defaults.birthdayMessage, MAX_BIRTHDAY_MESSAGE_LENGTH)),
   );
 }
@@ -3002,13 +3315,13 @@ function scheduledRow(guildId, message, channels, onDeleted) {
     if (!confirm(t("scheduledDeleteConfirm", { number: message.id }))) {
       return;
     }
-    remove.disabled = true;
+    setBusy(remove, true);
     try {
       await api(`/api/guilds/${guildId}/scheduled/${message.id}`, { method: "DELETE" });
       toast(t("scheduledDeleted"));
       onDeleted();
     } catch (error) {
-      remove.disabled = false;
+      setBusy(remove, false);
       failed(error);
     }
   });
@@ -3077,7 +3390,7 @@ async function showScheduled(guildId) {
           toast(t("scheduledPast"));
           return;
         }
-        submit.disabled = true;
+        setBusy(submit, true);
         try {
           await api(`/api/guilds/${guildId}/scheduled`, {
             method: "POST",
@@ -3089,7 +3402,7 @@ async function showScheduled(guildId) {
         } catch (error) {
           failed(error);
         } finally {
-          submit.disabled = false;
+          setBusy(submit, false);
         }
       },
     },
@@ -3560,7 +3873,7 @@ async function showCountry(guildId) {
           toast(t("embedPickChannel"), "error");
           return;
         }
-        postButton.disabled = true;
+        setBusy(postButton, true);
         try {
           const result = await api(`/api/guilds/${guildId}/country-guide`, { method: "POST", body: { channelId } });
           info.post = result.post;
@@ -3570,7 +3883,7 @@ async function showCountry(guildId) {
         } catch (error) {
           failed(error);
         } finally {
-          postButton.disabled = false;
+          setBusy(postButton, false);
         }
       },
     },
@@ -3952,7 +4265,7 @@ function showSimplePermissions(data) {
     }
     const apply = h("button", { class: "primary", type: "button" }, icon("check", "icon small"), t("permApply"));
     apply.addEventListener("click", async () => {
-      apply.disabled = true;
+      setBusy(apply, true);
       try {
         await api(`/api/guilds/${guildId}/permissions/preset`, { method: "POST", body: { ...body(), dryRun: false } });
         toast(t("permApplied"));
@@ -3960,7 +4273,7 @@ function showSimplePermissions(data) {
         route();
       } catch (error) {
         failed(error);
-        apply.disabled = false;
+        setBusy(apply, false);
       }
     });
     review.replaceChildren(
@@ -3989,12 +4302,13 @@ function showSimplePermissions(data) {
   }
 
   previewButton.addEventListener("click", async () => {
-    previewButton.disabled = true;
+    setBusy(previewButton, true);
     try {
       showPlan(await api(`/api/guilds/${guildId}/permissions/preset`, { method: "POST", body: body() }));
     } catch (error) {
       failed(error);
     } finally {
+      setBusy(previewButton, false);
       previewButton.disabled = !data.canManagePermissions;
     }
   });
@@ -4532,7 +4846,7 @@ function setupCard(data, { open = false } = {}) {
   let section;
   const redraw = (options) => section.replaceWith(setupCard(data, options));
   const saveSkipped = async (ids, button) => {
-    button.disabled = true;
+    setBusy(button, true);
     try {
       const result = await api(`/api/guilds/${guild.id}/settings`, { method: "PUT", body: { setupSkipped: ids } });
       data.settings = result.settings;
@@ -4540,7 +4854,7 @@ function setupCard(data, { open = false } = {}) {
       redraw({ open: open || todo.length > 0 });
     } catch (error) {
       failed(error);
-      button.disabled = false;
+      setBusy(button, false);
     }
   };
   const currentSkips = steps.filter((step) => step.skipped).map((step) => step.id);
@@ -5627,7 +5941,7 @@ function ticketPanelEditor(guildId, data) {
       onchange: () => refresh(),
       onsubmit: async (event) => {
         event.preventDefault();
-        save.disabled = true;
+        setBusy(save, true);
         try {
           const result = await api(`/api/guilds/${guildId}/settings`, {
             method: "PUT",
@@ -5641,7 +5955,7 @@ function ticketPanelEditor(guildId, data) {
         } catch (error) {
           failed(error);
         } finally {
-          save.disabled = false;
+          setBusy(save, false);
         }
       },
     },
@@ -5776,21 +6090,24 @@ async function showTicketList(guildId, data, query) {
   const empty = h("p", { class: "muted empty", hidden: true }, t("ticketsNone"));
   let before = null;
   const load = async () => {
-    more.disabled = true;
-    const params = new URLSearchParams({ status });
-    if (userId) {
-      params.set("user", userId);
+    setBusy(more, true);
+    try {
+      const params = new URLSearchParams({ status });
+      if (userId) {
+        params.set("user", userId);
+      }
+      if (before) {
+        params.set("before", before);
+      }
+      const page = await api(`/api/guilds/${guildId}/tickets?${params}`);
+      list.append(...page.tickets.map((ticket) => ticketRow(guildId, ticket)));
+      summary.textContent = t(page.panel ? "ticketsSummary" : "ticketsSummaryNoPanel", { count: formatNumber(page.openCount) });
+      empty.hidden = list.children.length > 0;
+      before = page.next;
+      more.hidden = !page.next;
+    } finally {
+      setBusy(more, false);
     }
-    if (before) {
-      params.set("before", before);
-    }
-    const page = await api(`/api/guilds/${guildId}/tickets?${params}`);
-    list.append(...page.tickets.map((ticket) => ticketRow(guildId, ticket)));
-    summary.textContent = t(page.panel ? "ticketsSummary" : "ticketsSummaryNoPanel", { count: formatNumber(page.openCount) });
-    empty.hidden = list.children.length > 0;
-    before = page.next;
-    more.hidden = !page.next;
-    more.disabled = false;
   };
   more.addEventListener("click", () => load().catch(failed));
   show(
@@ -5958,19 +6275,22 @@ function appealList(guildId) {
       page = 0;
       list.replaceChildren();
     }
-    more.disabled = true;
-    const params = new URLSearchParams({ page: String(page) });
-    if (status !== "all") {
-      params.set("status", status);
+    setBusy(more, true);
+    try {
+      const params = new URLSearchParams({ page: String(page) });
+      if (status !== "all") {
+        params.set("status", status);
+      }
+      const result = await api(`/api/guilds/${guildId}/appeals?${params}`);
+      list.append(...result.appeals.map((appeal) => appealRow(guildId, appeal)));
+      summary.textContent = t("appealsOpenCount", { count: formatNumber(result.openCount) });
+      empty.textContent = t(status === "open" ? "appealsNoneOpen" : "appealsNone");
+      empty.hidden = list.children.length > 0;
+      page += 1;
+      more.hidden = !result.more;
+    } finally {
+      setBusy(more, false);
     }
-    const result = await api(`/api/guilds/${guildId}/appeals?${params}`);
-    list.append(...result.appeals.map((appeal) => appealRow(guildId, appeal)));
-    summary.textContent = t("appealsOpenCount", { count: formatNumber(result.openCount) });
-    empty.textContent = t(status === "open" ? "appealsNoneOpen" : "appealsNone");
-    empty.hidden = list.children.length > 0;
-    page += 1;
-    more.hidden = !result.more;
-    more.disabled = false;
   };
   more.addEventListener("click", () => load().catch(failed));
   const filter = segmented(
@@ -6009,14 +6329,14 @@ async function showAppeal(guildId, data, number) {
         if (decision === "accept" && !confirm(t("appealsAcceptConfirm"))) {
           return;
         }
-        buttons.forEach((button) => (button.disabled = true));
+        buttons.forEach((button) => setBusy(button, true));
         try {
           ({ appeal } = await api(`/api/guilds/${guildId}/appeals/${number}`, { method: "POST", body: { decision, reason: reason.value } }));
           toast(t(decision === "accept" ? "appealsAccepted" : "appealsDenied"));
           render();
         } catch (error) {
           failed(error);
-          buttons.forEach((button) => (button.disabled = false));
+          buttons.forEach((button) => setBusy(button, false));
         }
       };
       buttons.push(
@@ -6161,13 +6481,13 @@ async function showAppealForm(guildId) {
           toast(t("appealAnswerAll"), "error");
           return;
         }
-        submit.disabled = true;
+        setBusy(submit, true);
         try {
           await api(`/api/appeals/${guildId}`, { method: "POST", body: { answers } });
           notice("appealSent");
         } catch (error) {
           failed(error);
-          submit.disabled = false;
+          setBusy(submit, false);
         }
       },
     },
@@ -6470,7 +6790,7 @@ async function showEmbeds(guildId) {
 
   async function submit() {
     const message = readEmbedForm(form);
-    send.disabled = true;
+    setBusy(send, true);
     try {
       if (editing) {
         await api(`/api/guilds/${guildId}/messages/${editing.channelId}/${editing.messageId}`, { method: "PUT", body: { message } });
@@ -6489,7 +6809,7 @@ async function showEmbeds(guildId) {
     } catch (error) {
       failed(error);
     } finally {
-      send.disabled = false;
+      setBusy(send, false);
     }
   }
 
@@ -6588,6 +6908,50 @@ const feedPingLabel = (guildId, roleId, data) => {
   return role ? `@${role.name}` : t("unknownOption", { id: roleId });
 };
 
+// A feed's message box. Its placeholder is what the feed posts while the box is
+// empty (the default for its kind, in the server's language), and one button
+// either copies that default in to edit or clears a custom message back to it.
+// setKind() swaps the default when the type changes on the add form.
+function feedMessageField(data, { id, kind, value }) {
+  const defaults = data.communityDefaults?.feedMessages ?? {};
+  const max = 500;
+  let current = kind;
+  const defaultFor = () => defaults[current] ?? defaults.rss ?? "";
+  const box = h("textarea", { id, rows: 3, maxLength: max });
+  box.value = value ?? "";
+  const count = h("span", { class: "char-count" });
+  const status = h("span", { class: "help grow" });
+  const toggle = h("button", { class: "ghost small", type: "button" });
+  const update = () => {
+    const custom = box.value.trim() !== "";
+    box.placeholder = defaultFor();
+    count.textContent = `${box.value.length}/${max}`;
+    status.textContent = t(custom ? "feedsMessageCustom" : "feedsMessageUsingDefault");
+    toggle.replaceChildren(icon(custom ? "refresh" : "edit", "icon small"), t(custom ? "feedsMessageReset" : "feedsMessageEditDefault"));
+  };
+  toggle.addEventListener("click", () => {
+    const custom = box.value.trim() !== "";
+    box.value = custom ? "" : defaultFor();
+    update();
+    box.focus();
+  });
+  box.addEventListener("input", update);
+  update();
+  return {
+    box,
+    setKind(next) {
+      current = next;
+      update();
+    },
+    element: h(
+      "div",
+      { class: "feed-message" },
+      field("feedsMessage", "feedsMessageHelp", h("span", { class: "message-box" }, box, count)),
+      h("div", { class: "toolbar" }, status, toggle),
+    ),
+  };
+}
+
 // One followed feed. Edit opens a form under it for where it posts, who it
 // pings and its message; what it follows stays (that's a new feed).
 function feedRow(guildId, feed, data, roles, onChanged) {
@@ -6596,6 +6960,7 @@ function feedRow(guildId, feed, data, roles, onChanged) {
     channel ? `#${channel.name}` : t("unknownOption", { id: feed.channelId }),
     feedPingLabel(guildId, feed.roleId, data),
     feed.postedAt ? t("feedsLastPost", { date: formatAgo(feed.postedAt) }) : t("feedsNoPostYet"),
+    t(feed.message ? "feedsCustomMessage" : "feedsDefaultMessage"),
   ].filter(Boolean);
   const editor = h("div", { class: "feed-editor", hidden: true });
   const editButton = h("button", { class: "ghost small", type: "button", "aria-expanded": "false" }, t("embedEdit"));
@@ -6610,15 +6975,15 @@ function feedRow(guildId, feed, data, roles, onChanged) {
     const channelPicker = picker({ id: `feedChannel-${feed.id}`, options: postableChannels(data), value: feed.channelId, emptyLabel: t("embedPickChannel") });
     channelPicker.required = true;
     const rolePicker = picker({ id: `feedRole-${feed.id}`, options: roles, value: feed.roleId, emptyLabel: t("feedsNoRole") });
-    const messageInput = h("textarea", { rows: 2, maxLength: 500, placeholder: t("feedsMessagePlaceholder") });
-    messageInput.value = feed.message ?? "";
+    const message = feedMessageField(data, { id: `feedMessage-${feed.id}`, kind: feed.kind, value: feed.message });
+    const messageInput = message.box;
     const save = h("button", { class: "primary small", type: "submit" }, t("feedsSave"));
     const form = h(
       "form",
       {
         onsubmit: async (event) => {
           event.preventDefault();
-          save.disabled = true;
+          setBusy(save, true);
           try {
             await api(`/api/guilds/${guildId}/feeds/${feed.id}`, {
               method: "PATCH",
@@ -6628,7 +6993,7 @@ function feedRow(guildId, feed, data, roles, onChanged) {
             onChanged();
           } catch (error) {
             failed(error);
-            save.disabled = false;
+            setBusy(save, false);
           }
         },
       },
@@ -6638,7 +7003,7 @@ function feedRow(guildId, feed, data, roles, onChanged) {
         field("feedsChannel", null, channelPicker),
         field("feedsRole", "feedsRoleHelp", rolePicker),
       ),
-      field("feedsMessage", "feedsMessageHelp", messageInput),
+      message.element,
       h("div", { class: "toolbar" }, h("span", { class: "grow" }), h("button", { class: "ghost small", type: "button", onclick: closeEditor }, t("cancel")), save),
     );
     editor.replaceChildren(form);
@@ -6706,11 +7071,13 @@ async function showFeeds(guildId) {
     const off = kind in FEED_KEYS_OFF && liveReady[kind] === false;
     sourceHelp.textContent = off ? t(FEED_KEYS_OFF[kind]) : t(`feedsSourceHelp_${kind}`);
     sourceHelp.classList.toggle("danger-text", off);
+    message.setKind(kind);
   };
   // @everyone is the role with the server's ID; listed first.
   const roles = [{ id: guildId, label: t("feedsEveryone") }, ...data.roles.filter((role) => role.id !== guildId && !role.managed).map((role) => roleItem(role))];
   const add = h("button", { class: "primary", type: "submit" }, icon("plus", "icon small"), t("feedsAdd"));
-  const messageInput = h("textarea", { id: "feedMessage", rows: 2, maxLength: 500, placeholder: t("feedsMessagePlaceholder") });
+  const message = feedMessageField(data, { id: "feedMessage", kind, value: null });
+  const messageInput = message.box;
 
   async function load() {
     const result = await api(`/api/guilds/${guildId}/feeds`);
@@ -6727,7 +7094,7 @@ async function showFeeds(guildId) {
     {
       onsubmit: async (event) => {
         event.preventDefault();
-        add.disabled = true;
+        setBusy(add, true);
         add.lastChild.textContent = t("feedsAdding");
         try {
           const result = await api(`/api/guilds/${guildId}/feeds`, {
@@ -6743,12 +7110,15 @@ async function showFeeds(guildId) {
           toast(t("feedsAdded", { name: result.feed.name }));
           sourceInput.value = "";
           messageInput.value = "";
+          message.setKind(kind);
+          add.lastChild.textContent = t("feedsAdd");
+          // load() then disables the button again if the limit is reached.
+          setBusy(add, false);
           await load();
         } catch (error) {
-          failed(error);
-        } finally {
           add.lastChild.textContent = t("feedsAdd");
-          add.disabled = false;
+          setBusy(add, false);
+          failed(error);
         }
       },
     },
@@ -6775,7 +7145,7 @@ async function showFeeds(guildId) {
       field("feedsChannel", null, picker({ id: "feedChannel", options: postableChannels(data), value: null, emptyLabel: t("embedPickChannel") })),
       field("feedsRole", "feedsRoleHelp", picker({ id: "feedRole", options: roles, value: null, emptyLabel: t("feedsNoRole") })),
     ),
-    field("feedsMessage", "feedsMessageHelp", messageInput),
+    message.element,
     h("div", { class: "toolbar" }, h("span", { class: "grow" }), add),
   );
   form.querySelector("#feedChannel").required = true;
@@ -6870,7 +7240,7 @@ async function showStickies(guildId) {
       onsubmit: async (event) => {
         event.preventDefault();
         const channelId = form.querySelector("#stickyChannel").value;
-        save.disabled = true;
+        setBusy(save, true);
         try {
           const replacing = current.some((sticky) => sticky.channelId === channelId);
           await api(`/api/guilds/${guildId}/stickies/${channelId}`, { method: "PUT", body: { content: content.value } });
@@ -6881,7 +7251,7 @@ async function showStickies(guildId) {
         } catch (error) {
           failed(error);
         } finally {
-          save.disabled = false;
+          setBusy(save, false);
         }
       },
     },
@@ -6916,7 +7286,9 @@ async function showBackup(guildId) {
   const download = h("a", { class: "button primary", href: `/api/guilds/${guildId}/backup`, download: "" }, icon("download", "icon small"), t("backupDownload"));
   const file = h("input", { id: "backupFile", type: "file", accept: ".json,application/json" });
   const review = h("div", { class: "backup-review", hidden: true });
-  let backup = null;
+  // The chosen file as uploaded: { file: its text, fileName }. The server
+  // checks it again in full; these checks only spare a pointless upload.
+  let upload = null;
 
   const itemList = (items, line) => h("ul", { class: "backup-list" }, ...items.map((item) => h("li", {}, line(item))));
 
@@ -6942,14 +7314,14 @@ async function showBackup(guildId) {
         if (!confirm(t("backupRestoreConfirm", { count: plan.changes.length }))) {
           return;
         }
-        confirmButton.disabled = true;
+        setBusy(confirmButton, true);
         try {
-          const result = await api(`/api/guilds/${guildId}/backup/restore`, { method: "POST", body: { backup, dryRun: false } });
+          const result = await api(`/api/guilds/${guildId}/backup/restore`, { method: "POST", body: { ...upload, dryRun: false } });
           toast(t("backupRestored", { count: result.changes.length }));
           await showBackup(guildId);
         } catch (error) {
           failed(error);
-          confirmButton.disabled = false;
+          setBusy(confirmButton, false);
         }
       });
       parts.push(h("div", { class: "toolbar" }, h("span", { class: "grow" }), confirmButton));
@@ -6960,23 +7332,32 @@ async function showBackup(guildId) {
 
   file.addEventListener("change", async () => {
     review.hidden = true;
-    backup = null;
+    upload = null;
     const chosen = file.files?.[0];
     if (!chosen) {
       return;
     }
-    if (chosen.size > 1_000_000) {
+    if (chosen.size > 512 * 1024) {
       toast(t("backupTooBig"), "error");
       return;
     }
-    try {
-      backup = JSON.parse(await chosen.text());
-    } catch {
+    // Only a .json file whose type is JSON or unknown (some systems give none).
+    if (!/\.json$/i.test(chosen.name) || !["", "application/json", "text/json"].includes(chosen.type)) {
       toast(t("backupNotJson"), "error");
+      file.value = "";
       return;
     }
+    const text = await chosen.text();
     try {
-      showPlan(await api(`/api/guilds/${guildId}/backup/restore`, { method: "POST", body: { backup, dryRun: true } }));
+      JSON.parse(text.replace(/^\uFEFF/, ""));
+    } catch {
+      toast(t("backupNotJson"), "error");
+      file.value = "";
+      return;
+    }
+    upload = { file: text, fileName: chosen.name };
+    try {
+      showPlan(await api(`/api/guilds/${guildId}/backup/restore`, { method: "POST", body: { ...upload, dryRun: true } }));
     } catch (error) {
       failed(error);
     }
@@ -7193,7 +7574,7 @@ async function showBranding(guildId) {
       toast(t("brandingNothing"));
       return;
     }
-    saveButton.disabled = true;
+    setBusy(saveButton, true);
     try {
       saved = await api(`/api/guilds/${guildId}/branding`, { method: "PATCH", body });
       state.cache = null;
@@ -7201,6 +7582,8 @@ async function showBranding(guildId) {
       toast(t("brandingSaved"));
     } catch (error) {
       failed(error);
+    } finally {
+      setBusy(saveButton, false);
       refresh();
     }
   });
@@ -7275,14 +7658,14 @@ function counterRow(guildId, counter, data, onChanged) {
     save.hidden = input.value.trim() === counter.template;
   });
   save.addEventListener("click", async () => {
-    save.disabled = true;
+    setBusy(save, true);
     try {
       await api(`/api/guilds/${guildId}/counters/${counter.id}`, { method: "PATCH", body: { template: input.value } });
       toast(t("countersSaved"));
       onChanged();
     } catch (error) {
       failed(error);
-      save.disabled = false;
+      setBusy(save, false);
     }
   });
   const remove = h(
@@ -7366,17 +7749,19 @@ async function showCounters(guildId) {
     {
       onsubmit: async (event) => {
         event.preventDefault();
-        add.disabled = true;
+        setBusy(add, true);
         try {
           await api(`/api/guilds/${guildId}/counters`, {
             method: "POST",
             body: { template: nameInput.value, categoryId: form.querySelector("#counterCategory").value || null },
           });
           toast(t("countersAdded"));
+          // load() then disables the button again if the limit is reached.
+          setBusy(add, false);
           await load();
         } catch (error) {
+          setBusy(add, false);
           failed(error);
-          add.disabled = false;
         }
       },
     },
@@ -7463,13 +7848,16 @@ async function showActivity(guildId) {
   const more = h("button", { class: "ghost", type: "button", hidden: true }, t("loadMore"));
   let before = null;
   const load = async () => {
-    more.disabled = true;
-    const page = await api(`/api/guilds/${guildId}/activity${before ? `?before=${before}` : ""}`);
-    list.append(...page.entries.map((entry) => activityRow(entry, data)));
-    empty.hidden = list.children.length > 0;
-    before = page.next;
-    more.hidden = !page.next;
-    more.disabled = false;
+    setBusy(more, true);
+    try {
+      const page = await api(`/api/guilds/${guildId}/activity${before ? `?before=${before}` : ""}`);
+      list.append(...page.entries.map((entry) => activityRow(entry, data)));
+      empty.hidden = list.children.length > 0;
+      before = page.next;
+      more.hidden = !page.next;
+    } finally {
+      setBusy(more, false);
+    }
   };
   more.addEventListener("click", () => load().catch(failed));
   show(guildLayout(data, "activity", pageHero("activity", t("activityIntro"), data), h("section", { class: "card" }, empty, list, h("div", { class: "center" }, more))));
