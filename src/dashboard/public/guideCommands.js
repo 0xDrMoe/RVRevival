@@ -49,6 +49,8 @@ export const COMMAND_PARTS = [
         tips: [
           "A warning doesn't stop the member chatting. Use `/timeout` for that.",
           "Warnings count towards automod's **escalate** setting, so a member can be timed out, kicked or banned automatically after too many in 24 hours.",
+          "Set **Warning thresholds** on the dashboard's Moderation page to act on manual warnings too, like *3 warnings in 7 days → time out 1 hour*.",
+          "The reason box suggests the reasons your staff use most, so similar cases read the same.",
           "Not worth a warning, but worth remembering? Use `/note` instead.",
           "Gave it to the wrong person? An admin can delete it with `/case delete`. To remove every warning, an admin runs `/clearwarns`.",
         ],

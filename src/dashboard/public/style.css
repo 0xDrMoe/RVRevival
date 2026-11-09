@@ -3480,6 +3480,31 @@ input.has-variable-problem {
   min-width: 0;
 }
 
+.threshold-row {
+  flex-wrap: wrap;
+}
+
+.threshold-part {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.threshold-part input {
+  width: 5em;
+}
+
+.threshold-row .threshold-action {
+  width: auto;
+  flex: 1 1 8em;
+  min-width: 0;
+}
+
+.threshold-row > button {
+  margin-left: auto;
+}
+
 .reward-role select {
   width: 100%;
 }

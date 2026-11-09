@@ -4,6 +4,17 @@
 export const CHANGELOG = [
   {
     date: "2026-11-09",
+    title: "Moderation: reports, right-click apps and warning thresholds",
+    items: [
+      "Members can report a message to staff: right-click it, then Apps > Report message. Staff get Delete, Time out and Dismiss buttons.",
+      "Right-click a member for User info or Moderation history, without typing a command.",
+      "Warning thresholds: after a set number of warnings in a set number of days, Rabble times out, kicks or bans on its own. Set them on the Moderation page.",
+      "The reason box on moderation commands suggests the reasons your staff use most.",
+      "The join log flags new members who share an avatar or name with a banned account.",
+    ],
+  },
+  {
+    date: "2026-11-09",
     title: "Tickets: claiming, auto-close, ratings and stats",
     items: [
       "Staff can claim a ticket with the 🙋 Claim button or /tickets claim, so everyone sees who is on it.",

@@ -43,6 +43,7 @@ import { createFunCommands } from "./fun.js";
 import { createEmbedCommand } from "./embed.js";
 import { createMassRoleCommand } from "./massRole.js";
 import { createMemberLoader } from "../guilds/memberCache.js";
+import { createContextMenus } from "./contextMenus.js";
 
 // Each command is { name, data, execute(interaction), autocomplete?(interaction),
 // components?, componentPrefixes? }. `components` maps a button, form or menu
@@ -68,7 +69,8 @@ import { createMemberLoader } from "../guilds/memberCache.js";
 // to /guide and /dashboard. `roleConfirmations` (roles/roleConfirmations.js)
 // makes role panels and the country picker ask before changing roles.
 // `sentMessages` (messages/sentMessageStore.js) lists /embed posts on the
-// dashboard's Embed builder page.
+// dashboard's Embed builder page. `reports` (moderation/reports.js) keeps
+// messages reported with the Report message app.
 export function createCommands({
   logger,
   guildSettings,
@@ -96,6 +98,7 @@ export function createCommands({
   highlightStore,
   highlights,
   sentMessages,
+  reports,
   roleConfirmations = createRoleConfirmations({ guildSettings, store: new RoleConfirmStore(), forcedLanguage }),
   dashboardUrl,
 }) {
@@ -139,13 +142,15 @@ export function createCommands({
     createAfkCommand({ afk, forcedLanguage }),
     createServerInfoCommand({ guildSettings, forcedLanguage }),
     ...createInfoCommands({ guildSettings, forcedLanguage, memberLoader }),
-    ...createBotInfoCommands({ guildSettings, forcedLanguage, dashboardUrl, commandCount: () => commands.length }),
+    ...createBotInfoCommands({ guildSettings, forcedLanguage, dashboardUrl, commandCount: () => commands.filter((command) => !command.data.type || command.data.type === 1).length }),
     ...createFunCommands({ forcedLanguage }),
     createStickyCommand({ store: stickyStore, stickies, forcedLanguage }),
     createHighlightCommand({ store: highlightStore, highlights, forcedLanguage }),
     createMediaOnlyCommand({ guildSettings, forcedLanguage }),
     createBirthdayCommand({ guildSettings, store: birthdays, forcedLanguage }),
     ...createLevelCommands({ levels, leveling, guildSettings, forcedLanguage }),
+    // Right-click apps: Report message, User info, Moderation history.
+    ...createContextMenus({ guildSettings, reports, moderation, forcedLanguage, logger }),
   ];
   return new Map(commands.map((command) => [command.name, command]));
 }

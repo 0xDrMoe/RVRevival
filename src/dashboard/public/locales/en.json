@@ -1606,5 +1606,19 @@
   "ticketsAutoClose": "Auto-close after (hours)",
   "ticketsAutoCloseHelp": "After this many hours without a message the ticket gets a warning, then closes up to 12 hours later if it stays quiet. 0 switches it off.",
   "ticketsRatings": "Ask for a rating",
-  "ticketsRatingsHelp": "When a ticket closes, the member gets a DM asking for 1 to 5 stars. Ratings show on each ticket and in the averages above."
+  "ticketsRatingsHelp": "When a ticket closes, the member gets a DM asking for 1 to 5 stars. Ratings show on each ticket and in the averages above.",
+  "thresholdsTitle": "Warning thresholds",
+  "thresholdsHelp": "When a member reaches a number of warnings within some days, the bot acts on its own and opens a case. The highest step that matches wins.",
+  "thresholdsNone": "No thresholds. Warnings only add up on the member's record.",
+  "thresholdsAdd": "Add step",
+  "thresholdAction": "Action",
+  "thresholdAction_timeout": "Time out",
+  "thresholdAction_kick": "Kick",
+  "thresholdAction_ban": "Ban",
+  "thresholdMinutes": "Timeout length in minutes",
+  "thresholdMinutesUnit": "minutes",
+  "thresholdCount": "Number of warnings",
+  "thresholdWarningsIn": "warnings in",
+  "thresholdDays": "Number of days",
+  "thresholdDaysArrow": "days →"
 }

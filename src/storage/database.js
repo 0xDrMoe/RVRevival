@@ -461,6 +461,38 @@ const MIGRATIONS = [
   ALTER TABLE tickets ADD COLUMN rating INTEGER;
   CREATE INDEX tickets_open_all ON tickets (closed_at) WHERE closed_at IS NULL;
   `,
+  // 31: what banned accounts looked like, to flag look-alike joins
+  // (moderation/altHints.js), and messages members reported to staff
+  // (moderation/reports.js).
+  `
+  CREATE TABLE banned_looks (
+    guild_id     TEXT    NOT NULL,
+    user_id      TEXT    NOT NULL,
+    name_key     TEXT,
+    avatar       TEXT,
+    banned_at    INTEGER NOT NULL,
+    PRIMARY KEY (guild_id, user_id)
+  ) WITHOUT ROWID;
+  CREATE INDEX banned_looks_by_avatar ON banned_looks (guild_id, avatar) WHERE avatar IS NOT NULL;
+  CREATE INDEX banned_looks_by_name ON banned_looks (guild_id, name_key) WHERE name_key IS NOT NULL;
+  CREATE TABLE message_reports (
+    id                 INTEGER PRIMARY KEY,
+    guild_id           TEXT    NOT NULL,
+    channel_id         TEXT    NOT NULL,
+    message_id         TEXT    NOT NULL,
+    author_id          TEXT    NOT NULL,
+    reporter_id        TEXT    NOT NULL,
+    reason             TEXT,
+    created_at         INTEGER NOT NULL,
+    status             TEXT    NOT NULL DEFAULT 'open',
+    handled_by         TEXT,
+    report_channel_id  TEXT,
+    report_message_id  TEXT
+  );
+  CREATE INDEX message_reports_by_message ON message_reports (guild_id, message_id);
+  CREATE INDEX message_reports_by_author ON message_reports (guild_id, author_id, created_at);
+  CREATE INDEX message_reports_by_reporter ON message_reports (guild_id, reporter_id, created_at);
+  `,
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS.length;

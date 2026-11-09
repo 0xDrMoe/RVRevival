@@ -158,6 +158,9 @@ export function createInteractionHandler({ commands, logger, forcedLanguage, act
       await handleAutocomplete(interaction);
     } else if (interaction.isChatInputCommand()) {
       await handleCommand(interaction);
+    } else if (interaction.isContextMenuCommand?.()) {
+      // Right-click apps (commands/contextMenus.js) go through the same checks.
+      await handleCommand(interaction);
     } else if (interaction.isButton() || interaction.isModalSubmit() || interaction.isAnySelectMenu()) {
       await handleComponent(interaction);
     }

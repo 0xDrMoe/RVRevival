@@ -30,7 +30,8 @@ const texts = (topic) =>
 function commandUsages() {
   const commands = createCommands({ logger: fakeLogger(), guildSettings: new GuildSettings() });
   const optionsOf = (list) => (list ?? []).map((option) => ({ name: option.name, required: option.required === true }));
-  return [...commands.values()].flatMap((command) => {
+  // Right-click apps (type 2 and 3) have no slash usage; the guide covers them in prose.
+  return [...commands.values()].filter((command) => !command.data.type || command.data.type === 1).flatMap((command) => {
     const data = typeof command.data.toJSON === "function" ? command.data.toJSON() : command.data;
     const base = `/${data.name}`;
     const subs = (data.options ?? []).flatMap((option) => {
@@ -177,6 +178,16 @@ describe("dashboard guide", () => {
     expect(explained.sort()).toEqual(new PermissionsBitField(BigInt(invite)).toArray().sort());
     for (const [, iconName] of block.matchAll(/^ {2}\["(\w+)"/gm)) {
       expect(icons.has(iconName), iconName).toBe(true);
+    }
+  });
+
+  it("explains every right-click app", () => {
+    const commands = createCommands({ logger: fakeLogger(), guildSettings: new GuildSettings() });
+    const apps = [...commands.values()].filter((command) => command.data.type === 2 || command.data.type === 3).map((command) => command.name);
+    expect(apps).toEqual(["Report message", "User info", "Moderation history"]);
+    const text = topics.flatMap(texts).join("\n");
+    for (const name of apps) {
+      expect(text, name).toContain(`**${name}**`);
     }
   });
 });

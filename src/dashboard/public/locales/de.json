@@ -1606,5 +1606,19 @@
   "ticketsAutoClose": "Automatisch schließen nach (Stunden)",
   "ticketsAutoCloseHelp": "Nach so vielen Stunden ohne Nachricht bekommt das Ticket eine Warnung und schließt bis zu 12 Stunden später, wenn es still bleibt. 0 schaltet es ab.",
   "ticketsRatings": "Um Bewertung bitten",
-  "ticketsRatingsHelp": "Wenn ein Ticket schließt, bekommt das Mitglied eine DM mit der Bitte um 1 bis 5 Sterne. Bewertungen stehen bei jedem Ticket und in den Durchschnitten oben."
+  "ticketsRatingsHelp": "Wenn ein Ticket schließt, bekommt das Mitglied eine DM mit der Bitte um 1 bis 5 Sterne. Bewertungen stehen bei jedem Ticket und in den Durchschnitten oben.",
+  "thresholdsTitle": "Verwarnungsschwellen",
+  "thresholdsHelp": "Erreicht ein Mitglied in einigen Tagen eine Anzahl Verwarnungen, handelt der Bot selbst und eröffnet einen Fall. Die höchste passende Stufe gilt.",
+  "thresholdsNone": "Keine Schwellen. Verwarnungen werden nur im Verlauf des Mitglieds gezählt.",
+  "thresholdsAdd": "Stufe hinzufügen",
+  "thresholdAction": "Aktion",
+  "thresholdAction_timeout": "Timeout",
+  "thresholdAction_kick": "Kicken",
+  "thresholdAction_ban": "Bannen",
+  "thresholdMinutes": "Timeout-Dauer in Minuten",
+  "thresholdMinutesUnit": "Minuten",
+  "thresholdCount": "Anzahl Verwarnungen",
+  "thresholdWarningsIn": "Verwarnungen in",
+  "thresholdDays": "Anzahl Tage",
+  "thresholdDaysArrow": "Tagen →"
 }

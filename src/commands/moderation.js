@@ -29,6 +29,8 @@ import {
 import { discordLocalizations, pickLanguage, translate } from "../i18n/i18n.js";
 import { result, Status } from "../logs/actionLog.js";
 import { hierarchyProblem, isModerator, outsiderProblem } from "../moderation/checks.js";
+import { applyWarnThreshold, normalizeWarnThresholds } from "../moderation/warnThresholds.js";
+import { Setting } from "../settings/guildSettings.js";
 import { DAY_MS, parseDuration } from "../utils/duration.js";
 import { getDiscordErrorCode, isPermissionError } from "../utils/discordErrors.js";
 
@@ -60,10 +62,15 @@ export function withDescription(builder, key) {
   return builder.setDescription(translate("en", key)).setDescriptionLocalizations(discordLocalizations(key));
 }
 
+// Suggests the server's most used reasons as you type (any text still works).
 const reasonOption = (required) => (option) =>
   withDescription(option.setName("reason"), "modReasonOptionDescription")
     .setRequired(required)
-    .setMaxLength(MAX_REASON_LENGTH);
+    .setMaxLength(MAX_REASON_LENGTH)
+    .setAutocomplete(true);
+
+// Discord's limit on an autocomplete suggestion.
+const MAX_SUGGESTION_LENGTH = 100;
 
 const memberOption = (option) =>
   withDescription(option.setName("member"), "modMemberOptionDescription").setRequired(true);
@@ -324,11 +331,38 @@ function createModerationCommand(spec, { guildSettings, moderation, forcedLangua
     if (moderationCase.dmSent === false) {
       lines.push(text("modDmFailed"));
     }
+    if (spec.name === "warn") {
+      const reached = await applyWarnThreshold({
+        guild,
+        member,
+        moderation,
+        thresholds: normalizeWarnThresholds(guildSettings.get(guild.id, Setting.WARN_THRESHOLDS)),
+      }).catch((error) => {
+        logger?.warn("Couldn't apply a warning threshold", { guildId: guild.id, error });
+        return { failed: true, threshold: null };
+      });
+      if (reached?.moderationCase) {
+        lines.push(text("modWarnThresholdApplied", { count: reached.threshold.count, days: reached.threshold.days, action: text(`modThresholdAction_${reached.threshold.action}`), number: reached.moderationCase.number }));
+      } else if (reached?.failed) {
+        lines.push(text("modWarnThresholdFailed"));
+      }
+    }
     await interaction.editReply({ content: lines.join("\n"), allowedMentions: { parse: [] } });
     return result(Status.SUCCESS, outcome.key, replyValues);
   }
 
-  return { name: spec.name, data: buildData(spec), execute };
+  // The reasons this server's moderators used most, matching what's typed so far.
+  async function autocomplete(interaction) {
+    const focused = interaction.options.getFocused(true);
+    if (focused.name !== "reason" || !interaction.inCachedGuild() || !isModerator(interaction, spec.permission, guildSettings)) {
+      await interaction.respond([]);
+      return;
+    }
+    const reasons = moderation.store.topReasons(interaction.guildId, String(focused.value ?? ""), { limit: 25, maxLength: MAX_SUGGESTION_LENGTH });
+    await interaction.respond(reasons.map((reason) => ({ name: reason, value: reason })));
+  }
+
+  return { name: spec.name, data: buildData(spec), execute, autocomplete };
 }
 
 export function createModerationCommands(options) {

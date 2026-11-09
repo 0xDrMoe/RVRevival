@@ -1,5 +1,7 @@
 // Starts the bot. Slash commands are registered separately with `npm run register`.
 
+import { ReportStore } from "./moderation/reports.js";
+import { AltHints } from "./moderation/altHints.js";
 import { Client, Events, GatewayCloseCodes, GatewayIntentBits, Options, Partials } from "discord.js";
 import { createAutomod } from "./automod/automod.js";
 import { normalizeAutomod } from "./automod/config.js";
@@ -183,7 +185,9 @@ async function start() {
   const actionLog = createActionLog({ guildSettings, logger, poster });
   // Posts cases in the mod-log channel, and server events in the server-log channel.
   const modLog = createModLog({ poster, store });
-  const serverLog = createServerLog({ poster, botDeletions, guildSettings });
+  // Remembers what banned accounts looked like, to flag look-alike joins.
+  const altHints = new AltHints(db);
+  const serverLog = createServerLog({ poster, botDeletions, guildSettings, altHints });
   // Saves and posts everything that happens to tickets (/tickets log).
   const ticketLog = createTicketLog({ tickets, poster, guildSettings, logger });
   // Anti-nuke (/antinuke) counts bans and kicks done through the bot as well.
@@ -281,6 +285,7 @@ async function start() {
     leveling,
     tempVoice: tempVoiceChannels,
     sentMessages: new SentMessageStore(db),
+    reports: new ReportStore(db),
     dashboardUrl: config.dashboardUrl,
   });
   const handleInteraction = createInteractionHandler({ commands, logger, forcedLanguage, actionLog, guildSettings });
@@ -475,6 +480,8 @@ async function start() {
 
     // Bans and unbans done outside the bot still get a case.
     client.on(Events.GuildBanAdd, safely("a ban", (ban) => externalActions.onBan(ban)));
+    client.on(Events.GuildBanAdd, safely("remembering a banned look", (ban) => ban.user && altHints.banned(ban.guild.id, ban.user)));
+    client.on(Events.GuildBanRemove, safely("forgetting a banned look", (ban) => ban.user && altHints.unbanned(ban.guild.id, ban.user.id)));
     client.on(Events.GuildAuditLogEntryCreate, safely("an audit log entry", (entry, guild) => antiNuke.auditLogEntry(entry, guild)));
     client.on(Events.GuildBanRemove, safely("an unban", (ban) => externalActions.onUnban(ban)));
 

@@ -1606,5 +1606,19 @@
   "ticketsAutoClose": "الإغلاق التلقائي بعد (ساعات)",
   "ticketsAutoCloseHelp": "بعد هذا العدد من الساعات بلا رسائل تتلقى التذكرة تنبيهًا، ثم تُغلق خلال 12 ساعة كحد أقصى إن بقيت هادئة. 0 يوقفه.",
   "ticketsRatings": "طلب تقييم",
-  "ticketsRatingsHelp": "عند إغلاق تذكرة، يتلقى العضو رسالة خاصة تطلب من 1 إلى 5 نجوم. تظهر التقييمات في كل تذكرة وفي المتوسطات أعلاه."
+  "ticketsRatingsHelp": "عند إغلاق تذكرة، يتلقى العضو رسالة خاصة تطلب من 1 إلى 5 نجوم. تظهر التقييمات في كل تذكرة وفي المتوسطات أعلاه.",
+  "thresholdsTitle": "حدود التحذيرات",
+  "thresholdsHelp": "عندما يصل العضو إلى عدد من التحذيرات خلال أيام، يتصرف البوت تلقائيًا ويفتح قضية. تُطبَّق أعلى خطوة مطابقة.",
+  "thresholdsNone": "لا توجد حدود. تُضاف التحذيرات إلى سجل العضو فقط.",
+  "thresholdsAdd": "إضافة خطوة",
+  "thresholdAction": "الإجراء",
+  "thresholdAction_timeout": "إسكات مؤقت",
+  "thresholdAction_kick": "طرد",
+  "thresholdAction_ban": "حظر",
+  "thresholdMinutes": "مدة الإسكات بالدقائق",
+  "thresholdMinutesUnit": "دقيقة",
+  "thresholdCount": "عدد التحذيرات",
+  "thresholdWarningsIn": "تحذيرات خلال",
+  "thresholdDays": "عدد الأيام",
+  "thresholdDaysArrow": "أيام ←"
 }

@@ -67,10 +67,18 @@ describe("command list", () => {
       "rank",
       "leaderboard",
       "levels",
+      "Report message",
+      "User info",
+      "Moderation history",
     ]);
     for (const command of commands.values()) {
       expect(command.data.name).toBe(command.name);
-      expect(command.data.description.length).toBeGreaterThan(0);
+      // Right-click apps (types 2 and 3) have a name but no description.
+      if (!command.data.type || command.data.type === 1) {
+        expect(command.data.description.length).toBeGreaterThan(0);
+      } else {
+        expect(command.data.name.length).toBeLessThanOrEqual(32);
+      }
     }
   });
 
