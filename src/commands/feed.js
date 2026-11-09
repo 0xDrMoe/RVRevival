@@ -2,7 +2,10 @@
 // going live, Bluesky and Mastodon posts, subreddit posts, GitHub releases and
 // RSS items in a channel.
 //
-//   /feed add type source channel [role] [message]   follow something (up to 20 per server)
+//   /feed add type source channel [role] [message] [videos] [shorts] [live]
+//                                                     follow something (up to 20 per server);
+//                                                     YouTube posts videos, Shorts and live
+//                                                     streams unless one is turned off
 //   /feed remove id                                   stop following it
 //   /feed list                                        what the server follows
 //
@@ -15,16 +18,15 @@ import { ChannelType, InteractionContextType, MessageFlags, PermissionFlagsBits,
 import { discordLocalizations, pickLanguage, translate } from "../i18n/i18n.js";
 import { result, Status } from "../logs/actionLog.js";
 import { variableRefusal } from "./commandHelpers.js";
-import { addFeed, FeedDuplicate, FeedError, FeedLimit, MAX_FEED_MESSAGE_LENGTH } from "../feeds/feeds.js";
-import { FEED_KINDS } from "../feeds/fetchFeed.js";
+import { addFeed, addYoutubeFeeds, countFeeds, FeedDuplicate, FeedError, FeedLimit, feedGroupKey, MAX_FEED_MESSAGE_LENGTH, YOUTUBE_TYPE_OF_KIND, YOUTUBE_TYPES } from "../feeds/feeds.js";
+import { FEED_KINDS, FeedKind } from "../feeds/fetchFeed.js";
 import { MAX_FEEDS } from "../feeds/feedStore.js";
 import { withDescription } from "./moderation.js";
 
 const COMMAND_NAME = "feed";
+// YouTube Shorts and live streams are switches on the YouTube type, not types of their own.
+const COMMAND_KINDS = FEED_KINDS.filter((kind) => kind !== FeedKind.YOUTUBE_SHORTS && kind !== FeedKind.YOUTUBE_LIVE);
 const KIND_ICONS = {
-  youtube: "📺",
-  youtube_shorts: "📱",
-  youtube_live: "🔴",
   twitch: "🟣",
   kick: "🟢",
   bluesky: "🦋",
@@ -45,14 +47,17 @@ export function buildFeedCommandData() {
         .addStringOption((option) =>
           withDescription(option.setName("type"), "feedTypeOptionDescription")
             .setRequired(true)
-            .addChoices(...FEED_KINDS.map((kind) => ({ name: translate("en", `feedType_${kind}`), name_localizations: discordLocalizations(`feedType_${kind}`), value: kind }))),
+            .addChoices(...COMMAND_KINDS.map((kind) => ({ name: translate("en", `feedType_${kind}`), name_localizations: discordLocalizations(`feedType_${kind}`), value: kind }))),
         )
         .addStringOption((option) => withDescription(option.setName("source"), "feedSourceOptionDescription").setRequired(true).setMaxLength(500))
         .addChannelOption((option) =>
           withDescription(option.setName("channel"), "feedChannelOptionDescription").setRequired(true).addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement),
         )
         .addRoleOption((option) => withDescription(option.setName("role"), "feedRoleOptionDescription"))
-        .addStringOption((option) => withDescription(option.setName("message"), "feedMessageOptionDescription").setMaxLength(MAX_FEED_MESSAGE_LENGTH)),
+        .addStringOption((option) => withDescription(option.setName("message"), "feedMessageOptionDescription").setMaxLength(MAX_FEED_MESSAGE_LENGTH))
+        .addBooleanOption((option) => withDescription(option.setName("videos"), "feedVideosOptionDescription"))
+        .addBooleanOption((option) => withDescription(option.setName("shorts"), "feedShortsOptionDescription"))
+        .addBooleanOption((option) => withDescription(option.setName("live"), "feedLiveOptionDescription")),
     )
     .addSubcommand((sub) =>
       withDescription(sub.setName("remove"), "feedRemoveDescription").addIntegerOption((option) =>
@@ -68,6 +73,7 @@ const FEED_ERROR_KEYS = {
   blocked: "feedErrorBlocked",
   unreachable: "feedErrorUnreachable",
   "not-a-feed": "feedErrorNotAFeed",
+  "no-types": "feedYoutubeNoTypes",
 };
 
 // Errors that name the platform: Twitch or Kick.
@@ -103,22 +109,17 @@ export function createFeedCommand({ store, live = {}, forcedLanguage, fetchOptio
     if (refusal) {
       return answer(Status.REFUSED, "variablesRefused", refusal);
     }
+    // YouTube: every type unless switched off with videos/shorts/live:False.
+    const youtube = kind === FeedKind.YOUTUBE;
+    const types = youtube ? Object.keys(YOUTUBE_TYPES).filter((type) => interaction.options.getBoolean(type) !== false) : [];
+    if (youtube && types.length === 0) {
+      return answer(Status.REFUSED, "feedYoutubeNoTypes");
+    }
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-    let feed;
+    let added;
     try {
-      feed = await addFeed({
-        store,
-        guildId: guild.id,
-        kind,
-        source,
-        channelId: channel.id,
-        roleId: role?.id ?? null,
-        message,
-        createdBy: interaction.user.id,
-        fetchOptions,
-        live,
-        now,
-      });
+      const options = { store, guildId: guild.id, source, channelId: channel.id, roleId: role?.id ?? null, message, createdBy: interaction.user.id, fetchOptions, live, now };
+      added = youtube ? await addYoutubeFeeds({ ...options, types }) : [await addFeed({ ...options, kind })];
     } catch (error) {
       if (error instanceof FeedLimit) {
         return answer(Status.REFUSED, "feedFull", { max: MAX_FEEDS });
@@ -131,9 +132,15 @@ export function createFeedCommand({ store, live = {}, forcedLanguage, fetchOptio
       }
       throw error;
     }
-    logger?.info("Feed added", { guildId: guild.id, feedId: feed.id, kind });
+    const [feed] = added;
+    logger?.info("Feed added", { guildId: guild.id, feedIds: added.map((item) => item.id), kind });
     // Without Mention Everyone the post still goes out, it just pings no one.
     const note = everyone && !usable.permissionsFor(me)?.has(PermissionFlagsBits.MentionEveryone) ? "feedEveryoneBotCantPing" : undefined;
+    if (youtube) {
+      const language = pickLanguage(interaction.locale, forcedLanguage);
+      const posts = added.map((item) => `${translate(language, `feedYoutubeType_${YOUTUBE_TYPE_OF_KIND[item.kind]}`)} \`${item.id}\``).join(", ");
+      return answer(Status.SUCCESS, "feedAddedYoutube", { ...values, name: feed.name, posts }, note);
+    }
     return answer(Status.SUCCESS, "feedAdded", { ...values, name: feed.name, id: feed.id }, note);
   }
 
@@ -168,11 +175,24 @@ export function createFeedCommand({ store, live = {}, forcedLanguage, fetchOptio
         if (feeds.length === 0) {
           return answer(Status.SUCCESS, "feedListEmpty");
         }
-        const lines = feeds.map(
-          (feed) =>
-            `\`${feed.id}\` ${KIND_ICONS[feed.kind] ?? "📰"} **${feed.name}** → <#${feed.channelId}>${feed.roleId ? ` · ${feed.roleId === interaction.guildId ? "@everyone" : `<@&${feed.roleId}>`}` : ""}${feed.lastError ? ` · ⚠️ ${feed.lastError.slice(0, 80)}` : ""}`,
-        );
-        return answer(Status.SUCCESS, "feedList", { count: feeds.length, max: MAX_FEEDS, list: lines.join("\n") });
+        // A YouTube channel posting in one channel is one line, with each
+        // type's number (for /feed remove).
+        const groups = new Map();
+        for (const feed of feeds) {
+          const key = feedGroupKey(feed);
+          groups.set(key, [...(groups.get(key) ?? []), feed]);
+        }
+        const lines = [...groups.values()].map((group) => {
+          const [feed] = group;
+          const youtube = group.length > 1 || feed.kind in YOUTUBE_TYPE_OF_KIND;
+          const ids = youtube ? group.map((item) => `${text(`feedYoutubeType_${YOUTUBE_TYPE_OF_KIND[item.kind]}`)} \`${item.id}\``).join(", ") : `\`${feed.id}\``;
+          const ping = feed.roleId ? ` · ${feed.roleId === interaction.guildId ? "@everyone" : `<@&${feed.roleId}>`}` : "";
+          const problems = group.filter((item) => item.lastError).map((item) => ` · ⚠️ ${item.lastError.slice(0, 80)}`).join("");
+          return youtube
+            ? `📺 **${feed.name}** → <#${feed.channelId}>${ping} · ${ids}${problems}`
+            : `${ids} ${KIND_ICONS[feed.kind] ?? "📰"} **${feed.name}** → <#${feed.channelId}>${ping}${problems}`;
+        });
+        return answer(Status.SUCCESS, "feedList", { count: countFeeds(store, interaction.guildId), max: MAX_FEEDS, list: lines.join("\n") });
       }
     }
     return undefined;

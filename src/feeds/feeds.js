@@ -119,15 +119,50 @@ async function readYoutube(kind, resolved, fetchOptions) {
 
 const YOUTUBE_KINDS = new Set([FeedKind.YOUTUBE, FeedKind.YOUTUBE_SHORTS, FeedKind.YOUTUBE_LIVE]);
 
+// The three things a YouTube channel can post, as /feed and the dashboard name
+// them, and the kind of feed each one is saved as.
+export const YOUTUBE_TYPES = Object.freeze({ videos: FeedKind.YOUTUBE, shorts: FeedKind.YOUTUBE_SHORTS, live: FeedKind.YOUTUBE_LIVE });
+export const YOUTUBE_TYPE_OF_KIND = Object.freeze(Object.fromEntries(Object.entries(YOUTUBE_TYPES).map(([type, kind]) => [kind, type])));
+
+// The UC… ID of the channel a YouTube feed follows, read from its address
+// (UULF…/UUSH… playlist, channel feed or /live page), or null.
+export function youtubeChannelOf(feed) {
+  if (!YOUTUBE_KINDS.has(feed.kind)) {
+    return null;
+  }
+  const match = feed.url.match(/[?&]channel_id=(UC[\w-]{22})|[?&]playlist_id=UU(?:LF|SH|LV)([\w-]{22})|\/channel\/(UC[\w-]{22})\//);
+  if (!match) {
+    return null;
+  }
+  return match[1] ?? (match[2] ? `UC${match[2]}` : match[3]);
+}
+
+// What counts as one feed toward the limit: a YouTube channel posting in one
+// channel is one, whether it posts videos, Shorts, live streams or all three.
+export function feedGroupKey(feed) {
+  const youtube = youtubeChannelOf(feed);
+  return youtube ? `youtube:${youtube}:${feed.channelId}` : `feed:${feed.id}`;
+}
+
+export function countFeeds(store, guildId) {
+  return new Set(store.list(guildId).map(feedGroupKey)).size;
+}
+
 // Looks the source up, reads it once and saves it, with everything in it now
 // counted as seen (only later items are posted). `live` holds the Twitch and
 // Kick APIs (feeds/twitch.js, feeds/kick.js); a platform without keys is left
 // out. Throws FeedLimit, FeedDuplicate or FeedError.
 export async function addFeed({ store, guildId, kind, source, channelId, roleId = null, message = null, createdBy, fetchOptions, live = {}, now = Date.now }) {
-  if (store.count(guildId) >= MAX_FEEDS) {
+  const groups = new Set(store.list(guildId).map(feedGroupKey));
+  const full = groups.size >= MAX_FEEDS;
+  if (full && !YOUTUBE_KINDS.has(kind)) {
     throw new FeedLimit(`A server can follow up to ${MAX_FEEDS} feeds.`);
   }
   const resolved = await resolveSource(kind, source, fetchOptions);
+  // Another type for a YouTube channel already posting here doesn't count.
+  if (full && !groups.has(feedGroupKey({ kind, url: resolved.channelFeed ?? "", channelId }))) {
+    throw new FeedLimit(`A server can follow up to ${MAX_FEEDS} feeds.`);
+  }
   const duplicate = () => store.find(guildId, resolved.url, channelId) || (resolved.fallbackUrl && store.find(guildId, resolved.fallbackUrl, channelId));
   if (duplicate()) {
     throw new FeedDuplicate("That feed already posts in that channel.");
@@ -160,6 +195,44 @@ export async function addFeed({ store, guildId, kind, source, channelId, roleId 
     createdBy,
     createdAt: now(),
   });
+}
+
+// Follows a YouTube channel's videos, Shorts and/or live streams (`types`,
+// keys of YOUTUBE_TYPES) in one channel: one saved feed per type. Types the
+// channel already posts there are skipped. All or nothing: if one type can't
+// be added, the ones added before it are removed again. `messages` holds a
+// message per type ({ shorts: "…" }); a type without one uses `message`.
+// Returns the new feeds; throws like addFeed, and FeedDuplicate when every
+// type is there.
+export async function addYoutubeFeeds({ types, messages = {}, message = null, source, fetchOptions, ...options }) {
+  const kinds = [...new Set(types)].map((type) => YOUTUBE_TYPES[type]).filter(Boolean);
+  if (kinds.length === 0) {
+    throw new FeedError("no-types", "Pick at least one of videos, Shorts or live streams.");
+  }
+  // The channel is looked up once; each type then starts from its ID.
+  const { channelFeed } = await resolveSource(FeedKind.YOUTUBE, source, fetchOptions);
+  const channelId = new URL(channelFeed).searchParams.get("channel_id");
+  const added = [];
+  try {
+    for (const kind of kinds) {
+      try {
+        added.push(await addFeed({ ...options, kind, source: channelId, message: messages[YOUTUBE_TYPE_OF_KIND[kind]] ?? message, fetchOptions }));
+      } catch (error) {
+        if (!(error instanceof FeedDuplicate)) {
+          throw error;
+        }
+      }
+    }
+  } catch (error) {
+    for (const feed of added) {
+      options.store.delete(options.guildId, feed.id);
+    }
+    throw error;
+  }
+  if (added.length === 0) {
+    throw new FeedDuplicate("That channel already posts those in that channel.");
+  }
+  return added;
 }
 
 // The message posted for a new item: the feed's own message or the default

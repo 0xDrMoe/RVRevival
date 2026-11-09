@@ -58,7 +58,7 @@ import { normalizeCategories } from "../tickets/categories.js";
 import { checkMessage, editableMessage, InvalidMessage, messageSummary, parseMessageLink } from "../messages/embedMessage.js";
 import { inviteLink } from "../guilds/invite.js";
 import { SentMessageStore } from "../messages/sentMessageStore.js";
-import { addFeed, defaultFeedMessages, FeedDuplicate, FeedError, FeedLimit, MAX_FEED_MESSAGE_LENGTH } from "../feeds/feeds.js";
+import { addFeed, addYoutubeFeeds, countFeeds, defaultFeedMessages, FeedDuplicate, FeedError, FeedLimit, MAX_FEED_MESSAGE_LENGTH, YOUTUBE_TYPES, youtubeChannelOf } from "../feeds/feeds.js";
 import { variableError } from "./public/variables.js";
 import { FEED_KINDS } from "../feeds/fetchFeed.js";
 import { FeedStore, MAX_FEEDS } from "../feeds/feedStore.js";
@@ -1812,6 +1812,8 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     checkedAt: feed.checkedAt,
     postedAt: feed.postedAt,
     lastError: feed.lastError,
+    // Feeds with the same YouTube channel and posting channel show as one.
+    youtubeChannel: youtubeChannelOf(feed),
   });
 
   // Checks where a feed posts, who it pings and its message, and answers 400
@@ -1848,26 +1850,40 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     if (!access) {
       return reply;
     }
-    return { feeds: feeds.list(access.guildId).map(feedJson), max: MAX_FEEDS, live: { twitch: Boolean(live.twitch), kick: Boolean(live.kick) } };
+    return { feeds: feeds.list(access.guildId).map(feedJson), count: countFeeds(feeds, access.guildId), max: MAX_FEEDS, live: { twitch: Boolean(live.twitch), kick: Boolean(live.kick) } };
   });
 
-  // Adding reads the feed once, which can take a few seconds.
+  // Adding reads the feed once, which can take a few seconds. YouTube takes
+  // `types` (any of videos, shorts, live; all three when left out) and
+  // `messages` (one per type, else `message`) and saves one feed per type,
+  // answered as `feeds`; `feed` is the first of them.
   app.post("/api/guilds/:id/feeds", { config: { rateLimit: { max: 20, timeWindow: "1 minute" } } }, async (request, reply) => {
     const access = await requireGuild(request, reply, { manage: true });
     if (!access) {
       return reply;
     }
     const { guildId, session } = access;
-    const { kind, source, channelId, roleId = null, message = null } = request.body ?? {};
+    const { kind, source, channelId, roleId = null, message = null, types = Object.keys(YOUTUBE_TYPES), messages = {} } = request.body ?? {};
     if (!FEED_KINDS.includes(kind) || typeof source !== "string") {
       return reply.code(400).send({ error: "bad-feed", message: "Pick what kind of feed it is and type what to follow." });
     }
+    const youtube = kind === "youtube";
+    if (youtube && (!Array.isArray(types) || types.length === 0 || types.length > 3 || !types.every((type) => Object.hasOwn(YOUTUBE_TYPES, type)))) {
+      return reply.code(400).send({ error: "no-types", message: "Pick at least one of videos, Shorts or live streams." });
+    }
+    const typeMessages = youtube && messages && typeof messages === "object" && !Array.isArray(messages) ? Object.fromEntries(types.map((type) => [type, messages[type] ?? message])) : {};
     if (await refuseFeedSettings(reply, guildId, session, { channelId, roleId, message })) {
       return reply;
     }
-    let feed;
+    for (const typeMessage of Object.values(typeMessages)) {
+      if (await refuseFeedSettings(reply, guildId, session, { channelId, roleId, message: typeMessage })) {
+        return reply;
+      }
+    }
+    let added;
     try {
-      feed = await addFeed({ store: feeds, guildId, kind, source, channelId, roleId, message, createdBy: session.userId, fetchOptions: feedFetchOptions, live });
+      const options = { store: feeds, guildId, source, channelId, roleId, message, createdBy: session.userId, fetchOptions: feedFetchOptions, live };
+      added = youtube ? await addYoutubeFeeds({ ...options, types, messages: typeMessages }) : [await addFeed({ ...options, kind })];
     } catch (error) {
       if (error instanceof FeedLimit || error instanceof FeedDuplicate) {
         return reply.code(409).send({ error: "feed-refused", message: error.message });
@@ -1877,8 +1893,14 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
       }
       throw error;
     }
-    await logAction(guildId, session, `**Feed added:** ${feed.name} → <#${channelId}>`, [feed.url]);
-    return { feed: feedJson(feed) };
+    const [feed] = added;
+    await logAction(
+      guildId,
+      session,
+      `**Feed added:** ${feed.name} → <#${channelId}>`,
+      added.map((item) => item.url),
+    );
+    return { feed: feedJson(feed), feeds: added.map(feedJson) };
   });
 
   // Changes where a feed posts, who it pings and its message. What it

@@ -1353,6 +1353,47 @@ describe("dashboard", () => {
     expect((await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}/feeds`, cookies })).json().feeds).toEqual([]);
   });
 
+  it("adds a YouTube channel's videos, Shorts and live streams in one go", async () => {
+    await app.close();
+    const channel = "UC" + "b".repeat(22);
+    const rest = channel.slice(2);
+    const atom = (title, ids) => `<feed xmlns="http://www.w3.org/2005/Atom"><title>${title}</title>${ids.map((id) => `<entry><id>yt:video:${id}</id><title>${id}</title></entry>`).join("")}</feed>`;
+    const pages = {
+      [`https://www.youtube.com/feeds/videos.xml?playlist_id=UULF${rest}`]: atom("Videos", ["v1"]),
+      [`https://www.youtube.com/feeds/videos.xml?playlist_id=UUSH${rest}`]: atom("Shorts", ["s1"]),
+      [`https://www.youtube.com/feeds/videos.xml?channel_id=${channel}`]: atom("Rabble", ["v1", "s1"]),
+      [`https://www.youtube.com/channel/${channel}/live`]: "<html>not live</html>",
+    };
+    const feedFetchOptions = {
+      fetchImpl: vi.fn(async (url) => (pages[String(url)] === undefined ? new Response("", { status: 404 }) : new Response(pages[String(url)]))),
+      lookup: vi.fn(async () => [{ address: "93.184.216.34" }]),
+      retryDelayMs: 0,
+    };
+    app = await buildDashboard({ config, db, discord, guildSettings, store, logger: fakeLogger(), feedFetchOptions });
+    const cookies = await login();
+    const add = (body) => write(cookies, "POST", `/api/guilds/${GUILD_ID}/feeds`, { kind: "youtube", source: channel, channelId: TEXT_ID, ...body });
+
+    expect((await add({ types: [] })).json()).toMatchObject({ error: "no-types" });
+    expect((await add({ types: ["videos", "tiktok"] })).statusCode).toBe(400);
+    expect((await add({ types: ["videos"], messages: { videos: "x".repeat(501) } })).statusCode).toBe(400);
+    const added = await add({ types: ["videos", "shorts"], messages: { shorts: "Short: {title}" } });
+    expect(added.statusCode).toBe(200);
+    expect(added.json().feeds.map((feed) => [feed.kind, feed.message, feed.youtubeChannel])).toEqual([
+      ["youtube", null, channel],
+      ["youtube_shorts", "Short: {title}", channel],
+    ]);
+    // Ticking live later adds just that type.
+    expect((await add({ types: ["live"] })).json().feeds).toMatchObject([{ kind: "youtube_live", name: "Rabble" }]);
+    expect((await add({ types: ["live"] })).statusCode).toBe(409);
+
+    const list = (await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}/feeds`, cookies })).json();
+    expect(list.feeds).toHaveLength(3);
+    expect(list.count).toBe(1);
+    for (const feed of list.feeds) {
+      expect((await write(cookies, "DELETE", `/api/guilds/${GUILD_ID}/feeds/${feed.id}`)).statusCode).toBe(200);
+    }
+  });
+
   it("adds, renames and removes server stats counters", async () => {
     discord.deleteChannel = vi.fn(async () => {});
     const cookies = await login();

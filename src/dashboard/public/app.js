@@ -8582,7 +8582,14 @@ async function showEmbeds(guildId) {
 
 // --- Feeds ---------------------------------------------------------------------------
 
-const FEED_KINDS = ["youtube", "youtube_shorts", "youtube_live", "twitch", "kick", "bluesky", "mastodon", "reddit", "github", "rss"];
+// What the add form offers. YouTube is one type with switches for videos,
+// Shorts and live streams; each switch is saved as its own feed kind.
+const FEED_KINDS = ["youtube", "twitch", "kick", "bluesky", "mastodon", "reddit", "github", "rss"];
+const YOUTUBE_TYPES = [
+  ["videos", "youtube"],
+  ["shorts", "youtube_shorts"],
+  ["live", "youtube_live"],
+];
 const FEED_TONES = {
   youtube: "red",
   youtube_shorts: "red",
@@ -8626,7 +8633,7 @@ const feedPingLabel = (guildId, roleId, data) => {
 // empty (the default for its kind, in the server's language), and one button
 // either copies that default in to edit or clears a custom message back to it.
 // setKind() swaps the default when the type changes on the add form.
-function feedMessageField(data, { id, kind, value }) {
+function feedMessageField(data, { id, kind, value, label = null }) {
   const defaults = data.communityDefaults?.feedMessages ?? {};
   const max = 500;
   let current = kind;
@@ -8651,6 +8658,10 @@ function feedMessageField(data, { id, kind, value }) {
   });
   box.addEventListener("input", update);
   update();
+  const messageField = field("feedsMessage", "feedsMessageHelp", withVariables(h("span", { class: "message-box" }, box, count), "feed", { box }));
+  if (label) {
+    messageField.querySelector(".field-label").textContent = label;
+  }
   return {
     box,
     setKind(next) {
@@ -8661,7 +8672,7 @@ function feedMessageField(data, { id, kind, value }) {
     element: h(
       "div",
       { class: "feed-message" },
-      field("feedsMessage", "feedsMessageHelp", withVariables(h("span", { class: "message-box" }, box, count), "feed", { box })),
+      messageField,
       h("div", { class: "toolbar" }, status, toggle),
     ),
   };
@@ -8768,6 +8779,187 @@ function feedRow(guildId, feed, data, roles, onChanged) {
   );
 }
 
+// One YouTube channel posting in one channel: its saved feeds (one per type)
+// shown together, with a switch per type. Turning one on adds that feed with
+// the group's channel and ping; turning one off removes it (the last one asks
+// first, like Remove). Edit sets the channel and ping for all of them and a
+// message per type.
+function youtubeGroupRow(guildId, group, data, roles, onChanged) {
+  const [first] = group;
+  const byKind = new Map(group.map((feed) => [feed.kind, feed]));
+  const channel = data.channels.find((item) => item.id === first.channelId);
+  const postedAt = Math.max(0, ...group.map((feed) => feed.postedAt ?? 0));
+  const facts = [
+    channel ? `#${channel.name}` : t("unknownOption", { id: first.channelId }),
+    feedPingLabel(guildId, first.roleId, data),
+    postedAt ? t("feedsLastPost", { date: formatAgo(postedAt) }) : t("feedsNoPostYet"),
+  ].filter(Boolean);
+  const editor = h("div", { class: "feed-editor", hidden: true });
+  const editButton = h("button", { class: "ghost small", type: "button", "aria-expanded": "false" }, t("embedEdit"));
+
+  const removeAll = async () => {
+    for (const feed of group) {
+      await api(`/api/guilds/${guildId}/feeds/${feed.id}`, { method: "DELETE" });
+    }
+  };
+
+  const switches = YOUTUBE_TYPES.map(([type, kind]) => {
+    const feed = byKind.get(kind);
+    const input = h("input", { type: "checkbox", checked: Boolean(feed) });
+    input.addEventListener("change", async () => {
+      input.disabled = true;
+      try {
+        if (input.checked) {
+          await api(`/api/guilds/${guildId}/feeds`, {
+            method: "POST",
+            body: { kind: "youtube", types: [type], source: first.youtubeChannel, channelId: first.channelId, roleId: first.roleId, message: null },
+          });
+          toast(t("feedsYoutubeTypeOn", { type: t(`feedsYoutubeType_${type}`), name: first.name }));
+        } else if (group.length === 1) {
+          if (!confirm(t("feedsRemoveConfirm", { name: first.name }))) {
+            input.checked = true;
+            input.disabled = false;
+            return;
+          }
+          await removeAll();
+          toast(t("feedsRemoved"));
+        } else {
+          await api(`/api/guilds/${guildId}/feeds/${feed.id}`, { method: "DELETE" });
+          toast(t("feedsYoutubeTypeOff", { type: t(`feedsYoutubeType_${type}`), name: first.name }));
+        }
+        onChanged();
+      } catch (error) {
+        input.checked = !input.checked;
+        input.disabled = false;
+        failed(error);
+      }
+    });
+    return h("label", { class: "check" }, input, h("span", {}, t(`feedsYoutubeType_${type}`)));
+  });
+
+  const closeEditor = () => {
+    editor.hidden = true;
+    editor.replaceChildren();
+    editButton.setAttribute("aria-expanded", "false");
+  };
+
+  const openEditor = () => {
+    const channelPicker = picker({ id: `feedChannel-yt-${first.id}`, options: postableChannels(data), value: first.channelId, emptyLabel: t("embedPickChannel") });
+    channelPicker.required = true;
+    const rolePicker = picker({ id: `feedRole-yt-${first.id}`, options: roles, value: first.roleId, emptyLabel: t("feedsNoRole") });
+    const messages = group.map((feed) => ({
+      feed,
+      field: feedMessageField(data, {
+        id: `feedMessage-${feed.id}`,
+        kind: feed.kind,
+        value: feed.message,
+        label: t("feedsYoutubeMessageFor", { type: t(`feedsYoutubeType_${YOUTUBE_TYPES.find(([, kind]) => kind === feed.kind)[0]}`) }),
+      }),
+    }));
+    const save = h("button", { class: "primary small", type: "submit" }, t("feedsSave"));
+    const form = h(
+      "form",
+      {
+        onsubmit: async (event) => {
+          event.preventDefault();
+          setBusy(save, true);
+          try {
+            for (const { feed, field: message } of messages) {
+              await api(`/api/guilds/${guildId}/feeds/${feed.id}`, {
+                method: "PATCH",
+                body: { channelId: channelPicker.value, roleId: rolePicker.value || null, message: message.box.value.trim() || null },
+              });
+            }
+            toast(t("feedsEdited", { name: first.name }));
+            onChanged();
+          } catch (error) {
+            failed(error);
+            setBusy(save, false);
+            // Some may have saved before the one that failed.
+            onChanged();
+          }
+        },
+      },
+      h("div", { class: "embed-grid" }, field("feedsChannel", null, channelPicker), field("feedsRole", "feedsRoleHelp", rolePicker)),
+      ...messages.map(({ field: message }) => message.element),
+      h("div", { class: "toolbar" }, h("span", { class: "grow" }), h("button", { class: "ghost small", type: "button", onclick: closeEditor }, t("cancel")), save),
+    );
+    editor.replaceChildren(form);
+    editor.hidden = false;
+    editButton.setAttribute("aria-expanded", "true");
+    channelPicker.focus();
+  };
+  editButton.addEventListener("click", () => (editor.hidden ? openEditor() : closeEditor()));
+
+  const problems = group.filter((feed) => feed.lastError);
+  return h(
+    "li",
+    { class: "sent-row feed-row" },
+    iconChip("image", "red", "sm"),
+    h(
+      "span",
+      { class: "ticket-main" },
+      h("span", { class: "ticket-subject" }, h("strong", {}, first.name), " ", h("span", { class: "badge" }, t("feedsKind_youtube"))),
+      h("span", { class: "muted" }, facts.join(" · ")),
+      h("span", { class: "feed-types", role: "group", "aria-label": t("feedsYoutubeTypes") }, switches),
+      ...problems.map((feed) =>
+        h(
+          "span",
+          { class: "danger-text small-text" },
+          t("feedsProblem", { error: `${t(`feedsYoutubeType_${YOUTUBE_TYPES.find(([, kind]) => kind === feed.kind)[0]}`)}: ${feed.lastError}` }),
+        ),
+      ),
+    ),
+    h(
+      "span",
+      { class: "row-actions" },
+      editButton,
+      h(
+        "button",
+        {
+          class: "ghost small",
+          type: "button",
+          onclick: async () => {
+            if (!confirm(t("feedsRemoveConfirm", { name: first.name }))) {
+              return;
+            }
+            try {
+              await removeAll();
+              toast(t("feedsRemoved"));
+            } catch (error) {
+              failed(error);
+            }
+            onChanged();
+          },
+        },
+        t("tagRemove"),
+      ),
+    ),
+    editor,
+  );
+}
+
+// The page's rows: a YouTube channel's feeds in the same channel make one.
+function feedRows(feeds) {
+  const rows = [];
+  const youtube = new Map();
+  for (const feed of feeds) {
+    if (!feed.youtubeChannel) {
+      rows.push([feed]);
+      continue;
+    }
+    const key = `${feed.youtubeChannel}:${feed.channelId}`;
+    if (!youtube.has(key)) {
+      youtube.set(key, []);
+      rows.push(youtube.get(key));
+    }
+    youtube.get(key).push(feed);
+  }
+  // Videos, then Shorts, then live.
+  const order = (feed) => YOUTUBE_TYPES.findIndex(([, kind]) => kind === feed.kind);
+  return rows.map((group) => (group[0].youtubeChannel ? group.sort((a, b) => order(a) - order(b)) : group));
+}
+
 async function showFeeds(guildId) {
   const data = await loadManagedGuild(guildId);
   if (!data) {
@@ -8787,19 +8979,44 @@ async function showFeeds(guildId) {
     sourceHelp.textContent = off ? t(FEED_KEYS_OFF[kind]) : t(`feedsSourceHelp_${kind}`);
     sourceHelp.classList.toggle("danger-text", off);
     message.setKind(kind);
+    const youtube = kind === "youtube";
+    youtubeBox.hidden = !youtube;
+    message.element.hidden = youtube;
+    add.disabled = full && !youtube;
   };
   // @everyone is the role with the server's ID; listed first.
   const roles = [{ id: guildId, label: t("feedsEveryone") }, ...data.roles.filter((role) => role.id !== guildId && !role.managed).map((role) => roleItem(role))];
   const add = h("button", { class: "primary", type: "submit" }, icon("plus", "icon small"), t("feedsAdd"));
   const message = feedMessageField(data, { id: "feedMessage", kind, value: null });
   const messageInput = message.box;
+  // YouTube: a switch per type, each with its own message box while it's on.
+  const youtubeTypes = YOUTUBE_TYPES.map(([type, typeKind]) => {
+    const input = h("input", { type: "checkbox", name: "youtubeType", value: type, checked: true });
+    const typeMessage = feedMessageField(data, { id: `feedMessage-${type}`, kind: typeKind, value: null, label: t("feedsYoutubeMessageFor", { type: t(`feedsYoutubeType_${type}`) }) });
+    input.addEventListener("change", () => {
+      typeMessage.element.hidden = !input.checked;
+    });
+    return { type, input, message: typeMessage, check: h("label", { class: "check" }, input, h("span", {}, t(`feedsYoutubeType_${type}`))) };
+  });
+  const youtubeBox = h(
+    "div",
+    { class: "feed-youtube" },
+    h("div", { class: "field" }, h("span", { class: "field-label" }, t("feedsYoutubeTypes")), h("span", { class: "feed-types", role: "group", "aria-label": t("feedsYoutubeTypes") }, youtubeTypes.map((item) => item.check)), h("span", { class: "help" }, t("feedsYoutubeTypesHelp"))),
+    // Each ticked type's message, folded away since most keep the defaults.
+    h("details", { class: "feed-youtube-messages" }, h("summary", {}, t("feedsYoutubeMessages")), youtubeTypes.map((item) => item.message.element)),
+  );
+  let full = false;
 
   async function load() {
     const result = await api(`/api/guilds/${guildId}/feeds`);
-    list.replaceChildren(...result.feeds.map((feed) => feedRow(guildId, feed, data, roles, () => load().catch(failed))));
+    const reload = () => load().catch(failed);
+    list.replaceChildren(...feedRows(result.feeds).map((group) => (group[0].youtubeChannel ? youtubeGroupRow(guildId, group, data, roles, reload) : feedRow(guildId, group[0], data, roles, reload))));
     empty.hidden = result.feeds.length > 0;
-    countPill.textContent = t("tagsCount", { count: result.feeds.length, max: result.max });
-    add.disabled = result.feeds.length >= result.max;
+    const count = result.count ?? result.feeds.length;
+    countPill.textContent = t("tagsCount", { count, max: result.max });
+    // Full still lets a YouTube channel already here post another type.
+    full = count >= result.max;
+    add.disabled = full && kind !== "youtube";
     liveReady = result.live ?? {};
     showKind();
   }
@@ -8809,22 +9026,35 @@ async function showFeeds(guildId) {
     {
       onsubmit: async (event) => {
         event.preventDefault();
+        const youtube = kind === "youtube";
+        const chosen = youtubeTypes.filter((item) => item.input.checked);
+        if (youtube && chosen.length === 0) {
+          toast(t("feedsYoutubePickOne"), "error");
+          return;
+        }
         setBusy(add, true);
         add.lastChild.textContent = t("feedsAdding");
+        const body = {
+          kind,
+          source: sourceInput.value.trim(),
+          channelId: form.querySelector("#feedChannel").value || null,
+          roleId: form.querySelector("#feedRole").value || null,
+          message: messageInput.value.trim() || null,
+        };
         try {
           const result = await api(`/api/guilds/${guildId}/feeds`, {
             method: "POST",
-            body: {
-              kind,
-              source: sourceInput.value.trim(),
-              channelId: form.querySelector("#feedChannel").value || null,
-              roleId: form.querySelector("#feedRole").value || null,
-              message: messageInput.value.trim() || null,
-            },
+            body: youtube
+              ? { ...body, message: null, types: chosen.map((item) => item.type), messages: Object.fromEntries(chosen.map((item) => [item.type, item.message.box.value.trim() || null])) }
+              : body,
           });
           toast(t("feedsAdded", { name: result.feed.name }));
           sourceInput.value = "";
           messageInput.value = "";
+          for (const item of youtubeTypes) {
+            item.message.box.value = "";
+            item.message.box.dispatchEvent(new Event("input", { bubbles: true }));
+          }
           message.setKind(kind);
           add.lastChild.textContent = t("feedsAdd");
           // load() then disables the button again if the limit is reached.
@@ -8860,6 +9090,7 @@ async function showFeeds(guildId) {
       field("feedsChannel", null, picker({ id: "feedChannel", options: postableChannels(data), value: null, emptyLabel: t("embedPickChannel") })),
       field("feedsRole", "feedsRoleHelp", picker({ id: "feedRole", options: roles, value: null, emptyLabel: t("feedsNoRole") })),
     ),
+    youtubeBox,
     message.element,
     h("div", { class: "toolbar" }, h("span", { class: "grow" }), add),
   );
