@@ -3963,15 +3963,50 @@ async function showCountry(guildId) {
   drawPreview();
 }
 
-const hasPermission = (role, bit) => (BigInt(role.permissions) & (1n << bit)) !== 0n;
+// Every Discord permission by bit, for the permission groups on the
+// Permissions page. Staff permissions come first, most powerful first; they
+// match permissions/moderatorPermissions.js plus the voice moderation ones.
+const PERMISSION_BITS = {
+  0: "CreateInstantInvite", 1: "KickMembers", 2: "BanMembers", 4: "ManageChannels", 5: "ManageGuild", 6: "AddReactions",
+  7: "ViewAuditLog", 8: "PrioritySpeaker", 9: "Stream", 10: "ViewChannel", 11: "SendMessages", 12: "SendTTSMessages",
+  13: "ManageMessages", 14: "EmbedLinks", 15: "AttachFiles", 16: "ReadMessageHistory", 17: "MentionEveryone",
+  18: "UseExternalEmojis", 19: "ViewGuildInsights", 20: "Connect", 21: "Speak", 22: "MuteMembers", 23: "DeafenMembers",
+  24: "MoveMembers", 25: "UseVAD", 26: "ChangeNickname", 27: "ManageNicknames", 28: "ManageRoles", 29: "ManageWebhooks",
+  30: "ManageGuildExpressions", 31: "UseApplicationCommands", 32: "RequestToSpeak", 33: "ManageEvents", 34: "ManageThreads",
+  35: "CreatePublicThreads", 36: "CreatePrivateThreads", 37: "UseExternalStickers", 38: "SendMessagesInThreads",
+  39: "UseEmbeddedActivities", 40: "ModerateMembers", 41: "ViewCreatorMonetizationAnalytics", 42: "UseSoundboard",
+  43: "CreateGuildExpressions", 44: "CreateEvents", 45: "UseExternalSounds", 46: "SendVoiceMessages",
+  48: "SetVoiceChannelStatus", 49: "SendPolls", 50: "UseExternalApps", 51: "PinMessages", 52: "BypassSlowmode",
+};
+const STAFF_PERMISSION_BITS = [5, 28, 4, 2, 1, 40, 13, 27, 34, 51, 29, 30, 33, 7, 17, 22, 23, 24].map(BigInt);
+const permissionLabel = (bit) => (PERMISSION_BITS[bit] ? t(`permBit_${PERMISSION_BITS[bit]}`) : t("permBitUnknown", { bit: String(bit) }));
 
-// How many permission badges a role shows before "+N more".
-const SHOWN_PERMISSIONS = 3;
+// A role's permission value split into Administrator, staff permissions and
+// everyday ones (bits Discord adds later show as "Unknown permission").
+function describePermissions(bits) {
+  const has = (bit) => (bits & (1n << bit)) !== 0n;
+  const staff = STAFF_PERMISSION_BITS.filter(has);
+  const everyday = [];
+  for (let bit = 0n; bits >> bit > 0n; bit += 1n) {
+    if (has(bit) && bit !== ADMINISTRATOR && !STAFF_PERMISSION_BITS.includes(bit)) {
+      everyday.push(bit);
+    }
+  }
+  return { admin: has(ADMINISTRATOR), staff, everyday };
+}
 
-// Every role, sorted into groups: roles with moderation powers, roles the bot
-// uses, bot roles, everyday roles, and country roles. Country roles are folded
-// into one row of chips, since there can be dozens of them and they rarely
-// carry permissions. A name filter and a group filter narrow it down.
+// How many groups show before "Show more", how many role names a closed group
+// previews, and how many an open group lists before "Show all".
+const GROUPS_PER_PAGE = 8;
+const PREVIEW_ROLES = 6;
+const OPEN_ROLES = 40;
+const ROLE_GROUP_KINDS = ["admin", "power", "basic"];
+
+// Every role, grouped by its exact permissions: roles that can do exactly the
+// same things share one row, so dozens of country or color roles are one line.
+// Groups are sorted Administrator, staff permissions, then everything else,
+// each by its highest role. A search (role or permission names) and a filter
+// narrow it down, and the list is paged so it never turns into a long scroll.
 function rolesTable(data) {
   const { settings } = data;
   const usedAs = (role) =>
@@ -3982,101 +4017,242 @@ function rolesTable(data) {
     ].filter(Boolean);
   const nameOf = (role) => (role.emoji ? `${role.emoji} ${role.name}` : role.name);
 
-  const described = data.roles.map((role) => {
-    const admin = hasPermission(role, ADMINISTRATOR);
-    const powers = admin ? [] : PERMISSIONS.filter((permission) => hasPermission(role, permission.bit));
-    const used = usedAs(role);
-    const kind = role.managed ? "bot" : admin || powers.length > 0 ? "power" : used.length > 0 ? "used" : role.country ? "country" : "other";
-    return { role, admin, powers, used, kind, search: searchable(role.name) };
-  });
-
-  const permissionBadges = ({ role, admin, powers }) => {
-    const extra = powers.slice(SHOWN_PERMISSIONS);
-    return h(
-      "div",
-      { class: "badges" },
-      admin ? h("span", { class: "badge badge-red" }, t("permAdmin")) : null,
-      powers.slice(0, SHOWN_PERMISSIONS).map((permission) => h("span", { class: "badge badge-amber" }, t(permission.key))),
-      extra.length > 0
-        ? h("span", { class: "badge", title: extra.map((permission) => t(permission.key)).join(", ") }, t("morePermissions", { count: extra.length }))
-        : null,
-      !admin && powers.length === 0 && !role.managed ? h("span", { class: "muted" }, "—") : null,
-    );
-  };
-  const roleRow = (entry) => {
-    const row = h(
-      "tr",
-      {},
-      h("td", { class: "role-name" }, roleDot(entry.role), h("span", {}, nameOf(entry.role))),
-      h("td", {}, permissionBadges(entry)),
-      h("td", {}, h("div", { class: "badges" }, entry.used.map((key) => h("span", { class: "badge badge-accent" }, t(key))))),
-    );
-    entry.element = row;
-    return row;
-  };
-  const countryChip = (entry) => {
-    entry.element = h("span", { class: "role-chip" }, roleDot(entry.role), nameOf(entry.role));
-    return entry.element;
-  };
-
-  const groups = ["power", "used", "bot", "other", "country"].map((kind) => {
-    const entries = described.filter((entry) => entry.kind === kind);
-    const heading = h("th", { colspan: 3, scope: "colgroup" });
-    const rows = kind === "country"
-      ? [h("tr", {}, h("td", { colspan: 3 }, h("div", { class: "role-chips" }, entries.map(countryChip))))]
-      : entries.map(roleRow);
-    return { kind, entries, heading, body: h("tbody", { class: "role-group" }, h("tr", { class: "group-row" }, heading), rows) };
-  });
-
-  const shownCount = h("span", { class: "count-pill" });
-  const empty = h("tbody", { hidden: true }, h("tr", {}, h("td", { colspan: 3, class: "muted empty" }, t("nothingMatches"))));
-  const search = h("input", { type: "search", class: "grow", placeholder: t("filterRoles"), "aria-label": t("filterRoles") });
-  const kind = h(
-    "select",
-    { "aria-label": t("roleKind"), class: "auto" },
-    ["all", ...groups.filter((group) => group.entries.length > 0).map((group) => group.kind)].map((value) =>
-      h("option", { value }, t(`roleKind_${value}`)),
-    ),
-  );
-  const filterRoles = () => {
-    const words = searchWords(search.value);
-    let shown = 0;
-    for (const group of groups) {
-      const groupShown = kind.value === "all" || kind.value === group.kind;
-      let inGroup = 0;
-      for (const entry of group.entries) {
-        entry.element.hidden = !groupShown || !matchesWords(entry.search, words);
-        inGroup += entry.element.hidden ? 0 : 1;
-      }
-      group.body.hidden = inGroup === 0;
-      group.heading.textContent = `${t(`roleKind_${group.kind}`)} · ${inGroup}`;
-      shown += inGroup;
+  // data.roles is sorted highest first, so a group's first role is its highest.
+  const byBits = new Map();
+  for (const role of data.roles) {
+    let bits;
+    try {
+      bits = BigInt(role.permissions ?? 0);
+    } catch {
+      bits = 0n;
     }
-    empty.hidden = shown > 0;
-    shownCount.textContent = t("rolesShown", { shown, total: described.length });
+    const key = bits.toString();
+    if (!byBits.has(key)) {
+      const described = describePermissions(bits);
+      const names = [described.admin ? t("permAdmin") : null, ...[...described.staff, ...described.everyday].map(permissionLabel)].filter(Boolean);
+      byBits.set(key, {
+        key,
+        bits,
+        ...described,
+        kind: described.admin ? "admin" : described.staff.length > 0 ? "power" : "basic",
+        permissionSearch: searchable(names.join(" ")),
+        roles: [],
+      });
+    }
+    const used = usedAs(role);
+    byBits.get(key).roles.push({ role, used, search: searchable(nameOf(role)) });
+  }
+  // A stable sort, so each kind keeps Discord's order (highest role first).
+  const groups = [...byBits.values()].sort((a, b) => ROLE_GROUP_KINDS.indexOf(a.kind) - ROLE_GROUP_KINDS.indexOf(b.kind));
+
+  const roleMatchesKind = (entry, group, kind) => {
+    switch (kind) {
+      case "all":
+        return true;
+      case "bot":
+        return entry.role.managed;
+      case "used":
+        return entry.used.length > 0;
+      case "country":
+        return Boolean(entry.role.country);
+      default:
+        return group.kind === kind;
+    }
   };
-  search.addEventListener("input", filterRoles);
-  filterKeys(search, filterRoles);
-  kind.addEventListener("change", filterRoles);
-  filterRoles();
+  const kindsPresent = ["all", ...ROLE_GROUP_KINDS.filter((kind) => groups.some((group) => group.kind === kind))];
+  for (const extra of ["bot", "used", "country"]) {
+    if (groups.some((group) => group.roles.some((entry) => roleMatchesKind(entry, group, extra)))) {
+      kindsPresent.push(extra);
+    }
+  }
+
+  const opened = new Set();
+  const allRolesShown = new Set();
+  let limit = GROUPS_PER_PAGE;
+
+  const roleChip = (entry) =>
+    h(
+      "span",
+      { class: "role-chip" },
+      roleDot(entry.role),
+      h("span", {}, nameOf(entry.role)),
+      entry.role.managed ? h("span", { class: "badge" }, t("roleBot")) : null,
+      entry.used.map((key) => h("span", { class: "badge badge-accent" }, t(key))),
+    );
+  const moreChip = (count) => h("span", { class: "role-chip more" }, t("morePermissions", { count }));
+
+  const permissionBadges = (group) => {
+    if (group.admin) {
+      return [h("span", { class: "badge badge-red" }, t("permAdmin"))];
+    }
+    const badges = group.staff.slice(0, 3).map((bit) => h("span", { class: "badge badge-amber" }, permissionLabel(bit)));
+    if (group.staff.length > 3) {
+      badges.push(h("span", { class: "badge badge-amber" }, t("morePermissions", { count: group.staff.length - 3 })));
+    }
+    if (group.everyday.length > 0) {
+      badges.push(h("span", { class: "muted perm-group-everyday" }, t("permGroupEverydayCount", { count: group.everyday.length })));
+    } else if (group.staff.length === 0) {
+      badges.push(h("span", { class: "muted perm-group-everyday" }, t("permGroupNone")));
+    }
+    return badges;
+  };
+
+  const groupRow = (group, roles) => {
+    const filtered = roles.length < group.roles.length;
+    const preview = roles.slice(0, PREVIEW_ROLES).map(roleChip);
+    const body = h("div", { class: "perm-group-body" });
+    const details = h(
+      "details",
+      { class: `perm-group kind-${group.kind}`, open: opened.has(group.key) },
+      h(
+        "summary",
+        {},
+        h(
+          "span",
+          { class: "perm-group-head" },
+          h("span", { class: "badges" }, permissionBadges(group)),
+          h(
+            "span",
+            { class: "count-pill", title: t("permGroupRolesIn") },
+            filtered ? t("rolesShown", { shown: roles.length, total: group.roles.length }) : t("permGroupRoleCount", { count: group.roles.length }),
+          ),
+        ),
+        h("span", { class: "role-chips perm-group-preview" }, preview, roles.length > PREVIEW_ROLES ? moreChip(roles.length - PREVIEW_ROLES) : null),
+      ),
+      body,
+    );
+    const drawBody = () => {
+      const showAll = allRolesShown.has(group.key) || roles.length <= OPEN_ROLES;
+      const permissionList = (titleKey, bits, tone) =>
+        bits.length > 0
+          ? h(
+              "div",
+              { class: "perm-group-list" },
+              h("h4", {}, t(titleKey)),
+              h("div", { class: "badges" }, bits.map((bit) => h("span", { class: `badge ${tone}` }, permissionLabel(bit)))),
+            )
+          : null;
+      body.replaceChildren(
+        h("h4", {}, t("permGroupRolesIn")),
+        h(
+          "div",
+          { class: "role-chips" },
+          (showAll ? roles : roles.slice(0, OPEN_ROLES)).map(roleChip),
+          showAll
+            ? null
+            : h(
+                "button",
+                {
+                  type: "button",
+                  class: "button ghost small",
+                  onclick: () => {
+                    allRolesShown.add(group.key);
+                    drawBody();
+                  },
+                },
+                t("permGroupShowAllRoles", { count: roles.length }),
+              ),
+        ),
+        group.admin
+          ? h("p", { class: "tip" }, icon("shield"), h("span", {}, t("permGroupAdminNote")))
+          : h(
+              "div",
+              { class: "perm-group-lists" },
+              permissionList("permGroupStaffPermissions", group.staff, "badge-amber"),
+              permissionList("permGroupEverydayPermissions", group.everyday, ""),
+              group.staff.length === 0 && group.everyday.length === 0 ? h("p", { class: "muted" }, t("permGroupNoneHelp")) : null,
+            ),
+      );
+    };
+    details.addEventListener("toggle", () => {
+      if (details.open) {
+        opened.add(group.key);
+        if (body.childElementCount === 0) {
+          drawBody();
+        }
+      } else {
+        opened.delete(group.key);
+      }
+    });
+    if (details.open) {
+      drawBody();
+    }
+    return details;
+  };
+
+  const list = h("div", { class: "perm-groups" });
+  const summary = h("span", { class: "count-pill" });
+  const search = h("input", { type: "search", class: "grow", placeholder: t("filterRolesOrPermissions"), "aria-label": t("filterRolesOrPermissions") });
+  const kind = h("select", { "aria-label": t("roleKind"), class: "auto" }, kindsPresent.map((value) => h("option", { value }, t(`roleKind_${value}`))));
+
+  const draw = () => {
+    const words = searchWords(search.value);
+    const matches = [];
+    for (const group of groups) {
+      // Words can be role or permission names: "mod ban" finds Moderator roles that can ban.
+      const roles = group.roles.filter(
+        (entry) => roleMatchesKind(entry, group, kind.value) && matchesWords(`${entry.search} ${group.permissionSearch}`, words),
+      );
+      if (roles.length > 0) {
+        matches.push({ group, roles });
+      }
+    }
+    const shownRoles = matches.reduce((sum, match) => sum + match.roles.length, 0);
+    summary.textContent = t("permGroupSummary", { roles: shownRoles, groups: matches.length });
+
+    const children = [];
+    let section = null;
+    for (const { group, roles } of matches.slice(0, limit)) {
+      if (group.kind !== section) {
+        section = group.kind;
+        const inSection = matches.filter((match) => match.group.kind === section);
+        children.push(h("h3", { class: "perm-group-section" }, t(`roleKind_${section}`), h("span", { class: "muted" }, ` · ${inSection.length}`)));
+      }
+      children.push(groupRow(group, roles));
+    }
+    if (matches.length === 0) {
+      children.push(h("p", { class: "muted empty" }, t("nothingMatches")));
+    }
+    const left = matches.length - limit;
+    if (left > 0) {
+      children.push(
+        h(
+          "div",
+          { class: "perm-group-more" },
+          h(
+            "button",
+            {
+              type: "button",
+              class: "button ghost small",
+              onclick: () => {
+                limit += GROUPS_PER_PAGE;
+                draw();
+              },
+            },
+            t("permGroupShowMore", { count: Math.min(left, GROUPS_PER_PAGE) }),
+          ),
+          h("span", { class: "muted" }, t("rolesShown", { shown: limit, total: matches.length })),
+        ),
+      );
+    }
+    list.replaceChildren(...children);
+  };
+  const refilter = () => {
+    limit = GROUPS_PER_PAGE;
+    draw();
+  };
+  search.addEventListener("input", refilter);
+  filterKeys(search, refilter);
+  kind.addEventListener("change", refilter);
+  draw();
 
   return card(
     t("allRoles"),
     "tag",
     "blue",
     h("p", { class: "help" }, t("allRolesHelp")),
-    h("div", { class: "toolbar" }, search, kind, shownCount),
-    h(
-      "div",
-      { class: "table-wrap" },
-      h(
-        "table",
-        { class: "table roles" },
-        h("thead", {}, h("tr", {}, ["roleColumn", "rolePowers", "roleUsedAs"].map((key) => h("th", { scope: "col" }, t(key))))),
-        groups.map((group) => group.body),
-        empty,
-      ),
-    ),
+    h("div", { class: "toolbar" }, search, kind, summary),
+    list,
   );
 }
 
