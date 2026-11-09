@@ -63,6 +63,10 @@ function fakeDiscord() {
         { id, name: "@everyone", color: 0, position: 0, managed: false },
         { id: ROLE_ID, name: "Mods", color: 0, position: 3, managed: false },
       ],
+      emojis: [
+        { id: "800000000000000001", name: "pog", animated: false, available: true, roles: [] },
+        { id: "800000000000000002", name: "dance", animated: true, available: false, roles: [] },
+      ],
     })),
     channels: vi.fn(async () => [
       { id: TEXT_ID, name: "general", type: ChannelType.GuildText, position: 1 },
@@ -273,6 +277,10 @@ describe("dashboard", () => {
       { id: ROLE_ID, name: "Mods", country: false, color: 0, position: 3, managed: false, hoist: false, mentionable: false, permissions: "0", emoji: null },
     ]);
     expect(ok.json().channels.map((channel) => channel.id)).toEqual([TEXT_ID, LOGS_ID, VOICE_ID]);
+    expect(ok.json().emojis).toEqual([
+      { id: "800000000000000001", name: "pog", animated: false, available: true },
+      { id: "800000000000000002", name: "dance", animated: true, available: false },
+    ]);
 
     expect((await app.inject({ method: "GET", url: `/api/guilds/${OTHER_GUILD_ID}`, cookies })).statusCode).toBe(403);
     expect((await app.inject({ method: "GET", url: `/api/guilds/${NO_BOT_GUILD_ID}`, cookies })).statusCode).toBe(404);
@@ -392,7 +400,7 @@ describe("dashboard", () => {
     expect(discord.member).toHaveBeenCalledWith(OTHER_GUILD_ID, USER_ID);
 
     const guild = await app.inject({ method: "GET", url: `/api/guilds/${OTHER_GUILD_ID}`, cookies });
-    expect(guild.json()).toMatchObject({ access: "cases", settings: null, channels: [], roles: [] });
+    expect(guild.json()).toMatchObject({ access: "cases", settings: null, channels: [], roles: [], emojis: [] });
     expect((await app.inject({ method: "GET", url: `/api/guilds/${OTHER_GUILD_ID}/cases`, cookies })).statusCode).toBe(200);
     expect((await app.inject({ method: "GET", url: `/api/guilds/${OTHER_GUILD_ID}/stats`, cookies })).statusCode).toBe(200);
     const settings = await write(cookies, "PUT", `/api/guilds/${OTHER_GUILD_ID}/settings`, { modRoleId: ROLE_ID });

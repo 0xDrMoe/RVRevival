@@ -5880,3 +5880,185 @@ dialog textarea {
   margin: 4px 0 0;
   font-size: 0.9rem;
 }
+
+/* --- Emoji picker (emojiInput) ---------------------------------------------------- */
+
+.emoji-input {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.emoji-input .emoji-value {
+  flex: 1;
+  min-width: 0;
+}
+
+/* The button comes after the text box in the page (so a click on the field's label
+   focuses the text box), but shows first. */
+.emoji-trigger {
+  order: -1;
+  flex: none;
+  width: 38px;
+  min-height: 38px;
+  padding: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  color: var(--muted);
+}
+
+.emoji-trigger:hover,
+.emoji-trigger[aria-expanded="true"] {
+  border-color: var(--accent);
+  background: var(--surface-2);
+}
+
+.emoji-shown {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.emoji-char {
+  font-size: 1.35rem;
+  line-height: 1;
+  font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", "Twemoji Mozilla", sans-serif;
+}
+
+.emoji-img {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+}
+
+.emoji-picker {
+  position: absolute;
+  z-index: 45;
+  top: calc(100% + 6px);
+  inset-inline-start: 0;
+  display: flex;
+  flex-direction: column;
+  /* As wide as the field on phones, at most 352px. */
+  width: min(352px, 100%);
+  min-width: 260px;
+  max-height: min(420px, 70vh);
+  padding: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lift);
+  animation: pop 0.12s ease-out;
+}
+
+.emoji-picker[hidden] {
+  display: none;
+}
+
+.emoji-search,
+.emoji-tabs,
+.emoji-hint {
+  flex: none;
+}
+
+.emoji-tabs {
+  display: flex;
+  gap: 2px;
+  margin: 6px 0 4px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+}
+
+.emoji-tabs[hidden] {
+  display: none;
+}
+
+.emoji-tab {
+  flex: none;
+  width: 32px;
+  min-height: 32px;
+  padding: 0;
+  background: none;
+}
+
+.emoji-tab .emoji-char {
+  font-size: 1.1rem;
+}
+
+.emoji-tab:hover {
+  background: var(--surface-2);
+}
+
+.emoji-list {
+  position: relative;
+  flex: 1;
+  min-height: 120px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.emoji-section-title {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  margin: 0;
+  padding: 6px 2px 4px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.emoji-section .help {
+  margin: 2px 2px 8px;
+}
+
+.emoji-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(36px, 1fr));
+  gap: 2px;
+  padding-bottom: 6px;
+}
+
+.emoji-option {
+  min-height: 36px;
+  padding: 0;
+  background: none;
+  border-radius: var(--radius-sm);
+}
+
+.emoji-option:hover,
+.emoji-option:focus-visible {
+  background: var(--surface-3);
+  outline: none;
+}
+
+.emoji-option:focus-visible {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.emoji-option[aria-disabled="true"] {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.emoji-hint {
+  min-height: 1.5em;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 0.8rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.emoji-none {
+  padding: 16px 4px;
+  text-align: center;
+}
