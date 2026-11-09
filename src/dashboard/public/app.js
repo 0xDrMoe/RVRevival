@@ -201,6 +201,7 @@ const ICONS = {
   logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5M21 12H9"/>',
   download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5M12 15V3"/>',
   upload: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5M12 3v12"/>',
+  pipette: '<path d="m2 22 1-1h3l9-9"/><path d="M3 21v-3l9-9"/><path d="m15 6 3.4-3.4a2.1 2.1 0 1 1 3 3L18 9l.4.4a2.1 2.1 0 1 1-3 3l-3.8-3.8a2.1 2.1 0 1 1 3-3l.4.4Z"/>',
   palette: '<path d="M12 21a9 9 0 1 1 9-9c0 2.5-2 3-3.5 3H15a2 2 0 0 0-1.5 3.3A1.6 1.6 0 0 1 12 21z"/><circle cx="7.5" cy="11" r="1"/><circle cx="10.5" cy="7" r="1"/><circle cx="15.5" cy="8" r="1"/>',
   mic: '<rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 17v4"/>',
   clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
@@ -5742,7 +5743,7 @@ function readTicketLook(form) {
   return {
     title: value("tkTitle"),
     description: value("tkDescription"),
-    color: form.querySelector("#tkUseColor").checked ? colorNumber(form.querySelector("#tkColor").value) : null,
+    color: readColorChooser(form, "tkColor"),
     authorName: value("tkAuthor"),
     authorIconUrl: value("tkAuthorIcon"),
     imageUrl: value("tkImage"),
@@ -5872,7 +5873,130 @@ function ticketWelcomePreview(look, category, data, defaults) {
   );
 }
 
-// The Tickets page's editor, for people who can change settings.
+// A colour chooser: the browser's colour picker (it has an eyedropper in most
+// browsers), an eyedropper button where the browser offers one, a hex code box and
+// quick swatches. With nothing chosen it shows `fallback` and follows it; read the
+// choice back with readColorChooser(). Every change fires "input" so forms refresh.
+const HEX_COLOR = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i;
+
+function normalHex(text) {
+  const match = HEX_COLOR.exec(text.trim());
+  if (!match) {
+    return null;
+  }
+  const digits = match[1].length === 3 ? [...match[1]].map((digit) => digit + digit).join("") : match[1];
+  return `#${digits.toLowerCase()}`;
+}
+
+function colorChooser({ id, value, fallback, followKey, resetKey }) {
+  const native = h("input", { id, type: "color", value: hexColor(value ?? fallback), "aria-label": t("embedColor") });
+  const hex = h("input", {
+    id: `${id}Hex`,
+    class: "color-hex",
+    type: "text",
+    value: hexColor(value ?? fallback).toUpperCase(),
+    maxLength: 7,
+    spellcheck: false,
+    autocomplete: "off",
+    "aria-label": t("colorHex"),
+  });
+  const status = h("span", { class: "help color-status" });
+  const reset = h("button", { type: "button", class: "ghost small" }, icon("refresh", "icon small"), h("span", {}, t(resetKey)));
+  const element = h("div", { class: "color-chooser" });
+  element.dataset.custom = String(value !== null && value !== undefined);
+
+  const update = () => {
+    const custom = element.dataset.custom === "true";
+    reset.hidden = !custom;
+    status.textContent = custom ? "" : t(followKey, { hex: hexColor(fallback).toUpperCase() });
+  };
+  // Sets the colour from the picker, a swatch, the eyedropper or a reset.
+  const choose = (color, custom) => {
+    native.value = color;
+    hex.value = color.toUpperCase();
+    hex.setCustomValidity("");
+    element.dataset.custom = String(custom);
+    update();
+    element.dispatchEvent(new Event("input", { bubbles: true }));
+  };
+
+  native.addEventListener("input", (event) => {
+    event.stopPropagation();
+    choose(native.value, true);
+  });
+  // Typing: a full hex code applies straight away; anything else is flagged and
+  // the last good colour stays until it's fixed.
+  hex.addEventListener("input", () => {
+    const color = normalHex(hex.value);
+    hex.setCustomValidity(color ? "" : t("colorHexInvalid"));
+    if (color) {
+      native.value = color;
+      element.dataset.custom = "true";
+      update();
+    }
+  });
+  hex.addEventListener("blur", () => {
+    const color = normalHex(hex.value);
+    if (color) {
+      hex.value = color.toUpperCase();
+    }
+  });
+  reset.addEventListener("click", () => choose(hexColor(fallback), false));
+
+  const swatches = EMBED_SWATCHES.map((swatch) => {
+    const button = h("button", { type: "button", class: "swatch", title: swatch, "aria-label": swatch, onclick: () => choose(swatch, true) });
+    button.style.setProperty("--swatch", swatch);
+    return button;
+  });
+  // Chrome and Edge can pick any colour on the screen; elsewhere the colour box's
+  // own picker is the way in.
+  const dropper =
+    "EyeDropper" in window
+      ? h(
+          "button",
+          {
+            type: "button",
+            class: "ghost small icon-button",
+            title: t("colorEyedropper"),
+            "aria-label": t("colorEyedropper"),
+            onclick: async () => {
+              try {
+                const { sRGBHex } = await new window.EyeDropper().open();
+                const color = normalHex(sRGBHex);
+                if (color) {
+                  choose(color, true);
+                }
+              } catch {
+                // Closed with Escape: keep the colour as it was.
+              }
+            },
+          },
+          icon("pipette", "icon small"),
+        )
+      : null;
+
+  element.append(h("div", { class: "color-chooser-row" }, native, hex, dropper, h("div", { class: "swatches" }, swatches), reset), status);
+  update();
+  return element;
+}
+
+// The chosen colour as a number, or null while it follows the fallback.
+function readColorChooser(form, id) {
+  const chooser = form.querySelector(`#${id}`).closest(".color-chooser");
+  return chooser.dataset.custom === "true" ? colorNumber(form.querySelector(`#${id}`).value) : null;
+}
+
+// The Tickets page's editor, for people who can change settings: a wizard that
+// walks through the panel one step at a time, with the previews alongside. Every
+// step can be opened from the step bar, and Save works from any of them.
+const TICKET_STEPS = [
+  { id: "panel", titleKey: "ticketSectionPanel", helpKey: "ticketStepPanelHelp", icon: "image", tone: "purple" },
+  { id: "types", titleKey: "ticketCategories", helpKey: "ticketCategoriesHelp", icon: "layers", tone: "purple" },
+  { id: "pick", titleKey: "ticketSectionPick", helpKey: "ticketStepPickHelp", icon: "list", tone: "blue" },
+  { id: "new", titleKey: "ticketSectionNew", helpKey: "ticketStepNewHelp", icon: "ticket", tone: "cyan" },
+  { id: "review", titleKey: "ticketSectionReview", helpKey: "ticketStepReviewHelp", icon: "check", tone: "green" },
+];
+
 function ticketPanelEditor(guildId, data) {
   const defaults = data.ticketDefaults;
   const look = data.settings.ticketPanel ?? {};
@@ -5888,30 +6012,14 @@ function ticketPanelEditor(guildId, data) {
   });
   const input = (id, current, attributes = {}) => h("input", { id, type: "text", value: current ?? "", ...attributes });
 
-  const startColor = look.color ?? defaults.color;
-  const colorInput = h("input", { id: "tkColor", type: "color", value: hexColor(startColor), "aria-label": t("embedColor") });
-  const useColor = h("input", { id: "tkUseColor", type: "checkbox", checked: look.color !== null && look.color !== undefined });
-  const swatches = EMBED_SWATCHES.map((swatch) => {
-    const button = h("button", {
-      type: "button",
-      class: "swatch",
-      title: swatch,
-      "aria-label": swatch,
-      onclick: () => {
-        colorInput.value = swatch;
-        useColor.checked = true;
-        refresh();
-      },
-    });
-    button.style.setProperty("--swatch", swatch);
-    return button;
-  });
+  const color = colorChooser({ id: "tkColor", value: look.color, fallback: defaults.color, followKey: "ticketColorFollowing", resetKey: "ticketColorReset" });
   const layout = h(
     "select",
     { id: "tkLayout" },
     h("option", { value: "buttons", selected: look.layout !== "menu" }, t("ticketLayoutButtons")),
     h("option", { value: "menu", selected: look.layout === "menu" }, t("ticketLayoutMenu")),
   );
+  const layoutField = field("ticketLayout", "ticketLayoutHelp", layout);
   const menuField = field("ticketMenuPlaceholder", null, input("tkMenuPlaceholder", look.menuPlaceholder, { maxLength: 150, placeholder: defaults.menuPlaceholder }));
   const singleButton = h(
     "div",
@@ -5929,18 +6037,115 @@ function ticketPanelEditor(guildId, data) {
 
   const panelPreview = h("div", { class: "embed-preview" });
   const welcomePreview = h("div", { class: "embed-preview" });
+  const reviewList = h("dl", { class: "wizard-review" });
   const save = h("button", { class: "primary", type: "submit" }, t("save"));
+  const back = h("button", { class: "ghost", type: "button", onclick: () => go(current - 1) }, icon("chevronLeft", "icon small"), h("span", {}, t("wizardBack")));
+  const next = h("button", { class: "primary", type: "button", onclick: () => checkStep(current) && go(current + 1) }, h("span", {}, t("wizardNext")), icon("chevronRight", "icon small"));
+  const position = h("span", { class: "muted wizard-position" });
   const summaryCount = h("span", { class: "muted" });
-  const section = (titleKey, iconName, tone, ...children) => h("div", { class: "editor-section" }, h("h3", { class: "editor-section-title" }, iconChip(iconName, tone, "sm"), t(titleKey)), ...children);
+
+  const stepBodies = {
+    panel: [
+      h("div", { class: "field" }, h("span", { class: "field-label" }, t("embedColor")), color),
+      h("p", { class: "help" }, t("ticketColorHelp")),
+      h("div", { class: "embed-grid" }, field("embedAuthor", null, input("tkAuthor", look.authorName, { maxLength: 256 })), field("embedAuthorIcon", null, input("tkAuthorIcon", look.authorIconUrl, { placeholder: "https://…" }))),
+      field("embedTitle", null, input("tkTitle", look.title, { maxLength: 256, placeholder: defaults.title })),
+      field("embedDescription", "embedDescriptionHelp", h("textarea", { id: "tkDescription", rows: 4, maxLength: 4096, placeholder: defaults.description }, look.description ?? "")),
+      h("div", { class: "embed-grid" }, field("embedImage", null, input("tkImage", look.imageUrl, { placeholder: "https://…" })), field("embedThumbnail", null, input("tkThumbnail", look.thumbnailUrl, { placeholder: "https://…" }))),
+      field("embedFooter", null, input("tkFooter", look.footer, { maxLength: 2048 })),
+    ],
+    types: [h("div", { class: "toolbar" }, h("span", { class: "grow" }), categories.count, categories.addButton), categories.empty, categories.list],
+    pick: [layoutField, menuField, singleHelp, singleButton],
+    new: [
+      field("ticketIntro", null, h("textarea", { id: "tkIntro", rows: 3, maxLength: 1500, placeholder: defaults.intro }, look.intro ?? "")),
+      h("p", { class: "help" }, t("ticketPlaceholdersHelp", { placeholders: TICKET_PLACEHOLDERS })),
+      field("ticketNameFormat", "ticketNameFormatHelp", input("tkNameFormat", look.nameFormat, { maxLength: 90, placeholder: defaults.nameFormat })),
+      h(
+        "label",
+        { class: "switch-card" },
+        h("span", { class: "switch-text" }, h("strong", {}, t("ticketPingStaff")), h("span", { class: "help" }, t("ticketPingStaffHelp"))),
+        h("span", { class: "switch" }, pingStaff),
+      ),
+    ],
+    review: [reviewList, h("p", { class: "help" }, t(defaults.posted ? "ticketSaveUpdatesPanel" : "ticketSaveNoPanel"))],
+  };
+  const sections = TICKET_STEPS.map((step, index) =>
+    h(
+      "div",
+      { class: "editor-section wizard-panel", id: `tk-step-${step.id}`, role: "group", "aria-labelledby": `tk-step-title-${step.id}`, hidden: index !== 0 },
+      h("h3", { class: "editor-section-title", id: `tk-step-title-${step.id}` }, iconChip(step.icon, step.tone, "sm"), t(step.titleKey)),
+      h("p", { class: "help" }, t(step.helpKey)),
+      ...stepBodies[step.id],
+    ),
+  );
+  const stepButtons = TICKET_STEPS.map((step, index) =>
+    h(
+      "button",
+      { type: "button", class: "wizard-step", "aria-controls": `tk-step-${step.id}`, onclick: () => go(index) },
+      h("span", { class: "wizard-step-number", "aria-hidden": "true" }, String(index + 1)),
+      h("span", { class: "wizard-step-label" }, t(step.titleKey)),
+    ),
+  );
+  const stepBar = h("ol", { class: "wizard-steps", "aria-label": t("ticketPanelEditor") }, stepButtons.map((button) => h("li", {}, button)));
+
+  // Steps you've been through are ticked; the open one is marked current.
+  let current = 0;
+  const seen = new Set([0]);
+  function go(index, focus = true) {
+    current = Math.max(0, Math.min(TICKET_STEPS.length - 1, index));
+    seen.add(current);
+    sections.forEach((section, number) => (section.hidden = number !== current));
+    stepButtons.forEach((button, number) => {
+      button.classList.toggle("done", seen.has(number) && number !== current);
+      if (number === current) {
+        button.setAttribute("aria-current", "step");
+      } else {
+        button.removeAttribute("aria-current");
+      }
+    });
+    const last = current === TICKET_STEPS.length - 1;
+    back.disabled = current === 0;
+    next.hidden = last;
+    save.classList.toggle("primary", last);
+    save.classList.toggle("ghost", !last);
+    position.textContent = t("wizardPosition", { step: current + 1, total: TICKET_STEPS.length });
+    if (focus) {
+      sections[current].querySelector(".editor-section-title").scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
+  }
+
+  // Shows the browser's message on the step's first unfinished field.
+  const firstInvalid = (root) => [...root.querySelectorAll("input, select, textarea")].find((element) => !element.checkValidity());
+  function showInvalid(element) {
+    const step = sections.findIndex((section) => section.contains(element));
+    go(step, false);
+    element.closest("details")?.setAttribute("open", "");
+    element.reportValidity();
+  }
+  function checkStep(index) {
+    const invalid = firstInvalid(sections[index]);
+    if (invalid) {
+      showInvalid(invalid);
+      return false;
+    }
+    return true;
+  }
 
   const form = h(
     "form",
     {
-      class: "ticket-editor",
+      class: "ticket-editor wizard",
+      noValidate: true,
       oninput: () => refresh(),
       onchange: () => refresh(),
       onsubmit: async (event) => {
         event.preventDefault();
+        // Hidden steps can't show the browser's message, so open the step first.
+        const invalid = firstInvalid(form);
+        if (invalid) {
+          showInvalid(invalid);
+          return;
+        }
         setBusy(save, true);
         try {
           const result = await api(`/api/guilds/${guildId}/settings`, {
@@ -5959,71 +6164,41 @@ function ticketPanelEditor(guildId, data) {
         }
       },
     },
-    section(
-      "ticketSectionPanel",
-      "image",
-      "purple",
-      h(
-        "div",
-        { class: "embed-color-row" },
-        h("label", { class: "switch" }, useColor, h("span", {}, t("ticketOwnColor"))),
-        colorInput,
-        h("div", { class: "swatches" }, swatches),
-      ),
-      h("p", { class: "help" }, t("ticketColorHelp")),
-      h("div", { class: "embed-grid" }, field("embedAuthor", null, input("tkAuthor", look.authorName, { maxLength: 256 })), field("embedAuthorIcon", null, input("tkAuthorIcon", look.authorIconUrl, { placeholder: "https://…" }))),
-      field("embedTitle", null, input("tkTitle", look.title, { maxLength: 256, placeholder: defaults.title })),
-      field("embedDescription", "embedDescriptionHelp", h("textarea", { id: "tkDescription", rows: 4, maxLength: 4096, placeholder: defaults.description }, look.description ?? "")),
-      h("div", { class: "embed-grid" }, field("embedImage", null, input("tkImage", look.imageUrl, { placeholder: "https://…" })), field("embedThumbnail", null, input("tkThumbnail", look.thumbnailUrl, { placeholder: "https://…" }))),
-      field("embedFooter", null, input("tkFooter", look.footer, { maxLength: 2048 })),
-    ),
-    section(
-      "ticketSectionPick",
-      "layers",
-      "blue",
-      field("ticketLayout", "ticketLayoutHelp", layout),
-      menuField,
-      singleHelp,
-      singleButton,
-    ),
-    section(
-      "ticketSectionNew",
-      "ticket",
-      "cyan",
-      field("ticketIntro", null, h("textarea", { id: "tkIntro", rows: 3, maxLength: 1500, placeholder: defaults.intro }, look.intro ?? "")),
-      h("p", { class: "help" }, t("ticketPlaceholdersHelp", { placeholders: TICKET_PLACEHOLDERS })),
-      field("ticketNameFormat", "ticketNameFormatHelp", input("tkNameFormat", look.nameFormat, { maxLength: 90, placeholder: defaults.nameFormat })),
-      h(
-        "label",
-        { class: "switch-card" },
-        h("span", { class: "switch-text" }, h("strong", {}, t("ticketPingStaff")), h("span", { class: "help" }, t("ticketPingStaffHelp"))),
-        h("span", { class: "switch" }, pingStaff),
-      ),
-    ),
-    section(
-      "ticketCategories",
-      "layers",
-      "purple",
-      h("div", { class: "toolbar" }, h("p", { class: "help grow" }, t("ticketCategoriesHelp")), categories.count, categories.addButton),
-      categories.empty,
-      categories.list,
-    ),
-    h("div", { class: "toolbar" }, h("p", { class: "help grow" }, t(defaults.posted ? "ticketSaveUpdatesPanel" : "ticketSaveNoPanel")), save),
+    stepBar,
+    ...sections,
+    h("div", { class: "toolbar wizard-nav" }, back, position, h("span", { class: "grow" }), save, next),
   );
 
+  // The last step: everything at a glance, each line a way back to its step.
+  function review(now, kinds) {
+    const edit = (stepId) =>
+      h("button", { type: "button", class: "ghost small", onclick: () => go(TICKET_STEPS.findIndex((step) => step.id === stepId)) }, icon("edit", "icon small"), h("span", {}, t("wizardEdit")));
+    const chip = h("span", { class: "color-dot" });
+    chip.style.setProperty("--swatch", hexColor(now.color ?? defaults.color));
+    const lines = [
+      ["panel", t("ticketSectionPanel"), h("span", {}, chip, `${now.title || defaults.title} · ${hexColor(now.color ?? defaults.color).toUpperCase()}`)],
+      ["types", t("ticketCategories"), kinds.length > 0 ? kinds.map((kind) => `${kind.emoji ? `${kind.emoji} ` : ""}${kind.label || t("ticketCategoryNew")}`).join(", ") : t("ticketReviewNoTypes")],
+      ["pick", t("ticketSectionPick"), kinds.length === 0 ? t("ticketReviewSingle", { label: now.buttonLabel || defaults.buttonLabel }) : t(now.layout === "menu" ? "ticketLayoutMenu" : "ticketLayoutButtons")],
+      ["new", t("ticketNameFormat"), now.nameFormat || defaults.nameFormat],
+      ["new", t("ticketPingStaff"), t(now.pingStaff ? "featureOn" : "featureOff")],
+    ];
+    reviewList.replaceChildren(...lines.map(([stepId, label, value]) => h("div", { class: "wizard-review-row" }, h("dt", {}, label), h("dd", {}, value), edit(stepId))));
+  }
+
   function refresh(changed = true) {
-    const current = readTicketLook(form);
+    const now = readTicketLook(form);
     const kinds = readTicketCategories(form) ?? [];
     const hasCategories = kinds.length > 0;
-    menuField.hidden = !hasCategories || current.layout !== "menu";
+    menuField.hidden = !hasCategories || now.layout !== "menu";
+    layoutField.hidden = !hasCategories;
     singleButton.hidden = hasCategories;
     singleHelp.hidden = hasCategories;
-    layout.disabled = !hasCategories;
-    panelPreview.replaceChildren(ticketPanelPreview(current, kinds, data, defaults));
-    welcomePreview.replaceChildren(ticketWelcomePreview(current, kinds[0] ?? null, data, defaults));
+    panelPreview.replaceChildren(ticketPanelPreview(now, kinds, data, defaults));
+    welcomePreview.replaceChildren(ticketWelcomePreview(now, kinds[0] ?? null, data, defaults));
     for (const preview of [panelPreview, welcomePreview]) {
       preview.querySelectorAll("[data-color]").forEach((element) => element.style.setProperty("--embed-color", element.dataset.color || "transparent"));
     }
+    review(now, kinds);
     summaryCount.textContent = t("ticketCategoriesSummary", { count: kinds.length });
     if (changed) {
       state.unsaved = true;
@@ -6046,6 +6221,7 @@ function ticketPanelEditor(guildId, data) {
       ),
     ),
   );
+  go(0, false);
   refresh(false);
   return editor;
 }
