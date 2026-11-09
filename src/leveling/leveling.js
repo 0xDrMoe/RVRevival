@@ -11,12 +11,9 @@ import { derivedSetting, Setting } from "../settings/guildSettings.js";
 import {
   Announce,
   levelForXp,
-  MAX_XP_PER_MESSAGE,
-  MIN_XP_PER_MESSAGE,
+  MAX_XP_COOLDOWN_MS,
   multiplierFor,
   normalizeLeveling,
-  VOICE_XP_PER_MINUTE,
-  XP_COOLDOWN_MS,
 } from "./config.js";
 
 const ANNOUNCE_PERMISSIONS = [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages];
@@ -52,15 +49,16 @@ export function createLeveling({ guildSettings, store, logger, forcedLanguage, r
   const lastAwarded = new Map();
   let lastSweep = -Infinity;
 
-  function onCooldown(key, time) {
+  // Cooldowns differ per server, so the sweep keeps entries for the longest one.
+  function onCooldown(key, time, cooldownMs) {
     const last = lastAwarded.get(key);
-    if (last !== undefined && time - last < XP_COOLDOWN_MS) {
+    if (last !== undefined && time - last < cooldownMs) {
       return true;
     }
-    if (lastAwarded.size >= COOLDOWN_SWEEP_SIZE && time - lastSweep >= XP_COOLDOWN_MS) {
+    if (lastAwarded.size >= COOLDOWN_SWEEP_SIZE && time - lastSweep >= MAX_XP_COOLDOWN_MS) {
       lastSweep = time;
       for (const [entry, at] of lastAwarded) {
-        if (time - at >= XP_COOLDOWN_MS) {
+        if (time - at >= MAX_XP_COOLDOWN_MS) {
           lastAwarded.delete(entry);
         }
       }
@@ -130,7 +128,7 @@ export function createLeveling({ guildSettings, store, logger, forcedLanguage, r
 
   // After XP was added: rewards, and the announcement on a level-up.
   async function afterAward(award, member, here, config) {
-    const [before, after] = [levelForXp(award.before), levelForXp(award.after)];
+    const [before, after] = [levelForXp(award.before, config), levelForXp(award.after, config)];
     // Also catches up members who reached a level before its reward was added.
     // No request is made when their roles are already right.
     await syncRewards(member, after, config);
@@ -157,17 +155,18 @@ export function createLeveling({ guildSettings, store, logger, forcedLanguage, r
     }
     const time = now();
     const cooldownKey = `${guildId}:${member.id}`;
-    if (onCooldown(cooldownKey, time)) {
+    const cooldownMs = config.cooldownSeconds * 1000;
+    if (onCooldown(cooldownKey, time, cooldownMs)) {
       return undefined;
     }
-    const base = MIN_XP_PER_MESSAGE + random(MAX_XP_PER_MESSAGE - MIN_XP_PER_MESSAGE + 1);
+    const base = config.xpMin + random(config.xpMax - config.xpMin + 1);
     const award = store.award({
       guildId,
       userId: member.id,
       userTag: member.user?.username ?? null,
       amount: Math.round(base * multiplierFor(config, member)),
       now: time,
-      cooldownMs: XP_COOLDOWN_MS,
+      cooldownMs,
     });
     if (!award) {
       return undefined;
@@ -204,7 +203,7 @@ export function createLeveling({ guildSettings, store, logger, forcedLanguage, r
           guildId: guild.id,
           userId: member.id,
           userTag: member.user?.username ?? null,
-          amount: Math.round(VOICE_XP_PER_MINUTE * multiplierFor(config, member)),
+          amount: Math.round(config.voiceXpPerMinute * multiplierFor(config, member)),
           now: now(),
         });
         awarded.push(member.id);

@@ -6667,3 +6667,188 @@ dialog textarea {
   padding: 16px 4px;
   text-align: center;
 }
+
+/* --- Leveling: level curve graph -------------------------------------------- */
+
+.curve-card .mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.curve-advanced {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  margin: 12px 0;
+}
+
+.curve-advanced summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.curve-advanced[open] summary {
+  margin-bottom: 10px;
+}
+
+.curve-advanced .help.error {
+  color: var(--danger);
+}
+
+.curve-toolbar {
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.inline-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.inline-field input {
+  width: 6rem;
+}
+
+.curve-chart {
+  margin: 12px 0 4px;
+  padding-inline-start: 44px;
+}
+
+.curve-plot {
+  position: relative;
+  touch-action: pan-y;
+}
+
+.curve-plot svg {
+  display: block;
+  width: 100%;
+  height: 220px;
+  overflow: visible;
+}
+
+.curve-plot .grid {
+  stroke: var(--border);
+  stroke-dasharray: 3 4;
+  vector-effect: non-scaling-stroke;
+}
+
+.curve-base {
+  stroke: var(--muted);
+  stroke-opacity: 0.5;
+  vector-effect: non-scaling-stroke;
+}
+
+.curve-line {
+  fill: none;
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.curve-this {
+  stroke: var(--accent);
+}
+
+.curve-standard {
+  stroke: var(--muted);
+  stroke-dasharray: 6 5;
+}
+
+.curve-guide {
+  stroke: var(--muted);
+  vector-effect: non-scaling-stroke;
+}
+
+/* A circle in a stretched SVG would turn oval, so the dot is a zero-length round-capped line. */
+.curve-dot {
+  stroke: var(--accent);
+  stroke-width: 10;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.curve-y {
+  position: absolute;
+  inset-inline-end: calc(100% + 8px);
+  transform: translateY(-50%);
+  font-size: 0.75rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.curve-x {
+  position: relative;
+  height: 1.2rem;
+  margin-top: 4px;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.curve-x span {
+  position: absolute;
+  transform: translateX(-50%);
+}
+
+[dir="rtl"] .curve-x span {
+  transform: translateX(50%);
+}
+
+.curve-tip {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  max-width: min(320px, 90%);
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  box-shadow: var(--shadow-lift);
+  font-size: 0.8rem;
+  color: var(--text);
+  pointer-events: none;
+}
+
+[dir="rtl"] .curve-tip {
+  transform: translateX(50%);
+}
+
+.curve-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.curve-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.curve-key {
+  display: inline-block;
+  width: 18px;
+  border-top: 2px solid var(--accent);
+}
+
+.curve-key-standard {
+  border-top: 2px dashed var(--muted);
+}
+
+.curve-math h3 {
+  margin: 16px 0 6px;
+  font-size: 0.95rem;
+}
+
+.curve-math p {
+  margin: 4px 0;
+  color: var(--muted);
+}
+
+.curve-table td,
+.curve-table th {
+  white-space: nowrap;
+}

@@ -1166,7 +1166,8 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     if (!entry || entry.xp <= 0) {
       return null;
     }
-    return { ...levelProgress(entry.xp), xp: entry.xp, messages: entry.messages, rank: levels.rank(guildId, userId) };
+    const config = normalizeLeveling(guildSettings.get(guildId, Setting.LEVELING));
+    return { ...levelProgress(entry.xp, config), xp: entry.xp, messages: entry.messages, rank: levels.rank(guildId, userId) };
   };
 
   app.get("/api/guilds/:id/levels", async (request, reply) => {
@@ -1183,8 +1184,9 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     const total = since === undefined ? levels.count(guildId) : levels.countSince(guildId, since);
     const range = { limit: LEADERBOARD_PAGE, offset };
     const entries = since === undefined ? levels.top(guildId, range) : levels.topSince(guildId, since, range);
+    const config = normalizeLeveling(guildSettings.get(guildId, Setting.LEVELING));
     return {
-      enabled: normalizeLeveling(guildSettings.get(guildId, Setting.LEVELING)).enabled,
+      enabled: config.enabled,
       period,
       page,
       pageSize: LEADERBOARD_PAGE,
@@ -1196,7 +1198,7 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
         xp: entry.xp,
         gained: entry.gained ?? null,
         messages: entry.messages,
-        ...levelProgress(entry.xp),
+        ...levelProgress(entry.xp, config),
       })),
     };
   });

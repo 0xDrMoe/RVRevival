@@ -730,8 +730,10 @@ const FEATURE_PARTS = [
         ],
         example: ["/levels reward-add level:10 role:@Regulars", "/levels no-xp channel:#bot-commands", "/leaderboard period:This week"],
         tips: [
-          "15 to 25 XP per message, at most once a minute, so spamming doesn't help. Bots and the country channel never earn XP.",
-          "Voice XP is 10 a minute, only with two or more people in the channel, never when deafened or in the AFK channel.",
+          "By default 15 to 25 XP per message, at most once a minute, so spamming doesn't help. Bots and the country channel never earn XP.",
+          "Voice XP is 10 a minute by default, only with two or more people in the channel, never when deafened or in the AFK channel.",
+          "On the dashboard's Leveling page, XP rates sets the XP per message (1 to 100), the seconds between messages that earn XP (10 to 600) and voice XP (1 to 50 a minute).",
+          "Level curve picks how much XP each level takes: a ready-made curve, or your own formula under Advanced. The graph shows XP per level and in total, and the table estimates how long each level takes. Members keep their XP when you change it.",
           "Boosts go from 1x to 5x and don't add up: a member gets their highest one.",
           "Message placeholders: `{user}`, `{username}`, `{level}`, `{server}`.",
           "Reward roles must be below the bot's role. Only use `set` and `reset` to fix mistakes or cheating.",
