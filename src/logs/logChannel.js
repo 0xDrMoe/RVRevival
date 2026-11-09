@@ -1,11 +1,13 @@
-// Posts entries in one of a server's log channels (the logs, mod-log or
-// server-log channel from /settings). Posting never throws: if the channel is
+// Posts entries in one of a server's log channels (the logs, mod-log,
+// server-log or ticket log channel, or the channel picked for that kind of
+// entry on the Logging page; see logRoutes.js). Posting never throws: if the channel is
 // missing or the bot can't post there, the caller carries on and a warning goes
 // to the console, once per server and channel until posting works again.
 //
 // Entries go through a webhook the bot creates in each log channel (it needs
 // Manage Webhooks there), so busy logs don't use up the bot's own message rate
-// limits. Without the permission, or if the webhook can't be made or used, the
+// limits. Each channel gets its own webhook, so entries routed to different
+// channels each go through that channel's. Without the permission, or if the webhook can't be made or used, the
 // bot posts as itself. While a post is on its way, new entries for the same
 // channel wait and then go out together, up to 10 per message.
 
@@ -36,14 +38,17 @@ export function createLogChannelPoster({ guildSettings, logger, now = Date.now }
   // log channel ID -> { busy, pending: entries waiting to be sent }
   const queues = new Map();
 
-  // The channel `route` goes to, else the first of `settings` that is set, and
-  // its channel. Throws if that channel is gone.
+  // The channel picked for `route` (or its group), else the first of
+  // `settings` that is set, and its channel. Throws if that channel is gone.
   function channelFor(guild, settings, route) {
     const routed = routedChannelId(guildSettings, guild.id, route);
     if (routed) {
       const channel = guild.channels?.cache.get(routed);
       if (!channel?.isTextBased?.()) {
-        throw Object.assign(new Error("The log channel no longer exists or isn't a text channel"), { setting: Setting.LOG_ROUTES });
+        throw Object.assign(new Error("The log channel no longer exists or isn't a text channel"), {
+          setting: Setting.LOG_ROUTES,
+          channelId: routed,
+        });
       }
       return { setting: Setting.LOG_ROUTES, channel };
     }
@@ -62,12 +67,13 @@ export function createLogChannelPoster({ guildSettings, logger, now = Date.now }
   }
 
   function warnOnce(guild, setting, error) {
+    const channelId = error?.channelId ?? (setting === Setting.LOG_ROUTES ? undefined : guildSettings.get(guild.id, setting));
     const key = `${guild.id}:${setting}`;
     if (!warned.has(key)) {
       warned.add(key);
       logger.warn(
         "Couldn't post in the logs channel. Give the bot View Channel, Send Messages, Embed Links and Attach Files there (and Manage Webhooks for faster logs).",
-        { guildId: guild.id, setting, channelId: guildSettings.get(guild.id, setting), error },
+        { guildId: guild.id, setting, channelId, error },
       );
     }
   }
@@ -244,12 +250,13 @@ export function createLogChannelPoster({ guildSettings, logger, now = Date.now }
   }
 
   return {
-    // Whether `route` has its own channel, or any of `settings` has one, in this server.
+    // Whether `route` (or its group) has its own channel, or any of `settings` has one, in this server.
     isEnabled: (guild, settings, route) =>
       Boolean(guild && (routedChannelId(guildSettings, guild.id, route) || settings.some((setting) => guildSettings.get(guild.id, setting)))),
 
-    // Posts in the channel of `route` (see logRoutes.js) if it has one, else in
-    // the first channel of `settings` that is set. `build({ canAttach })`
+    // Posts in the channel picked for `route` or its group (see logRoutes.js;
+    // `route` can be a list, looked at in order), else in the first channel of
+    // `settings` that is set. `build({ canAttach })`
     // returns { embed, files? }. With `alone`, the entry gets a message of its
     // own (so it can be edited later). Returns the posted message, or undefined.
     async post(guild, settings, build, { alone = false, route } = {}) {

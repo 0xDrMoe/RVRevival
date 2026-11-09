@@ -22,6 +22,7 @@ import { formatDuration, parseDuration } from "../utils/duration.js";
 import { isPermissionError } from "../utils/discordErrors.js";
 import { beginModerationCommand } from "./commandHelpers.js";
 import { withDescription } from "./moderation.js";
+import { LogRoute } from "../logs/logRoutes.js";
 
 // What a lock takes away from @everyone. Unlocking resets these to the
 // channel's default (inherit from the category or server).
@@ -134,7 +135,7 @@ export function createChannelToolCommands({ guildSettings, modLog = noModLog, fo
         lines: reason ? [`Reason: ${reason}`] : [],
         color: locking ? 0xe67e22 : 0x57f287,
       }),
-    }));
+    }), { route: LogRoute.CHANNEL_LOCK });
     return answer(Status.SUCCESS, locking ? "lockDone" : "unlockDone", values);
   };
 
@@ -173,7 +174,7 @@ export function createChannelToolCommands({ guildSettings, modLog = noModLog, fo
           ? `**Slowmode set to ${shown}** · <#${channel.id}>`
           : `**Slowmode turned off** · <#${channel.id}>`,
       }),
-    }));
+    }), { route: LogRoute.SLOWMODE });
     return seconds
       ? answer(Status.SUCCESS, "slowmodeSet", { ...values, duration: shown })
       : answer(Status.SUCCESS, "slowmodeOff", values);

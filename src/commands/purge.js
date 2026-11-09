@@ -24,6 +24,7 @@ import { noModLog } from "../moderation/modLog.js";
 import { DAY_MS } from "../utils/duration.js";
 import { isPermissionError } from "../utils/discordErrors.js";
 import { withDescription } from "./moderation.js";
+import { LogRoute } from "../logs/logRoutes.js";
 
 const COMMAND_NAME = "purge";
 const MAX_AMOUNT = 100;
@@ -125,7 +126,7 @@ export function createPurgeCommand({ guildSettings, modLog = noModLog, botDeleti
       files: canAttach
         ? [new AttachmentBuilder(Buffer.from(buildTranscript(deleted), "utf8"), { name: `purge-${channel.id}.txt` })]
         : [],
-    }));
+    }), { route: LogRoute.PURGE });
 
     return answer(Status.SUCCESS, "purgeDone", { count: deleted.length });
   }

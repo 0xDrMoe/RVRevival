@@ -221,7 +221,7 @@ export function createAntiNuke({ guildSettings, moderation, quarantine, modLog =
         lines,
         color: 0xed4245,
       }),
-    }), { route: LogRoute.PROTECTION });
+    }), { route: LogRoute.ANTI_NUKE });
     await tellOwner(guild, (language) => ({
       server: guild.name,
       user: member?.user?.tag ?? member?.user?.username ?? userId,

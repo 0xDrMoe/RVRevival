@@ -17,6 +17,7 @@ import { isPermissionError } from "../utils/discordErrors.js";
 import { beginModerationCommand } from "./commandHelpers.js";
 import { roleProblem } from "./memberTools.js";
 import { withDescription } from "./moderation.js";
+import { LogRoute } from "../logs/logRoutes.js";
 
 const COMMAND_NAME = "temprole";
 export const MAX_TEMP_ROLE_MS = 365 * 24 * 60 * 60 * 1000;
@@ -57,7 +58,7 @@ const timestamp = (ms) => `<t:${Math.floor(ms / 1000)}:R>`;
 // Options: guildSettings, store (TempRoleStore), modLog, forcedLanguage, now
 export function createTempRoleCommand({ guildSettings, store, modLog = noModLog, forcedLanguage, now = Date.now }) {
   const log = (guild, moderator, summary, lines) =>
-    modLog.post(guild, () => ({ embed: buildActionLogEmbed({ moderator, summary, lines, color: 0x9b59b6 }) }));
+    modLog.post(guild, () => ({ embed: buildActionLogEmbed({ moderator, summary, lines, color: 0x9b59b6 }) }), { route: LogRoute.TEMP_ROLE });
 
   // The member and role, or a refusal.
   function check(interaction, answer) {

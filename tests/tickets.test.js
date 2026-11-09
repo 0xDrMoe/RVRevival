@@ -514,7 +514,7 @@ describe("ticket log", () => {
     t.guild.channels.cache.set(LOG_CHANNEL_ID, { ...t.channel, id: LOG_CHANNEL_ID });
     await t.postPanel();
     await t.openTicket();
-    expect(t.logPosts[0]).toMatchObject({ route: LogRoute.MOD_ACTIONS, settings: [Setting.TICKET_LOG_CHANNEL, Setting.MOD_LOG_CHANNEL, Setting.LOGS_CHANNEL] });
+    expect(t.logPosts[0]).toMatchObject({ route: [LogRoute.TICKET_OPENED, LogRoute.MOD_ACTIONS], settings: [Setting.TICKET_LOG_CHANNEL, Setting.MOD_LOG_CHANNEL, Setting.LOGS_CHANNEL] });
 
     const notAdmin = t.interaction({ subcommand: "log", manageThreads: true, options: { channel: { id: LOG_CHANNEL_ID } } });
     expect((await t.command.execute(notAdmin)).key).toBe("modNoPermission");
@@ -534,7 +534,7 @@ describe("ticket log", () => {
     await t.command.execute(t.interaction({ subcommand: "log-event", manageGuild: true, options: { event: TicketEvent.CLOSED, enabled: true } }));
     expect(t.guildSettings.get(GUILD_ID, Setting.DISABLED_TICKET_LOG_EVENTS)).toBeUndefined();
     await t.openTicket();
-    expect(t.logPosts.at(-1)).toMatchObject({ title: "🎫 Ticket #2 opened", route: undefined });
+    expect(t.logPosts.at(-1)).toMatchObject({ title: "🎫 Ticket #2 opened", route: LogRoute.TICKET_OPENED });
 
     expect((await t.command.execute(t.interaction({ subcommand: "log", manageGuild: true }))).key).toBe("ticketLogCleared");
     expect(t.guildSettings.get(GUILD_ID, Setting.TICKET_LOG_CHANNEL)).toBeUndefined();

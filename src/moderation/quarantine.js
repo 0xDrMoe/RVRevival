@@ -8,6 +8,7 @@
 import { buildActionLogEmbed, noModLog } from "./modLog.js";
 import { SavedRoles } from "../members/savedRoleStore.js";
 import { Setting } from "../settings/guildSettings.js";
+import { LogRoute } from "../logs/logRoutes.js";
 
 export class AlreadyQuarantined extends Error {
   name = "AlreadyQuarantined";
@@ -33,7 +34,7 @@ export function createQuarantine({ guildSettings, store, modLog = noModLog, logg
   };
 
   const log = (guild, moderator, summary, lines, color) =>
-    modLog.post(guild, () => ({ embed: buildActionLogEmbed({ moderator, summary, lines, color }) }));
+    modLog.post(guild, () => ({ embed: buildActionLogEmbed({ moderator, summary, lines, color }) }), { route: LogRoute.QUARANTINE });
 
   return {
     isQuarantined(guildId, userId) {
