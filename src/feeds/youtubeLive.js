@@ -7,6 +7,7 @@
 
 import { decodeXml } from "./parseFeed.js";
 import { safeFetchText } from "./fetchFeed.js";
+import { MAX_PAGE_BYTES } from "./youtubePages.js";
 
 // Skips the cookie-consent page YouTube shows to some regions.
 const HEADERS = { Cookie: "SOCS=CAI; CONSENT=YES+", "Accept-Language": "en-US,en;q=0.8" };
@@ -45,5 +46,5 @@ export function readLivePage(html) {
 
 // The stream on `url` (a channel's /live page), if any. Throws FeedError.
 export async function fetchYoutubeLive(url, options = {}) {
-  return readLivePage(await safeFetchText(url, { ...options, headers: HEADERS }));
+  return readLivePage(await safeFetchText(url, { ...options, headers: HEADERS, maxBytes: MAX_PAGE_BYTES }));
 }

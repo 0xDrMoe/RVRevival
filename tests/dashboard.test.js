@@ -1367,7 +1367,6 @@ describe("dashboard", () => {
     const feedFetchOptions = {
       fetchImpl: vi.fn(async (url) => (pages[String(url)] === undefined ? new Response("", { status: 404 }) : new Response(pages[String(url)]))),
       lookup: vi.fn(async () => [{ address: "93.184.216.34" }]),
-      retryDelayMs: 0,
     };
     app = await buildDashboard({ config, db, discord, guildSettings, store, logger: fakeLogger(), feedFetchOptions });
     const cookies = await login();

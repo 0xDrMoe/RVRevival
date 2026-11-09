@@ -78,8 +78,9 @@ async function checkHost(url, lookup) {
 }
 
 // GETs a public URL and returns its text. `headers` are added to the request;
-// fetchImpl and lookup are for tests.
-export async function safeFetchText(link, { fetchImpl = fetch, lookup = dnsLookup, headers = {} } = {}) {
+// `maxBytes` raises the size cap (YouTube pages run over 1 MB); fetchImpl and
+// lookup are for tests.
+export async function safeFetchText(link, { fetchImpl = fetch, lookup = dnsLookup, headers = {}, maxBytes = MAX_BYTES } = {}) {
   let url;
   try {
     url = new URL(link);
@@ -106,13 +107,13 @@ export async function safeFetchText(link, { fetchImpl = fetch, lookup = dnsLooku
       throw new FeedError("unreachable", `${url.hostname} answered ${response.status}.`);
     }
     const length = Number(response.headers.get("content-length") ?? 0);
-    if (length > MAX_BYTES) {
+    if (length > maxBytes) {
       throw new FeedError("not-a-feed", "That feed is too big.");
     }
     const reader = response.body?.getReader?.();
     if (!reader) {
       const text = await response.text();
-      return text.slice(0, MAX_BYTES);
+      return text.slice(0, maxBytes);
     }
     const chunks = [];
     let total = 0;
@@ -122,7 +123,7 @@ export async function safeFetchText(link, { fetchImpl = fetch, lookup = dnsLooku
         break;
       }
       total += value.byteLength;
-      if (total > MAX_BYTES) {
+      if (total > maxBytes) {
         await reader.cancel().catch(() => {});
         throw new FeedError("not-a-feed", "That feed is too big.");
       }

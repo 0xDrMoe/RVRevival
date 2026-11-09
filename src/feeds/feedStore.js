@@ -7,9 +7,10 @@ import { openDatabase } from "../storage/database.js";
 
 export const MAX_FEEDS = 20;
 export const SEEN_KEEP = 100;
-// Put in front of `seen` when a feed was saved without reading it (YouTube
-// Shorts that YouTube wouldn't serve yet, feeds.js): the first good read then
-// only posts items published after the feed was added (feeds/feedPoller.js).
+// In front of `seen` on a feed saved without being read (YouTube Shorts
+// added while YouTube's feeds were down, before feeds were read from the
+// channel page instead): its first good read only posts items published after
+// the feed was added (feeds/feedPoller.js). Nothing new is saved with it.
 export const PENDING_FIRST_READ = "*pending-first-read";
 
 function parseSeen(text) {

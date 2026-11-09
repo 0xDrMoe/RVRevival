@@ -10,6 +10,7 @@ import { createLivePoller, LIVE_CHECK_EVERY_MS } from "../src/feeds/livePoller.j
 import { parseFeed } from "../src/feeds/parseFeed.js";
 import { createTwitchApi } from "../src/feeds/twitch.js";
 import { readLivePage } from "../src/feeds/youtubeLive.js";
+import { readChannelPage } from "../src/feeds/youtubePages.js";
 import { Status } from "../src/logs/actionLog.js";
 import { fakeLogger } from "./helpers/fakes.js";
 
@@ -355,9 +356,29 @@ function fakeNet(pages) {
       return page === undefined ? new Response("nope", { status: 404 }) : new Response(page, { status: 200 });
     }),
     lookup: vi.fn(async () => [{ address: "93.184.216.34" }]),
-    retryDelayMs: 0,
   };
 }
+
+// A channel's /shorts and /videos pages, cut down to what the bot reads.
+const page = (data) => `<html><script>var ytInitialData = ${JSON.stringify(data)};</script></html>`;
+const SHORTS_PAGE = page({
+  metadata: { channelMetadataRenderer: { title: "Sweet AL" } },
+  contents: {
+    tabs: [
+      { shortsLockupViewModel: { entityId: "shorts-shelf-item-4fll9AKiXFc", onTap: { innertubeCommand: { reelWatchEndpoint: { videoId: "4fll9AKiXFc" } } }, overlayMetadata: { primaryText: { content: "Amazing sniper #fortnite" } } } },
+      { shortsLockupViewModel: { entityId: "shorts-shelf-item-k6ce75sLORY" } },
+      { shortsLockupViewModel: { entityId: "shorts-shelf-item-4fll9AKiXFc" } },
+    ],
+  },
+});
+const VIDEOS_PAGE = page({
+  metadata: { channelMetadataRenderer: { title: "Sweet AL" } },
+  contents: [
+    { lockupViewModel: { contentId: "7zTQ3FQlPZ4", contentType: "LOCKUP_CONTENT_TYPE_VIDEO", metadata: { lockupMetadataViewModel: { title: { content: "Reacting & more" } } } } },
+    { lockupViewModel: { contentId: "PLxxxxxxxxx", contentType: "LOCKUP_CONTENT_TYPE_PLAYLIST" } },
+    { videoRenderer: { videoId: "ivpUeDyLteo", title: { runs: [{ text: "Old layout" }] } } },
+  ],
+});
 
 const livePage = (videoId, { live = true } = {}) => `<html><head><link rel="canonical" href="https://www.youtube.com/watch?v=${videoId}"><meta name="title" content="Finals &amp; chill"></head>
   <script>var ytInitialPlayerResponse = {"videoDetails":{"videoId":"${videoId}","title":"Finals & chill","author":"Rabble"},"microformat":{"playerMicroformatRenderer":{"ownerChannelName":"Rabble \\u0026 Co","liveBroadcastDetails":{"isLiveNow":${live}}}}};</script></html>`;
@@ -365,43 +386,53 @@ const livePage = (videoId, { live = true } = {}) => `<html><head><link rel="cano
 describe("YouTube videos, Shorts and live", () => {
   const channelFeed = `https://www.youtube.com/feeds/videos.xml?channel_id=${CHANNEL}`;
 
-  it("follows long videos, falling back to all uploads, and names the feed after the channel", async () => {
+  it("follows long videos and names the feed after the channel", async () => {
     const store = new FeedStore();
     const videos = `https://www.youtube.com/feeds/videos.xml?playlist_id=UULF${REST}`;
     const net = fakeNet({ [videos]: atom("Videos", ["v1"]), [channelFeed]: atom("Rabble", ["v1", "s1"]) });
     const feed = await addFeed({ ...base, store, kind: "youtube", source: CHANNEL, fetchOptions: net });
     expect(feed).toMatchObject({ url: videos, name: "Rabble", seen: ["v1"] });
-
-    const fallback = await addFeed({ ...base, store, guildId: OTHER_GUILD, kind: "youtube", source: CHANNEL, fetchOptions: fakeNet({ [channelFeed]: atom("Rabble", ["v1", "s1"]) }) });
-    expect(fallback).toMatchObject({ url: channelFeed, name: "Rabble", seen: ["v1", "s1"] });
-    // The same channel's uploads in the same channel: a duplicate either way.
-    await expect(addFeed({ ...base, store, guildId: OTHER_GUILD, kind: "youtube", source: CHANNEL, fetchOptions: net })).rejects.toThrow(/already posts/);
+    await expect(addFeed({ ...base, store, kind: "youtube", source: CHANNEL, fetchOptions: net })).rejects.toThrow(/already posts/);
   });
 
-  it("follows Shorts", async () => {
+  it("reads the channel's Videos and Shorts pages when YouTube's feeds are blocked", async () => {
     const store = new FeedStore();
     const shorts = `https://www.youtube.com/feeds/videos.xml?playlist_id=UUSH${REST}`;
-    const feed = await addFeed({ ...base, store, kind: "youtube_shorts", source: CHANNEL, fetchOptions: fakeNet({ [shorts]: atom("Shorts", ["s1"]), [channelFeed]: atom("Rabble", []) }) });
-    expect(feed).toMatchObject({ url: shorts, name: "Rabble", seen: ["s1"] });
+    const videos = `https://www.youtube.com/feeds/videos.xml?playlist_id=UULF${REST}`;
+    // Only the pages answer, like on a server YouTube's feeds refuse.
+    const net = fakeNet({ [`https://www.youtube.com/channel/${CHANNEL}/shorts`]: SHORTS_PAGE, [`https://www.youtube.com/channel/${CHANNEL}/videos`]: VIDEOS_PAGE });
+    const shortsFeed = await addFeed({ ...base, store, kind: "youtube_shorts", source: CHANNEL, fetchOptions: net });
+    expect(shortsFeed).toMatchObject({ url: shorts, name: "Sweet AL", seen: ["4fll9AKiXFc", "k6ce75sLORY"] });
+    const videosFeed = await addFeed({ ...base, store, kind: "youtube", source: CHANNEL, fetchOptions: net });
+    expect(videosFeed).toMatchObject({ url: videos, name: "Sweet AL", seen: ["7zTQ3FQlPZ4", "ivpUeDyLteo"] });
+    // The page asks to skip the cookie-consent screen.
+    expect(net.fetchImpl.mock.calls.find(([url]) => String(url).endsWith("/shorts"))[1].headers.Cookie).toContain("SOCS");
+    // Live streams take the channel's name from the Videos page too.
+    const liveNet = fakeNet({ [`https://www.youtube.com/channel/${CHANNEL}/live`]: "<html>not live</html>", [`https://www.youtube.com/channel/${CHANNEL}/videos`]: VIDEOS_PAGE });
+    expect(await addFeed({ ...base, store, kind: "youtube_live", source: CHANNEL, fetchOptions: liveNet })).toMatchObject({ name: "Sweet AL", seen: [] });
   });
 
-  it("tries YouTube's flaky feed server again before giving up", async () => {
-    const store = new FeedStore();
-    const shorts = `https://www.youtube.com/feeds/videos.xml?playlist_id=UUSH${REST}`;
-    const net = fakeNet({ [shorts]: atom("Shorts", ["s1"]), [channelFeed]: atom("Rabble", []) });
-    const answers = [404, 500];
-    const real = net.fetchImpl.getMockImplementation();
-    net.fetchImpl.mockImplementation(async (url, init) => (String(url) === shorts && answers.length ? new Response("oops", { status: answers.shift() }) : real(url, init)));
-    const feed = await addFeed({ ...base, store, kind: "youtube_shorts", source: CHANNEL, fetchOptions: net });
-    expect(feed).toMatchObject({ url: shorts, seen: ["s1"] });
-    expect(net.fetchImpl.mock.calls.filter(([url]) => String(url) === shorts)).toHaveLength(3);
+  it("reads Shorts, videos and older layouts from a channel page", () => {
+    expect(readChannelPage(SHORTS_PAGE, { shorts: true })).toEqual({
+      title: "Sweet AL",
+      channelName: "Sweet AL",
+      items: [
+        { id: "4fll9AKiXFc", title: "Amazing sniper #fortnite", link: "https://www.youtube.com/shorts/4fll9AKiXFc", author: "Sweet AL", publishedAt: null },
+        { id: "k6ce75sLORY", title: "(untitled)", link: "https://www.youtube.com/shorts/k6ce75sLORY", author: "Sweet AL", publishedAt: null },
+      ],
+    });
+    expect(readChannelPage(VIDEOS_PAGE).items.map((item) => [item.id, item.title, item.link])).toEqual([
+      ["7zTQ3FQlPZ4", "Reacting & more", "https://www.youtube.com/watch?v=7zTQ3FQlPZ4"],
+      ["ivpUeDyLteo", "Old layout", "https://www.youtube.com/watch?v=ivpUeDyLteo"],
+    ]);
+    expect(() => readChannelPage("<html>consent page</html>")).toThrow(/didn't load/);
+    expect(() => readChannelPage("<script>var ytInitialData = {broken;</script>")).toThrow(/didn't load/);
   });
 
-  it("saves Shorts YouTube won't serve yet and posts only Shorts made after", async () => {
+  it("posts only Shorts made after a feed that was saved unread", async () => {
     const store = new FeedStore();
     const shorts = `https://www.youtube.com/feeds/videos.xml?playlist_id=UUSH${REST}`;
-    const feed = await addFeed({ ...base, store, kind: "youtube_shorts", source: CHANNEL, fetchOptions: fakeNet({ [channelFeed]: atom("Rabble", ["v1", "s1"]) }), now: () => 1000 });
-    expect(feed).toMatchObject({ url: shorts, name: "Rabble", seen: [PENDING_FIRST_READ, "v1", "s1"] });
+    const feed = store.add({ ...base, kind: "youtube_shorts", source: CHANNEL, url: shorts, name: "Rabble", seen: [PENDING_FIRST_READ, "v1", "s1"], createdAt: 1000 });
 
     const channel = { isTextBased: () => true, send: vi.fn(async () => {}) };
     let time = CHECK_EVERY_MS + 1000;
