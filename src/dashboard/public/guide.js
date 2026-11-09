@@ -1110,7 +1110,7 @@ const FEATURE_PARTS = [
           "**Discord permissions count** (on by default) lets anyone with a command's permission use it, as Discord intends. Turn it off to make the bot's roles the only way in: a command that needs a permission then needs the mod role or a role you gave it, the command sees only what those roles give, and only Administrators skip the role and channel limits. Administrators and the owner always keep access, so set a mod role first.",
           "Applying a setup keeps commands you turned off, blocked roles and channel limits. Changing things on Advanced afterwards marks the setup as *Custom*.",
           "A refused command is private and shows in the logs channel.",
-          "The role table at the bottom shows every role's colour, strongest permissions and what the bot uses it for. Country roles are folded away: flip **Country roles** or type a name in the filter box.",
+          "**Roles and permissions** at the bottom groups roles that have exactly the same permissions into one row (Administrator first, then staff permissions, then the rest), so dozens of colour or country roles take one line. Open a row to see every role in it and its full permission list. Type a role or permission name in the box (\"ban\" finds every group that can ban), or pick a filter such as **Bot roles** or **Roles the bot uses**.",
         ],
       },
       {

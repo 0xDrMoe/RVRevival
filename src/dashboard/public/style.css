@@ -2110,24 +2110,123 @@ a.stat:hover {
   color: color-mix(in srgb, var(--act) 68%, var(--ink));
 }
 
-.roles .role-name {
+/* Roles grouped by their exact permissions (Permissions page). */
+.perm-groups {
+  display: grid;
+  gap: 6px;
+}
+
+.perm-group-section {
+  margin: 12px 0 2px;
+  font-size: 0.9rem;
+}
+
+.perm-group-section:first-child {
+  margin-top: 4px;
+}
+
+.perm-group {
+  border: 1px solid var(--border);
+  border-inline-start: 4px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+
+.perm-group.kind-admin {
+  border-inline-start-color: rgb(239 68 68 / 70%);
+}
+
+.perm-group.kind-power {
+  border-inline-start-color: rgb(245 158 11 / 70%);
+}
+
+.perm-group > summary {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.perm-group > summary::-webkit-details-marker {
+  display: none;
+}
+
+.perm-group-head {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+
+.perm-group-head .badges {
+  flex: 1;
+  min-width: 0;
+}
+
+/* The arrow that shows a group opens. */
+.perm-group-head::after {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-right: 2px solid var(--muted);
+  border-bottom: 2px solid var(--muted);
+  transform: rotate(45deg);
+  transition: transform 0.15s ease;
+}
+
+.perm-group[open] .perm-group-head::after {
+  transform: rotate(-135deg);
+}
+
+.perm-group-everyday {
+  font-size: 0.82rem;
+}
+
+/* An open group lists all its roles below, so the preview hides. */
+.perm-group[open] .perm-group-preview {
+  display: none;
+}
+
+.perm-group .role-chip {
+  background: var(--surface);
+}
+
+.perm-group .role-chip .badge {
+  padding: 0 6px;
+  font-size: 0.72rem;
+}
+
+.perm-group .role-chip.more {
+  color: var(--muted);
+}
+
+.perm-group-body {
+  display: grid;
+  gap: 10px;
+  padding: 0 12px 12px;
+}
+
+.perm-group-body h4 {
+  margin: 0 0 6px;
+  font-size: 0.8rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.perm-group-lists {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 10px 16px;
+}
+
+.perm-group-more {
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
-  font-weight: 600;
-  min-width: 160px;
-}
-
-/* Each group of roles starts with its name and how many roles it shows. */
-.roles .group-row th {
-  padding-top: 16px;
-  background: transparent;
-  color: var(--ink);
-  border-bottom: 2px solid var(--border);
-}
-
-.roles .group-row:hover th {
-  background: transparent;
+  margin-top: 6px;
 }
 
 /* --- Case filters ----------------------------------------------------------------- */
