@@ -1656,5 +1656,6 @@
   "activityUndone": "Deshecho",
   "activityUndoConfirm": "¿Restaurar los ajustes que reemplazó este cambio? Lo que se cambió después se queda igual.",
   "activityUndoDone": "Cambio deshecho.",
-  "activityUndoSkipped": "Deshecho, salvo los ajustes cambiados después: {settings}"
+  "activityUndoSkipped": "Deshecho, salvo los ajustes cambiados después: {settings}",
+  "errorGenericRef": "Algo salió mal. Inténtalo de nuevo. Si sigue pasando, dinos este código: {ref}"
 }

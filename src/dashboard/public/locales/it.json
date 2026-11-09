@@ -1656,5 +1656,6 @@
   "activityUndone": "Annullato",
   "activityUndoConfirm": "Ripristinare le impostazioni sostituite da questa modifica? Ciò che è cambiato dopo resta com'è.",
   "activityUndoDone": "Modifica annullata.",
-  "activityUndoSkipped": "Annullato, tranne le impostazioni cambiate dopo: {settings}"
+  "activityUndoSkipped": "Annullato, tranne le impostazioni cambiate dopo: {settings}",
+  "errorGenericRef": "Si è verificato un errore. Riprova. Se continua, comunicaci questo codice: {ref}"
 }

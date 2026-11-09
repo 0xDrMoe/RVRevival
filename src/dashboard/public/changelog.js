@@ -4,6 +4,11 @@
 export const CHANGELOG = [
   {
     date: "2026-11-09",
+    title: "Error codes",
+    items: ["When something breaks, the error message now shows a short code (like E-7F3A9C). Give it to staff or support and they can find exactly what went wrong."],
+  },
+  {
+    date: "2026-11-09",
     title: "Dashboard: undo, server checkup and quick switches",
     items: [
       "Undo a settings change from the Activity page, and filter it by person or search it.",

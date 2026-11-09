@@ -951,7 +951,9 @@ function failed(error) {
   }
   const messages = { 403: t("errorForbidden"), 404: t("errorNotFound"), 429: t("errorTooFast") };
   const message = error instanceof ApiError && error.body?.message ? error.body.message : messages[error.status];
-  toast(message ?? t("errorGeneric"), "error");
+  // A server error carries a code that matches the dashboard's log line.
+  const ref = error instanceof ApiError && typeof error.body?.ref === "string" ? error.body.ref : null;
+  toast(message ?? (ref ? t("errorGenericRef", { ref }) : t("errorGeneric")), "error");
 }
 
 // --- Account -----------------------------------------------------------------

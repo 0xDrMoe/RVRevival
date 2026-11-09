@@ -1520,5 +1520,7 @@
   "weeklyBoardIntro": "نقاط الخبرة من {from} إلى {to}.",
   "weeklyBoardXp": "{xp} XP",
   "weeklyBoardWinner": "👑 {user} يحمل {role} حتى الأسبوع القادم.",
-  "weeklyBoardFooter": "يُنشر كل يوم اثنين · /leaderboard للقائمة الكاملة"
+  "weeklyBoardFooter": "يُنشر كل يوم اثنين · /leaderboard للقائمة الكاملة",
+
+  "unexpectedRef": "حدث خطأ ما. حاول مرة أخرى لاحقًا. إذا تكرر، أعطِ فريق الخادم هذا الرمز: `{ref}`"
 }

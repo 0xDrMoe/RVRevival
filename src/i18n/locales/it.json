@@ -1520,5 +1520,7 @@
   "weeklyBoardIntro": "XP guadagnati dal {from} al {to}.",
   "weeklyBoardXp": "{xp} XP",
   "weeklyBoardWinner": "👑 {user} tiene {role} fino alla prossima settimana.",
-  "weeklyBoardFooter": "Pubblicato ogni lunedì · /leaderboard per la classifica completa"
+  "weeklyBoardFooter": "Pubblicato ogni lunedì · /leaderboard per la classifica completa",
+
+  "unexpectedRef": "Si è verificato un errore. Riprova più tardi. Se continua, dai questo codice allo staff del server: `{ref}`"
 }

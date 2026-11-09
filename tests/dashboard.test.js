@@ -769,6 +769,19 @@ describe("dashboard", () => {
     expect((await write(cookies, "POST", `/api/guilds/${GUILD_ID}/activity/${redoEntry.id}/undo`, {})).statusCode).toBe(409);
   });
 
+  it("answers a crash with a reference code that matches the log line", async () => {
+    const logger = fakeLogger();
+    const crashing = await buildDashboard({ config, db, discord, guildSettings, store, logger });
+    const cookies = await login();
+    discord.guild.mockRejectedValueOnce(new Error("boom"));
+    const response = await crashing.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}`, cookies });
+    expect(response.statusCode).toBe(500);
+    const { ref } = response.json();
+    expect(ref).toMatch(/^E-[0-9A-F]{6}$/);
+    expect(logger.error).toHaveBeenCalledWith("Dashboard request failed", expect.objectContaining({ ref }));
+    await crashing.close();
+  });
+
   it("adds the server checkup and top commands to the Overview stats", async () => {
     const cookies = await login();
     const BOT_ROLE = "700000000000000050";

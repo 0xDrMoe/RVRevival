@@ -7,6 +7,7 @@ import { pickLanguage, translate } from "./i18n/i18n.js";
 import { noActionLog, result, Status } from "./logs/actionLog.js";
 import { commandVerdict, withGrant } from "./permissions/commandRules.js";
 import { isExpiredInteractionError } from "./utils/discordErrors.js";
+import { errorReference } from "./utils/errorReference.js";
 
 // `guildSettings` holds each server's command rules (permissions/commandRules.js);
 // without it every command runs as Discord allows.
@@ -79,16 +80,18 @@ export function createInteractionHandler({ commands, logger, forcedLanguage, act
         });
         return;
       }
+      const ref = errorReference();
       logger.error("Command crashed", {
+        ref,
         command: interaction.commandName,
         guildId: interaction.guildId,
         userId: interaction.user.id,
         error,
       });
-      await sendErrorReply(interaction);
+      await sendErrorReply(interaction, ref);
       await actionLog.logCommand(interaction, {
         status: Status.ERROR,
-        note: "The command crashed. The details are in the bot's console log.",
+        note: `The command crashed. Search the bot's console log for ${ref}.`,
       });
       return;
     }
@@ -118,16 +121,18 @@ export function createInteractionHandler({ commands, logger, forcedLanguage, act
         });
         return;
       }
+      const ref = errorReference();
       logger.error("Button or form crashed", {
+        ref,
         customId: interaction.customId,
         guildId: interaction.guildId,
         userId: interaction.user.id,
         error,
       });
-      await sendErrorReply(interaction);
+      await sendErrorReply(interaction, ref);
       await actionLog.logCommand(interaction, {
         status: Status.ERROR,
-        note: "It crashed. The details are in the bot's console log.",
+        note: `It crashed. Search the bot's console log for ${ref}.`,
         action,
       });
       return;
@@ -139,9 +144,10 @@ export function createInteractionHandler({ commands, logger, forcedLanguage, act
   }
 
   // Shows the generic "something went wrong" message, never error details.
-  async function sendErrorReply(interaction) {
+  // With a reference, the message gives it so staff can find the log line.
+  async function sendErrorReply(interaction, ref = null) {
     const language = pickLanguage(interaction.locale, forcedLanguage);
-    const content = translate(language, "unexpected");
+    const content = ref ? translate(language, "unexpectedRef", { ref }) : translate(language, "unexpected");
     try {
       if (interaction.deferred || interaction.replied) {
         await interaction.editReply({ content });

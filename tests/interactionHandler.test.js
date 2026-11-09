@@ -28,6 +28,9 @@ function handlerFor(command, options = {}) {
 
 const failing = (error) => vi.fn(async () => Promise.reject(error));
 const errorMessage = translate("en", "unexpected");
+// A crash reply ends with its reference code, e.g. `E-7F3A9C`.
+const crashMessage = (language = "en") =>
+  expect.stringMatching(new RegExp(`^${translate(language, "unexpectedRef", { ref: "REF" }).replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace("REF", "E-[0-9A-F]{6}")}$`));
 
 describe("interaction handler", () => {
   it("runs the matching command", async () => {
@@ -40,20 +43,28 @@ describe("interaction handler", () => {
   it("replies with a generic private error when a command crashes before acknowledging", async () => {
     const interaction = fakeCommandInteraction("country");
     await handlerFor({ execute: failing(new Error("C:\\secret\\path failed")) })(interaction);
-    expect(interaction.reply).toHaveBeenCalledWith({ content: errorMessage, flags: MessageFlags.Ephemeral });
+    expect(interaction.reply).toHaveBeenCalledWith({ content: crashMessage(), flags: MessageFlags.Ephemeral });
   });
 
   it("edits the reply when a command crashes after acknowledging", async () => {
     const interaction = fakeCommandInteraction("country", { deferred: true });
     await handlerFor({ execute: failing(new Error("boom")) })(interaction);
-    expect(interaction.editReply).toHaveBeenCalledWith({ content: errorMessage });
+    expect(interaction.editReply).toHaveBeenCalledWith({ content: crashMessage() });
     expect(interaction.reply).not.toHaveBeenCalled();
+  });
+
+  it("gives the same reference code in the reply and the log line", async () => {
+    const logger = fakeLogger();
+    const interaction = fakeCommandInteraction("country");
+    await handlerFor({ execute: failing(new Error("boom")) }, { logger })(interaction);
+    const ref = interaction.reply.mock.calls[0][0].content.match(/E-[0-9A-F]{6}/)[0];
+    expect(logger.error).toHaveBeenCalledWith("Command crashed", expect.objectContaining({ ref }));
   });
 
   it("translates the error message", async () => {
     const interaction = fakeCommandInteraction("country", { locale: "fr" });
     await handlerFor({ execute: failing(new Error("boom")) })(interaction);
-    expect(interaction.reply).toHaveBeenCalledWith({ content: translate("fr", "unexpected"), flags: MessageFlags.Ephemeral });
+    expect(interaction.reply).toHaveBeenCalledWith({ content: crashMessage("fr"), flags: MessageFlags.Ephemeral });
   });
 
   it("doesn't try to answer an expired interaction", async () => {
@@ -209,7 +220,7 @@ describe("interaction handler", () => {
       const interaction = fakeButtonInteraction("test:open");
       await withButton(failing(new Error("boom")), { actionLog })(interaction);
 
-      expect(interaction.reply).toHaveBeenCalledWith({ content: errorMessage, flags: MessageFlags.Ephemeral });
+      expect(interaction.reply).toHaveBeenCalledWith({ content: crashMessage(), flags: MessageFlags.Ephemeral });
       expect(actionLog.logCommand).toHaveBeenCalledWith(
         interaction,
         expect.objectContaining({ status: Status.ERROR, action: { label: "Test button" } }),

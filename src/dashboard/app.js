@@ -84,6 +84,7 @@ import { MAX_DELAY_MS, MAX_INTERVAL_MS, MAX_SCHEDULED, MAX_SCHEDULED_LENGTH, MIN
 import { buildCaseEmbed } from "../moderation/modLog.js";
 import { Setting } from "../settings/guildSettings.js";
 import { ActivityStore } from "./activityStore.js";
+import { errorReference } from "../utils/errorReference.js";
 import { serverCheckup } from "./checkup.js";
 import { CommandUsageStore } from "../stats/commandUsage.js";
 import { canManage, DiscordApiError } from "./discordApi.js";
@@ -420,8 +421,9 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     if (error.statusCode && error.statusCode < 500) {
       return reply.code(error.statusCode).send({ error: error.code ?? "bad-request", message: error.message });
     }
-    logger.error("Dashboard request failed", { method: request.method, url: request.url, error });
-    return reply.code(500).send({ error: "internal" });
+    const ref = errorReference();
+    logger.error("Dashboard request failed", { ref, method: request.method, url: request.url, error });
+    return reply.code(500).send({ error: "internal", ref });
   });
 
   // Clear out expired logins every hour.

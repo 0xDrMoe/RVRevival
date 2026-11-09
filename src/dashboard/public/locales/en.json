@@ -1656,5 +1656,6 @@
   "activityUndone": "Undone",
   "activityUndoConfirm": "Put back the settings this change replaced? Anything changed again since stays as it is.",
   "activityUndoDone": "Change undone.",
-  "activityUndoSkipped": "Undone, except settings changed again since: {settings}"
+  "activityUndoSkipped": "Undone, except settings changed again since: {settings}",
+  "errorGenericRef": "Something went wrong. Please try again. If it keeps happening, tell us this code: {ref}"
 }

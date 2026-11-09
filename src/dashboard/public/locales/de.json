@@ -1656,5 +1656,6 @@
   "activityUndone": "Rückgängig gemacht",
   "activityUndoConfirm": "Die Einstellungen wiederherstellen, die diese Änderung ersetzt hat? Später Geändertes bleibt, wie es ist.",
   "activityUndoDone": "Änderung rückgängig gemacht.",
-  "activityUndoSkipped": "Rückgängig gemacht, außer später geänderte Einstellungen: {settings}"
+  "activityUndoSkipped": "Rückgängig gemacht, außer später geänderte Einstellungen: {settings}",
+  "errorGenericRef": "Etwas ist schiefgelaufen. Bitte versuche es erneut. Wenn es weiter passiert, nenne uns diesen Code: {ref}"
 }
