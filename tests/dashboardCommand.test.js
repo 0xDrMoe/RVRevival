@@ -20,7 +20,7 @@ const replyOf = (interaction) => interaction.reply.mock.calls[0][0];
 
 describe("/dashboard", () => {
   it("builds the server's dashboard link", () => {
-    expect(dashboardLink(DASHBOARD, GUILD_ID)).toBe(`${DASHBOARD}/#/g/${GUILD_ID}`);
+    expect(dashboardLink(DASHBOARD, GUILD_ID)).toBe(`${DASHBOARD}/g/${GUILD_ID}`);
     expect(dashboardLink(undefined, GUILD_ID)).toBeNull();
     expect(dashboardLink(DASHBOARD, null)).toBeNull();
   });
@@ -34,7 +34,7 @@ describe("/dashboard", () => {
     expect(reply.allowedMentions).toEqual({ parse: [] });
     expect(reply.content).toContain("Cool \\*Server\\*");
     const [button] = reply.components[0].toJSON().components;
-    expect(button.url).toBe(`${DASHBOARD}/#/g/${GUILD_ID}`);
+    expect(button.url).toBe(`${DASHBOARD}/g/${GUILD_ID}`);
     expect(button.label).toBe("Open dashboard");
   });
 

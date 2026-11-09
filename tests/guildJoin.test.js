@@ -62,7 +62,7 @@ describe("guildJoined", () => {
     const { embeds, allowedMentions } = channel.send.mock.calls[0][0];
     const text = embeds[0].data.description;
     expect(embeds[0].data.title).toBe("Thanks for adding Rabble!");
-    expect(text).toContain(`https://rabble.example.com/#/g/${GUILD_ID}`);
+    expect(text).toContain(`https://rabble.example.com/g/${GUILD_ID}`);
     expect(text).toContain("/country");
     expect(allowedMentions).toEqual({ parse: [] });
   });
@@ -93,7 +93,7 @@ describe("setup message dashboard button", () => {
     const channel = fakeChannel("1");
     await join.guildJoined(fakeGuild({ systemChannel: channel }));
     const [row] = channel.send.mock.calls[0][0].components.map((component) => component.toJSON());
-    expect(row.components[0].url).toBe(`https://rabble.example.com/#/g/${GUILD_ID}`);
+    expect(row.components[0].url).toBe(`https://rabble.example.com/g/${GUILD_ID}`);
   });
 
   it("leaves the button out without a dashboard", async () => {

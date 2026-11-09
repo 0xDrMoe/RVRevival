@@ -152,7 +152,7 @@ describe("/guide pages", () => {
     const index = findGuidePage("tickets");
     expect(buttonsOf(json(renderGuidePage(index)))).toHaveLength(3);
     const link = buttonsOf(json(renderGuidePage(index, { dashboardUrl: DASHBOARD, guildId: GUILD_ID })))[3];
-    expect(link.url).toBe(`${DASHBOARD}/#/g/${GUILD_ID}/guide?topic=tickets`);
+    expect(link.url).toBe(`${DASHBOARD}/g/${GUILD_ID}/guide?topic=tickets`);
   });
 
   it("notes the guide is in English for other languages", () => {

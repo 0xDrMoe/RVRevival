@@ -1,29 +1,29 @@
 // The dashboard page. Plain JavaScript, no build step. Pages are picked by the
 // part of the address after "#":
 //
-//   #/                     your servers
-//   #/g/<id>/overview      a server's numbers at a glance, and which features are on
-//   #/g/<id>/guide         how to use the bot and every feature (?part=, or ?topic=)
-//   #/guide                the same guide for everyone, no login (also /guide)
-//   #/g/<id>/activity      every change made on the dashboard (?before=)
-//   #/g/<id>/cases         moderation cases (?q=&action=&user=&moderator=&from=&to=)
-//   #/g/<id>/members       find a member (?q=), or one member's history (?user=)
-//   #/g/<id>/tickets       support tickets (?status=&user=), or one ticket's history and transcript (?ticket=)
-//   #/g/<id>/automod       automod rules, punishments and exemptions
-//   #/g/<id>/antinuke      anti-nuke limits, punishment and trusted people (owner only)
-//   #/g/<id>/raid          the new-account gate, join alerts and a running lockdown
-//   #/g/<id>/welcome       welcome and leave messages
-//   #/g/<id>/roles         autoroles, roles on rejoin, role panels (made and edited here)
-//   #/g/<id>/starboard     the starboard
-//   #/g/<id>/birthdays     birthday greetings and role
-//   #/g/<id>/levels        leveling: XP, level-up messages, reward roles, the leaderboard (?page=)
-//   #/g/<id>/country       the /country channel
-//   #/g/<id>/tags          custom commands (saved answers for /tag)
-//   #/g/<id>/responders    auto-responders
-//   #/g/<id>/scheduled     scheduled messages
-//   #/g/<id>/moderation    staff and mod roles, the mod log
-//   #/g/<id>/logging       log channels, events and ignored channels
-//   #/g/<id>/access        permissions: premade setups (Simple), or roles, command
+//   /                     your servers
+//   /g/<id>/overview      a server's numbers at a glance, and which features are on
+//   /g/<id>/guide         how to use the bot and every feature (?part=, or ?topic=)
+//   /guide                the same guide for everyone, no login (also /guide)
+//   /g/<id>/activity      every change made on the dashboard (?before=)
+//   /g/<id>/cases         moderation cases (?q=&action=&user=&moderator=&from=&to=)
+//   /g/<id>/members       find a member (?q=), or one member's history (?user=)
+//   /g/<id>/tickets       support tickets (?status=&user=), or one ticket's history and transcript (?ticket=)
+//   /g/<id>/automod       automod rules, punishments and exemptions
+//   /g/<id>/antinuke      anti-nuke limits, punishment and trusted people (owner only)
+//   /g/<id>/raid          the new-account gate, join alerts and a running lockdown
+//   /g/<id>/welcome       welcome and leave messages
+//   /g/<id>/roles         autoroles, roles on rejoin, role panels (made and edited here)
+//   /g/<id>/starboard     the starboard
+//   /g/<id>/birthdays     birthday greetings and role
+//   /g/<id>/levels        leveling: XP, level-up messages, reward roles, the leaderboard (?page=)
+//   /g/<id>/country       the /country channel
+//   /g/<id>/tags          custom commands (saved answers for /tag)
+//   /g/<id>/responders    auto-responders
+//   /g/<id>/scheduled     scheduled messages
+//   /g/<id>/moderation    staff and mod roles, the mod log
+//   /g/<id>/logging       log channels, events and ignored channels
+//   /g/<id>/access        permissions: premade setups (Simple), or roles, command
 //                          rules and log channels per kind (?tab=advanced)
 //
 // Everything shown comes from the JSON API in ../app.js. Text from Discord
@@ -264,6 +264,11 @@ const PERMISSIONS = [
   { key: "permManageMessages", bit: 13n },
 ];
 
+// The page's address without the origin: "/g/<id>/cases?user=1".
+function currentUrl() {
+  return `${location.pathname}${location.search}`;
+}
+
 const state = {
   language: "en",
   strings: {},
@@ -274,7 +279,7 @@ const state = {
   // Set while a settings page has unsaved changes.
   unsaved: false,
   // The address of the page shown, to go back to if leaving is cancelled.
-  lastHash: location.hash,
+  lastUrl: currentUrl(),
   // The last server loaded, reused for a few seconds so moving between pages is instant.
   cache: null,
   // The sidebar and content area of the server shown, kept between its pages.
@@ -312,7 +317,7 @@ function t(key, values = {}) {
 }
 
 async function loadLanguage(language) {
-  const load = async (code) => (await fetch(`locales/${code}.json`)).json();
+  const load = async (code) => (await fetch(`/locales/${code}.json`)).json();
   state.english = Object.keys(state.english).length > 0 ? state.english : await load("en");
   state.strings = language === "en" ? state.english : await load(language);
   state.language = language;
@@ -993,8 +998,8 @@ function renderAccount() {
     "div",
     { class: "menu", role: "menu", hidden: true },
     h("div", { class: "menu-user" }, avatar(), h("strong", {}, user.username)),
-    h("a", { class: "menu-item", role: "menuitem", href: "#/servers" }, icon("layers"), t("allServers")),
-    h("a", { class: "menu-item", role: "menuitem", href: "#/" }, icon("home"), t("topHome")),
+    h("a", { class: "menu-item", role: "menuitem", href: "/servers" }, icon("layers"), t("allServers")),
+    h("a", { class: "menu-item", role: "menuitem", href: "/" }, icon("home"), t("topHome")),
     h(
       "button",
       { class: "menu-item", type: "button", role: "menuitem", onclick: () => (closeMenus(), openAppearance()) },
@@ -1053,24 +1058,23 @@ async function logout() {
   state.cache = null;
   state.shell = null;
   renderChrome();
-  location.hash = "#/";
-  showLogin();
+  navigate("/");
 }
 
 // Logged out: the landing page, or a plain login card for someone appealing a ban.
 function showLogin() {
-  const failedLogin = new URLSearchParams(location.hash.split("?")[1] ?? "").get("login") === "failed";
-  const appealing = /^#\/appeal\/\d{17,20}$/.test(location.hash);
+  const failedLogin = new URLSearchParams(location.search).get("login") === "failed";
+  const appealing = APPEAL_PATH.test(location.pathname);
   if (!appealing) {
     showLanding(failedLogin);
     return;
   }
-  rememberReturn(location.hash);
+  rememberReturn(location.pathname);
   show(
     h(
       "section",
       { class: "login card" },
-      h("div", { class: "login-art" }, h("img", { src: "favicon.svg", alt: "", width: 72, height: 72 })),
+      h("div", { class: "login-art" }, h("img", { src: "/favicon.svg", alt: "", width: 72, height: 72 })),
       h("h1", {}, t("loginTitle")),
       h("p", { class: "muted" }, t(appealing ? "appealLoginIntro" : "loginIntro")),
       failedLogin ? h("p", { class: "error-text" }, t("loginFailed")) : null,
@@ -1237,7 +1241,7 @@ function landingDemo(tone, iconName, title, text) {
   return h(
     "div",
     { class: `landing-demo tone-${tone}` },
-    h("img", { src: "favicon.svg", alt: "", width: 36, height: 36 }),
+    h("img", { src: "/favicon.svg", alt: "", width: 36, height: 36 }),
     h(
       "div",
       {},
@@ -1306,20 +1310,20 @@ function showLanding(failedLogin = false) {
       landingJump("steps", t("landingNavSteps")),
       landingJump("dashboard", t("landingNavDashboard")),
       landingJump("faq", t("landingNavFaq")),
-      h("a", { class: "link-button topnav-guide", href: "#/guide" }, t("page_guide")),
+      h("a", { class: "link-button topnav-guide", href: "/guide" }, t("page_guide")),
     ),
     topInvite,
     // replaceChildren would print a null as "null", so only add the button when logged in.
-    ...(state.me ? [h("a", { class: "button ghost small topnav-dashboard", href: "#/servers" }, icon("layers"), t("landingDashboard"))] : []),
+    ...(state.me ? [h("a", { class: "button ghost small topnav-dashboard", href: "/servers" }, icon("layers"), t("landingDashboard"))] : []),
   );
   topnav.hidden = false;
-  const dashboardHref = state.me ? "#/servers" : "/auth/login";
+  const dashboardHref = state.me ? "/servers" : "/auth/login";
   const login = () => h("a", { class: "button landing-login big", href: dashboardHref }, icon("home"), t("landingDashboard"));
   // Step 1 invites the bot, step 2 opens the dashboard, step 3 the public guide.
   const stepActions = [
     invites[2],
     h("a", { class: "button big landing-step-action", href: dashboardHref }, icon("home"), t("landingDashboard")),
-    h("a", { class: "button big landing-step-action", href: "#/guide" }, icon("book"), t("landingOpenGuide")),
+    h("a", { class: "button big landing-step-action", href: "/guide" }, icon("book"), t("landingOpenGuide")),
   ];
   const status = h("span", { class: "landing-status" }, t("loading"));
   const stats = h("div", { class: "landing-stats", "aria-busy": "true" }, Array.from({ length: 6 }, () => h("span", { class: "sk sk-stat" })));
@@ -1430,7 +1434,7 @@ function showLanding(failedLogin = false) {
       h(
         "footer",
         { class: "landing-footer" },
-        h("span", { class: "landing-footer-brand" }, h("img", { src: "favicon.svg", alt: "", width: 24, height: 24 }), "Rabble"),
+        h("span", { class: "landing-footer-brand" }, h("img", { src: "/favicon.svg", alt: "", width: 24, height: 24 }), "Rabble"),
         h(
           "nav",
           { "aria-label": t("landingFooterNav") },
@@ -1439,7 +1443,7 @@ function showLanding(failedLogin = false) {
           landingJump("dashboard", t("landingNavDashboard")),
           landingJump("faq", t("landingNavFaq")),
           h("a", { href: "/auth/login" }, t("landingDashboard")),
-          h("a", { href: "#/guide" }, t("page_guide")),
+          h("a", { href: "/guide" }, t("page_guide")),
           h("a", { href: "/terms" }, t("landingTerms")),
           h("a", { href: "/privacy" }, t("landingPrivacy")),
         ),
@@ -1480,7 +1484,7 @@ async function showServers({ refresh = false } = {}) {
     );
   const readyCards = ready.map((guild) =>
     serverCard(guild, {
-      href: `#/g/${guild.id}/overview`,
+      href: `/g/${guild.id}/overview`,
       banner: bannerFor(guild.id),
       badge: h(
         "span",
@@ -1556,7 +1560,7 @@ const canManageGuild = (data) => data.access === "manage";
 async function loadManagedGuild(guildId) {
   const data = await loadGuild(guildId, { fresh: true });
   if (!canManageGuild(data)) {
-    location.replace(`#/g/${guildId}/overview`);
+    navigate(`/g/${guildId}/overview`, { replace: true });
     return undefined;
   }
   return data;
@@ -1576,10 +1580,10 @@ function guildSwitcher(data) {
     "div",
     { class: "menu switcher-menu", role: "menu", hidden: true },
     others.map((entry) =>
-      h("a", { class: "menu-item", role: "menuitem", href: `#/g/${entry.id}/overview` }, guildIcon(entry, "xs"), h("span", { class: "grow" }, entry.name)),
+      h("a", { class: "menu-item", role: "menuitem", href: `/g/${entry.id}/overview` }, guildIcon(entry, "xs"), h("span", { class: "grow" }, entry.name)),
     ),
     others.length > 0 ? h("hr") : null,
-    h("a", { class: "menu-item", role: "menuitem", href: "#/servers" }, icon("layers"), t("allServers")),
+    h("a", { class: "menu-item", role: "menuitem", href: "/servers" }, icon("layers"), t("allServers")),
   );
   const button = h(
     "button",
@@ -1616,7 +1620,7 @@ function navLinks(data, pageId) {
           "a",
           {
             class: `nav-link${page.id === pageId ? " active" : ""}`,
-            href: `#/g/${data.guild.id}/${page.id}`,
+            href: `/g/${data.guild.id}/${page.id}`,
             "data-page": page.id,
             "aria-current": page.id === pageId ? "page" : undefined,
           },
@@ -1696,7 +1700,7 @@ function searchItems() {
         title: t(`page_${page.id}`),
         sub: t(`navGroup_${page.group}`),
         text: searchable(`${t(`page_${page.id}`)} ${t(`navGroup_${page.group}`)} ${intro === `${page.id}Intro` ? "" : intro} ${t(`search_${page.id}`)}`),
-        href: `#/g/${data.guild.id}/${page.id}`,
+        href: `/g/${data.guild.id}/${page.id}`,
       });
     }
     for (const part of GUIDE) {
@@ -1723,7 +1727,7 @@ function searchItems() {
     }
   }
   for (const guild of (state.me?.guilds ?? []).filter((entry) => entry.botPresent)) {
-    items.push({ kind: "server", guild, title: guild.name, sub: t("searchServers"), text: searchable(guild.name), href: `#/g/${guild.id}/overview` });
+    items.push({ kind: "server", guild, title: guild.name, sub: t("searchServers"), text: searchable(guild.name), href: `/g/${guild.id}/overview` });
   }
   return items;
 }
@@ -1739,7 +1743,7 @@ function openSearch() {
   const list = h("ul", { class: "search-results", role: "listbox" });
   const go = (item) => {
     dialog.close();
-    location.hash = item.href;
+    navigate(item.href);
   };
   const paint = () => {
     list.replaceChildren(
@@ -4444,7 +4448,7 @@ async function leaderboardCard(guildId, page, period) {
     if (nextPeriod !== "all") {
       query.set("period", nextPeriod);
     }
-    return `#/g/${guildId}/levels${query.size > 0 ? `?${query}` : ""}`;
+    return `/g/${guildId}/levels${query.size > 0 ? `?${query}` : ""}`;
   };
   const rows =
     board.entries.length === 0
@@ -4830,7 +4834,7 @@ async function showLevels(guildId) {
   if (!data) {
     return;
   }
-  const query = new URLSearchParams(location.hash.split("?")[1] ?? "");
+  const query = new URLSearchParams(location.search);
   const page = Math.max(1, Number.parseInt(query.get("page") ?? "1", 10) || 1);
   const period = LEADERBOARD_PERIODS.includes(query.get("period")) ? query.get("period") : "all";
   const config = data.settings.leveling;
@@ -5753,7 +5757,7 @@ function permissionTabs(guildId, current) {
         {
           class: "button segment",
           role: "tab",
-          href: `#/g/${guildId}/access${tab === "simple" ? "" : `?tab=${tab}`}`,
+          href: `/g/${guildId}/access${tab === "simple" ? "" : `?tab=${tab}`}`,
           "aria-selected": String(tab === current),
           "aria-pressed": String(tab === current),
         },
@@ -6135,7 +6139,7 @@ async function showAccess(guildId) {
   if (!data) {
     return;
   }
-  const query = new URLSearchParams(location.hash.split("?")[1] ?? "");
+  const query = new URLSearchParams(location.search);
   if (query.get("tab") === "advanced") {
     showAdvancedPermissions(data);
   } else {
@@ -6153,7 +6157,7 @@ async function showOverview(guildId) {
   const { guild } = data;
   const casesLink = (params = {}) => {
     const query = new URLSearchParams(params);
-    return `#/g/${guildId}/cases${query.size > 0 ? `?${query}` : ""}`;
+    return `/g/${guildId}/cases${query.size > 0 ? `?${query}` : ""}`;
   };
 
   const total = Object.values(stats.caseCounts).reduce((sum, count) => sum + count, 0);
@@ -6369,7 +6373,7 @@ function featuresCard(data) {
         const on = page.on(data.settings);
         return h(
           "a",
-          { class: `feature tone-${page.tone}${on ? " on" : ""}`, href: `#/g/${data.guild.id}/${page.id}` },
+          { class: `feature tone-${page.tone}${on ? " on" : ""}`, href: `/g/${data.guild.id}/${page.id}` },
           iconChip(page.icon, page.tone, "sm"),
           h("span", { class: "grow" }, t(`page_${page.id}`)),
           h("span", { class: `status ${on ? "on" : "off"}` }, t(on ? "featureOn" : "featureOff")),
@@ -6462,7 +6466,7 @@ function setupCard(data, { open = false } = {}) {
                       "span",
                       { class: "step-actions" },
                       h("button", { type: "button", class: "button ghost small", title: t("setupSkipHelp"), onclick: skip([step.id]) }, t("setupSkip")),
-                      h("a", { class: "button ghost small", href: `#/g/${guild.id}/${step.page}` }, t("setupFix")),
+                      h("a", { class: "button ghost small", href: `/g/${guild.id}/${step.page}` }, t("setupFix")),
                     ),
             ),
           ),
@@ -6514,7 +6518,7 @@ function filtersToApi(filters, { before } = {}) {
 
 async function showCases(guildId) {
   const data = await loadGuild(guildId);
-  const query = new URLSearchParams(location.hash.split("?")[1] ?? "");
+  const query = new URLSearchParams(location.search);
   const filters = {
     q: query.get("q") ?? "",
     actions: (query.get("action") ?? "").split(",").filter((action) => CASE_ACTIONS.includes(action)),
@@ -6526,7 +6530,7 @@ async function showCases(guildId) {
   // Changing the address reloads the list.
   const apply = (next) => {
     const params = filtersToHash(next);
-    location.hash = `#/g/${guildId}/cases${params.size > 0 ? `?${params}` : ""}`;
+    navigate(`/g/${guildId}/cases${params.size > 0 ? `?${params}` : ""}`);
   };
 
   const rows = h("tbody");
@@ -6789,7 +6793,7 @@ async function deleteCase(guildId, entry, row) {
 
 // --- Members -----------------------------------------------------------------
 
-const memberLink = (guildId, userId) => `#/g/${guildId}/members?user=${userId}`;
+const memberLink = (guildId, userId) => `/g/${guildId}/members?user=${userId}`;
 // Accounts younger than this get a warning, like the server log's join message.
 const NEW_ACCOUNT_DAYS = 7;
 
@@ -6817,7 +6821,7 @@ function formatAgo(ms) {
 }
 
 async function showMembers(guildId) {
-  const query = new URLSearchParams(location.hash.split("?")[1] ?? "");
+  const query = new URLSearchParams(location.search);
   const userId = query.get("user");
   if (userId && /^\d{17,20}$/.test(userId)) {
     return showMemberHistory(guildId, userId);
@@ -6841,9 +6845,9 @@ async function showMembers(guildId) {
         event.preventDefault();
         const next = input.value.trim();
         if (/^\d{17,20}$/.test(next)) {
-          location.hash = memberLink(guildId, next);
+          navigate(memberLink(guildId, next));
         } else {
-          location.hash = `#/g/${guildId}/members${next ? `?q=${encodeURIComponent(next)}` : ""}`;
+          navigate(`/g/${guildId}/members${next ? `?q=${encodeURIComponent(next)}` : ""}`);
         }
       },
     },
@@ -6888,7 +6892,7 @@ async function showMembers(guildId) {
 async function showMemberHistory(guildId, userId) {
   const [data, history] = await Promise.all([loadGuild(guildId), api(`/api/guilds/${guildId}/members/${userId}`)]);
   const { user, member } = history;
-  const casesLink = `#/g/${guildId}/cases?user=${userId}`;
+  const casesLink = `/g/${guildId}/cases?user=${userId}`;
   const accountAgeDays = (Date.now() - user.createdAt) / DAY_MS;
 
   // Where they stand right now.
@@ -6971,7 +6975,7 @@ async function showMemberHistory(guildId, userId) {
           t("levelsLevel", { level: history.level.level }),
           t("memberLevel"),
           t("memberLevelSub", { rank: formatNumber(history.level.rank), xp: formatNumber(history.level.xp) }),
-          canManageGuild(data) ? `#/g/${guildId}/levels` : undefined,
+          canManageGuild(data) ? `/g/${guildId}/levels` : undefined,
         )
       : null,
   );
@@ -7063,7 +7067,7 @@ async function showMemberHistory(guildId, userId) {
     guildLayout(
       data,
       "members",
-      h("a", { class: "back", href: `#/g/${guildId}/members` }, t("memberBackToSearch")),
+      h("a", { class: "back", href: `/g/${guildId}/members` }, t("memberBackToSearch")),
       header,
       history.banned?.reason ? h("p", { class: "tip danger" }, t("memberBanReason", { reason: history.banned.reason })) : null,
       history.quarantine
@@ -7106,7 +7110,7 @@ async function showMemberHistory(guildId, userId) {
 
 // --- Tickets -----------------------------------------------------------------------
 
-const ticketLink = (guildId, number) => `#/g/${guildId}/tickets?ticket=${number}`;
+const ticketLink = (guildId, number) => `/g/${guildId}/tickets?ticket=${number}`;
 const TICKET_STATUSES = ["open", "closed", "all"];
 
 function ticketBadge(ticket) {
@@ -7793,7 +7797,7 @@ async function showTicketList(guildId, data, query) {
   const go = (changes) => {
     const next = new URLSearchParams({ status, user: userId, ...changes });
     [...next.entries()].forEach(([key, value]) => (value === "" || (key === "status" && value === "all")) && next.delete(key));
-    location.hash = `#/g/${guildId}/tickets${next.size > 0 ? `?${next}` : ""}`;
+    navigate(`/g/${guildId}/tickets${next.size > 0 ? `?${next}` : ""}`);
   };
   const userInput = h("input", {
     type: "search",
@@ -7913,7 +7917,7 @@ async function showTicket(guildId, data, number) {
     guildLayout(
       data,
       "tickets",
-      h("a", { class: "back", href: `#/g/${guildId}/tickets` }, t("ticketsBack")),
+      h("a", { class: "back", href: `/g/${guildId}/tickets` }, t("ticketsBack")),
       h(
         "section",
         { class: "card" },
@@ -7936,7 +7940,7 @@ async function showTicket(guildId, data, number) {
 }
 
 async function showTickets(guildId) {
-  const query = new URLSearchParams(location.hash.split("?")[1] ?? "");
+  const query = new URLSearchParams(location.search);
   const data = await loadGuild(guildId);
   const number = Number.parseInt(query.get("ticket") ?? "", 10);
   return Number.isInteger(number) && number > 0 ? showTicket(guildId, data, number) : showTicketList(guildId, data, query);
@@ -7948,8 +7952,8 @@ const MAX_APPEAL_QUESTIONS = 5;
 const MAX_APPEAL_QUESTION_LENGTH = 200;
 const APPEAL_FILTERS = ["open", "accepted", "denied", "all"];
 const APPEAL_BADGES = { open: "badge-amber", accepted: "badge-green", denied: "badge-red" };
-const appealLink = (guildId, number) => `#/g/${guildId}/appeals?appeal=${number}`;
-const appealPageUrl = (guildId) => `${location.origin}/#/appeal/${guildId}`;
+const appealLink = (guildId, number) => `/g/${guildId}/appeals?appeal=${number}`;
+const appealPageUrl = (guildId) => `${location.origin}/appeal/${guildId}`;
 const appealBadge = (appeal) => h("span", { class: `badge ${APPEAL_BADGES[appeal.status] ?? ""}` }, t(`appealStatus_${appeal.status}`));
 
 function questionRow(question, onRemove) {
@@ -8093,7 +8097,7 @@ async function showAppeal(guildId, data, number) {
       guildLayout(
         data,
         "appeals",
-        h("a", { class: "back", href: `#/g/${guildId}/appeals` }, t("appealsBack")),
+        h("a", { class: "back", href: `/g/${guildId}/appeals` }, t("appealsBack")),
         h(
           "section",
           { class: "card" },
@@ -8109,7 +8113,7 @@ async function showAppeal(guildId, data, number) {
 }
 
 async function showAppeals(guildId) {
-  const query = new URLSearchParams(location.hash.split("?")[1] ?? "");
+  const query = new URLSearchParams(location.search);
   const data = await loadManagedGuild(guildId);
   if (!data) {
     return;
@@ -8342,7 +8346,7 @@ function embedPreview(message, data) {
   return h(
     "div",
     { class: "discord-message" },
-    h("img", { class: "discord-avatar", src: "favicon.svg", alt: "" }),
+    h("img", { class: "discord-avatar", src: "/favicon.svg", alt: "" }),
     h(
       "div",
       { class: "discord-body" },
@@ -9837,8 +9841,8 @@ async function showActivity(guildId) {
 
 // Every topic in guide.js, in order, with the part it's in.
 const GUIDE_TOPICS = GUIDE.flatMap(({ id, part, sections }) => sections.map((section) => ({ ...section, part, partId: id })));
-// Inside a server (#/g/<id>/guide) or the public guide (#/guide) when guildId is null.
-const guideRoot = (guildId) => (guildId ? `#/g/${guildId}/guide` : "#/guide");
+// Inside a server (/g/<id>/guide) or the public guide (/guide) when guildId is null.
+const guideRoot = (guildId) => (guildId ? `/g/${guildId}/guide` : "/guide");
 const guideLink = (guildId, topicId) => `${guideRoot(guildId)}${topicId ? `?topic=${topicId}` : ""}`;
 // The command reference's page for each slash command, by name ("/ban").
 const COMMAND_PAGES = new Map(GUIDE_TOPICS.filter((topic) => topic.command).map((topic) => [topic.command, topic]));
@@ -10083,7 +10087,7 @@ function guideTopicPage(data, topic) {
   const part = GUIDE.find((entry) => entry.id === topic.partId);
   const index = GUIDE_TOPICS.indexOf(topic);
   const page = guildId && topic.page && visiblePages(data).find((entry) => entry.id === topic.page);
-  const openPage = page ? h("a", { class: "button ghost small", href: `#/g/${guildId}/${page.id}` }, icon(page.icon, "icon small"), t("guideOpenPage", { page: t(`page_${page.id}`) })) : null;
+  const openPage = page ? h("a", { class: "button ghost small", href: `/g/${guildId}/${page.id}` }, icon(page.icon, "icon small"), t("guideOpenPage", { page: t(`page_${page.id}`) })) : null;
   const pagerEntry = (entry) => entry && { href: guideLink(guildId, entry.id), title: entry.title };
   return [
     guideCrumbs(guildId, part, topic),
@@ -10105,27 +10109,27 @@ function guideTopicPage(data, topic) {
 
 // The page a guide address asks for: ?topic=<id>, ?part=<id>, or the first page.
 function guideContent(data) {
-  const query = new URLSearchParams(location.hash.split("?")[1] ?? "");
+  const query = new URLSearchParams(location.search);
   const topic = GUIDE_TOPICS.find((entry) => entry.id === query.get("topic"));
   const part = !topic && GUIDE.find((entry) => entry.id === query.get("part"));
   return topic ? guideTopicPage(data, topic) : part ? guidePart(data, part) : guideHome(data);
 }
 
-// The guide inside a server: #/g/<id>/guide.
+// The guide inside a server: /g/<id>/guide.
 async function showGuide(guildId) {
   const data = await loadGuild(guildId);
   show(guildLayout(data, "guide", guideContent(data)));
 }
 
-// The public guide: #/guide, readable without logging in. Its links stay in
+// The public guide: /guide, readable without logging in. Its links stay in
 // the public guide; logged in, the top bar still has the account menu.
 async function showPublicGuide() {
   await loadMeQuietly();
   const back = h(
     "div",
     { class: "public-guide-bar" },
-    h("a", { class: "button ghost small", href: "#/" }, icon("chevronLeft", "icon small"), t("guideBackHome")),
-    h("a", { class: "button ghost small", href: state.me ? "#/servers" : "/auth/login" }, icon("home", "icon small"), t("landingDashboard")),
+    h("a", { class: "button ghost small", href: "/" }, icon("chevronLeft", "icon small"), t("guideBackHome")),
+    h("a", { class: "button ghost small", href: state.me ? "/servers" : "/auth/login" }, icon("home", "icon small"), t("landingDashboard")),
   );
   show(h("div", { class: "public-guide" }, back, guideContent(null)));
 }
@@ -10166,18 +10170,20 @@ const SHOW_PAGE = {
 // Where to go back to after logging in (the appeal page someone opened while
 // logged out). Session storage can be off, so this is best effort.
 const RETURN_KEY = "rv-return";
-function rememberReturn(hash) {
+const APPEAL_PATH = /^\/appeal\/\d{17,20}$/;
+function rememberReturn(path) {
   try {
-    sessionStorage.setItem(RETURN_KEY, hash);
+    sessionStorage.setItem(RETURN_KEY, path);
   } catch {
     // Private mode.
   }
 }
 function takeReturn() {
   try {
-    const hash = sessionStorage.getItem(RETURN_KEY);
+    // Saved before clean addresses as "#/appeal/<id>".
+    const path = sessionStorage.getItem(RETURN_KEY)?.replace(/^#/, "") ?? null;
     sessionStorage.removeItem(RETURN_KEY);
-    return hash;
+    return path;
   } catch {
     return null;
   }
@@ -10196,28 +10202,28 @@ async function loadMeQuietly() {
 
 async function showHome() {
   await loadMeQuietly();
-  const failedLogin = new URLSearchParams(location.hash.split("?")[1] ?? "").get("login") === "failed";
+  const failedLogin = new URLSearchParams(location.search).get("login") === "failed";
   showLanding(failedLogin);
 }
 
 async function route() {
-  let [path] = location.hash.replace(/^#/, "").split("?");
+  let path = location.pathname;
   if (path === "/servers") {
     const back = takeReturn();
-    if (back && /^#\/appeal\/\d{17,20}$/.test(back)) {
+    if (back && APPEAL_PATH.test(back)) {
       history.replaceState(null, "", back);
-      [path] = location.hash.replace(/^#/, "").split("?");
+      path = location.pathname;
     }
   }
   const appeal = path.match(/^\/appeal\/(\d{17,20})$/);
-  const match = path.match(/^\/g\/(\d{17,20})(?:\/(\w+))?$/);
+  const match = path.match(/^\/g\/(\d{17,20})(?:\/(\w+))?\/?$/);
   state.unsaved = false;
-  state.lastHash = location.hash;
+  state.lastUrl = currentUrl();
   closeMenus();
   const pageId = match && (PAGE_ALIASES[match[2]] ?? match[2] ?? "overview");
   if (match && PAGE_ALIASES[match[2]]) {
-    history.replaceState(null, "", `#/g/${match[1]}/${pageId}`);
-    state.lastHash = location.hash;
+    history.replaceState(null, "", `/g/${match[1]}/${pageId}${location.search}`);
+    state.lastUrl = currentUrl();
   }
   // Moving between pages of the same server keeps the sidebar and shows placeholders.
   if (match && state.shell?.guildId === match[1] && state.shell.element.isConnected) {
@@ -10241,26 +10247,79 @@ async function route() {
     } else if (path === "/guide") {
       await showPublicGuide();
     } else {
+      if (path !== "/") {
+        history.replaceState(null, "", `/${location.search}`);
+        state.lastUrl = currentUrl();
+      }
       await showHome();
     }
   } catch (error) {
     failed(error);
     if (!(error instanceof ApiError && error.status === 401) && match) {
-      show(h("p", { class: "muted empty" }, t("errorGeneric")), h("a", { class: "button ghost", href: "#/servers" }, t("backToServers")));
+      show(h("p", { class: "muted empty" }, t("errorGeneric")), h("a", { class: "button ghost", href: "/servers" }, t("backToServers")));
     }
   }
 }
 
-// Asks before leaving a settings page with unsaved changes.
-function onHashChange() {
+// Goes to a page of the app without reloading. Asks first when a settings
+// page has unsaved changes. `replace` swaps the current history entry.
+function navigate(url, { replace = false } = {}) {
+  if (url !== state.lastUrl && state.unsaved && !confirm(t("leaveUnsaved"))) {
+    return;
+  }
+  // Clicking a link to the page already shown doesn't add a history entry.
+  if (url === currentUrl()) {
+    replace = true;
+  }
+  history[replace ? "replaceState" : "pushState"](null, "", url);
+  route();
+}
+
+// Pages the app draws itself. Every other address on the site (/auth/login,
+// /terms, files) is a normal link that loads from the server.
+const APP_PATH = /^\/(?:|servers|guide|appeal\/\d{17,20}|g\/\d{17,20}(?:\/\w+)?)\/?$/;
+
+// Same-site links to app pages open without reloading the page.
+function onLinkClick(event) {
+  if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+    return;
+  }
+  const link = event.target.closest?.("a[href]");
+  if (!link || (link.target && link.target !== "_self") || link.hasAttribute("download")) {
+    return;
+  }
+  const url = new URL(link.href, location.href);
+  if (url.origin !== location.origin || !APP_PATH.test(url.pathname)) {
+    return;
+  }
+  // A link to a spot on the same page (#faq) scrolls as usual.
+  if (url.hash && url.pathname === location.pathname && url.search === location.search) {
+    return;
+  }
+  event.preventDefault();
+  navigate(`${url.pathname}${url.search}`);
+}
+
+// Back and forward. History has already moved, so a cancelled leave puts the
+// page that was shown back.
+function onPopState() {
   if (state.unsaved && !confirm(t("leaveUnsaved"))) {
-    history.replaceState(null, "", state.lastHash || "#/");
+    history.pushState(null, "", state.lastUrl || "/");
     return;
   }
   route();
 }
 
+// Links from before clean addresses (/#/g/<id>/cases?user=1) still work.
+function upgradeHashUrl() {
+  if (location.hash.startsWith("#/")) {
+    history.replaceState(null, "", location.hash.slice(1));
+  }
+}
+
 async function start() {
+  upgradeHashUrl();
+  state.lastUrl = currentUrl();
   loadAppearance();
   await loadLanguage(preferredLanguage());
   renderChrome();
@@ -10272,7 +10331,15 @@ async function start() {
       closeMenus();
     }
   });
-  window.addEventListener("hashchange", onHashChange);
+  document.addEventListener("click", onLinkClick);
+  window.addEventListener("popstate", onPopState);
+  // An old "#/..." link followed while the page is open.
+  window.addEventListener("hashchange", () => {
+    if (location.hash.startsWith("#/")) {
+      upgradeHashUrl();
+      route();
+    }
+  });
   window.addEventListener("beforeunload", (event) => {
     if (state.unsaved) {
       event.preventDefault();

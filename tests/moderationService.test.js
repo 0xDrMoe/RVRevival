@@ -78,13 +78,13 @@ describe("moderation service", () => {
     const appealing = createModerationService({
       store,
       logger: fakeLogger(),
-      appealLink: (target) => `https://dash.example.com/#/appeal/${target.id}`,
+      appealLink: (target) => `https://dash.example.com/appeal/${target.id}`,
       now: () => NOW,
     });
     const member = fakeMember(TARGET_ID);
     await appealing.ban({ guild, user: member.user, member, moderator, reason: "cheating" });
     expect(member.user.send.mock.calls[0][0].content).toBe(
-      `You have been banned from **Rumbleverse \\*Revival\\***.\nReason: cheating\nYou can appeal this ban here: https://dash.example.com/#/appeal/${GUILD_ID}`,
+      `You have been banned from **Rumbleverse \\*Revival\\***.\nReason: cheating\nYou can appeal this ban here: https://dash.example.com/appeal/${GUILD_ID}`,
     );
     const kicked = fakeMember("300000000000000099");
     await appealing.kick({ guild, member: kicked, moderator, reason: "spam" });

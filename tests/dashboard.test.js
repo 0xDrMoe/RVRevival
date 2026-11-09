@@ -115,7 +115,7 @@ describe("dashboard", () => {
       url: `/auth/callback?code=abc&state=${state}`,
       cookies: { rv_oauth_state: stateCookie.value },
     });
-    expect(callback.headers.location).toBe("/#/servers");
+    expect(callback.headers.location).toBe("/servers");
     const session = callback.cookies.find((cookie) => cookie.name === "rv_session");
     expect(session).toMatchObject({ httpOnly: true, secure: true, sameSite: "Lax" });
     return { rv_session: session.value };
@@ -168,10 +168,21 @@ describe("dashboard", () => {
     expect(image.headers["content-type"]).toBe("image/jpeg");
   });
 
-  it("sends /guide to the public guide without logging in", async () => {
-    const page = await app.inject({ method: "GET", url: "/guide" });
-    expect(page.statusCode).toBe(302);
-    expect(page.headers.location).toBe("/#/guide");
+  it("serves the page for every address the app draws, without logging in", async () => {
+    for (const url of ["/", "/servers", "/guide", `/appeal/${GUILD_ID}`, `/g/${GUILD_ID}`, `/g/${GUILD_ID}/cases?user=1`]) {
+      const page = await app.inject({ method: "GET", url });
+      expect(page.statusCode, url).toBe(200);
+      expect(page.headers["content-type"], url).toContain("text/html");
+      expect(page.body, url).toContain('<script type="module" src="/app.js">');
+    }
+  });
+
+  it("keeps files, the API and unknown addresses apart from the app's pages", async () => {
+    const script = await app.inject({ method: "GET", url: "/guide.js" });
+    expect(script.headers["content-type"]).toContain("javascript");
+    expect((await app.inject({ method: "GET", url: "/api/me" })).statusCode).toBe(401);
+    expect((await app.inject({ method: "GET", url: "/nothing-here" })).statusCode).toBe(404);
+    expect((await app.inject({ method: "GET", url: "/g/1/2/3" })).statusCode).toBe(404);
   });
 
   it("serves the Terms of Service and Privacy Policy without logging in", async () => {
@@ -263,7 +274,7 @@ describe("dashboard", () => {
       url: "/auth/callback?code=abc&state=forged",
       cookies: { rv_oauth_state: stateCookie.value },
     });
-    expect(callback.headers.location).toBe("/#/?login=failed");
+    expect(callback.headers.location).toBe("/?login=failed");
     expect(callback.cookies.some((cookie) => cookie.name === "rv_session" && cookie.value)).toBe(false);
     expect(discord.exchangeCode).not.toHaveBeenCalled();
   });
@@ -1064,7 +1075,7 @@ describe("dashboard", () => {
     expect(sent.statusCode).toBe(200);
     expect(sent.json().appeal).toMatchObject({ number: 1, status: "open" });
     expect(discord.postMessage).toHaveBeenCalledWith(TEXT_ID, expect.objectContaining({ embeds: [expect.objectContaining({ title: "Ban appeal #1" })] }));
-    expect(JSON.stringify(discord.postMessage.mock.calls.at(-1)[1])).toContain(`${URL_ORIGIN}/#/g/${GUILD_ID}/appeals?appeal=1`);
+    expect(JSON.stringify(discord.postMessage.mock.calls.at(-1)[1])).toContain(`${URL_ORIGIN}/g/${GUILD_ID}/appeals?appeal=1`);
     // One open appeal at a time.
     expect((await write(cookies, "POST", appealUrl, { answers: ["again"] })).statusCode).toBe(409);
     expect((await app.inject({ method: "GET", url: appealUrl, cookies })).json()).toMatchObject({ state: "pending" });

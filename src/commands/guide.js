@@ -307,7 +307,7 @@ function componentsFor(index, text, { dashboardUrl, guildId }) {
   if (dashboardUrl && guildId) {
     const target = page.topic ? `?topic=${page.topic.id}` : page.part ? `?part=${page.part.id}` : "";
     buttons.push(
-      new ButtonBuilder().setURL(`${dashboardUrl}/#/g/${guildId}/guide${target}`).setLabel(text("guideOpenDashboard")).setStyle(ButtonStyle.Link),
+      new ButtonBuilder().setURL(`${dashboardUrl}/g/${guildId}/guide${target}`).setLabel(text("guideOpenDashboard")).setStyle(ButtonStyle.Link),
     );
   }
   rows.push(new ActionRowBuilder().addComponents(buttons));
