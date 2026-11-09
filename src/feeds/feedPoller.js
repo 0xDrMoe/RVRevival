@@ -7,6 +7,7 @@
 // items can't flood a channel.
 
 import { pickLanguage } from "../i18n/i18n.js";
+import { PENDING_FIRST_READ } from "./feedStore.js";
 import { buildFeedPost, readFeed } from "./feeds.js";
 
 export const CHECK_EVERY_MS = 10 * 60 * 1000;
@@ -51,8 +52,11 @@ export function createFeedPoller({ client, store, logger, forcedLanguage, fetchF
       return;
     }
     const seen = new Set(feed.seen);
-    const fresh = items.filter((item) => !seen.has(item.id));
-    const allIds = [...fresh.map((item) => item.id), ...feed.seen];
+    const pending = seen.has(PENDING_FIRST_READ);
+    const unseen = items.filter((item) => !seen.has(item.id));
+    const allIds = [...unseen.map((item) => item.id), ...feed.seen.filter((id) => id !== PENDING_FIRST_READ)];
+    // A feed saved without being read: only what came out after it was added.
+    const fresh = pending ? unseen.filter((item) => item.publishedAt !== null && item.publishedAt > feed.createdAt) : unseen;
     if (fresh.length === 0) {
       store.checked(feed.id, { seen: allIds, checkedAt: now() });
       return;

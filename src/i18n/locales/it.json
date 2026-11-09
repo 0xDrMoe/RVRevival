@@ -1115,7 +1115,6 @@
   "feedErrorNotAFeed": "Quel link non è un feed RSS o Atom. Cerca il link RSS del sito.",
   "feedErrorNoTwitchAccount": "Non c'è nessun canale Twitch con quel nome.",
   "feedErrorTwitchOff": "Le notifiche Twitch non sono ancora attive su questo bot: il proprietario deve prima aggiungere le chiavi Twitch.",
-  "feedErrorNoShorts": "YouTube non ha una lista di Shorts per quel canale. Riprova quando avrà pubblicato uno Short.",
   "feedErrorKickOff": "Le notifiche Kick non sono ancora attive su questo bot: il proprietario deve prima aggiungere le chiavi Kick.",
   "feedErrorNoKickAccount": "Non c'è nessun canale Kick con quel nome.",
   "feedAdded": "Seguo **{name}** in {channel} (feed `{id}`). I nuovi post arrivano entro 10 minuti, le live YouTube entro 3 e quelle Twitch o Kick entro 2; quelli vecchi non vengono pubblicati.",
