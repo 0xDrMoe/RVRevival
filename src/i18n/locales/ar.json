@@ -1506,5 +1506,19 @@
   "modWarnThresholdFailed": "⚠️ وصل هذا إلى حد التحذيرات، لكن لم أستطع التصرف: أعلى رتبة لديه فوق رتبتي.",
   "modThresholdAction_timeout": "إسكات",
   "modThresholdAction_kick": "طرد",
-  "modThresholdAction_ban": "حظر"
+  "modThresholdAction_ban": "حظر",
+
+  "joinChecklist": "إعداد سريع",
+  "joinStepModLog": "اختر أين تُنشر قضايا الإشراف: `/settings mod-log-channel`",
+  "joinStepModRole": "اختر رتبة المشرفين: `/settings mod-role`",
+  "joinStepAutomod": "فعّل الإشراف التلقائي بإعداد جاهز في صفحة **Automod** في لوحة التحكم",
+  "joinStepWelcome": "رحّب بالأعضاء الجدد: `/welcome channel`",
+  "joinStepTickets": "افتح مكتب دعم: `/tickets panel`",
+  "joinGuideButton": "اقرأ الدليل",
+  "joinMissingPermissions": "⚠️ **تنقص رتبتي صلاحيات طلبتها:** {permissions}. لن تعمل بعض الميزات حتى يمنحها مسؤول لرتبتي.",
+  "weeklyBoardTitle": "🏆 أكثر الأعضاء نشاطًا هذا الأسبوع",
+  "weeklyBoardIntro": "نقاط الخبرة من {from} إلى {to}.",
+  "weeklyBoardXp": "{xp} XP",
+  "weeklyBoardWinner": "👑 {user} يحمل {role} حتى الأسبوع القادم.",
+  "weeklyBoardFooter": "يُنشر كل يوم اثنين · /leaderboard للقائمة الكاملة"
 }

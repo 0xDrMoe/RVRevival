@@ -69,6 +69,12 @@ export class LevelStore {
         WHERE d.guild_id = ? AND d.day >= ?
         GROUP BY d.user_id HAVING gained > 0
         ORDER BY gained DESC, d.user_id LIMIT ? OFFSET ?`),
+      topBetween: db.prepare(`
+        SELECT d.user_id, SUM(d.xp) AS gained, m.user_tag
+        FROM xp_daily d LEFT JOIN member_xp m ON m.guild_id = d.guild_id AND m.user_id = d.user_id
+        WHERE d.guild_id = ? AND d.day >= ? AND d.day < ?
+        GROUP BY d.user_id HAVING gained > 0
+        ORDER BY gained DESC, d.user_id LIMIT ?`),
       gainedSince: db.prepare("SELECT COALESCE(SUM(xp), 0) AS gained FROM xp_daily WHERE guild_id = ? AND user_id = ? AND day >= ?"),
       aheadSince: db.prepare(`
         SELECT COUNT(*) AS total FROM (
@@ -143,6 +149,15 @@ export class LevelStore {
       gained: Number(row.gained),
       xp: Number(row.xp ?? 0),
       messages: Number(row.messages ?? 0),
+    }));
+  }
+
+  // The most XP earned from `fromDay` up to (not including) `toDay`: [{ userId, userTag, gained }].
+  topBetween(guildId, fromDay, toDay, limit = 10) {
+    return this.#statements.topBetween.all(guildId, fromDay, toDay, limit).map((row) => ({
+      userId: row.user_id,
+      userTag: row.user_tag ?? null,
+      gained: Number(row.gained),
     }));
   }
 

@@ -1506,5 +1506,19 @@
   "modWarnThresholdFailed": "⚠️ Eine Verwarnungsschwelle ist erreicht, aber ich konnte nichts tun: Ihre höchste Rolle steht über meiner.",
   "modThresholdAction_timeout": "Timeout",
   "modThresholdAction_kick": "gekickt",
-  "modThresholdAction_ban": "gebannt"
+  "modThresholdAction_ban": "gebannt",
+
+  "joinChecklist": "Schnelleinrichtung",
+  "joinStepModLog": "Wähle, wohin Moderationsfälle gehen: `/settings mod-log-channel`",
+  "joinStepModRole": "Wähle die Rolle deiner Moderatoren: `/settings mod-role`",
+  "joinStepAutomod": "Schalte Automod mit einer Vorlage auf der Dashboard-Seite **Automod** ein",
+  "joinStepWelcome": "Begrüße neue Mitglieder: `/welcome channel`",
+  "joinStepTickets": "Richte einen Support ein: `/tickets panel`",
+  "joinGuideButton": "Anleitung lesen",
+  "joinMissingPermissions": "⚠️ **Meiner Rolle fehlen angefragte Berechtigungen:** {permissions}. Manche Funktionen gehen erst, wenn ein Admin sie meiner Rolle gibt.",
+  "weeklyBoardTitle": "🏆 Die aktivsten Mitglieder der Woche",
+  "weeklyBoardIntro": "XP von {from} bis {to}.",
+  "weeklyBoardXp": "{xp} XP",
+  "weeklyBoardWinner": "👑 {user} hat {role} bis nächste Woche.",
+  "weeklyBoardFooter": "Jeden Montag · /leaderboard für die ganze Liste"
 }

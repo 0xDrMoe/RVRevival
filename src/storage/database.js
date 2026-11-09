@@ -493,6 +493,15 @@ const MIGRATIONS = [
   CREATE INDEX message_reports_by_author ON message_reports (guild_id, author_id, created_at);
   CREATE INDEX message_reports_by_reporter ON message_reports (guild_id, reporter_id, created_at);
   `,
+  // 32: the last week each server's weekly leaderboard was posted for, and
+  // who holds the top member role (leveling/weeklyBoard.js).
+  `
+  CREATE TABLE weekly_board_posts (
+    guild_id  TEXT    PRIMARY KEY,
+    week      INTEGER NOT NULL,
+    winner_id TEXT
+  ) WITHOUT ROWID;
+  `,
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS.length;

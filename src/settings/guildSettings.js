@@ -49,6 +49,8 @@ export const Setting = Object.freeze({
   TAGS: "tags", // custom commands for /tag, a list of { name, content } (see community/tags.js)
   STARBOARD: "starboard", // the starboard, { channelId, threshold, emoji } (see community/starboard.js)
   LEVELING: "leveling", // leveling and XP, an object (see leveling/config.js)
+  WEEKLY_BOARD_CHANNEL: "weeklyBoardChannelId", // where the weekly leaderboard is posted each Monday; unset = not posted (see leveling/weeklyBoard.js)
+  WEEKLY_BOARD_ROLE: "weeklyBoardRoleId", // role the week's top member holds until the next post; unset = none
   TICKETS: "tickets", // the ticket panel, { channelId, messageId, staffRoleId, title, message } (see tickets/tickets.js)
   TICKET_PANEL: "ticketPanel", // how the ticket panel looks and what tickets start with, an object (see tickets/panel.js)
   TICKET_CATEGORIES: "ticketCategories", // the panel's kinds of ticket, [{ id, label, emoji, description, staffRoleId, style, intro, nameFormat, pingStaff, questions }] (see tickets/categories.js)

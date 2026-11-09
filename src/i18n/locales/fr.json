@@ -1506,5 +1506,19 @@
   "modWarnThresholdFailed": "⚠️ Un seuil d'avertissements est atteint, mais je n'ai pas pu agir : son rôle le plus haut est au-dessus du mien.",
   "modThresholdAction_timeout": "exclusion temporaire",
   "modThresholdAction_kick": "expulsion",
-  "modThresholdAction_ban": "bannissement"
+  "modThresholdAction_ban": "bannissement",
+
+  "joinChecklist": "Configuration rapide",
+  "joinStepModLog": "Choisis où vont les dossiers de modération : `/settings mod-log-channel`",
+  "joinStepModRole": "Choisis le rôle de tes modérateurs : `/settings mod-role`",
+  "joinStepAutomod": "Active l'automod avec un préréglage sur la page **Automod** du tableau de bord",
+  "joinStepWelcome": "Accueille les nouveaux membres : `/welcome channel`",
+  "joinStepTickets": "Ouvre un support : `/tickets panel`",
+  "joinGuideButton": "Lire le guide",
+  "joinMissingPermissions": "⚠️ **Il manque à mon rôle des permissions demandées :** {permissions}. Certaines fonctions ne marcheront pas tant qu'un admin ne les donne pas à mon rôle.",
+  "weeklyBoardTitle": "🏆 Les membres les plus actifs de la semaine",
+  "weeklyBoardIntro": "XP gagnée du {from} au {to}.",
+  "weeklyBoardXp": "{xp} XP",
+  "weeklyBoardWinner": "👑 {user} garde {role} jusqu'à la semaine prochaine.",
+  "weeklyBoardFooter": "Publié chaque lundi · /leaderboard pour le classement complet"
 }

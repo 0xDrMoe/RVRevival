@@ -1620,5 +1620,11 @@
   "thresholdCount": "Anzahl Verwarnungen",
   "thresholdWarningsIn": "Verwarnungen in",
   "thresholdDays": "Anzahl Tage",
-  "thresholdDaysArrow": "Tagen →"
+  "thresholdDaysArrow": "Tagen →",
+  "weeklyBoardTitle": "Wöchentliche Bestenliste",
+  "weeklyBoardHelp": "Jeden Montag (UTC) postet der Bot die 10 Mitglieder mit den meisten XP der Vorwoche. Der erste Post kommt am Montag nach der Kanalwahl.",
+  "weeklyBoardChannel": "Posten in",
+  "weeklyBoardOff": "Nicht posten",
+  "weeklyBoardRole": "Rolle für das Top-Mitglied",
+  "weeklyBoardRoleHelp": "Das Top-Mitglied der Woche hat diese Rolle bis zum nächsten Post. Sie muss unter der Rolle des Bots liegen."
 }
