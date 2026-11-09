@@ -95,6 +95,8 @@ export const SETTING_RULES = Object.freeze({
   [Setting.WARN_THRESHOLDS]: { kind: "warnThresholds", label: "Warning thresholds" },
   [Setting.STARBOARD]: { kind: "starboard", types: POSTING_CHANNELS, label: "Starboard" },
   [Setting.LEVELING]: { kind: "leveling", label: "Leveling" },
+  [Setting.WEEKLY_BOARD_CHANNEL]: { kind: "channel", types: POSTING_CHANNELS, label: "Weekly leaderboard channel" },
+  [Setting.WEEKLY_BOARD_ROLE]: { kind: "givableRole", label: "Weekly top member role" },
   [Setting.JOIN_GATE]: { kind: "joinGate", label: "Raid protection" },
   // Only the server owner may change this (checked by the dashboard route).
   [Setting.ANTI_NUKE]: { kind: "antiNuke", label: "Anti-nuke", ownerOnly: true },
@@ -128,6 +130,13 @@ function checkValue(setting, value, { guildId, channels, roles }) {
         throw new InvalidSetting(setting, "Pick a role from this server (not @everyone).");
       }
       return value;
+    case "givableRole": {
+      const role = roles.find((entry) => entry.id === value);
+      if (!roleOk(value) || role.managed || isModeratorRole(role)) {
+        throw new InvalidSetting(setting, "Pick a role from this server that isn't a bot's role and has no moderator permissions.");
+      }
+      return value;
+    }
     case "channel":
       if (typeof value !== "string" || !channelOk(value, rule.types)) {
         throw new InvalidSetting(setting, "Pick a text or announcement channel from this server.");
@@ -480,6 +489,7 @@ export function describeValue(setting, value) {
   }
   switch (SETTING_RULES[setting]?.kind) {
     case "role":
+    case "givableRole":
       return `<@&${value}>`;
     case "channel":
       return `<#${value}>`;

@@ -1506,5 +1506,19 @@
   "modWarnThresholdFailed": "⚠️ Isto atingiu um limite de avisos, mas não pude agir: o cargo mais alto da pessoa está acima do meu.",
   "modThresholdAction_timeout": "castigo",
   "modThresholdAction_kick": "expulsão",
-  "modThresholdAction_ban": "banimento"
+  "modThresholdAction_ban": "banimento",
+
+  "joinChecklist": "Configuração rápida",
+  "joinStepModLog": "Escolha para onde vão os casos de moderação: `/settings mod-log-channel`",
+  "joinStepModRole": "Escolha o cargo dos seus moderadores: `/settings mod-role`",
+  "joinStepAutomod": "Ative o automod com uma predefinição na página **Automod** do painel",
+  "joinStepWelcome": "Dê boas-vindas aos novos membros: `/welcome channel`",
+  "joinStepTickets": "Abra um suporte: `/tickets panel`",
+  "joinGuideButton": "Ler o guia",
+  "joinMissingPermissions": "⚠️ **Faltam ao meu cargo permissões que pedi:** {permissions}. Alguns recursos não funcionam até um admin dá-las ao meu cargo.",
+  "weeklyBoardTitle": "🏆 Os membros mais ativos da semana",
+  "weeklyBoardIntro": "XP ganha de {from} a {to}.",
+  "weeklyBoardXp": "{xp} XP",
+  "weeklyBoardWinner": "👑 {user} fica com {role} até a próxima semana.",
+  "weeklyBoardFooter": "Publicado toda segunda · /leaderboard para o ranking completo"
 }

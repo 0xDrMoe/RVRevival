@@ -4,6 +4,15 @@
 export const CHANGELOG = [
   {
     date: "2026-11-09",
+    title: "Weekly leaderboard, clickable commands and a better welcome",
+    items: [
+      "A weekly leaderboard post every Monday, with an optional role for the week's top member. Set it on the Leveling page.",
+      "Commands in /guide and the setup message are clickable: tap one to start typing it.",
+      "The setup message Rabble posts when it joins has a quick setup checklist, a guide button, and warns when its role is missing permissions.",
+    ],
+  },
+  {
+    date: "2026-11-09",
     title: "Moderation: reports, right-click apps and warning thresholds",
     items: [
       "Members can report a message to staff: right-click it, then Apps > Report message. Staff get Delete, Time out and Dismiss buttons.",

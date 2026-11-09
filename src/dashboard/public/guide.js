@@ -768,6 +768,7 @@ const FEATURE_PARTS = [
           "Boosts go from 1x to 5x and don't add up: a member gets their highest one.",
           "Message variables: `{user}`, `{username}`, `{level}` and `{server}` (see **Message variables**).",
           "Reward roles must be below the bot's role. Only use `set` and `reset` to fix mistakes or cheating.",
+          "**Weekly leaderboard** (dashboard, Leveling page): every Monday (UTC) the bot posts the 10 members who earned the most XP in the week before. Pick a **top member role** too and the week's winner holds it until the next post.",
         ],
       },
       {

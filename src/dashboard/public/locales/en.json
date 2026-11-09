@@ -1620,5 +1620,11 @@
   "thresholdCount": "Number of warnings",
   "thresholdWarningsIn": "warnings in",
   "thresholdDays": "Number of days",
-  "thresholdDaysArrow": "days →"
+  "thresholdDaysArrow": "days →",
+  "weeklyBoardTitle": "Weekly leaderboard",
+  "weeklyBoardHelp": "Every Monday (UTC) the bot posts the 10 members who earned the most XP in the week before. The first post is the Monday after you pick a channel.",
+  "weeklyBoardChannel": "Post it in",
+  "weeklyBoardOff": "Don't post it",
+  "weeklyBoardRole": "Top member role",
+  "weeklyBoardRoleHelp": "The week's top member gets this role until the next post. It must be below the bot's role."
 }

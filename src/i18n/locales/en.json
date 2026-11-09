@@ -1506,5 +1506,19 @@
   "modWarnThresholdFailed": "⚠️ This reached a warning threshold, but I couldn't act: their top role is above mine.",
   "modThresholdAction_timeout": "timed out",
   "modThresholdAction_kick": "kicked",
-  "modThresholdAction_ban": "banned"
+  "modThresholdAction_ban": "banned",
+
+  "joinChecklist": "Quick setup",
+  "joinStepModLog": "Pick where moderation cases go: `/settings mod-log-channel`",
+  "joinStepModRole": "Choose your moderators' role: `/settings mod-role`",
+  "joinStepAutomod": "Turn on automod with a preset on the dashboard's **Automod** page",
+  "joinStepWelcome": "Greet new members: `/welcome channel`",
+  "joinStepTickets": "Open a support desk: `/tickets panel`",
+  "joinGuideButton": "Read the guide",
+  "joinMissingPermissions": "⚠️ **My role is missing permissions I asked for:** {permissions}. Some features won't work until an admin gives them to my role.",
+  "weeklyBoardTitle": "🏆 This week's most active members",
+  "weeklyBoardIntro": "XP earned from {from} to {to}.",
+  "weeklyBoardXp": "{xp} XP",
+  "weeklyBoardWinner": "👑 {user} holds {role} until next week.",
+  "weeklyBoardFooter": "Posted every Monday · /leaderboard for the full board"
 }

@@ -1620,5 +1620,11 @@
   "thresholdCount": "Número de advertencias",
   "thresholdWarningsIn": "advertencias en",
   "thresholdDays": "Número de días",
-  "thresholdDaysArrow": "días →"
+  "thresholdDaysArrow": "días →",
+  "weeklyBoardTitle": "Clasificación semanal",
+  "weeklyBoardHelp": "Cada lunes (UTC) el bot publica los 10 miembros que más XP ganaron la semana anterior. La primera publicación es el lunes después de elegir un canal.",
+  "weeklyBoardChannel": "Publicarla en",
+  "weeklyBoardOff": "No publicarla",
+  "weeklyBoardRole": "Rol del mejor miembro",
+  "weeklyBoardRoleHelp": "El mejor miembro de la semana tiene este rol hasta la siguiente publicación. Debe estar por debajo del rol del bot."
 }

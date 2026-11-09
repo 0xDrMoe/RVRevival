@@ -1620,5 +1620,11 @@
   "thresholdCount": "عدد التحذيرات",
   "thresholdWarningsIn": "تحذيرات خلال",
   "thresholdDays": "عدد الأيام",
-  "thresholdDaysArrow": "أيام ←"
+  "thresholdDaysArrow": "أيام ←",
+  "weeklyBoardTitle": "لوحة الصدارة الأسبوعية",
+  "weeklyBoardHelp": "كل يوم اثنين (UTC) ينشر البوت أكثر 10 أعضاء كسبوا نقاط خبرة في الأسبوع السابق. أول نشر يكون يوم الاثنين بعد اختيار القناة.",
+  "weeklyBoardChannel": "انشرها في",
+  "weeklyBoardOff": "لا تنشرها",
+  "weeklyBoardRole": "رتبة العضو الأول",
+  "weeklyBoardRoleHelp": "يحصل العضو الأول هذا الأسبوع على هذه الرتبة حتى النشر التالي. يجب أن تكون تحت رتبة البوت."
 }

@@ -985,6 +985,12 @@ describe("dashboard", () => {
     expect(badThreshold.statusCode).toBe(400);
     await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, { warnThresholds: null });
     expect(guildSettings.get(GUILD_ID, Setting.WARN_THRESHOLDS)).toBeUndefined();
+
+    const weekly = await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, { weeklyBoardRoleId: ROLE_ID });
+    expect(weekly.statusCode).toBe(200);
+    expect(guildSettings.get(GUILD_ID, Setting.WEEKLY_BOARD_ROLE)).toBe(ROLE_ID);
+    const everyone = await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, { weeklyBoardRoleId: GUILD_ID });
+    expect(everyone.statusCode).toBe(400);
     const rest = (await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}/tickets?before=6`, cookies })).json();
     expect(rest.tickets.map((ticket) => ticket.number)).toEqual([5, 4, 3, 2, 1]);
     expect(rest.next).toBeNull();

@@ -580,6 +580,7 @@ Members earn XP for chatting and level up; reward roles are given automatically.
 - `/levels voice enabled:` lets members earn 10 XP a minute in voice channels (off by default). It only counts when at least two people (not bots) are in the channel, and never for deafened members, the AFK channel or no-XP channels and roles. Voice level-ups are announced in the voice channel's chat.
 - `/levels boost multiplier:` gives server boosters more XP (for example `1.5`), and `/levels boost multiplier: role:` gives a role more XP (up to 10 roles). Boosts go from 1 to 5 in steps of 0.1; set `1` to remove one. Boosts don't add up: a member gets their highest one.
 - `/levels set member: level:` moves someone to a level, `/levels reset member:` clears their XP. `/levels show` lists the settings, `/levels off` pauses leveling and keeps everyone's XP.
+- **Weekly leaderboard** (dashboard, Leveling page): pick a channel and every Monday (00:00 UTC, checked every 10 minutes) the bot posts the 10 members who earned the most XP from Monday to Sunday. The first post is the Monday after the channel is picked, and a week is never posted twice. Pick a **top member role** too and the week's winner gets it, taking it from last week's (the role must be below the bot's and have no moderator permissions). Nothing is posted while leveling is off or when nobody earned XP.
 
 The dashboard's **Leveling** page has all the same settings plus the full leaderboard (all time, 7 days or 30 days), and each member's history page shows their level and rank. `/levels` needs **Manage Server**; the bot needs **Manage Roles** (with its role above the reward roles) to give rewards.
 
@@ -640,7 +641,9 @@ Discord's own *Server Settings > Integrations* page can also limit a command to 
 
 ### Joining a server
 
-When the bot is added to a server it posts a short setup message (a dashboard link and **Open dashboard** button, `/guide` and `/settings`) in the server's system channel, or the first text channel it can post in. A brand-new server also gets the country role commands switched off (see [Country roles](#country-roles)).
+When the bot is added to a server it posts a short setup message in the server's system channel, or the first text channel it can post in: a dashboard link, a five-step **Quick setup** checklist, `/guide` and `/settings`, any invite permissions its role is missing (someone unticked them), and **Open dashboard** and **Read the guide** buttons.
+
+**Clickable commands.** When the bot starts it fetches its registered commands, and commands written as `` `/name` `` or `` `/name sub` `` in the setup message and `/guide` become clickable mentions. Until then (or for commands registered per server) they show as plain text. A brand-new server also gets the country role commands switched off (see [Country roles](#country-roles)).
 
 ### Web dashboard
 

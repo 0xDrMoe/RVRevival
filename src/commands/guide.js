@@ -20,6 +20,7 @@ import {
 import { GUIDE } from "../dashboard/public/guide.js";
 import { pickLanguage, translate } from "../i18n/i18n.js";
 import { result, Status } from "../logs/actionLog.js";
+import { linkCommands } from "./commandMentions.js";
 import { withDescription } from "./moderation.js";
 
 const COMMAND_NAME = "guide";
@@ -88,13 +89,19 @@ const colorOf = (tone) => COLORS[tone] ?? COLORS.green;
 
 const clip = (text, limit) => (text.length <= limit ? text : `${text.slice(0, limit - 1)}…`);
 
+// A text's length with every command counted as its longest clickable form,
+// so pages split the same way whether or not commands are clickable yet
+// (commandMentions.js loads their IDs once the bot is online).
+const COMMAND_TEXT = /<\/([^:>]+):\d+>|`\/([a-z0-9_-]+(?: [a-z0-9_-]+){0,2})`/g;
+const measure = (text) => text.replace(COMMAND_TEXT, (_, mention, code) => "x".repeat((mention ?? code).length + 25)).length;
+
 // Lines packed into as few fields as fit. A field's name gets "(2)" and so on
 // when its lines spill over.
 function packFields(name, lines) {
   const fields = [];
   let value = "";
-  for (const line of lines.map((entry) => clip(entry, FIELD_LIMIT))) {
-    if (value && value.length + 1 + line.length > FIELD_LIMIT) {
+  for (const line of lines.map((entry) => clip(linkCommands(entry), FIELD_LIMIT))) {
+    if (value && measure(value) + 1 + measure(line) > FIELD_LIMIT) {
       fields.push(value);
       value = "";
     }
@@ -144,15 +151,15 @@ function topicContent(topic, text) {
     ...(topic.example?.length ? packFields(text("guideExample"), topic.example.map((line) => `\`${line.replaceAll("`", "'")}\``)) : []),
     ...(topic.tips?.length ? packFields(text("guideGoodToKnow"), topic.tips.map((tip) => `• ${tip}`)) : []),
   ];
-  return { intro: clip(intro, DESCRIPTION_LIMIT), fields };
+  return { intro: clip(linkCommands(intro), DESCRIPTION_LIMIT), fields };
 }
 
 // The fields split into pages that each fit in one message.
 function splitFields(intro, fields) {
   const pages = [[]];
-  let size = intro.length;
+  let size = measure(intro);
   for (const field of fields) {
-    const fieldSize = field.name.length + field.value.length;
+    const fieldSize = field.name.length + measure(field.value);
     const current = pages.at(-1);
     if (current.length > 0 && (size + fieldSize > EMBED_BUDGET || current.length === MAX_FIELDS)) {
       pages.push([]);

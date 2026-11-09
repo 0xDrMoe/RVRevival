@@ -5197,6 +5197,22 @@ async function showLevels(guildId) {
         toggle("levelsStack", config.stackRewards, "levelsStack", "levelsStackHelp"),
       ),
       card(
+        t("weeklyBoardTitle"),
+        "trophy",
+        "blue",
+        h("p", { class: "help" }, t("weeklyBoardHelp")),
+        field(
+          "weeklyBoardChannel",
+          null,
+          picker({ id: "weeklyBoardChannelId", options: postableChannels(data), value: data.settings.weeklyBoardChannelId, emptyLabel: t("weeklyBoardOff") }),
+        ),
+        field(
+          "weeklyBoardRole",
+          "weeklyBoardRoleHelp",
+          picker({ id: "weeklyBoardRoleId", options: givable, value: data.settings.weeklyBoardRoleId, emptyLabel: t("notSet") }),
+        ),
+      ),
+      card(
         t("levelsExtrasTitle"),
         "mic",
         "purple",
@@ -5232,7 +5248,11 @@ async function showLevels(guildId) {
         checkList({ name: "noXpRole", items: roles, checked: config.noXpRoleIds, filterKey: "filterRoles" }),
       ),
     ],
-    fields: { leveling: (form) => readLeveling(form, data.settings.leveling) },
+    fields: {
+      leveling: (form) => readLeveling(form, data.settings.leveling),
+      weeklyBoardChannelId: selectValue("weeklyBoardChannelId"),
+      weeklyBoardRoleId: selectValue("weeklyBoardRoleId"),
+    },
     after: board,
   });
 }

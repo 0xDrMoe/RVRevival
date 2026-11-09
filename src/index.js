@@ -11,6 +11,7 @@ import { createStarboard } from "./community/starboard.js";
 import { StarboardStore } from "./community/starboardStore.js";
 import { createWelcomer } from "./community/welcome.js";
 import { createGuildJoinHandler } from "./guilds/guildJoin.js";
+import { loadCommandMentions } from "./commands/commandMentions.js";
 import { normalizeAppeals } from "./appeals/config.js";
 import { ConfigError, loadBotConfig } from "./config.js";
 import { createGiveawayScheduler } from "./giveaways/giveawayScheduler.js";
@@ -42,6 +43,7 @@ import { createAutoResponder } from "./community/autoResponders.js";
 import { TempVoiceStore } from "./voice/tempVoiceStore.js";
 import { createLeveling } from "./leveling/leveling.js";
 import { LevelStore } from "./leveling/levelStore.js";
+import { createWeeklyBoard, WeeklyBoardStore } from "./leveling/weeklyBoard.js";
 import { createActionLog } from "./logs/actionLog.js";
 import { createLogChannelPoster } from "./logs/logChannel.js";
 import { RecentIds } from "./logs/recentIds.js";
@@ -144,6 +146,7 @@ async function start() {
   const tickets = new TicketStore(db);
   // Members' XP for leveling (/rank, /levels).
   const levels = new LevelStore(db);
+  const weeklyBoards = new WeeklyBoardStore(db);
   // Commands run and uptime, for the dashboard's public landing page.
   const botStats = new BotStatsStore(db);
   // A busy database must never take the bot down over a counter.
@@ -301,6 +304,7 @@ async function start() {
     [Setting.TICKET_LOG_CHANNEL, "The ticket log channel was deleted; ticket entries go to the mod-log channel until a new one is set"],
     [Setting.WELCOME_CHANNEL, "The welcome channel was deleted; set a new one with /welcome channel"],
     [Setting.LEAVE_CHANNEL, "The leave channel was deleted; set a new one with /welcome leave-channel"],
+    [Setting.WEEKLY_BOARD_CHANNEL, "The weekly leaderboard channel was deleted; pick a new one on the dashboard's Leveling page"],
   ];
 
   // Runs an event handler, logging instead of crashing if it fails.
@@ -330,6 +334,7 @@ async function start() {
   let giveawayScheduler;
   let scheduledMessageScheduler;
   let birthdays;
+  let weeklyBoard;
   let tempRoleScheduler;
   let feedPoller;
   // Checks tickets for inactivity (tickets/support.js) every 5 minutes.
@@ -366,6 +371,10 @@ async function start() {
       birthdays = createBirthdays({ client: readyClient, guildSettings, store: birthdayStore, logger, forcedLanguage });
       birthdays.start();
       leveling.startVoiceXp(readyClient);
+      loadCommandMentions(readyClient, logger);
+      weeklyBoard?.stop();
+      weeklyBoard = createWeeklyBoard({ client: readyClient, guildSettings, levels, store: weeklyBoards, logger, forcedLanguage });
+      weeklyBoard.start();
       tempRoleScheduler?.stop();
       tempRoleScheduler = createTempRoleScheduler({ client: readyClient, store: tempRoles, modLog, logger });
       tempRoleScheduler.start();
@@ -543,7 +552,7 @@ async function start() {
 
     // Forget a deleted staff, mod or dashboard role, so settings never point at a role that is gone.
     client.on(Events.GuildRoleDelete, (role) => {
-      for (const setting of [Setting.STAFF_ROLE, Setting.MOD_ROLE, Setting.QUARANTINE_ROLE]) {
+      for (const setting of [Setting.STAFF_ROLE, Setting.MOD_ROLE, Setting.QUARANTINE_ROLE, Setting.WEEKLY_BOARD_ROLE]) {
         if (guildSettings.get(role.guild.id, setting) === role.id) {
           guildSettings
             .clear(role.guild.id, setting)
@@ -587,6 +596,7 @@ async function start() {
       giveawayScheduler?.stop();
       scheduledMessageScheduler?.stop();
       birthdays?.stop();
+      weeklyBoard?.stop();
       tempRoleScheduler?.stop();
       feedPoller?.stop();
       livePoller?.stop();

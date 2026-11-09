@@ -5,16 +5,20 @@
 //    on from the dashboard's Permissions page. Servers that already had
 //    settings, such as one that removed and re-added the bot, keep theirs.
 // 2. The bot posts a short "how to set me up" message in the server's system
-//    channel, or the first channel it can talk in.
+//    channel, or the first channel it can talk in: a setup checklist with
+//    clickable commands, any invite permissions its role is missing, and
+//    buttons to the dashboard and the guide.
 //
 // Discord also sends a "guild create" event when a server comes back after an
 // outage, so the message only goes out if the bot joined in the last few
 // minutes.
 
-import { ChannelType, EmbedBuilder, PermissionFlagsBits } from "discord.js";
+import { ButtonBuilder, ButtonStyle, ChannelType, EmbedBuilder, PermissionFlagsBits, PermissionsBitField } from "discord.js";
+import { linkCommands } from "../commands/commandMentions.js";
 import { dashboardButtonRow } from "../commands/dashboard.js";
 import { pickLanguage, translate } from "../i18n/i18n.js";
 import { Setting } from "../settings/guildSettings.js";
+import { INVITE_PERMISSIONS } from "./invite.js";
 
 export const COUNTRY_COMMANDS = ["country", "country-help", "country-staff"];
 export const RECENT_JOIN_MS = 10 * 60 * 1000;
@@ -41,19 +45,50 @@ export function pickIntroChannel(guild) {
   return channels[0] ?? null;
 }
 
-export function introEmbed({ language, dashboardUrl, countriesOff }) {
+// The setup checklist, in the order most servers need it.
+const SETUP_STEPS = ["joinStepModLog", "joinStepModRole", "joinStepAutomod", "joinStepWelcome", "joinStepTickets"];
+
+// "ManageRoles" -> "Manage Roles".
+const permissionName = (name) => name.replace(/([a-z])([A-Z])/g, "$1 $2");
+
+// The invite permissions the bot's role doesn't have here (someone unticked
+// them on the invite page), as readable names.
+export function missingInvitePermissions(me) {
+  if (!me?.permissions || me.permissions.has(PermissionFlagsBits.Administrator)) {
+    return [];
+  }
+  return new PermissionsBitField(BigInt(INVITE_PERMISSIONS)).toArray().filter((name) => !me.permissions.has(PermissionFlagsBits[name])).map(permissionName);
+}
+
+export function introEmbed({ language, dashboardUrl, countriesOff, missing = [] }) {
   const lines = [translate(language, "joinIntro")];
   if (dashboardUrl) {
     lines.push(translate(language, "joinDashboard", { url: dashboardUrl }));
   }
-  lines.push(translate(language, "joinGuide"));
+  lines.push(
+    [`**${translate(language, "joinChecklist")}**`, ...SETUP_STEPS.map((key, index) => `${index + 1}. ${linkCommands(translate(language, key))}`)].join("\n"),
+  );
+  lines.push(linkCommands(translate(language, "joinGuide")));
+  if (missing.length > 0) {
+    lines.push(translate(language, "joinMissingPermissions", { permissions: missing.join(", ") }));
+  }
   if (countriesOff) {
-    lines.push(translate(language, "joinCountriesOff"));
+    lines.push(linkCommands(translate(language, "joinCountriesOff")));
   }
   return new EmbedBuilder()
     .setColor(BRAND_COLOR)
     .setTitle(translate(language, "joinTitle"))
     .setDescription(lines.join("\n\n"));
+}
+
+// Open dashboard and Read the guide, when the dashboard is set up.
+function joinButtons(language, dashboardUrl, guildId) {
+  if (!dashboardUrl) {
+    return [];
+  }
+  const row = dashboardButtonRow(`${dashboardUrl}/g/${guildId}`, translate(language, "dashboardOpen"));
+  row.addComponents(new ButtonBuilder().setURL(`${dashboardUrl}/guide`).setLabel(translate(language, "joinGuideButton")).setEmoji("📖").setStyle(ButtonStyle.Link));
+  return [row];
 }
 
 export function createGuildJoinHandler({ guildSettings, logger, dashboardUrl, forcedLanguage, now = () => Date.now() }) {
@@ -82,9 +117,10 @@ export function createGuildJoinHandler({ guildSettings, logger, dashboardUrl, fo
     }
     const language = pickLanguage(guild.preferredLocale, forcedLanguage);
     const base = dashboardUrl ? `${dashboardUrl}/g/${guild.id}` : undefined;
+    const missing = missingInvitePermissions(guild.members.me);
     await channel.send({
-      embeds: [introEmbed({ language, dashboardUrl: base, countriesOff })],
-      components: base ? [dashboardButtonRow(base, translate(language, "dashboardOpen"))] : [],
+      embeds: [introEmbed({ language, dashboardUrl: base, countriesOff, missing })],
+      components: joinButtons(language, dashboardUrl, guild.id),
       allowedMentions: { parse: [] },
     });
   }
