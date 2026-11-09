@@ -164,6 +164,15 @@ const roleJson = ({ id, name, color, position, managed, hoist, mentionable, perm
   emoji: emoji ?? null,
 });
 
+// What the browser gets for one of the server's own emojis. `available` is
+// false when the server lost the boost level it needs.
+const emojiJson = ({ id, name, animated, available }) => ({
+  id,
+  name,
+  animated: Boolean(animated),
+  available: available !== false,
+});
+
 // The case search filters from a query string, or { error } for a 400 reply.
 export function parseCaseFilters(query = {}) {
   const { user, moderator, action, from, to, q } = query;
@@ -765,6 +774,8 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
             .map(roleJson)
             .sort((a, b) => b.position - a.position)
         : [],
+      // The server's own emojis, for the emoji pickers (GET /guilds/:id includes them).
+      emojis: manage ? (guild.emojis ?? []).filter((emoji) => emoji.id && emoji.name).map(emojiJson) : [],
       caseCounts: store.countGuildCases(guildId),
       // What the bot posts when no welcome or leave message is set, in the server's language.
       communityDefaults: manage ? communityDefaults(guild) : null,

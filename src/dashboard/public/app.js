@@ -230,6 +230,7 @@ const ICONS = {
   userX: '<circle cx="9" cy="8" r="4"/><path d="M2 21a7 7 0 0 1 14 0"/><path d="m17 8 5 5M22 8l-5 5"/>',
   inbox: '<path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>',
   volume: '<path d="M11 5 6 9H2v6h4l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14"/>',
+  smile: '<circle cx="12" cy="12" r="9"/><path d="M8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01"/>',
 };
 
 // Permission bits shown as badges on the roles page. Administrator includes
@@ -494,6 +495,259 @@ function field(labelKey, helpKey, control) {
     control,
     helpKey ? h("span", { class: "help" }, t(helpKey)) : null,
   );
+}
+// --- Emoji picker --------------------------------------------------------------------
+
+// A custom emoji as Discord writes it: <:name:id>, or <a:name:id> when animated.
+const CUSTOM_EMOJI = /^<(a?):(\w{2,32}):(\d{17,20})>$/;
+const customEmojiCode = (emoji) => `<${emoji.animated ? "a" : ""}:${emoji.name}:${emoji.id}>`;
+const customEmojiUrl = (id, animated) => `https://cdn.discordapp.com/emojis/${id}.${animated ? "gif" : "webp"}?size=48`;
+
+// The standard emojis (emojiData.js, about 40 KB), loaded the first time a picker opens.
+let standardEmojis;
+function loadStandardEmojis() {
+  standardEmojis ??= import("./emojiData.js")
+    .then(({ EMOJI_GROUPS }) =>
+      EMOJI_GROUPS.map((group) => ({
+        id: group.id,
+        emojis: group.emojis.split("|").map((entry) => {
+          const space = entry.indexOf(" ");
+          return { value: entry.slice(0, space), name: entry.slice(space + 1) };
+        }),
+      })),
+    )
+    .catch((error) => {
+      standardEmojis = undefined;
+      throw error;
+    });
+  return standardEmojis;
+}
+
+// How an emoji setting looks: a custom emoji as its image, anything else as text.
+function emojiGlyph(value) {
+  const custom = CUSTOM_EMOJI.exec(value ?? "");
+  return custom
+    ? h("img", { class: "emoji-img", src: customEmojiUrl(custom[3], custom[1] === "a"), alt: `:${custom[2]}:`, title: `:${custom[2]}:` })
+    : h("span", { class: "emoji-char" }, value ?? "");
+}
+
+// A text box for one emoji, with a button that opens a picker: this server's
+// own emojis first, then the standard ones by group, and a search over both.
+// Typing or pasting an emoji still works. `id` is the text box's id, which is
+// what the page's save reads. Works inside field()'s <label>.
+function emojiInput(data, { id, value = "", placeholder = "", maxLength = 64 }) {
+  const serverEmojis = data.emojis ?? [];
+  const input = h("input", { id, type: "text", class: "emoji-value", maxLength, value, placeholder, autocomplete: "off", spellcheck: false });
+  const shown = h("span", { class: "emoji-shown", "aria-hidden": "true" });
+  const trigger = h("button", {
+    class: "emoji-trigger",
+    type: "button",
+    title: t("emojiPickerOpen"),
+    "aria-label": t("emojiPickerOpen"),
+    "aria-haspopup": "dialog",
+    "aria-expanded": "false",
+  });
+  const search = h("input", { type: "search", class: "emoji-search", placeholder: t("emojiPickerSearch"), "aria-label": t("emojiPickerSearch"), autocomplete: "off" });
+  const tabs = h("div", { class: "emoji-tabs", role: "toolbar", "aria-label": t("emojiPickerGroups") });
+  const list = h("div", { class: "emoji-list" });
+  const hint = h("div", { class: "emoji-hint", "aria-live": "polite" }, t("emojiPickerHint"));
+  const panel = h("div", { class: "emoji-picker", role: "dialog", "aria-label": t("emojiPickerOpen"), hidden: true }, search, tabs, list, hint);
+  const wrap = h("div", { class: "emoji-input" }, input, trigger, panel);
+
+  const showValue = () => {
+    const current = input.value.trim();
+    shown.replaceChildren(current ? emojiGlyph(current) : icon("smile", "icon small"));
+    trigger.replaceChildren(shown);
+  };
+  showValue();
+  input.addEventListener("input", showValue);
+
+  const pick = (code) => {
+    input.value = code;
+    // The page's save bar listens for input on the form.
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    close();
+    input.focus();
+  };
+
+  const emojiButton = ({ value: code, label, glyph, disabled = false }) =>
+    h(
+      "button",
+      {
+        class: "emoji-option",
+        type: "button",
+        tabindex: "-1",
+        title: label,
+        "aria-label": label,
+        "aria-disabled": disabled ? "true" : undefined,
+        "data-code": code,
+        onclick: () => (disabled ? null : pick(code)),
+        onmouseenter: () => (hint.textContent = label),
+        onfocus: () => (hint.textContent = label),
+      },
+      glyph,
+    );
+
+  // The server's emojis and the standard groups as sections; `query` filters by name.
+  const render = (groups, query = "") => {
+    const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+    const matches = (name) => words.every((word) => name.toLowerCase().includes(word));
+    const sections = [];
+    const server = serverEmojis.filter((emoji) => matches(emoji.name));
+    if (!words.length || server.length > 0) {
+      sections.push({
+        id: "server",
+        tab: guildIcon(data.guild, "xs"),
+        buttons: server.map((emoji) =>
+          emojiButton({
+            value: customEmojiCode(emoji),
+            label: emoji.available ? `:${emoji.name}:` : `:${emoji.name}: · ${t("emojiPickerUnavailable")}`,
+            glyph: h("img", { class: "emoji-img", src: customEmojiUrl(emoji.id, emoji.animated), alt: "", loading: "lazy" }),
+            disabled: !emoji.available,
+          }),
+        ),
+        empty: words.length ? null : t("emojiPickerServerEmpty"),
+      });
+    }
+    for (const group of groups) {
+      const found = group.emojis.filter((emoji) => matches(emoji.name));
+      if (found.length > 0) {
+        sections.push({
+          id: group.id,
+          tab: h("span", { class: "emoji-char" }, group.emojis[0].value),
+          buttons: found.map((emoji) => emojiButton({ value: emoji.value, label: emoji.name, glyph: h("span", { class: "emoji-char" }, emoji.value) })),
+        });
+      }
+    }
+    list.replaceChildren(
+      ...sections.map((section) =>
+        h(
+          "section",
+          { class: "emoji-section", "data-group": section.id },
+          h("h3", { class: "emoji-section-title" }, t(section.id === "server" ? "emojiPickerServer" : `emojiGroup_${section.id}`)),
+          section.buttons.length > 0
+            ? h("div", { class: "emoji-grid", role: "group", "aria-label": t(section.id === "server" ? "emojiPickerServer" : `emojiGroup_${section.id}`) }, section.buttons)
+            : h("p", { class: "help" }, section.empty),
+        ),
+      ),
+      sections.length === 0 ? h("p", { class: "help emoji-none" }, t("emojiPickerNone")) : null,
+    );
+    // Search results show without tabs; the tabs jump to a group.
+    tabs.hidden = words.length > 0;
+    tabs.replaceChildren(
+      ...sections.map((section) =>
+        h(
+          "button",
+          {
+            class: "emoji-tab",
+            type: "button",
+            title: t(section.id === "server" ? "emojiPickerServer" : `emojiGroup_${section.id}`),
+            "aria-label": t(section.id === "server" ? "emojiPickerServer" : `emojiGroup_${section.id}`),
+            onclick: () => {
+              const target = list.querySelector(`[data-group="${section.id}"]`);
+              list.scrollTop = target ? target.offsetTop - list.offsetTop : 0;
+            },
+          },
+          section.tab,
+        ),
+      ),
+    );
+    list.scrollTop = 0;
+  };
+
+  const options = () => [...list.querySelectorAll(".emoji-option")];
+  // Arrow keys move through the emojis; up and down go a row at a time.
+  list.addEventListener("keydown", (event) => {
+    const all = options();
+    const index = all.indexOf(document.activeElement);
+    if (index < 0) {
+      return;
+    }
+    const grid = document.activeElement.parentElement;
+    const columns = getComputedStyle(grid).gridTemplateColumns.split(" ").length || 1;
+    const rtl = document.documentElement.dir === "rtl";
+    const step = { ArrowRight: rtl ? -1 : 1, ArrowLeft: rtl ? 1 : -1, ArrowDown: columns, ArrowUp: -columns }[event.key];
+    if (step === undefined) {
+      return;
+    }
+    event.preventDefault();
+    if (index + step < 0) {
+      search.focus();
+      return;
+    }
+    all[Math.min(all.length - 1, index + step)]?.focus();
+  });
+  search.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      // Not the page's save: pick the first match instead.
+      event.preventDefault();
+      options().find((option) => option.getAttribute("aria-disabled") !== "true")?.click();
+    } else if (event.key === "ArrowDown") {
+      event.preventDefault();
+      options()[0]?.focus();
+    }
+  });
+  let groups = [];
+  search.addEventListener("input", (event) => {
+    // The page's save bar doesn't need to hear about searches.
+    event.stopPropagation();
+    render(groups, search.value);
+  });
+  // Clicks on the picker's empty space mustn't reach the <label> around it.
+  panel.addEventListener("click", (event) => {
+    if (!event.target.closest("button, input")) {
+      event.preventDefault();
+    }
+  });
+
+  const onOutside = (event) => {
+    if (!wrap.isConnected || !wrap.contains(event.target)) {
+      close();
+    }
+  };
+  const onKey = (event) => {
+    if (event.key === "Escape" && !panel.hidden) {
+      event.preventDefault();
+      event.stopPropagation();
+      close();
+      trigger.focus();
+    }
+  };
+  function close() {
+    panel.hidden = true;
+    trigger.setAttribute("aria-expanded", "false");
+    document.removeEventListener("pointerdown", onOutside, true);
+    wrap.removeEventListener("keydown", onKey);
+  }
+  async function open() {
+    panel.hidden = false;
+    trigger.setAttribute("aria-expanded", "true");
+    document.addEventListener("pointerdown", onOutside, true);
+    wrap.addEventListener("keydown", onKey);
+    search.value = "";
+    hint.textContent = t("emojiPickerHint");
+    render(groups);
+    search.focus();
+    if (groups.length === 0) {
+      try {
+        groups = await loadStandardEmojis();
+        if (!panel.hidden) {
+          render(groups, search.value);
+        }
+      } catch {
+        hint.textContent = t("emojiPickerLoadFailed");
+      }
+    }
+  }
+  trigger.addEventListener("click", (event) => {
+    event.preventDefault();
+    if (panel.hidden) {
+      open();
+    } else {
+      close();
+    }
+  });
+  return wrap;
 }
 
 // --- Look and feel ---------------------------------------------------------------
@@ -2304,7 +2558,8 @@ function readStarboard(form) {
   return {
     channelId,
     threshold: Number(form.querySelector("#starboardThreshold").value),
-    emoji: form.querySelector("#starboardEmoji").value.trim(),
+    // Left empty, the star stays the default.
+    emoji: form.querySelector("#starboardEmoji").value.trim() || STARBOARD_DEFAULTS.emoji,
   };
 }
 
@@ -2501,7 +2756,11 @@ async function showStarboard(guildId) {
               value: starboard.threshold ?? STARBOARD_DEFAULTS.threshold,
             }),
           ),
-          field("starboardEmoji", "starboardEmojiHelp", h("input", { id: "starboardEmoji", maxLength: 64, value: starboard.emoji ?? STARBOARD_DEFAULTS.emoji })),
+          field(
+            "starboardEmoji",
+            "starboardEmojiHelp",
+            emojiInput(data, { id: "starboardEmoji", value: starboard.emoji ?? STARBOARD_DEFAULTS.emoji, placeholder: STARBOARD_DEFAULTS.emoji }),
+          ),
         ),
       ),
     ],
