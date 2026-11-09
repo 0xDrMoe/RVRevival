@@ -399,13 +399,13 @@
   "settingsAutomodCleared": "Automod wurde ausgeschaltet und alle seine Einstellungen zurückgesetzt.",
   "settingsShowAutomod": "Automod: {status} (Details: `/settings automod show`)",
 
-  "welcomeDefaultWelcome": "Willkommen auf {server}, {user}! Du bist Mitglied Nr. {count}.",
+  "welcomeDefaultWelcome": "Willkommen auf {server}, {user}! Du bist Mitglied Nr. {members}.",
   "welcomeDefaultLeave": "{username} hat den Server verlassen.",
   "welcomeCommandDescription": "Nur Admins: Willkommens- und Abschiedsnachrichten, Willkommens-DM und Rollen für Neue.",
   "welcomeChannelDescription": "Eine Willkommensnachricht in einem Kanal posten, wenn jemand beitritt.",
   "welcomeChannelOptionDescription": "Der Kanal für Willkommensnachrichten.",
   "welcomeMessageDescription": "Eine eigene Willkommensnachricht schreiben.",
-  "welcomeTextOptionDescription": "Kann {user}, {username}, {server} und {count} nutzen. \\n für eine neue Zeile.",
+  "welcomeTextOptionDescription": "Kann {user}, {username}, {server} und {members} nutzen. \\n für eine neue Zeile.",
   "welcomeLeaveChannelDescription": "Eine Nachricht in einem Kanal posten, wenn jemand geht.",
   "welcomeLeaveChannelOptionDescription": "Der Kanal für Abschiedsnachrichten.",
   "welcomeLeaveMessageDescription": "Eine eigene Abschiedsnachricht schreiben.",
@@ -872,7 +872,7 @@
   "voiceSetupDescription": "Temporäre Kanäle an: Wer dem Hub beitritt, bekommt einen eigenen Sprachkanal.",
   "voiceHubOptionDescription": "Der Sprachkanal, dem man beitritt, um einen eigenen Kanal zu bekommen.",
   "voiceCategoryOptionDescription": "Wohin neue Kanäle kommen (Standard: die Kategorie des Hubs).",
-  "voiceNameOptionDescription": "Kanalname; {name} ist der Name des Mitglieds (Standard: 🔊 {name}).",
+  "voiceNameOptionDescription": "Kanalname; {username} ist der Name des Mitglieds (Standard: 🔊 {username}).",
   "voiceLimitOptionDescription": "Nutzerlimit für neue Kanäle (0 = kein Limit).",
   "voiceOffDescription": "Temporäre Kanäle ausschalten.",
   "voiceLockDescription": "Nur wer schon in deinem Kanal ist, kann beitreten.",
@@ -1451,5 +1451,6 @@
   "eightBall_17": "Meine Antwort ist nein.",
   "eightBall_18": "Meine Quellen sagen nein.",
   "eightBall_19": "Sieht nicht so gut aus.",
-  "eightBall_20": "Sehr zweifelhaft."
+  "eightBall_20": "Sehr zweifelhaft.",
+  "variablesRefused": "{bad} geht hier nicht, daher wurde nichts gespeichert. Diese Nachricht kann Folgendes nutzen: {allowed}"
 }

@@ -7,17 +7,19 @@
 // accepted, since Discord doesn't let pending members have roles. When someone
 // leaves, the leave message goes in the leave channel. Bots get none of this.
 //
-// Messages can use {user} (a mention), {username}, {server} and {count} (the
-// member count). Unset messages use a default in the server's language.
+// Messages can use the "welcome" variables (dashboard/public/variables.js):
+// {user} (a mention), {username}, {server} and {members} (the member count;
+// the old {count} still works). Unset messages use a default in the server's
+// language.
 
 import { escapeMarkdown, PermissionFlagsBits } from "discord.js";
 import { pickLanguage, translate } from "../i18n/i18n.js";
 import { isModeratorRole } from "../permissions/moderatorPermissions.js";
 import { Setting } from "../settings/guildSettings.js";
+import { fillVariables } from "../dashboard/public/variables.js";
 
 export const MAX_MESSAGE_LENGTH = 1000;
 export const MAX_AUTOROLES = 10;
-export const PLACEHOLDERS = ["{user}", "{username}", "{server}", "{count}"];
 
 // Fills in the placeholders. The member's name and the server's name can't add
 // formatting; only {user} mentions anyone.
@@ -27,9 +29,9 @@ export function renderTemplate(template, { member, guild }) {
     user: `<@${member.id}>`,
     username: escapeMarkdown(name),
     server: escapeMarkdown(guild.name ?? ""),
-    count: guild.memberCount ? new Intl.NumberFormat("en-US").format(guild.memberCount) : "?",
+    members: guild.memberCount ? new Intl.NumberFormat("en-US").format(guild.memberCount) : "?",
   };
-  return template.replace(/\{(user|username|server|count)\}/g, (_match, key) => values[key]).slice(0, 2000);
+  return fillVariables(template, "welcome", values).slice(0, 2000);
 }
 
 // The welcome or leave text for a member: the server's own, or the default.

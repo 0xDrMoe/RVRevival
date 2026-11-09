@@ -399,13 +399,13 @@
   "settingsAutomodCleared": "O automod foi desligado e todas as configurações dele foram redefinidas.",
   "settingsShowAutomod": "Automod: {status} (detalhes: `/settings automod show`)",
 
-  "welcomeDefaultWelcome": "Bem-vindo ao {server}, {user}! Você é o membro nº {count}.",
+  "welcomeDefaultWelcome": "Bem-vindo ao {server}, {user}! Você é o membro nº {members}.",
   "welcomeDefaultLeave": "{username} saiu do servidor.",
   "welcomeCommandDescription": "Só admins: mensagens de entrada e saída, uma DM de boas-vindas e cargos para novatos.",
   "welcomeChannelDescription": "Posta uma mensagem de boas-vindas em um canal quando alguém entra.",
   "welcomeChannelOptionDescription": "O canal das mensagens de boas-vindas.",
   "welcomeMessageDescription": "Escreva sua própria mensagem de boas-vindas.",
-  "welcomeTextOptionDescription": "Pode usar {user}, {username}, {server} e {count}. Digite \\n para uma nova linha.",
+  "welcomeTextOptionDescription": "Pode usar {user}, {username}, {server} e {members}. Digite \\n para uma nova linha.",
   "welcomeLeaveChannelDescription": "Posta uma mensagem em um canal quando alguém sai.",
   "welcomeLeaveChannelOptionDescription": "O canal das mensagens de saída.",
   "welcomeLeaveMessageDescription": "Escreva sua própria mensagem de saída.",
@@ -872,7 +872,7 @@
   "voiceSetupDescription": "Ativa os canais temporários: entrar no canal base cria um canal de voz para o membro.",
   "voiceHubOptionDescription": "O canal de voz em que as pessoas entram para ter seu próprio canal.",
   "voiceCategoryOptionDescription": "Onde os canais novos ficam (padrão: a categoria do canal base).",
-  "voiceNameOptionDescription": "Nome do canal; {name} é o nome do membro (padrão: 🔊 {name}).",
+  "voiceNameOptionDescription": "Nome do canal; {username} é o nome do membro (padrão: 🔊 {username}).",
   "voiceLimitOptionDescription": "Limite de usuários dos canais novos (0 = sem limite).",
   "voiceOffDescription": "Desativa os canais temporários.",
   "voiceLockDescription": "Só quem já está no seu canal pode entrar.",
@@ -1451,5 +1451,6 @@
   "eightBall_17": "Minha resposta é não.",
   "eightBall_18": "Minhas fontes dizem que não.",
   "eightBall_19": "Perspectiva não muito boa.",
-  "eightBall_20": "Muito duvidoso."
+  "eightBall_20": "Muito duvidoso.",
+  "variablesRefused": "{bad} não pode ser usado aqui, então nada foi salvo. Esta mensagem pode usar: {allowed}"
 }

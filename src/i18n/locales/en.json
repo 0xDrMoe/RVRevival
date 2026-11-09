@@ -399,13 +399,13 @@
   "settingsAutomodCleared": "Automod has been switched off and all its settings reset.",
   "settingsShowAutomod": "Automod: {status} (details: `/settings automod show`)",
 
-  "welcomeDefaultWelcome": "Welcome to {server}, {user}! You're member #{count}.",
+  "welcomeDefaultWelcome": "Welcome to {server}, {user}! You're member #{members}.",
   "welcomeDefaultLeave": "{username} has left the server.",
   "welcomeCommandDescription": "Admins only: welcome and leave messages, a welcome DM and roles for new members.",
   "welcomeChannelDescription": "Post a welcome message in a channel when someone joins.",
   "welcomeChannelOptionDescription": "The channel for welcome messages.",
   "welcomeMessageDescription": "Write your own welcome message.",
-  "welcomeTextOptionDescription": "Can use {user}, {username}, {server} and {count}. Type \\n for a new line.",
+  "welcomeTextOptionDescription": "Can use {user}, {username}, {server} and {members}. Type \\n for a new line.",
   "welcomeLeaveChannelDescription": "Post a message in a channel when someone leaves.",
   "welcomeLeaveChannelOptionDescription": "The channel for leave messages.",
   "welcomeLeaveMessageDescription": "Write your own leave message.",
@@ -872,7 +872,7 @@
   "voiceSetupDescription": "Turn on join-to-create: joining the hub makes a voice channel for that member.",
   "voiceHubOptionDescription": "The voice channel people join to get their own channel.",
   "voiceCategoryOptionDescription": "Where new channels go (default: the hub's category).",
-  "voiceNameOptionDescription": "Channel name; {name} is the member's name (default: 🔊 {name}).",
+  "voiceNameOptionDescription": "Channel name; {username} is the member's name (default: 🔊 {username}).",
   "voiceLimitOptionDescription": "User limit for new channels (0 = no limit).",
   "voiceOffDescription": "Turn join-to-create off.",
   "voiceLockDescription": "Only the people inside your channel can join it.",
@@ -1451,5 +1451,6 @@
   "eightBall_17": "My reply is no.",
   "eightBall_18": "My sources say no.",
   "eightBall_19": "Outlook not so good.",
-  "eightBall_20": "Very doubtful."
+  "eightBall_20": "Very doubtful.",
+  "variablesRefused": "{bad} can't be used here, so nothing was saved. This message can use: {allowed}"
 }

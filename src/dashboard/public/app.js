@@ -38,6 +38,7 @@ import {
 import { GUIDE } from "./guide.js";
 import { RESPONDER_TEMPLATES, TAG_TEMPLATES, responderFromTemplate, tagFromTemplate } from "./customCommandTemplates.js";
 import { buildCurve, CURVE_PRESETS, MAX_FORMULA_LENGTH, STANDARD_FORMULA, standardCurve as standardLevelCurve, tryBuildCurve } from "./levelCurve.js";
+import { contextsUsing, exampleValues, fillVariables, findVariableProblems, variablesFor } from "./variables.js";
 
 const LANGUAGES = { en: "English", es: "Español", de: "Deutsch", fr: "Français", pt: "Português", it: "Italiano", ar: "العربية" };
 const LOG_EVENTS = ["messageEdit", "messageDelete", "bulkDelete", "memberJoin", "memberLeave", "memberUpdate"];
@@ -2935,7 +2936,8 @@ async function showAutomod(guildId) {
 // --- Community -------------------------------------------------------------------
 
 // A message box with a character count. Empty means the default (or off, for the DM).
-function messageBox(id, value, placeholder, max = MAX_MESSAGE_LENGTH) {
+// `variables` names the place in variables.js, for the variable picker under it.
+function messageBox(id, value, placeholder, max = MAX_MESSAGE_LENGTH, variables = null, variableOptions = {}) {
   const count = h("span", { class: "char-count" });
   const box = h("textarea", { id, rows: 3, maxLength: max, placeholder: placeholder ?? "" }, value ?? "");
   const update = () => {
@@ -2943,7 +2945,98 @@ function messageBox(id, value, placeholder, max = MAX_MESSAGE_LENGTH) {
   };
   box.addEventListener("input", update);
   update();
-  return h("span", { class: "message-box" }, box, count);
+  const wrapped = h("span", { class: "message-box" }, box, count);
+  return variables ? h("span", { class: "message-with-variables" }, wrapped, variableTools(box, variables, variableOptions)) : wrapped;
+}
+
+// --- Message variables -------------------------------------------------------------
+// Every box that takes {variables} gets the same picker from the one list in
+// variables.js: a button per variable this place can use (it adds the variable
+// at the cursor), a warning for anything that isn't one, and a preview with
+// example values. The bot refuses to save a message the warning complains about.
+
+const variableAbout = (context, name) => {
+  const note = `variable_${context}_${name}`;
+  return state.english[note] ? t(note) : t(`variable_${name}`);
+};
+
+// Puts text where the cursor is (replacing a selection) and tells the form.
+function insertAtCursor(box, text) {
+  const start = box.selectionStart ?? box.value.length;
+  const end = box.selectionEnd ?? box.value.length;
+  if (box.maxLength > 0 && box.value.length - (end - start) + text.length > box.maxLength) {
+    box.focus();
+    return;
+  }
+  box.setRangeText(text, start, end, "end");
+  box.focus();
+  box.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
+// What's wrong with a text's variables, as sentences for the dashboard's language.
+function variableWarnings(text, context) {
+  return findVariableProblems(text, context).map((problem) => {
+    if (problem.kind === "case") {
+      return t("variableCase", { token: problem.token, suggestion: problem.suggestion });
+    }
+    if (problem.kind === "elsewhere") {
+      const others = contextsUsing(problem.name);
+      if (others.length > 2) {
+        return t("variableNotHere", { token: problem.token });
+      }
+      return t("variableElsewhere", { token: problem.token, where: others.map((other) => t(`variableWhere_${other}`)).join(" · ") });
+    }
+    return t("variableUnknown", { token: problem.token });
+  });
+}
+
+// A text box with the variable picker under it.
+// `options.box` is the text box when `control` wraps it (with a character count, say).
+const withVariables = (control, context, options = {}) =>
+  h("span", { class: "message-with-variables" }, control, variableTools(options.box ?? control, context, options));
+
+// Options: preview (default true) shows the text with example values;
+// examples overrides some of them, like { server: the real server's name }.
+function variableTools(box, context, { preview = true, examples = {} } = {}) {
+  const chips = variablesFor(context).map(({ name, token, example }) => {
+    const about = variableAbout(context, name);
+    return h(
+      "button",
+      {
+        type: "button",
+        class: "variable-chip",
+        title: `${about} ${t("variableExample", { example: examples[name] ?? example })}`,
+        "aria-label": t("variableAdd", { token, about }),
+        onclick: () => insertAtCursor(box, token),
+      },
+      token,
+    );
+  });
+  const warning = h("span", { class: "variable-warning", role: "status", "aria-live": "polite", hidden: true });
+  const previewLine = preview ? h("span", { class: "variable-preview" }) : null;
+  const values = { ...exampleValues(context), ...examples };
+  const update = () => {
+    const problems = variableWarnings(box.value, context);
+    warning.hidden = problems.length === 0;
+    warning.replaceChildren(...problems.map((problem) => h("span", {}, icon("alert", "icon small"), problem)));
+    box.toggleAttribute("aria-invalid", problems.length > 0);
+    box.classList.toggle("has-variable-problem", problems.length > 0);
+    if (previewLine) {
+      const text = box.value.trim() || box.placeholder;
+      previewLine.hidden = !text;
+      previewLine.replaceChildren(h("span", { class: "variable-preview-label" }, t("variablesPreview")), fillVariables(text, context, values));
+    }
+  };
+  box.addEventListener("input", update);
+  box.refreshVariables = update;
+  update();
+  return h(
+    "span",
+    { class: "variable-tools" },
+    h("span", { class: "variable-bar", role: "group", "aria-label": t("variablesLabel") }, h("span", { class: "variable-bar-label", title: t("variablesHint") }, t("variablesLabel")), chips),
+    warning,
+    previewLine,
+  );
 }
 
 const textValue = (id) => (form) => form.querySelector(`#${id}`).value.replace(/\r\n?/g, "\n").trim() || null;
@@ -3617,7 +3710,7 @@ function birthdayCard(data, postable, defaults) {
       field("birthdayRole", "birthdayRoleHelp", picker({ id: "birthdayRoleId", options: roles, value: saved.roleId, emptyLabel: t("communityOff") })),
     ),
     timeZonePicker({ id: "birthdayTimezone", value: saved.timezone ?? "UTC", labelKey: "birthdayTimezone", helpKey: "birthdayTimezoneHelp" }),
-    field("birthdayMessage", "birthdayMessageHelp", messageBox("birthdayMessage", saved.message, defaults.birthdayMessage, MAX_BIRTHDAY_MESSAGE_LENGTH)),
+    field("birthdayMessage", "birthdayMessageHelp", messageBox("birthdayMessage", saved.message, defaults.birthdayMessage, MAX_BIRTHDAY_MESSAGE_LENGTH, "birthday", { examples: { server: data.guild.name } })),
   );
 }
 
@@ -3631,6 +3724,7 @@ async function showWelcome(guildId) {
   }
   const { settings } = data;
   const defaults = data.communityDefaults ?? {};
+  const serverExample = { examples: { server: data.guild.name } };
   settingsPage({
     data,
     pageId: "welcome",
@@ -3641,15 +3735,15 @@ async function showWelcome(guildId) {
         "userPlus",
         "pink",
         field("welcomeChannel", "welcomeChannelHelp", offPicker(data, "welcomeChannelId", settings.welcomeChannelId)),
-        field("welcomeMessage", "messagePlaceholdersHelp", messageBox("welcomeMessage", settings.welcomeMessage, defaults.welcomeMessage)),
+        field("welcomeMessage", "messagePlaceholdersHelp", messageBox("welcomeMessage", settings.welcomeMessage, defaults.welcomeMessage, MAX_MESSAGE_LENGTH, "welcome", serverExample)),
       ),
-      card(t("welcomeDm"), "message", "blue", field("welcomeDm", "welcomeDmHelp", messageBox("welcomeDm", settings.welcomeDm, t("welcomeDmPlaceholder")))),
+      card(t("welcomeDm"), "message", "blue", field("welcomeDm", "welcomeDmHelp", messageBox("welcomeDm", settings.welcomeDm, t("welcomeDmPlaceholder"), MAX_MESSAGE_LENGTH, "welcome", serverExample))),
       card(
         t("sectionLeave"),
         "logout",
         "gray",
         field("leaveChannel", "leaveChannelHelp", offPicker(data, "leaveChannelId", settings.leaveChannelId)),
-        field("leaveMessage", "messagePlaceholdersHelp", messageBox("leaveMessage", settings.leaveMessage, defaults.leaveMessage)),
+        field("leaveMessage", "messagePlaceholdersHelp", messageBox("leaveMessage", settings.leaveMessage, defaults.leaveMessage, MAX_MESSAGE_LENGTH, "welcome", serverExample)),
       ),
     ],
     fields: {
@@ -3862,10 +3956,14 @@ function responderRow(responder, channels, onRemove) {
       h("span", { class: "responder-channel" }, picker({ id: undefined, options: channels, value: responder.channelId ?? "", emptyLabel: t("responderEverywhere") })),
       h("button", { class: "ghost small", type: "button", onclick: () => onRemove(row) }, t("tagRemove")),
     ),
-    h(
-      "textarea",
-      { class: "responder-reply", rows: 3, maxLength: MAX_TAG_LENGTH, placeholder: t("responderReplyPlaceholder"), "aria-label": t("responderReply") },
-      responder.reply,
+    withVariables(
+      h(
+        "textarea",
+        { class: "responder-reply", rows: 3, maxLength: MAX_TAG_LENGTH, placeholder: t("responderReplyPlaceholder"), "aria-label": t("responderReply") },
+        responder.reply,
+      ),
+      "responder",
+      { preview: false },
     ),
   );
   return row;
@@ -4810,7 +4908,7 @@ async function showLevels(guildId) {
         field(
           "levelsMessage",
           "levelsMessageHelp",
-          messageBox("levelsMessage", config.message, defaults.levelUpMessage, MAX_LEVEL_MESSAGE_LENGTH),
+          messageBox("levelsMessage", config.message, defaults.levelUpMessage, MAX_LEVEL_MESSAGE_LENGTH, "levelUp", { examples: { server: data.guild.name } }),
         ),
       ),
       card(
@@ -7029,7 +7127,6 @@ function ticketRow(guildId, ticket) {
 const MAX_TICKET_CATEGORIES = 25;
 const MAX_CATEGORY_QUESTIONS = 5;
 const TICKET_BUTTON_STYLES = ["primary", "secondary", "success", "danger"];
-const TICKET_PLACEHOLDERS = "{user} {username} {number} {staff} {category} {server}";
 const newCategoryId = () => Math.random().toString(36).slice(2, 10) || "c1";
 
 // Saved questions used to be plain text.
@@ -7125,11 +7222,17 @@ function categoryRow(category, roles, onRemove) {
       ticketField("ticketCategoryStaff", staff),
     ),
     ticketField("ticketCategoryDescription", h("input", { class: "category-description", type: "text", maxLength: 200, value: value.description ?? "", placeholder: t("ticketCategoryDescriptionPlaceholder") })),
-    ticketField("ticketCategoryIntro", h("textarea", { class: "category-intro", rows: 2, maxLength: 1500, placeholder: t("ticketCategoryFollowPanel") }, value.intro ?? "")),
+    ticketField(
+      "ticketCategoryIntro",
+      withVariables(h("textarea", { class: "category-intro", rows: 2, maxLength: 1500, placeholder: t("ticketCategoryFollowPanel") }, value.intro ?? ""), "ticket", { preview: false }),
+    ),
     h(
       "div",
       { class: "category-grid" },
-      ticketField("ticketCategoryNameFormat", h("input", { class: "category-name-format", type: "text", maxLength: 90, value: value.nameFormat ?? "", placeholder: t("ticketCategoryFollowPanel") })),
+      ticketField(
+        "ticketCategoryNameFormat",
+        withVariables(h("input", { class: "category-name-format", type: "text", maxLength: 90, value: value.nameFormat ?? "", placeholder: t("ticketCategoryFollowPanel") }), "ticket", { preview: false }),
+      ),
       ticketField(
         "ticketCategoryPing",
         h(
@@ -7199,9 +7302,7 @@ function readTicketLook(form) {
 }
 
 // Fills {user}, {number}… with example values, for the preview.
-function ticketSample(text, values) {
-  return text.replace(/\{(user|username|number|staff|category|server)\}/g, (match, key) => values[key] ?? match);
-}
+const ticketSample = (text, values) => fillVariables(text, "ticket", values);
 
 const ticketPreviewButton = (style, emoji, label) =>
   h("span", { class: `discord-button ${style}` }, emoji ? h("span", { "aria-hidden": "true" }, emoji.startsWith("<") ? "🙂" : emoji) : null, label);
@@ -7495,9 +7596,8 @@ function ticketPanelEditor(guildId, data) {
     types: [h("div", { class: "toolbar" }, h("span", { class: "grow" }), categories.count, categories.addButton), categories.empty, categories.list],
     pick: [layoutField, menuField, singleHelp, singleButton],
     new: [
-      field("ticketIntro", null, h("textarea", { id: "tkIntro", rows: 3, maxLength: 1500, placeholder: defaults.intro }, look.intro ?? "")),
-      h("p", { class: "help" }, t("ticketPlaceholdersHelp", { placeholders: TICKET_PLACEHOLDERS })),
-      field("ticketNameFormat", "ticketNameFormatHelp", input("tkNameFormat", look.nameFormat, { maxLength: 90, placeholder: defaults.nameFormat })),
+      field("ticketIntro", "ticketPlaceholdersHelp", withVariables(h("textarea", { id: "tkIntro", rows: 3, maxLength: 1500, placeholder: defaults.intro }, look.intro ?? ""), "ticket", { preview: false })),
+      field("ticketNameFormat", "ticketNameFormatHelp", withVariables(input("tkNameFormat", look.nameFormat, { maxLength: 90, placeholder: defaults.nameFormat }), "ticket", { preview: false })),
       h(
         "label",
         { class: "switch-card" },
@@ -8546,7 +8646,7 @@ function feedMessageField(data, { id, kind, value }) {
   toggle.addEventListener("click", () => {
     const custom = box.value.trim() !== "";
     box.value = custom ? "" : defaultFor();
-    update();
+    box.dispatchEvent(new Event("input", { bubbles: true }));
     box.focus();
   });
   box.addEventListener("input", update);
@@ -8556,11 +8656,12 @@ function feedMessageField(data, { id, kind, value }) {
     setKind(next) {
       current = next;
       update();
+      box.refreshVariables?.();
     },
     element: h(
       "div",
       { class: "feed-message" },
-      field("feedsMessage", "feedsMessageHelp", h("span", { class: "message-box" }, box, count)),
+      field("feedsMessage", "feedsMessageHelp", withVariables(h("span", { class: "message-box" }, box, count), "feed", { box })),
       h("div", { class: "toolbar" }, status, toggle),
     ),
   };
@@ -9311,7 +9412,7 @@ function counterRow(guildId, counter, data, onChanged) {
     "li",
     { class: "sent-row counter-row" },
     iconChip("chart", "blue", "sm"),
-    h("span", { class: "ticket-main" }, h("span", { class: "counter-edit" }, input, save), status, counter.error ? h("span", { class: "danger-text small-text" }, t("feedsProblem", { error: counter.error })) : null),
+    h("span", { class: "ticket-main" }, h("span", { class: "counter-edit" }, withVariables(input, "counter", { preview: false }), save), status, counter.error ? h("span", { class: "danger-text small-text" }, t("feedsProblem", { error: counter.error })) : null),
     remove,
   );
 }
@@ -9398,7 +9499,7 @@ async function showCounters(guildId) {
     h(
       "div",
       { class: "embed-grid" },
-      field("countersName", "countersNameHelp", nameInput),
+      field("countersName", "countersNameHelp", withVariables(nameInput, "counter")),
       field("countersCategory", "countersCategoryHelp", picker({ id: "counterCategory", options: categories, value: null, emptyLabel: t("countersNoCategory") })),
     ),
     h("div", { class: "toolbar" }, h("span", { class: "grow" }), add),

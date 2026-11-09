@@ -4,10 +4,11 @@
 // leveling/levelStore.js.
 
 import { randomInt } from "node:crypto";
-import { PermissionFlagsBits } from "discord.js";
+import { escapeMarkdown, PermissionFlagsBits } from "discord.js";
 import { pickLanguage, translate } from "../i18n/i18n.js";
 import { isModeratorRole } from "../permissions/moderatorPermissions.js";
 import { derivedSetting, Setting } from "../settings/guildSettings.js";
+import { fillVariables } from "../dashboard/public/variables.js";
 import {
   Announce,
   levelForXp,
@@ -23,11 +24,12 @@ const COOLDOWN_SWEEP_SIZE = 10_000;
 
 // "{user} reached level {level}!" with the placeholders filled in.
 export function fillLevelMessage(template, { member, level, guild }) {
-  return template
-    .replaceAll("{user}", `<@${member.id}>`)
-    .replaceAll("{username}", member.displayName ?? member.user?.username ?? "")
-    .replaceAll("{level}", String(level))
-    .replaceAll("{server}", guild.name);
+  return fillVariables(template, "levelUp", {
+    user: `<@${member.id}>`,
+    username: escapeMarkdown(member.displayName ?? member.user?.username ?? ""),
+    level: String(level),
+    server: escapeMarkdown(guild.name ?? ""),
+  });
 }
 
 // The reward roles a member should have at `level`: every one reached, or only

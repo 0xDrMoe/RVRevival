@@ -14,6 +14,7 @@
 import { ChannelType, InteractionContextType, MessageFlags, PermissionFlagsBits, SlashCommandBuilder } from "discord.js";
 import { discordLocalizations, pickLanguage, translate } from "../i18n/i18n.js";
 import { result, Status } from "../logs/actionLog.js";
+import { variableRefusal } from "./commandHelpers.js";
 import { addFeed, FeedDuplicate, FeedError, FeedLimit, MAX_FEED_MESSAGE_LENGTH } from "../feeds/feeds.js";
 import { FEED_KINDS } from "../feeds/fetchFeed.js";
 import { MAX_FEEDS } from "../feeds/feedStore.js";
@@ -98,6 +99,11 @@ export function createFeedCommand({ store, live = {}, forcedLanguage, fetchOptio
     if (everyone && !interaction.memberPermissions.has(PermissionFlagsBits.MentionEveryone)) {
       return answer(Status.REFUSED, "feedRoleEveryone");
     }
+    const message = interaction.options.getString("message");
+    const refusal = message && variableRefusal(message, "feed");
+    if (refusal) {
+      return answer(Status.REFUSED, "variablesRefused", refusal);
+    }
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     let feed;
     try {
@@ -108,7 +114,7 @@ export function createFeedCommand({ store, live = {}, forcedLanguage, fetchOptio
         source,
         channelId: channel.id,
         roleId: role?.id ?? null,
-        message: interaction.options.getString("message"),
+        message,
         createdBy: interaction.user.id,
         fetchOptions,
         live,

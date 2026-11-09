@@ -6,8 +6,8 @@
 // the dashboard is shown in:
 //   tags:        tagTpl_<id>_title, tagTpl_<id>_name, tagTpl_<id>_content
 //   responders:  respTpl_<id>_title, respTpl_<id>_trigger, respTpl_<id>_reply
-// Responder replies may use the placeholders the bot fills in
-// (community/autoResponders.js fillReply): {user}, {server} and {channel}.
+// Responder replies may use the "responder" variables (variables.js):
+// {user}, {username}, {server} and {channel}. tests/variables.test.js checks them.
 
 export const TAG_TEMPLATES = Object.freeze([
   { id: "rules", icon: "📜" },

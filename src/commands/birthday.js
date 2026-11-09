@@ -23,6 +23,7 @@ import {
 import { roleProblem } from "../community/rolePanels.js";
 import { discordLocalizations, pickLanguage, translate } from "../i18n/i18n.js";
 import { result, Status } from "../logs/actionLog.js";
+import { variableRefusal } from "./commandHelpers.js";
 import { Setting } from "../settings/guildSettings.js";
 
 const COMMAND_NAME = "birthday";
@@ -88,6 +89,10 @@ export function createBirthdayCommand({ guildSettings, store, forcedLanguage, no
     const message = interaction.options.getString("message")?.replace(/\\n/g, "\n").trim();
     const me = guild.members.me;
 
+    const refusal = message && variableRefusal(message, "birthday");
+    if (refusal) {
+      return answer(Status.REFUSED, "variablesRefused", refusal);
+    }
     if (timezone && !isValidTimeZone(timezone)) {
       return answer(Status.REFUSED, "birthdayBadTimezone");
     }

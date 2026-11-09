@@ -186,11 +186,31 @@ Admins set it up on the dashboard's **Automod** page, or with:
 
 Reading messages needs the **Message Content** intent; without it only spam and mention counts work. Deleting needs **Manage Messages**, timeouts **Moderate Members**, which the invite link already includes.
 
+### Message variables
+
+Messages the bot posts can use variables: words in curly brackets that it fills in, like `{user}`. There is one list for every feature, in `src/dashboard/public/variables.js`, used both by the bot (to fill and check messages) and by the dashboard, so each variable means the same thing everywhere.
+
+| Variable | What it is | Works in |
+|---|---|---|
+| `{user}` | A mention of the member (never pings) | welcome, leave and welcome DM, level-up, birthday (everyone that day), auto-responders, tickets |
+| `{username}` | The member's display name as text | welcome, leave and welcome DM, level-up, auto-responders, tickets, voice channel names |
+| `{server}` | The server's name | welcome, leave and welcome DM, level-up, birthday, auto-responders, tickets |
+| `{members}` | The member count | welcome, leave and welcome DM, stats counters |
+| `{channel}` | The channel the message was sent in | auto-responders |
+| `{level}` | The level just reached | level-up |
+| `{number}`, `{staff}`, `{category}` | Ticket number, staff role mention, ticket type | ticket intros and thread names |
+| `{title}`, `{link}`, `{author}`, `{feed}`, `{game}` | The post | feed messages |
+| `{humans}`, `{bots}`, `{boosts}`, `{tier}`, `{channels}`, `{roles}` | Server counts | stats counters |
+
+- Every message box on the dashboard lists the variables it can use under it (click one to add it at the cursor), warns while you type about anything that isn't one of them, and shows a preview with example values.
+- Saving a message with a variable it can't use, like `{usr}` or `{level}` in a welcome message, is refused by the dashboard and by the slash commands, with a message saying what it can use instead. Other curly brackets, like `{1,2}`, are left alone.
+- Older spellings keep working in saved messages: `{count}` (welcome) is `{members}`, `{name}` (voice) is `{username}`.
+
 ### Welcome and leave messages
 
 When someone joins, the bot can post a welcome message in a channel, DM them, and give them **autoroles** (starter roles, up to 10). When someone leaves, it can post a leave message. Bots get none of this. If the server makes new members accept the rules first (membership screening), autoroles wait until they've accepted.
 
-Messages can use `{user}` (a mention), `{username}`, `{server}` and `{count}` (the member count), up to 1000 characters. Only `{user}` pings anyone. Unset messages use a default in the server's language: *Welcome to {server}, {user}! You're member #{count}.* and *{username} has left the server.*
+Messages can use `{user}` (a mention), `{username}`, `{server}` and `{members}` (the member count; the old `{count}` still works), up to 1000 characters (see [Message variables](#message-variables)). Only `{user}` pings anyone. Unset messages use a default in the server's language: *Welcome to {server}, {user}! You're member #{members}.* and *{username} has left the server.*
 
 Admins set it up on the dashboard's **Welcome & leave** and **Roles & panels** pages, or with:
 
@@ -335,7 +355,7 @@ The bot needs **Manage Channels** and **Manage Roles** in the channels it locks 
 
 Discord has no built-in way to give each group its own voice channel, so the bot makes them.
 
-- `/voice setup hub:<voice channel> [category] [name] [limit]` turns it on. Joining the hub (for example "➕ Create a channel") makes a voice channel for that member, moves them into it, and deletes it as soon as it's empty. New channels go in `category` (default: the hub's category) and copy its permissions. `name` is the channel name, where `{name}` is the member's display name and `{username}` their username (default `🔊 {name}`); `limit` is the user limit (0 = none). `/voice off` turns it off; channels already made are still deleted once empty.
+- `/voice setup hub:<voice channel> [category] [name] [limit]` turns it on. Joining the hub (for example "➕ Create a channel") makes a voice channel for that member, moves them into it, and deletes it as soon as it's empty. New channels go in `category` (default: the hub's category) and copy its permissions. `name` is the channel name, where `{username}` is the member's display name (the old `{name}` means the same; default `🔊 {username}`); `limit` is the user limit (0 = none). `/voice off` turns it off; channels already made are still deleted once empty.
 - The owner gets **Manage Channels** and **Move Members** on their channel, so they rename it, change the limit and disconnect people with Discord's own channel menus.
 - `/voice lock` lets only the people inside (and staff) join; `/voice unlock` opens it again. `/voice claim` takes over a channel whose owner left.
 - Someone who already has a channel and joins the hub again is moved back into theirs. At most 50 channels per server. Empty channels left over from a restart are deleted when the bot starts.

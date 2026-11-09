@@ -9,6 +9,7 @@
 // Categories (tickets/categories.js) can override the intro, the thread name
 // and the ping. Everything left empty uses the built-in text.
 
+import { fillVariables, variableError } from "../dashboard/public/variables.js";
 import { BUTTON_STYLES, isButtonEmoji } from "./categories.js";
 
 export { BUTTON_STYLES };
@@ -31,7 +32,6 @@ export const PANEL_LIMITS = Object.freeze({
 
 // What a template can say: the opener, the ticket number, the staff role, the
 // category and the server.
-export const TICKET_PLACEHOLDERS = ["{user}", "{username}", "{number}", "{staff}", "{category}", "{server}"];
 export const DEFAULT_NAME_FORMAT = "🎫 {number} · {user}";
 
 const DEFAULT_LOOK = Object.freeze({
@@ -86,10 +86,14 @@ function readLook(value, problem) {
     }
     return look;
   }
-  const limited = (key, max, what, clean = text) => {
+  const limited = (key, max, what, clean = text, variables = null) => {
     const cleaned = clean(value[key]);
+    const variableProblem = variables && variableError(cleaned, variables);
     if (cleaned.length > max) {
       problem(`The ${what} is at most ${max} characters.`);
+    } else if (variableProblem) {
+      problem(`The ${what}: ${variableProblem}`);
+      look[key] = cleaned;
     } else if (cleaned) {
       look[key] = cleaned;
     }
@@ -141,8 +145,8 @@ function readLook(value, problem) {
     }
   }
   choice("buttonStyle", BUTTON_STYLES, "button style");
-  limited("intro", PANEL_LIMITS.intro, "intro message");
-  limited("nameFormat", PANEL_LIMITS.nameFormat, "thread name", oneLine);
+  limited("intro", PANEL_LIMITS.intro, "intro message", text, "ticket");
+  limited("nameFormat", PANEL_LIMITS.nameFormat, "thread name", oneLine, "ticket");
   if (value.pingStaff !== undefined && value.pingStaff !== null) {
     if (typeof value.pingStaff === "boolean") {
       look.pingStaff = value.pingStaff;
@@ -187,10 +191,8 @@ export function describeLook(saved) {
   );
 }
 
-// Fills {user}, {number}… in a template. Unknown placeholders stay as they are.
-export function fillTemplate(template, values) {
-  return template.replace(/\{(user|username|number|staff|category|server)\}/g, (match, key) => values[key] ?? match);
-}
+// Fills the ticket variables ({user}, {number}…) in a template. Unknown ones stay as they are.
+export const fillTemplate = (template, values) => fillVariables(template, "ticket", values);
 
 // A thread's name from a format, within Discord's 100 characters. Falls back
 // to the default when the format comes out empty.

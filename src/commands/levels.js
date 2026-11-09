@@ -35,6 +35,7 @@ import {
   totalXpForLevel,
 } from "../leveling/config.js";
 import { result, Status } from "../logs/actionLog.js";
+import { variableRefusal } from "./commandHelpers.js";
 import { Period, PERIODS, periodStart } from "../leveling/levelStore.js";
 import { isModeratorRole } from "../permissions/moderatorPermissions.js";
 import { Setting } from "../settings/guildSettings.js";
@@ -330,6 +331,10 @@ export function createLevelCommands({ levels, leveling, guildSettings, forcedLan
       }
       case "message": {
         const message = interaction.options.getString("text")?.trim() || null;
+        const refusal = message && variableRefusal(message, "levelUp");
+        if (refusal) {
+          return answer(Status.REFUSED, "variablesRefused", refusal);
+        }
         await save({ message });
         return answer(Status.SUCCESS, message ? "levelsMessageSet" : "levelsMessageReset");
       }

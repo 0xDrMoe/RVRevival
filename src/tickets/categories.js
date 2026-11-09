@@ -7,6 +7,8 @@
 // A category's intro, thread name and ping left empty (null) follow the
 // panel's (tickets/panel.js).
 
+import { variableError } from "../dashboard/public/variables.js";
+
 export const MAX_CATEGORIES = 25; // five rows of five buttons, or one dropdown
 export const MAX_CATEGORY_QUESTIONS = 5; // Discord forms hold five inputs
 export const MAX_LABEL_LENGTH = 80; // Discord button labels
@@ -121,10 +123,14 @@ function readCategory(value, problem, { isRole = () => true } = {}) {
   const intro = cleanText(value.intro);
   if (intro.length > MAX_INTRO_LENGTH) {
     problem(`${where}: the intro message is at most ${MAX_INTRO_LENGTH} characters.`);
+  } else if (variableError(intro, "ticket")) {
+    problem(`${where}: the intro message: ${variableError(intro, "ticket")}`);
   }
   const nameFormat = clean(value.nameFormat);
   if (nameFormat.length > MAX_NAME_FORMAT_LENGTH) {
     problem(`${where}: the thread name is at most ${MAX_NAME_FORMAT_LENGTH} characters.`);
+  } else if (variableError(nameFormat, "ticket")) {
+    problem(`${where}: the thread name: ${variableError(nameFormat, "ticket")}`);
   }
   let pingStaff = null;
   if (value.pingStaff !== undefined && value.pingStaff !== null) {

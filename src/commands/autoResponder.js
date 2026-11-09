@@ -30,6 +30,7 @@ import {
 } from "../community/autoResponders.js";
 import { discordLocalizations, pickLanguage, translate } from "../i18n/i18n.js";
 import { result, Status } from "../logs/actionLog.js";
+import { variableRefusal } from "./commandHelpers.js";
 import { Setting } from "../settings/guildSettings.js";
 import { KeyedLock } from "../utils/keyedLock.js";
 
@@ -203,6 +204,10 @@ export function createAutoResponderCommand({ guildSettings, forcedLanguage }) {
     const reply = cleanReply(interaction.fields.getTextInputValue(FORM_INPUT));
     if (!reply) {
       return answer(Status.REFUSED, "autoresponderEmpty");
+    }
+    const refusal = variableRefusal(reply, "responder");
+    if (refusal) {
+      return answer(Status.REFUSED, "variablesRefused", refusal);
     }
     const guildId = interaction.guildId;
     return locks.run(guildId, async () => {

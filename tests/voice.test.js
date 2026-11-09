@@ -118,7 +118,7 @@ describe("channelName", () => {
   it("fills in the member's names and stays within 100 characters", () => {
     const member = { displayName: "Rumbler", user: { username: "rumbler99" } };
     expect(channelName("🔊 {name}", member)).toBe("🔊 Rumbler");
-    expect(channelName("{username}'s room", member)).toBe("rumbler99's room");
+    expect(channelName("{username}'s room", member)).toBe("Rumbler's room"); // {username} is the display name everywhere
     expect(channelName("", member)).toBe("🔊 Rumbler");
     expect(channelName("x".repeat(80) + "{name}{name}{name}", member)).toHaveLength(100);
   });
@@ -256,7 +256,7 @@ describe("/voice", () => {
       interactionFor({ guild, member, subcommand: "setup", options: { hub, limit: 4 }, permissions: [PermissionFlagsBits.ManageGuild] }),
     );
     expect(done.status).toBe(Status.SUCCESS);
-    expect(guildSettings.get(GUILD_ID, Setting.TEMP_VOICE)).toEqual({ hubChannelId: HUB_ID, categoryId: null, nameTemplate: "🔊 {name}", userLimit: 4 });
+    expect(guildSettings.get(GUILD_ID, Setting.TEMP_VOICE)).toEqual({ hubChannelId: HUB_ID, categoryId: null, nameTemplate: "🔊 {username}", userLimit: 4 });
 
     const off = await command.execute(interactionFor({ guild, member, subcommand: "off", permissions: [PermissionFlagsBits.ManageGuild] }));
     expect(off.status).toBe(Status.SUCCESS);

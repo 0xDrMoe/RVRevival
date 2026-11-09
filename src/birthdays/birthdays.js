@@ -9,6 +9,7 @@
 
 import { pickLanguage, translate } from "../i18n/i18n.js";
 import { Setting } from "../settings/guildSettings.js";
+import { fillVariables } from "../dashboard/public/variables.js";
 
 export const MAX_BIRTHDAY_MESSAGE_LENGTH = 1000;
 export const DEFAULT_TIMEZONE = "UTC";
@@ -147,7 +148,7 @@ export function createBirthdays({ client, guildSettings, store, logger, forcedLa
     }
     const language = pickLanguage(guild.preferredLocale, forcedLanguage);
     const template = config.message ?? translate(language, "birthdayDefaultMessage");
-    const content = template.replaceAll("{user}", mentionList(language, celebrated)).replaceAll("{server}", guild.name).slice(0, 2000);
+    const content = fillVariables(template, "birthday", { user: mentionList(language, celebrated), server: guild.name }).slice(0, 2000);
     await channel.send({ content, allowedMentions: { users: celebrated } }).catch((error) =>
       logger.warn("Couldn't post the birthday message; check the bot's permissions in that channel", { guildId: guild.id, error }),
     );
