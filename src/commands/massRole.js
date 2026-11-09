@@ -22,6 +22,7 @@ import { getDiscordErrorCode, isPermissionError } from "../utils/discordErrors.j
 import { beginModerationCommand } from "./commandHelpers.js";
 import { roleProblem } from "./memberTools.js";
 import { withDescription } from "./moderation.js";
+import { LogRoute } from "../logs/logRoutes.js";
 
 export const WHO = Object.freeze({ HUMANS: "humans", BOTS: "bots", EVERYONE: "everyone" });
 
@@ -236,7 +237,7 @@ export function createMassRoleCommand({ guildSettings, modLog = noModLog, forced
           ],
           color: 0x9b59b6,
         }),
-      }));
+      }), { route: LogRoute.MASS_ROLE });
       const status = counts.stopped && counts.stopped !== "cancelled" ? Status.FAILED : Status.SUCCESS;
       if (now() - started > REPLY_EDITABLE_MS) {
         // The reply can't be edited any more; the mod log has the result.

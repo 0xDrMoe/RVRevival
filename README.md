@@ -46,7 +46,7 @@ Rabble is an all-in-one Discord bot and web dashboard by Cedar Tech Solutions, m
 | [Join-to-create voice](#join-to-create-voice) | `/voice` | Manage Server (`setup`, `off`), the channel's owner (`lock`, `unlock`), anyone in the channel (`claim`) |
 | [Leveling](#leveling) | `/rank`, `/leaderboard`, `/levels`, or the dashboard's Leveling page | Everyone (`/rank`, `/leaderboard`), Manage Server (`/levels`) |
 | [Country roles](#country-roles) | `/country`, `/country-staff`, `/country-help` | Everyone (`/country`), the staff role (`/country-staff`), Manage Server (`/country-help`) |
-| [Permissions](#permissions) | The dashboard's Permissions page | The server owner or whoever added the bot (log channels per kind: Manage Server) |
+| [Permissions](#permissions) | The dashboard's Permissions page | The server owner or whoever added the bot |
 | [Web dashboard](#web-dashboard) | https://rabble.cedartechsolutions.ca | Manage Server, or a dashboard role |
 
 Every reply is translated into English, Spanish, German, French, Portuguese, Italian or Arabic (see [Languages](#languages)).
@@ -128,6 +128,19 @@ The mod-log embeds show the case number, action, member, moderator, duration and
 | `/nick member [nickname]` | Changes a member's nickname; leave it empty to reset it. | Manage Nicknames |
 
 The mod role can use these too, and the same hierarchy rules as moderation apply (moderators may change their own roles and nickname). Each change is posted in the mod-log channel. The bot needs **Manage Channels** and **Manage Roles** in the channel to lock it, **Manage Channels** for slowmode, and **Manage Nicknames** for `/nick`; replies say so when it can't.
+
+### A channel for each log type
+
+On the dashboard's Logging page, **Where each log goes** lets an admin pick a channel for any single kind of log entry. It has four parts:
+
+| Part | Kinds | Default channel |
+|---|---|---|
+| Bot activity | command and button uses, messages the bot deleted, dashboard changes | the logs channel |
+| Moderation | each case action (bans, softbans, unbans, kicks, timeouts, timeouts removed, warnings, notes), each other action (warnings cleared, channel locks, slowmode, `/role`, `/nick`, purges, mass roles, temporary roles, quarantines), automod deletions, raid alerts, raid lockdowns, anti-nuke alerts | the mod-log channel, else the logs channel |
+| Server log | each server-log event | the server-log channel |
+| Tickets | each ticket event | the ticket log channel, else the "other moderation actions" channel, else the mod-log channel |
+
+The groups *Moderation cases*, *Other moderation actions* and *Raid and anti-nuke alerts* also have an "all of them" choice: an entry goes to its own kind's channel, else its group's, else the default. Each picker's empty choice says where that kind goes right now (*Default: #mod-log*, *Same as Moderation cases: #cases*), and it follows the channels picked above it as they change. Switching an event off (server log or ticket log) still stops it everywhere. A deleted channel goes back to the default by itself. Each channel gets the bot's own webhook, so routed logs post the same way as the main ones.
 
 ### Server log
 
@@ -593,7 +606,6 @@ Applying a setup keeps commands you turned off, blocked roles and channel limits
 - **Staff roles:** the mod role, the staff role and the dashboard roles.
 - **Command permissions:** for each command, turn it off for everyone, give it to more roles (they use it as if they had its Discord permission; for commands everyone can use, it limits them to those roles), block roles, or keep it to some channels or categories. Members with Manage Server ignore role and channel limits; a command that's off is off for them too. `/antinuke` can't be given to roles, and `/country-staff` follows the staff role. Refusals are private and show in the logs channel. Changing these after applying a setup marks it as *Custom*.
 - **Discord permissions count** (on by default): members with a command's Discord permission (Ban Members for `/ban`) can use it. Turn it off and a command that needs a permission also needs the mod role or a role given that command; the command then sees only what those roles give, and only Administrators (the owner included) skip the role and channel limits. Administrators always keep access. This covers slash commands; ticket buttons still accept Manage Threads.
-- **Log channels per kind:** send command uses, messages the bot deleted, dashboard changes, cases, other moderation actions, automod deletions, raid and anti-nuke alerts, and each server-log event to its own channel. Anything left on *Usual* goes where it always did. A deleted channel goes back to *Usual* by itself.
 
 Discord's own *Server Settings > Integrations* page can also limit a command to roles and channels, and hides it from everyone else; use it when hiding is all you need. The bot's rules are for giving a command to a role without the permission, blocking roles, or turning a command off.
 
@@ -628,7 +640,7 @@ A website where admins log in with Discord and manage the bot without slash comm
 - **Staff roles:** staff and mod roles, the quarantine role, and the mod-log channel.
 - **Logging:** the logs and server-log channels, a switch for each server-log event, ignored channels or categories (with a filter), and the ticket log channel with a switch for each kind of ticket entry.
 - **Backup:** download every setting as a file, or restore one after seeing what would change (see [Settings backup](#settings-backup)).
-- **Permissions:** premade setups (Simple), or roles, command rules and a log channel per kind (Advanced), plus a table of every role with its color, its strongest permissions and what the bot uses it for (see [Permissions](#permissions)).
+- **Permissions:** premade setups (Simple), or roles and command rules (Advanced), plus a table of every role with its color, its strongest permissions and what the bot uses it for (see [Permissions](#permissions)).
 
 Settings pages show a save bar when something changed, and ask before you leave with unsaved changes.
 
@@ -824,7 +836,7 @@ src/
   reminders/             Reminders: saved in SQLite (reminderStore.js), sent when due (reminderScheduler.js)
   automod/               Automod: settings (config.js), what each rule matches (rules.js), acting on messages
   branding/              Branding: the per-server embed colour, and checks for the Branding page's changes
-  logs/                  Logs channel, server log, posting to log channels, and a channel per kind of entry (logRoutes.js)
+  logs/                  Logs channel, server log, posting to log channels, and a channel per log type (logRoutes.js)
   moderation/            Moderation: cases (SQLite), checks, actions, mod log, temporary bans
   settings/              Per-server settings (saved in data/bot.db)
   storage/               The SQLite database: opening it and schema migrations

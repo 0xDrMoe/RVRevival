@@ -1944,13 +1944,172 @@ async function showAntiNuke(guildId) {
   }
 }
 
+// Where each log goes (logs/logRoutes.js). Every kind of entry can have its own
+// channel; groups ("All moderation cases") cover the kinds under them. Server
+// and ticket events reuse the names of their on/off switches.
+const ticketRouteOf = (event) => `ticket${event[0].toUpperCase()}${event.slice(1)}`;
+const LOG_ROUTE_SECTIONS = [
+  { section: "logs", items: [{ route: "commands" }, { route: "botDeletions" }, { route: "dashboard" }] },
+  {
+    section: "modLog",
+    items: [
+      { route: "cases", children: ["caseBan", "caseSoftban", "caseUnban", "caseKick", "caseTimeout", "caseUntimeout", "caseWarn", "caseNote"] },
+      { route: "modActions", children: ["warningsCleared", "channelLock", "slowmode", "roleChange", "nicknameChange", "purge", "massRole", "tempRole", "quarantine"] },
+      { route: "automod" },
+      { route: "protection", children: ["raidAlert", "raidLockdown", "antiNuke"] },
+    ],
+  },
+  { section: "serverLog", items: LOG_EVENTS.map((route) => ({ route, label: `logEvent_${route}` })) },
+  { section: "ticketLog", items: TICKET_EVENTS.map((event) => ({ route: ticketRouteOf(event), label: `ticketEvent_${event}` })) },
+];
+const routeLabel = (item) => t(item.label ?? `logRoute_${item.route}`);
+// A field whose label is already translated text.
+const labelled = (text, control) => h("label", { class: "field" }, h("span", { class: "field-label" }, text), control);
+
+// The "Where each log goes" card. Each picker's empty choice says where that
+// kind of entry goes when it's left alone, and follows the channels picked
+// above as they change. Returns { element, read(form) }.
+function logRoutesCard(data, settings) {
+  const saved = settings.logRoutes ?? {};
+  const postable = postableChannels(data);
+  const channelName = (id) => {
+    const channel = data.channels.find((entry) => entry.id === id);
+    return channel ? `#${channel.name}` : t("unknownOption", { id });
+  };
+  const pickers = new Map(); // route -> select
+  const routePicker = (route) => {
+    const select = picker({ id: `route-${route}`, options: postable, value: saved[route], emptyLabel: "" });
+    select.dataset.route = route;
+    pickers.set(route, select);
+    return select;
+  };
+
+  const counts = new Map(); // section -> element showing how many have their own channel
+  const defaults = new Map(); // section -> element showing the section's channel
+  const sections = LOG_ROUTE_SECTIONS.map(({ section, items }) => {
+    const count = h("span", { class: "badge" });
+    const where = h("span", { class: "help" });
+    counts.set(section, count);
+    defaults.set(section, where);
+    const routes = items.flatMap((item) => [item.route, ...(item.children ?? [])]);
+    const reset = h(
+      "button",
+      {
+        class: "ghost small",
+        type: "button",
+        onclick: (event) => {
+          routes.forEach((route) => (pickers.get(route).value = ""));
+          event.currentTarget.dispatchEvent(new Event("change", { bubbles: true }));
+        },
+      },
+      t("logRoutesReset"),
+    );
+    // Groups get their own block; the kinds between them share one grid.
+    const body = [];
+    let simple = [];
+    const flush = () => {
+      if (simple.length > 0) {
+        body.push(h("div", { class: "route-grid" }, simple));
+        simple = [];
+      }
+    };
+    for (const item of items) {
+      if (!item.children) {
+        simple.push(labelled(routeLabel(item), routePicker(item.route)));
+        continue;
+      }
+      flush();
+      body.push(
+        h(
+          "div",
+          { class: "route-group" },
+          h("div", { class: "route-grid" }, labelled(t("logRouteAll", { group: routeLabel(item) }), routePicker(item.route))),
+          h(
+            "div",
+            { class: "route-grid route-children" },
+            item.children.map((route) => labelled(routeLabel({ route }), routePicker(route))),
+          ),
+        ),
+      );
+    }
+    flush();
+    return h(
+      "details",
+      { class: "route-section collapsible", open: routes.some((route) => saved[route]) },
+      h(
+        "summary",
+        {},
+        h("span", { class: "route-summary" }, h("strong", {}, t(`logRouteSection_${section}`)), where),
+        count,
+      ),
+      h("div", { class: "toolbar" }, h("p", { class: "help grow" }, t(`logRouteSectionHelp_${section}`)), reset),
+      body,
+    );
+  });
+
+  // Where each section's entries go when nothing more specific is picked.
+  const value = (form, id) => form.querySelector(`#${id}`)?.value || "";
+  const sectionChannel = (form, section) => {
+    const logs = value(form, "logsChannelId");
+    const modLog = value(form, "modLogChannelId") || logs;
+    if (section === "logs") {
+      return logs;
+    }
+    if (section === "modLog") {
+      return modLog;
+    }
+    if (section === "serverLog") {
+      return value(form, "serverLogChannelId");
+    }
+    // Tickets: the ticket log channel, else "mod actions" if picked, else the mod-log channel.
+    return value(form, "ticketLogChannelId") || pickers.get("modActions").value || modLog;
+  };
+
+  const element = h("div", { class: "route-sections" }, sections);
+  const refresh = () => {
+    const form = element.closest("form") ?? document;
+    for (const { section, items } of LOG_ROUTE_SECTIONS) {
+      const fallback = sectionChannel(form, section);
+      defaults.get(section).textContent = fallback
+        ? t("logRouteGoesTo", { channel: channelName(fallback) })
+        : t("logRouteNowhereShort");
+      const label = (channel) => (channel ? t("logRouteDefault", { channel: channelName(channel) }) : t("logRouteNowhere"));
+      let own = 0;
+      for (const item of items) {
+        const group = pickers.get(item.route);
+        group.options[0].textContent = label(fallback);
+        own += group.value ? 1 : 0;
+        for (const route of item.children ?? []) {
+          const child = pickers.get(route);
+          child.options[0].textContent = group.value
+            ? t("logRouteSameAs", { group: routeLabel(item), channel: channelName(group.value) })
+            : label(fallback);
+          own += child.value ? 1 : 0;
+        }
+      }
+      counts.get(section).textContent = own > 0 ? t("logRoutesOwn", { count: own }) : t("logRoutesAllDefault");
+      counts.get(section).classList.toggle("badge-accent", own > 0);
+    }
+  };
+
+  return {
+    element,
+    refresh,
+    read: (form) => {
+      const picked = [...form.querySelectorAll("select[data-route]")].filter((select) => select.value).map((select) => [select.dataset.route, select.value]);
+      return picked.length > 0 ? Object.fromEntries(picked) : null;
+    },
+  };
+}
+
 async function showLogging(guildId) {
   const data = await loadManagedGuild(guildId);
   if (!data) {
     return;
   }
   const postable = postableChannels(data);
-  const channelPicker = (key) => picker({ id: key, options: postable, value: data.settings[key], emptyLabel: t("notSet") });
+  const channelPicker = (key, emptyLabel = t("notSet")) => picker({ id: key, options: postable, value: data.settings[key], emptyLabel });
+  const routes = logRoutesCard(data, data.settings);
 
   const disabled = new Set(data.settings.disabledLogEvents ?? []);
   const eventSwitches = LOG_EVENTS.map((event) =>
@@ -1998,9 +2157,12 @@ async function showLogging(guildId) {
         t("sectionChannels"),
         "hash",
         "amber",
+        h("p", { class: "help" }, t("logChannelsHelp")),
         field("logsChannel", "logsChannelHelp", channelPicker("logsChannelId")),
+        field("modLogChannel", "modLogChannelHelp", channelPicker("modLogChannelId", t("useLogsChannel"))),
         field("serverLogChannel", "serverLogChannelHelp", channelPicker("serverLogChannelId")),
       ),
+      card(t("logRoutesTitle"), "list", "blue", h("p", { class: "help" }, t("logRoutesHelp")), routes.element),
       card(
         t("sectionServerLog"),
         "zap",
@@ -2032,6 +2194,7 @@ async function showLogging(guildId) {
     ],
     fields: {
       logsChannelId: selectValue("logsChannelId"),
+      modLogChannelId: selectValue("modLogChannelId"),
       serverLogChannelId: selectValue("serverLogChannelId"),
       disabledLogEvents: (form) => {
         const off = [...form.querySelectorAll('input[name="logEvent"]')].filter((box) => !box.checked).map((box) => box.value);
@@ -2043,8 +2206,12 @@ async function showLogging(guildId) {
         const off = [...form.querySelectorAll('input[name="ticketLogEvent"]')].filter((box) => !box.checked).map((box) => box.value);
         return off.length > 0 ? off : null;
       },
+      logRoutes: routes.read,
     },
   });
+  // The "Default: #channel" choices follow the channels picked on the page.
+  routes.element.closest("form")?.addEventListener("change", routes.refresh);
+  routes.refresh();
 }
 
 // --- Automod ---------------------------------------------------------------------
@@ -3515,12 +3682,6 @@ const PRESET_ROLES = { adminsOnly: [], oneTeam: ["moderator"], twoTeams: ["moder
 const RECOMMENDED_PRESET = "oneTeam";
 // The commands helpers get in the two-team setup (permissions/presets.js).
 const HELPER_COMMANDS = ["case", "modlogs", "note", "purge", "slowmode", "timeout", "untimeout", "warn"];
-// Where each kind of log entry goes without its own channel (logs/logRoutes.js).
-const LOG_ROUTE_GROUPS = [
-  { group: "logs", routes: ["commands", "botDeletions", "dashboard"] },
-  { group: "modLog", routes: ["cases", "modActions", "automod", "protection"] },
-  { group: "serverLog", routes: LOG_EVENTS },
-];
 // Discord permission bits, for "Needs Ban Members" on commands.
 const PERMISSION_NAMES = [
   { key: "permAdmin", bit: ADMINISTRATOR },
@@ -3915,27 +4076,6 @@ function showAdvancedPermissions(data) {
     filterRows();
   });
 
-  const postable = postableChannels(data);
-  const routes = settings.logRoutes ?? {};
-  const routeGroups = LOG_ROUTE_GROUPS.map(({ group, routes: names }) =>
-    h(
-      "div",
-      { class: "route-group" },
-      h("h3", {}, t(`permLogGroup_${group}`)),
-      h(
-        "div",
-        { class: "route-grid" },
-        names.map((route) =>
-          field(
-            LOG_EVENTS.includes(route) ? `logEvent_${route}` : `logRoute_${route}`,
-            null,
-            picker({ id: `route-${route}`, options: postable, value: routes[route], emptyLabel: t(`permLogDefault_${group}`) }),
-          ),
-        ),
-      ),
-    ),
-  );
-
   // Whether Discord permissions alone let members use commands (on unless saved as false).
   const nativeBox = h("input", { type: "checkbox", name: "nativePermissions", role: "switch", checked: settings.nativePermissions !== false, disabled: !data.canManagePermissions, "aria-label": t("permNative") });
   const nativeSwitch = h(
@@ -3979,7 +4119,6 @@ function showAdvancedPermissions(data) {
         h("div", { class: "field" }, h("span", { class: "field-label" }, t("dashboardAccess")), h("span", { class: "help" }, t("dashboardAccessHelp")), checkList({ name: "dashboardRole", items: roleItems(), checked: settings.dashboardRoleIds ?? [], filterKey: "filterRoles" })),
       ),
       commandsCard,
-      card(t("permLogRoutes"), "list", "blue", h("p", { class: "help" }, t("permLogRoutesHelp")), routeGroups),
     ],
     fields: {
       nativePermissions: (form) => (form.querySelector('input[name="nativePermissions"]').checked ? null : false),
@@ -3987,12 +4126,6 @@ function showAdvancedPermissions(data) {
       staffRoleId: selectValue("staffRoleId"),
       dashboardRoleIds: checkedList("dashboardRole"),
       commandRules: () => cleanRules(rules),
-      logRoutes: (form) => {
-        const picked = LOG_ROUTE_GROUPS.flatMap((entry) => entry.routes)
-          .map((route) => [route, form.querySelector(`#route-${route}`).value])
-          .filter(([, id]) => id);
-        return picked.length > 0 ? Object.fromEntries(picked) : null;
-      },
     },
   });
 }

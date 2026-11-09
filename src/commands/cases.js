@@ -24,6 +24,7 @@ import { isModerator } from "../moderation/checks.js";
 import { CaseAction } from "../moderation/caseStore.js";
 import { actionName, buildActionLogEmbed, buildCaseEmbed, noModLog } from "../moderation/modLog.js";
 import { withDescription } from "./moderation.js";
+import { LogRoute } from "../logs/logRoutes.js";
 
 const MAX_REASON_LENGTH = 512;
 // Cases listed by /modlogs; an embed holds 4096 characters.
@@ -218,7 +219,7 @@ export function createClearWarnsCommand({ moderation, modLog = noModLog, forcedL
         summary: `**Warnings cleared** · ${count} for <@${user.id}>`,
         color: 0x99aab5,
       }),
-    }));
+    }), { route: LogRoute.WARNINGS_CLEARED });
     return answer(Status.SUCCESS, "clearwarnsDone", { ...values, count });
   }
 

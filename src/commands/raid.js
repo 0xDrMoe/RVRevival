@@ -85,7 +85,7 @@ export function createRaidCommand({ guildSettings, modLog = noModLog, forcedLang
   }
 
   const logEntry = (guild, moderator, summary, lines, color) =>
-    modLog.post(guild, () => ({ embed: buildActionLogEmbed({ moderator, summary, lines, color }) }), { route: LogRoute.PROTECTION });
+    modLog.post(guild, () => ({ embed: buildActionLogEmbed({ moderator, summary, lines, color }) }), { route: LogRoute.RAID_LOCKDOWN });
 
   async function lockdown(interaction, answer) {
     const guild = interaction.guild;

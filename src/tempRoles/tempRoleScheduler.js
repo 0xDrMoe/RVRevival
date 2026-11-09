@@ -3,6 +3,7 @@
 // back. Members who left, and roles that were deleted, are just forgotten.
 
 import { buildActionLogEmbed, noModLog } from "../moderation/modLog.js";
+import { LogRoute } from "../logs/logRoutes.js";
 
 // Options: client, store (TempRoleStore), modLog, logger
 export function createTempRoleScheduler({ client, store, modLog = noModLog, logger, intervalMs = 30_000, now = Date.now }) {
@@ -32,7 +33,7 @@ export function createTempRoleScheduler({ client, store, modLog = noModLog, logg
         lines: entry.reason ? [`Reason given: ${entry.reason}`] : [],
         color: 0x95a5a6,
       }),
-    }));
+    }), { route: LogRoute.TEMP_ROLE });
   }
 
   // Takes away every role that has ended. Never runs twice at once.

@@ -16,6 +16,7 @@ import { auditReason } from "../moderation/moderationService.js";
 import { isPermissionError } from "../utils/discordErrors.js";
 import { beginModerationCommand } from "./commandHelpers.js";
 import { withDescription } from "./moderation.js";
+import { LogRoute } from "../logs/logRoutes.js";
 
 // Discord's longest nickname.
 const MAX_NICKNAME_LENGTH = 32;
@@ -138,7 +139,7 @@ export function createMemberToolCommands({ guildSettings, modLog = noModLog, for
         lines: reason ? [`Reason: ${reason}`] : [],
         color: 0x9b59b6,
       }),
-    }));
+    }), { route: LogRoute.ROLE_CHANGE });
     return answer(Status.SUCCESS, adding ? "roleAdded" : "roleRemoved", values);
   }
 
@@ -198,7 +199,7 @@ export function createMemberToolCommands({ guildSettings, modLog = noModLog, for
         lines: [`${shown(before)} → ${shown(nickname)}`],
         color: 0x9b59b6,
       }),
-    }));
+    }), { route: LogRoute.NICKNAME_CHANGE });
     return nickname
       ? answer(Status.SUCCESS, "nickSet", { ...values, nickname })
       : answer(Status.SUCCESS, "nickReset", values);

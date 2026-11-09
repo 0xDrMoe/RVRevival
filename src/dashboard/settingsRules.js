@@ -95,7 +95,7 @@ export const SETTING_RULES = Object.freeze({
   [Setting.AUTO_RESPONDERS]: { kind: "autoResponders", types: RESPONDER_CHANNELS, label: "Auto-responders" },
   [Setting.MEDIA_ONLY]: { kind: "mediaOnly", types: [ChannelType.GuildText, ChannelType.GuildAnnouncement], label: "Media-only channels" },
   [Setting.SETUP_SKIPPED]: { kind: "setupSteps", label: "Skipped setup steps" },
-  [Setting.LOG_ROUTES]: { kind: "logRoutes", types: POSTING_CHANNELS, label: "Log channels per kind" },
+  [Setting.LOG_ROUTES]: { kind: "logRoutes", types: POSTING_CHANNELS, label: "Log channels per log type" },
   // Only the owner or whoever added the bot may change these (checked by the dashboard route).
   [Setting.COMMAND_RULES]: { kind: "commandRules", types: IGNORABLE_CHANNELS, label: "Command permissions", permissionsOnly: true },
   [Setting.PERMISSION_PRESET]: { kind: "preset", label: "Permission setup", permissionsOnly: true },

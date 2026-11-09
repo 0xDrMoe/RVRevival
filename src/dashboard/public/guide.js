@@ -509,7 +509,7 @@ const FEATURE_PARTS = [
         tips: [
           "Log entries never ping anyone. Bot and webhook messages aren't logged.",
           "Entries are posted through a webhook named like the bot, and a busy moment can put several in one message. **Don't delete that webhook**; the bot would post as itself until it can make a new one.",
-          "Want cases, automod deletions, raid alerts or each server-log event in its own channel? Use **Log channels per kind** on the Permissions page's Advanced tab.",
+          "Want a log in its own channel? Open **Where each log goes** on the Logging page. Every kind of entry (bans, kicks, purges, raid alerts, each server-log and ticket event…) can have its own channel; groups like *Moderation cases: all of them* cover everything under them. Anything left on *Default* goes to the channel shown next to it, which follows the logs, mod-log, server-log and ticket log channels.",
         ],
       },
     ],
@@ -1088,7 +1088,7 @@ const FEATURE_PARTS = [
         icon: "key",
         tone: "purple",
         page: "access",
-        summary: "Who can use which command, who can open this dashboard, and where each kind of log goes. Two tabs: **Simple** and **Advanced**.",
+        summary: "Who can use which command and who can open this dashboard. Two tabs: **Simple** and **Advanced**.",
         who: "Only the **server owner** or **whoever added the bot** can change the setup and command rules. Other admins can look.",
         native: "Discord's own *Server Settings → Integrations → Rabble* can also limit a command to roles and channels, and hides it from everyone else. Use that when hiding is all you need. The bot's rules are for giving a command to a role without the permission, blocking roles, or turning a command off.",
         table: {
@@ -1102,7 +1102,7 @@ const FEATURE_PARTS = [
         steps: [
           "On **Simple**, pick a setup and its roles, press **Preview changes** to see exactly what will change, then **Apply this setup**.",
           "Add each staff role under *Server Settings → Integrations → Rabble*, so Discord shows them their commands. The page lists which commands each role needs.",
-          "Fine-tune on **Advanced**: whether **Discord permissions count**; the mod role, staff role and dashboard roles; **Command permissions** for each command (on or off, also allowed roles, only these roles, blocked roles, only these channels); and **Log channels per kind**.",
+          "Fine-tune on **Advanced**: whether **Discord permissions count**; the mod role, staff role and dashboard roles; **Command permissions** for each command (on or off, also allowed roles, only these roles, blocked roles, only these channels). Log channels for each kind of entry are on the Logging page.",
         ],
         tips: [
           "People with a dashboard role see **Overview**, **Guide**, **Cases**, **Members** and **Tickets**, with full case access. Admins see every page; Anti-nuke stays owner-only. Removing someone's role takes their access away within 30 seconds.",

@@ -3,12 +3,13 @@
 // ticket's history, which the dashboard's Tickets page shows, and posted in the
 // ticket log channel (/tickets log, or the dashboard's Logging page). Without
 // one, entries go to the mod-log channel like before. Each kind of entry can
-// be switched off (/tickets log-event); switched-off events are still saved.
+// also have a channel of its own (the Logging page, "Where each log goes"),
+// and be switched off (/tickets log-event); switched-off events are still saved.
 //
 // Log entries are in English, like every other log.
 
 import { AttachmentBuilder, EmbedBuilder, escapeMarkdown } from "discord.js";
-import { LogRoute } from "../logs/logRoutes.js";
+import { LogRoute, ticketRoute } from "../logs/logRoutes.js";
 import { Setting } from "../settings/guildSettings.js";
 
 // The values are saved in the database and the settings, so never rename one.
@@ -112,8 +113,11 @@ export function createTicketLog({ tickets, poster, guildSettings, logger, now = 
       if (!poster || !isPosted(guild.id, event)) {
         return undefined;
       }
-      // A ticket log channel wins over a channel picked for "mod actions" on the Permissions page.
-      const route = guildSettings.get(guild.id, Setting.TICKET_LOG_CHANNEL) ? undefined : LogRoute.MOD_ACTIONS;
+      // A channel picked for this kind of event (the Logging page) wins; then
+      // the ticket log channel, which wins over one picked for all "mod actions".
+      const route = guildSettings.get(guild.id, Setting.TICKET_LOG_CHANNEL)
+        ? ticketRoute(event)
+        : [ticketRoute(event), LogRoute.MOD_ACTIONS];
       try {
         return await poster.post(
           guild,
