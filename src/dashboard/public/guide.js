@@ -145,7 +145,7 @@ const FEATURE_PARTS = [
         table: {
           head: ["Group", "Pages"],
           rows: [
-            ["**General**", "**Overview** (counts, a 30-day chart, the busiest mods and the Setup card), **Guide** (this page) and **Activity** (every dashboard change, with who made it)."],
+            ["**General**", "**Overview** (counts, the Server checkup, quick on/off switches, a 30-day chart, the busiest mods, top commands and the Setup card), **Guide** (this page) and **Activity** (every dashboard change, with who made it, and Undo)."],
             ["**Moderation**", "**Cases** (search, filter, edit reasons, export CSV), **Members** (anyone's full history), **Tickets** (with transcripts) and **Ban appeals**."],
             ["**Protection**", "**Automod** (with media-only channels), **Anti-nuke** and **Raid protection**."],
             ["**Community**", "**Welcome & leave**, **Roles & panels** (autoroles, roles on rejoin and role panels), **Starboard**, **Birthdays**, **Leveling**, **Country** and **Server stats**."],
@@ -161,6 +161,9 @@ const FEATURE_PARTS = [
           "The account menu (top right) sets the language, style (clean, or the game-style Rumble look), theme, accent colour and spacing for your browser.",
           "**Everything you change here is posted in the logs channel with your name**, and listed on the Activity page.",
           "Logins last 7 days. Log out on shared computers.",
+          "The Overview's **Server checkup** lists what stops features working: permissions Rabble's role is missing, roles it's set to give that sit above its own role, and channels in the settings that were deleted. Each one links to the page that fixes it.",
+          "Automod, Leveling and Anti-nuke (owner only) have a switch right on their Overview tile.",
+          "**Undo** on the Activity page puts back what a settings change replaced. A setting someone changed again since is left as it is. Filter the list by person or search it.",
         ],
       },
     ],

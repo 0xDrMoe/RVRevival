@@ -4,6 +4,16 @@
 export const CHANGELOG = [
   {
     date: "2026-11-09",
+    title: "Dashboard: undo, server checkup and quick switches",
+    items: [
+      "Undo a settings change from the Activity page, and filter it by person or search it.",
+      "The Overview has a Server checkup: missing permissions, roles above Rabble's, and deleted channels, each with a Fix link.",
+      "Switch Automod, Leveling and Anti-nuke on or off right from the Overview.",
+      "A Top commands card shows what your server uses most in the last 30 days.",
+    ],
+  },
+  {
+    date: "2026-11-09",
     title: "Weekly leaderboard, clickable commands and a better welcome",
     items: [
       "A weekly leaderboard post every Monday, with an optional role for the week's top member. Set it on the Leveling page.",
