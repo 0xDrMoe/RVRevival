@@ -318,6 +318,7 @@
   "automodAction_delete": "Supprimer le message",
   "automodAction_warn": "Supprimer et avertir",
   "automodAction_timeout": "Supprimer et exclure temporairement",
+  "automodAction_log": "Journaliser seulement (garder le message)",
   "automodEscalation_timeout": "Exclure temporairement",
   "automodEscalation_kick": "Expulser",
   "automodEscalation_ban": "Bannir",

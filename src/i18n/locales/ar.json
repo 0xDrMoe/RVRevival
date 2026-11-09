@@ -318,6 +318,7 @@
   "automodAction_delete": "حذف الرسالة",
   "automodAction_warn": "الحذف والتحذير",
   "automodAction_timeout": "الحذف والإسكات المؤقت",
+  "automodAction_log": "التسجيل فقط (إبقاء الرسالة)",
   "automodEscalation_timeout": "إسكات مؤقت",
   "automodEscalation_kick": "طرد",
   "automodEscalation_ban": "حظر",

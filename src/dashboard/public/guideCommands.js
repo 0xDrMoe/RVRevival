@@ -744,7 +744,7 @@ export const COMMAND_PARTS = [
             options: [
               ["rule", "Banned words, invite links, links, mass mentions, spam (messages too fast), repeated messages, or too many capitals."],
               ["enabled", "Whether the rule is on."],
-              ["action", "Delete the message, delete and warn, or delete and time out. Leave it out to keep the current one."],
+              ["action", "Delete the message, delete and warn, delete and time out, or log only (the message stays, the mod log notes it). Leave it out to keep the current one."],
             ],
           },
           {

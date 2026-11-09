@@ -28,6 +28,13 @@
 // Everything shown comes from the JSON API in ../app.js. Text from Discord
 // (names, reasons) is always set as text, never as HTML.
 
+import {
+  applyPreset as applyAutomodPreset,
+  AUTOMOD_PRESETS,
+  CUSTOM_PRESET as CUSTOM_AUTOMOD,
+  matchingPreset as matchingAutomodPreset,
+  RECOMMENDED_PRESET as RECOMMENDED_AUTOMOD,
+} from "./automodPresets.js";
 import { GUIDE } from "./guide.js";
 import { RESPONDER_TEMPLATES, TAG_TEMPLATES, responderFromTemplate, tagFromTemplate } from "./customCommandTemplates.js";
 
@@ -37,7 +44,7 @@ const LOG_EVENTS = ["messageEdit", "messageDelete", "bulkDelete", "memberJoin", 
 const TICKET_EVENTS = ["opened", "closed", "reopened", "memberAdded", "memberRemoved", "renamed", "deleted"];
 const CASE_ACTIONS = ["ban", "softban", "unban", "kick", "timeout", "untimeout", "warn", "note"];
 const AUTOMOD_RULES = ["bannedWords", "invites", "links", "mentions", "spam", "duplicates", "caps"];
-const AUTOMOD_ACTIONS = ["delete", "warn", "timeout"];
+const AUTOMOD_ACTIONS = ["delete", "warn", "timeout", "log"];
 const ESCALATION_ACTIONS = ["timeout", "kick", "ban"];
 // The numbers each rule uses: where they live in the automod settings, and their range.
 const AUTOMOD_NUMBERS = {
@@ -2483,11 +2490,21 @@ async function showLogging(guildId) {
 }
 
 // --- Automod ---------------------------------------------------------------------
+//
+// Two views of the same settings. Simple: pick a preset, switch rules on or
+// off, and edit the word and website lists. Advanced: every rule's action and
+// numbers, plus per-rule fine-tuning (notice, own timeout, roles and channels
+// it skips), and the punishments. The Advanced controls are always on the
+// page (hidden in Simple) and are what gets saved; the Simple controls just
+// write into them, so switching views never loses a change.
+
+const AUTOMOD_VIEWS = ["simple", "advanced"];
 
 // "https://www.YouTube.com/x" -> "youtube.com", the way the bot saves websites.
 const cleanSite = (text) =>
   text.trim().toLowerCase().replace(/^[a-z]+:\/\//, "").split(/[/?#:]/)[0].replace(/^www\./, "").replace(/\.$/, "");
 const lines = (text) => [...new Set(text.split("\n").map((line) => line.trim()).filter(Boolean))];
+const readAt = (object, path) => path.split(".").reduce((value, part) => value?.[part], object);
 
 // An on/off switch whose checkbox is read into the automod settings at `path`.
 function automodSwitch(path, checked, label) {
@@ -2499,8 +2516,7 @@ function automodSwitch(path, checked, label) {
 }
 
 function automodNumber({ path, key, min, max }, config) {
-  const value = path.split(".").reduce((object, part) => object[part], config);
-  return field(key, null, h("input", { type: "number", min, max, step: 1, required: true, value, "data-path": path, "data-kind": "int" }));
+  return field(key, null, h("input", { type: "number", min, max, step: 1, required: true, value: readAt(config, path), "data-path": path, "data-kind": "int" }));
 }
 
 function automodSelect(path, options, value, labelPrefix) {
@@ -2511,35 +2527,61 @@ function automodSelect(path, options, value, labelPrefix) {
   );
 }
 
-// One rule: its switch, what it does, and its own settings.
-function automodRule(rule, config) {
+// A rule's extras: its own notice, timeout length, and roles and channels it skips.
+function automodFineTune(rule, settings, { roles, channels }) {
+  const changed =
+    (settings.notify === false ? 1 : 0) +
+    (settings.timeoutMinutes ? 1 : 0) +
+    (settings.exemptRoleIds.length > 0 ? 1 : 0) +
+    (settings.exemptChannelIds.length > 0 ? 1 : 0);
+  return h(
+    "details",
+    { class: "am-fine-tune wide", open: changed > 0 },
+    h(
+      "summary",
+      {},
+      icon("sliders", "icon small"),
+      h("span", {}, t("amFineTune")),
+      changed > 0 ? h("span", { class: "badge badge-accent" }, t("amFineTuneChanged", { count: changed })) : null,
+    ),
+    h(
+      "div",
+      { class: "am-fine-tune-body" },
+      h(
+        "label",
+        { class: "switch-card" },
+        h("span", { class: "switch-text" }, h("strong", {}, t("amNotify")), h("span", { class: "help" }, t("amNotifyHelp"))),
+        automodSwitch(`rules.${rule}.notify`, settings.notify, t("amNotify")),
+      ),
+      field(
+        "amRuleTimeout",
+        "amRuleTimeoutHelp",
+        h("input", {
+          type: "number",
+          min: 1,
+          max: 40320,
+          step: 1,
+          value: settings.timeoutMinutes ?? "",
+          placeholder: t("amUseServerTimeout"),
+          "data-path": `rules.${rule}.timeoutMinutes`,
+          "data-kind": "intOrNull",
+        }),
+      ),
+      h("p", { class: "field-label" }, t("amRuleSkipRoles")),
+      checkList({ name: `amRuleRole_${rule}`, items: roles, checked: settings.exemptRoleIds, filterKey: "filterRoles" }),
+      h("p", { class: "field-label" }, t("amRuleSkipChannels")),
+      checkList({ name: `amRuleChannel_${rule}`, items: channels, checked: settings.exemptChannelIds, filterKey: "filterChannels" }),
+      h("p", { class: "help" }, t("amRuleSkipHelp")),
+    ),
+  );
+}
+
+// One rule in the Advanced view: its switch, what it does, its numbers and fine-tuning.
+function automodRule(rule, config, lists) {
   const settings = config.rules[rule];
-  const extra = [];
-  if (rule === "bannedWords") {
-    extra.push(
-      h(
-        "label",
-        { class: "field wide" },
-        h("span", { class: "field-label" }, t("amWords")),
-        h("textarea", { rows: 4, "data-path": "rules.bannedWords.words", "data-kind": "words", spellcheck: false }, settings.words.join("\n")),
-        h("span", { class: "help" }, t("amWordsHelp")),
-      ),
-    );
-  }
-  if (rule === "links") {
-    extra.push(
-      h(
-        "label",
-        { class: "field wide" },
-        h("span", { class: "field-label" }, t("amSites")),
-        h("textarea", { rows: 3, "data-path": "rules.links.allowedDomains", "data-kind": "sites", spellcheck: false }, settings.allowedDomains.join("\n")),
-        h("span", { class: "help" }, t("amSitesHelp")),
-      ),
-    );
-  }
   return h(
     "div",
-    { class: "rule" },
+    { class: "rule", "data-rule": rule },
     h(
       "label",
       { class: "rule-head" },
@@ -2551,7 +2593,7 @@ function automodRule(rule, config) {
       { class: "rule-body" },
       field("amAction", null, automodSelect(`rules.${rule}.action`, AUTOMOD_ACTIONS, settings.action, "amAction_")),
       (AUTOMOD_NUMBERS[rule] ?? []).map((number) => automodNumber(number, config)),
-      extra,
+      automodFineTune(rule, settings, lists),
     ),
   );
 }
@@ -2563,20 +2605,85 @@ function readAutomod(form, saved) {
     const parts = input.dataset.path.split(".");
     const parent = parts.slice(0, -1).reduce((object, part) => object[part], config);
     const kind = input.dataset.kind;
+    const text = input.value;
     parent[parts.at(-1)] =
       kind === "bool"
         ? input.checked
         : kind === "int"
-          ? Number.parseInt(input.value, 10)
-          : kind === "words"
-            ? lines(input.value.toLowerCase().replace(/[ \t]+/g, " "))
-            : kind === "sites"
-              ? [...new Set(lines(input.value.replace(/[,\s]+/g, "\n")).map(cleanSite).filter(Boolean))]
-              : input.value;
+          ? Number.parseInt(text, 10)
+          : kind === "intOrNull"
+            ? text.trim() === ""
+              ? null
+              : Number.parseInt(text, 10)
+            : kind === "words"
+              ? lines(text.toLowerCase().replace(/[ \t]+/g, " "))
+              : kind === "sites"
+                ? [...new Set(lines(text.replace(/[,\s]+/g, "\n")).map(cleanSite).filter(Boolean))]
+                : text;
   }
-  config.exemptRoleIds = [...form.querySelectorAll('input[name="amRole"]:checked')].map((box) => box.value);
-  config.exemptChannelIds = [...form.querySelectorAll('input[name="amChannel"]:checked')].map((box) => box.value);
+  const ticked = (name) => [...form.querySelectorAll(`input[name="${name}"]:checked`)].map((box) => box.value);
+  config.exemptRoleIds = ticked("amRole");
+  config.exemptChannelIds = ticked("amChannel");
+  for (const rule of AUTOMOD_RULES) {
+    config.rules[rule].exemptRoleIds = ticked(`amRuleRole_${rule}`);
+    config.rules[rule].exemptChannelIds = ticked(`amRuleChannel_${rule}`);
+  }
   return config;
+}
+
+// Puts `config` into the page's controls (a preset, or a rule switched in the Simple view).
+function writeAutomod(form, config) {
+  for (const input of form.querySelectorAll("[data-path]")) {
+    const kind = input.dataset.kind;
+    const value = readAt(config, input.dataset.path);
+    if (kind === "bool") {
+      input.checked = Boolean(value);
+    } else if (kind === "words" || kind === "sites") {
+      continue; // The lists are typed in one place, in both views.
+    } else {
+      input.value = value ?? "";
+    }
+  }
+  const tick = (name, ids) => form.querySelectorAll(`input[name="${name}"]`).forEach((box) => (box.checked = ids.includes(box.value)));
+  for (const rule of AUTOMOD_RULES) {
+    tick(`amRuleRole_${rule}`, config.rules[rule].exemptRoleIds ?? []);
+    tick(`amRuleChannel_${rule}`, config.rules[rule].exemptChannelIds ?? []);
+  }
+  // Check lists recount, and the save bar notices.
+  form.querySelectorAll(".check-list").forEach((list) => list.dispatchEvent(new Event("change", { bubbles: false })));
+  form.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
+// "Delete and time out (10 min)" for one rule of a config.
+function ruleOutcome(config, rule) {
+  const settings = config.rules[rule];
+  const label = t(`amAction_${settings.action}`);
+  return settings.action === "timeout" ? `${label} (${formatDuration((settings.timeoutMinutes ?? config.timeoutMinutes) * 60_000)})` : label;
+}
+
+// What happens after too many warnings, in a few words.
+function escalationText(escalation) {
+  if (escalation.warnings <= 0) {
+    return t("amPointNoEscalation");
+  }
+  const action =
+    escalation.action === "timeout"
+      ? t("amEscalationFor", { duration: formatDuration(escalation.timeoutMinutes * 60_000) })
+      : t(`amEscalation_${escalation.action}`);
+  return t("amPointEscalation", { count: escalation.warnings, action });
+}
+
+// The bullet points under a preset: what it switches on and how hard it punishes.
+function presetPoints(config) {
+  const on = AUTOMOD_RULES.filter((rule) => config.rules[rule].enabled);
+  const off = AUTOMOD_RULES.filter((rule) => !config.rules[rule].enabled);
+  return h(
+    "ul",
+    { class: "am-points" },
+    on.map((rule) => h("li", {}, h("strong", {}, t(`amRule_${rule}`)), ": ", ruleOutcome(config, rule))),
+    off.length > 0 ? h("li", { class: "muted" }, t("amPointOff", { rules: off.map((rule) => t(`amRule_${rule}`)).join(", ") })) : null,
+    h("li", {}, escalationText(config.escalation)),
+  );
 }
 
 async function showAutomod(guildId) {
@@ -2590,54 +2697,191 @@ async function showAutomod(guildId) {
   const channels = data.channels
     .filter((channel) => [CHANNEL.TEXT, CHANNEL.ANNOUNCEMENT, CHANNEL.FORUM, CHANNEL.VOICE, CHANNEL.CATEGORY].includes(channel.type))
     .map((channel) => channelItem(channel, data.channels));
+  const anyRuleOn = (value) => AUTOMOD_RULES.some((rule) => value.rules[rule].enabled);
+  const remembered = recall("automodView");
+  let view = AUTOMOD_VIEWS.includes(remembered) ? remembered : matchingAutomodPreset(config) === CUSTOM_AUTOMOD && anyRuleOn(config) ? "advanced" : "simple";
+  let form;
+  const current = () => (form ? readAutomod(form, data.settings.automod) : config);
+
+  // Simple view: the presets.
+  const presetButtons = [...AUTOMOD_PRESETS, CUSTOM_AUTOMOD].map((preset) => {
+    const isCustom = preset === CUSTOM_AUTOMOD;
+    const button = h(
+      "button",
+      {
+        type: "button",
+        class: "am-preset",
+        "data-preset": preset,
+        "aria-pressed": "false",
+        onclick: () => {
+          if (isCustom) {
+            setView("advanced");
+            return;
+          }
+          const next = applyAutomodPreset(current(), preset);
+          next.enabled = true;
+          writeAutomod(form, next);
+        },
+      },
+      h(
+        "span",
+        { class: "am-preset-title" },
+        h("strong", {}, t(`amPreset_${preset}`)),
+        preset === RECOMMENDED_AUTOMOD ? h("span", { class: "badge badge-green" }, t("amRecommended")) : null,
+      ),
+      h("span", { class: "help" }, t(`amPresetAbout_${preset}`)),
+      isCustom ? null : presetPoints(applyAutomodPreset(config, preset)),
+    );
+    return button;
+  });
+
+  // Simple view: one switch per rule, written into the Advanced switch.
+  const quickSwitches = AUTOMOD_RULES.map((rule) => {
+    const box = h("input", {
+      type: "checkbox",
+      role: "switch",
+      "aria-label": t(`amRule_${rule}`),
+      onchange: (event) => {
+        event.stopPropagation();
+        const target = form.querySelector(`[data-path="rules.${rule}.enabled"]`);
+        target.checked = box.checked;
+        form.dispatchEvent(new Event("change", { bubbles: true }));
+      },
+    });
+    const outcome = h("span", { class: "badge" });
+    return {
+      rule,
+      box,
+      outcome,
+      element: h(
+        "label",
+        { class: "switch-card am-quick-rule" },
+        h("span", { class: "switch-text" }, h("strong", {}, t(`amRule_${rule}`), outcome), h("span", { class: "help" }, t(`amRuleHelp_${rule}`))),
+        h("span", { class: "switch" }, box),
+      ),
+    };
+  });
+
+  // Keeps the Simple view in step with the settings (and with Advanced edits).
+  const sync = () => {
+    const value = current();
+    const match = matchingAutomodPreset(value);
+    presetButtons.forEach((button) => {
+      const preset = button.dataset.preset;
+      button.setAttribute("aria-pressed", String(preset === match && (preset !== CUSTOM_AUTOMOD || anyRuleOn(value))));
+      if (preset === CUSTOM_AUTOMOD) {
+        button.hidden = match !== CUSTOM_AUTOMOD || !anyRuleOn(value);
+      }
+    });
+    for (const { rule, box, outcome } of quickSwitches) {
+      box.checked = value.rules[rule].enabled;
+      outcome.textContent = ruleOutcome(value, rule);
+      outcome.hidden = !box.checked;
+    }
+  };
+
+  const simpleCards = [
+    card(
+      t("amQuickTitle"),
+      "sparkles",
+      "pink",
+      h("p", { class: "help" }, t("amQuickHelp")),
+      h("div", { class: "am-presets", role: "group", "aria-label": t("amQuickTitle") }, presetButtons),
+    ),
+    card(t("amChecksTitle"), "list", "blue", h("p", { class: "help" }, t("amChecksHelp")), h("div", { class: "am-quick-rules" }, quickSwitches.map((entry) => entry.element))),
+  ];
+  const advancedCards = [
+    card(
+      t("amRulesTitle"),
+      "sparkles",
+      "pink",
+      h("p", { class: "help" }, t("amRulesHelp")),
+      h("div", { class: "rules" }, AUTOMOD_RULES.map((rule) => automodRule(rule, config, { roles, channels }))),
+    ),
+    card(
+      t("amPunishTitle"),
+      "gavel",
+      "red",
+      h(
+        "div",
+        { class: "rule-body" },
+        field(
+          "amTimeoutMinutes",
+          "amTimeoutMinutesHelp",
+          h("input", { type: "number", min: 1, max: 40320, step: 1, required: true, value: config.timeoutMinutes, "data-path": "timeoutMinutes", "data-kind": "int" }),
+        ),
+        field(
+          "amEscalationWarnings",
+          "amEscalationWarningsHelp",
+          h("input", { type: "number", min: 0, max: 20, step: 1, required: true, value: config.escalation.warnings, "data-path": "escalation.warnings", "data-kind": "int" }),
+        ),
+        field("amEscalationAction", null, automodSelect("escalation.action", ESCALATION_ACTIONS, config.escalation.action, "amEscalation_")),
+        field(
+          "amEscalationMinutes",
+          null,
+          h("input", { type: "number", min: 1, max: 40320, step: 1, required: true, value: config.escalation.timeoutMinutes, "data-path": "escalation.timeoutMinutes", "data-kind": "int" }),
+        ),
+      ),
+    ),
+  ];
+
+  const setView = (next) => {
+    view = next;
+    remember("automodView", view);
+    simpleCards.forEach((element) => (element.hidden = view !== "simple"));
+    advancedCards.forEach((element) => (element.hidden = view !== "advanced"));
+    viewSwitch.querySelectorAll(".segment").forEach((button, index) => button.setAttribute("aria-pressed", String(AUTOMOD_VIEWS[index] === view)));
+    sync();
+  };
+  const viewSwitch = segmented(
+    t("amViewLabel"),
+    AUTOMOD_VIEWS.map((value) => ({ value, text: t(`amView_${value}`) })),
+    view,
+    (value) => setView(value),
+  );
+
+  const masterCard = card(
+    t("amMaster"),
+    "bot",
+    "blue",
+    h(
+      "label",
+      { class: "switch-card" },
+      h("span", { class: "switch-text" }, h("strong", {}, t("amMaster")), h("span", { class: "help" }, t("amMasterHelp"))),
+      automodSwitch("enabled", config.enabled, t("amMaster")),
+    ),
+    h("p", { class: "help" }, t("amAlwaysExempt")),
+  );
+  // The main switch and the presets read best across the whole width.
+  masterCard.classList.add("span-all");
+  simpleCards[0].classList.add("span-all");
 
   settingsPage({
     data,
     pageId: "automod",
     intro: t("automodIntro"),
+    heroExtra: () => viewSwitch,
     cards: [
+      masterCard,
+      ...simpleCards,
+      ...advancedCards,
       card(
-        t("amMaster"),
-        "bot",
-        "blue",
+        t("amListsTitle"),
+        "file",
+        "amber",
         h(
           "label",
-          { class: "switch-card" },
-          h("span", { class: "switch-text" }, h("strong", {}, t("amMaster")), h("span", { class: "help" }, t("amMasterHelp"))),
-          automodSwitch("enabled", config.enabled, t("amMaster")),
+          { class: "field wide" },
+          h("span", { class: "field-label" }, t("amWords")),
+          h("textarea", { rows: 4, "data-path": "rules.bannedWords.words", "data-kind": "words", spellcheck: false }, config.rules.bannedWords.words.join("\n")),
+          h("span", { class: "help" }, t("amWordsHelp")),
         ),
-        h("p", { class: "help" }, t("amAlwaysExempt")),
-      ),
-      card(
-        t("amRulesTitle"),
-        "sparkles",
-        "pink",
-        h("p", { class: "help" }, t("amRulesHelp")),
-        h("div", { class: "rules" }, AUTOMOD_RULES.map((rule) => automodRule(rule, config))),
-      ),
-      card(
-        t("amPunishTitle"),
-        "gavel",
-        "red",
         h(
-          "div",
-          { class: "rule-body" },
-          field(
-            "amTimeoutMinutes",
-            "amTimeoutMinutesHelp",
-            h("input", { type: "number", min: 1, max: 40320, step: 1, required: true, value: config.timeoutMinutes, "data-path": "timeoutMinutes", "data-kind": "int" }),
-          ),
-          field(
-            "amEscalationWarnings",
-            "amEscalationWarningsHelp",
-            h("input", { type: "number", min: 0, max: 20, step: 1, required: true, value: config.escalation.warnings, "data-path": "escalation.warnings", "data-kind": "int" }),
-          ),
-          field("amEscalationAction", null, automodSelect("escalation.action", ESCALATION_ACTIONS, config.escalation.action, "amEscalation_")),
-          field(
-            "amEscalationMinutes",
-            null,
-            h("input", { type: "number", min: 1, max: 40320, step: 1, required: true, value: config.escalation.timeoutMinutes, "data-path": "escalation.timeoutMinutes", "data-kind": "int" }),
-          ),
+          "label",
+          { class: "field wide" },
+          h("span", { class: "field-label" }, t("amSites")),
+          h("textarea", { rows: 3, "data-path": "rules.links.allowedDomains", "data-kind": "sites", spellcheck: false }, config.rules.links.allowedDomains.join("\n")),
+          h("span", { class: "help" }, t("amSitesHelp")),
         ),
       ),
       card(
@@ -2671,10 +2915,14 @@ async function showAutomod(guildId) {
       ),
     ],
     fields: {
-      automod: (form) => readAutomod(form, data.settings.automod),
-      mediaOnly: (form) => ({ channelIds: checkedList("mediaOnly")(form) ?? [], allowLinks: form.querySelector("#mediaOnlyLinks").checked }),
+      automod: (page) => readAutomod(page, data.settings.automod),
+      mediaOnly: (page) => ({ channelIds: checkedList("mediaOnly")(page) ?? [], allowLinks: page.querySelector("#mediaOnlyLinks").checked }),
     },
   });
+  form = main.querySelector("form.settings");
+  form?.addEventListener("change", sync);
+  form?.addEventListener("input", sync);
+  setView(view);
 }
 
 // --- Community -------------------------------------------------------------------

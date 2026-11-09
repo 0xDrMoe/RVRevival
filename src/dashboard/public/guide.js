@@ -381,7 +381,7 @@ const FEATURE_PARTS = [
         },
         commands: [
           ["/settings automod toggle enabled", "Turns automod on or off."],
-          ["/settings automod rule rule enabled [action]", "Switches a rule and sets what it does: delete, delete and warn, or delete and time out."],
+          ["/settings automod rule rule enabled [action]", "Switches a rule and sets what it does: delete, delete and warn, delete and time out, or log only."],
           ["/settings automod limit setting value", "Changes a rule's numbers (mentions, messages per seconds, repeats, caps)."],
           ["/settings automod word word", "Adds a banned word, or removes it if it's on the list."],
           ["/settings automod allow-site site", "Allows a website, or removes it."],
@@ -391,6 +391,8 @@ const FEATURE_PARTS = [
           ["/settings automod show", "Lists the automod settings."],
         ],
         tips: [
+          "The page has two views. **Simple**: pick Light, Balanced (recommended) or Strict and switch single rules on or off. **Advanced**: every rule's action and numbers, the punishments, and *Fine-tune* per rule (its own notice, timeout length, and roles and channels it skips).",
+          "Trying a rule out? Set it to **Log only**: matches go to the mod log and the message stays up.",
           "Never checked: bots, the mod role, anyone with Manage Messages, exempt roles and channels, and the country channel.",
           "Warnings and timeouts become normal cases with \"Automod\" in the reason.",
           "When it gets it wrong: `/untimeout` the member, then delete the case and fix the word or site.",

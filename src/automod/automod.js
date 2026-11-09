@@ -3,11 +3,13 @@
 // breaks: deletes the message, tells the member in the channel, and either
 // notes it in the mod log or warns or times them out (a case, posted in the mod
 // log like any other). Members who collect enough warnings in 24 hours can be
-// timed out, kicked or banned automatically.
+// timed out, kicked or banned automatically. A rule set to "log only" leaves
+// the message up and just notes it in the mod log.
 //
 // Left alone: bots, webhooks, moderators (Manage Messages in the channel, or
 // the mod role), roles and channels the server exempts, and the /country
-// channel, which deletes everything anyway.
+// channel, which deletes everything anyway. Each rule can also skip its own
+// roles and channels, post no notice, and use its own timeout length.
 //
 // Reading what messages say needs the Message Content intent; without it only
 // the spam rule and mention counts work.
@@ -28,6 +30,7 @@ import {
   EscalationAction,
   normalizeAutomod,
   RULE_LABELS,
+  ruleSkips,
 } from "./config.js";
 import { countMentions, findBannedWord, findBlockedLink, findInvites, isMostlyCaps, repeatKey } from "./rules.js";
 import { LogRoute } from "../logs/logRoutes.js";
@@ -51,7 +54,11 @@ const HISTORY_RULES = new Set([AutomodRule.SPAM, AutomodRule.DUPLICATES]);
 function automodPlan(saved) {
   const config = normalizeAutomod(saved);
   const rules = activeRules(config);
-  return config.enabled && rules.length > 0 ? { config, rules, needsHistory: rules.some((rule) => HISTORY_RULES.has(rule)) } : null;
+  if (!config.enabled || rules.length === 0) {
+    return null;
+  }
+  const scoped = rules.some((rule) => config.rules[rule].exemptRoleIds.length > 0 || config.rules[rule].exemptChannelIds.length > 0);
+  return { config, rules, scoped, needsHistory: rules.some((rule) => HISTORY_RULES.has(rule)) };
 }
 
 // Invite codes remembered at most; past this the oldest are forgotten.
@@ -83,6 +90,8 @@ export function createAutomod({
   const history = new Map();
   // "<server>:<member>" -> when automod last warned or timed them out.
   const lastPunished = new Map();
+  // "<server>:<member>:<rule>" -> when a log-only rule last noted them.
+  const lastLogged = new Map();
   // invite code -> { guildId, at }
   const invites = new Map();
 
@@ -102,6 +111,11 @@ export function createAutomod({
         lastPunished.delete(key);
       }
     }
+    for (const [key, at] of lastLogged) {
+      if (at < now() - PUNISH_COOLDOWN_MS) {
+        lastLogged.delete(key);
+      }
+    }
     for (const [code, entry] of invites) {
       if (entry.at < now() - INVITE_CACHE_MS) {
         invites.delete(code);
@@ -112,9 +126,11 @@ export function createAutomod({
 
   const planFor = (guildId) => derivedSetting(guildSettings, guildId, Setting.AUTOMOD, automodPlan) ?? undefined;
 
+  const channelIdsOf = (message) => [message.channelId, message.channel?.parentId, message.channel?.parent?.parentId].filter(Boolean);
+
   function isExempt(message, member, config) {
     const channel = message.channel;
-    const channelIds = [message.channelId, channel?.parentId, channel?.parent?.parentId].filter(Boolean);
+    const channelIds = channelIdsOf(message);
     if (channelIds.some((id) => config.exemptChannelIds.includes(id))) {
       return true;
     }
@@ -128,6 +144,16 @@ export function createAutomod({
     const roles = member.roles?.cache;
     const modRole = moderatorRoleId(guildSettings, message.guildId);
     return Boolean(roles && [modRole, ...config.exemptRoleIds].some((id) => id && roles.has(id)));
+  }
+
+  // The rules that check this message: the active ones, minus any that skip
+  // the member's roles or this channel.
+  function rulesFor(message, member, plan) {
+    if (!plan.scoped) {
+      return plan.rules;
+    }
+    const scope = { channelIds: channelIdsOf(message), roleIds: member.roles?.cache };
+    return plan.rules.filter((rule) => !ruleSkips(plan.config.rules[rule], scope));
   }
 
   // invite code -> the lookup in progress, so a burst of the same invite asks Discord once.
@@ -314,8 +340,42 @@ export function createAutomod({
     }
   }
 
+  // A log-only rule: the message stays, and the mod log notes what it would
+  // have caught (once per member and rule in PUNISH_COOLDOWN_MS).
+  async function logOnly(message, member, violation) {
+    const { rule } = violation;
+    if (HISTORY_RULES.has(rule)) {
+      history.delete(`${message.guildId}:${message.author.id}`);
+    }
+    const key = `${message.guildId}:${message.author.id}:${rule}`;
+    if ((lastLogged.get(key) ?? -Infinity) > now() - PUNISH_COOLDOWN_MS) {
+      return;
+    }
+    lastLogged.set(key, now());
+    const content = message.content ?? "";
+    const link = message.url ? ` · [message](${message.url})` : "";
+    logger.info("Automod noted a message (log only)", { guildId: message.guildId, userId: member.id, rule });
+    try {
+      await modLog.post(message.guild, () => ({
+        embed: buildActionLogEmbed({
+          moderator: message.client.user,
+          summary: `**Automod (log only): ${RULE_LABELS[rule]}** · message by <@${member.id}> in <#${message.channelId}> was left up${link}`,
+          lines: [`**Matched:** ${violation.detail}`, ...(content ? [codeBlock(content.slice(0, 1500))] : [])],
+          color: 0x95a5a6,
+        }),
+      }), { route: LogRoute.AUTOMOD });
+    } catch (error) {
+      logger.warn("Automod couldn't note a log-only match", { guildId: message.guildId, userId: member.id, rule, error });
+    }
+  }
+
   async function enforce(message, member, config, violation) {
     const { rule } = violation;
+    const ruleSettings = config.rules[rule];
+    if (ruleSettings.action === AutomodAction.LOG) {
+      await logOnly(message, member, violation);
+      return false;
+    }
     const guild = message.guild;
     const moderator = message.client.user;
     await deleteMessages(message, violation.messages);
@@ -326,12 +386,14 @@ export function createAutomod({
 
     const memberKey = `${message.guildId}:${message.author.id}`;
     if ((lastPunished.get(memberKey) ?? -Infinity) > now() - PUNISH_COOLDOWN_MS) {
-      return;
+      return true;
     }
     lastPunished.set(memberKey, now());
-    await sendNotice(message, rule);
+    if (ruleSettings.notify) {
+      await sendNotice(message, rule);
+    }
 
-    let action = config.rules[rule].action;
+    let action = ruleSettings.action;
     // Discord can't time out admins or anyone above the bot; warn instead.
     if (action === AutomodAction.TIMEOUT && member.moderatable === false) {
       action = AutomodAction.WARN;
@@ -345,7 +407,7 @@ export function createAutomod({
         await moderation.warn({ guild, member, moderator, reason });
         await escalate(guild, member, moderator, config);
       } else if (action === AutomodAction.TIMEOUT) {
-        await moderation.timeout({ guild, member, moderator, reason, durationMs: config.timeoutMinutes * 60_000 });
+        await moderation.timeout({ guild, member, moderator, reason, durationMs: (ruleSettings.timeoutMinutes ?? config.timeoutMinutes) * 60_000 });
       } else {
         await modLog.post(guild, () => ({
           embed: buildActionLogEmbed({
@@ -359,6 +421,7 @@ export function createAutomod({
     } catch (error) {
       logger.warn("Automod couldn't finish acting on a message", { guildId: guild.id, userId: member.id, rule, action, error });
     }
+    return true;
   }
 
   // Finds the member behind a message, fetching them if they aren't cached.
@@ -380,18 +443,15 @@ export function createAutomod({
       if (!plan) {
         return;
       }
-      const { config, rules } = plan;
+      const { config } = plan;
       const member = await memberOf(message);
       if (!member || isExempt(message, member, config)) {
         return;
       }
       const recent = plan.needsHistory ? remember(message) : undefined;
-      const violation = await findViolation(message, config, { recent, rules });
-      if (violation) {
-        await enforce(message, member, config, violation);
-        return true;
-      }
-      return false;
+      const violation = await findViolation(message, config, { recent, rules: rulesFor(message, member, plan) });
+      // True when the message was removed (a log-only rule leaves it up).
+      return violation ? enforce(message, member, config, violation) : false;
     },
 
     // Someone editing a message into something automod would have caught.
@@ -403,12 +463,12 @@ export function createAutomod({
       if (!plan) {
         return;
       }
-      const { config, rules } = plan;
+      const { config } = plan;
       const member = await memberOf(newMessage);
       if (!member || isExempt(newMessage, member, config)) {
         return;
       }
-      const violation = await findViolation(newMessage, config, { recent: undefined, rules });
+      const violation = await findViolation(newMessage, config, { recent: undefined, rules: rulesFor(newMessage, member, plan) });
       if (violation) {
         await enforce(newMessage, member, config, violation);
       }

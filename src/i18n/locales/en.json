@@ -318,6 +318,7 @@
   "automodAction_delete": "Delete the message",
   "automodAction_warn": "Delete and warn",
   "automodAction_timeout": "Delete and time out",
+  "automodAction_log": "Log only (keep the message)",
   "automodEscalation_timeout": "Time out",
   "automodEscalation_kick": "Kick",
   "automodEscalation_ban": "Ban",
