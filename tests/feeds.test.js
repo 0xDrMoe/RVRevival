@@ -144,6 +144,10 @@ describe("resolveSource", () => {
     expect(await resolveSource("youtube", `https://www.youtube.com/channel/${CHANNEL}/videos`)).toEqual(feed);
     const net = fakeNet({ "https://www.youtube.com/@rumble": `<script>{"externalId":"${CHANNEL}"}</script>`, "https://www.youtube.com/@empty": "<html></html>" });
     expect(await resolveSource("youtube", "https://youtube.com/@rumble", net)).toEqual(feed);
+    for (const link of ["https://www.youtube.com/@rumble/shorts", "https://m.youtube.com/@rumble/videos/", "youtube.com/@rumble/streams?si=abc", "@rumble/live"]) {
+      expect(await resolveSource("youtube", link, net)).toEqual(feed);
+    }
+    await expect(resolveSource("youtube", "https://www.youtube.com/@rumble/playlists/x", net)).rejects.toMatchObject({ reason: "bad-source" });
     expect(await resolveSource("youtube", "@rumble", net)).toEqual(feed);
     expect(await resolveSource("youtube_shorts", "@rumble", net)).toEqual({ url: `https://www.youtube.com/feeds/videos.xml?playlist_id=UUSH${CHANNEL.slice(2)}`, name: null, channelFeed });
     expect(await resolveSource("youtube_live", CHANNEL)).toEqual({ url: `https://www.youtube.com/channel/${CHANNEL}/live`, name: null, channelFeed });

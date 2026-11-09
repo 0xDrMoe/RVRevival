@@ -204,7 +204,7 @@ function youtubeSource(kind, channelId) {
 
 // What the user typed → the feed's address and a display name.
 // YouTube (videos, Shorts or live): a channel ID, a /channel/ link or an
-// @handle (looked up on YouTube). Twitch and Kick: a channel name or link
+// @handle (looked up on YouTube), with or without a tab like /shorts. Twitch and Kick: a channel name or link
 // (checked on the platform when added, feeds.js). GitHub: owner/repo.
 // Bluesky: a handle or profile link. Mastodon: @name@server or a profile link.
 // Reddit: r/name, name or a subreddit link. RSS: any public link.
@@ -223,7 +223,7 @@ export async function resolveSource(kind, input, options = {}) {
   if (kind === FeedKind.YOUTUBE || kind === FeedKind.YOUTUBE_SHORTS || kind === FeedKind.YOUTUBE_LIVE) {
     let channelId = YOUTUBE_CHANNEL.test(text) ? text : text.match(/youtube\.com\/channel\/(UC[\w-]{22})/)?.[1];
     if (!channelId) {
-      const handle = text.match(/^(?:https?:\/\/(?:www\.|m\.)?youtube\.com\/)?(@[\w.-]{3,30})\/?$/)?.[1];
+      const handle = text.match(/^(?:(?:https?:\/\/)?(?:www\.|m\.)?youtube\.com\/)?(@[\w.-]{3,30})(?:\/(?:featured|videos|shorts|streams|live|about))?\/?(?:[?#].*)?$/)?.[1];
       if (!handle) {
         throw new FeedError("bad-source", "Type a YouTube channel link, like https://youtube.com/@name.");
       }
