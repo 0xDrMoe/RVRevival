@@ -55,6 +55,7 @@ export const Setting = Object.freeze({
   TICKET_LOG_CHANNEL: "ticketLogChannelId", // where ticket events are posted; unset = the mod-log channel (see tickets/ticketLog.js)
   DISABLED_TICKET_LOG_EVENTS: "disabledTicketLogEvents", // ticket events not posted, a list of names (they're still saved)
   TICKET_SUPPORT: "ticketSupport", // auto-close after inactivity and ratings, { autoCloseHours, ratings } (see tickets/support.js)
+  WARN_THRESHOLDS: "warnThresholds", // automatic timeout, kick or ban after N /warn cases in D days, [{ count, days, action, minutes }] (see moderation/warnThresholds.js)
   JOIN_GATE: "joinGate", // new-account gate and join alerts, an object (see raid/raid.js)
   LOCKDOWN: "lockdown", // a running /raid lockdown and what to restore, an object (see raid/raid.js)
   TEMP_VOICE: "tempVoice", // join-to-create voice, { hubChannelId, categoryId, nameTemplate, userLimit } (see voice/tempVoice.js)

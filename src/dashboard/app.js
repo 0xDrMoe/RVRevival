@@ -73,6 +73,7 @@ import { checkTemplate, COUNTER_PRESETS, InvalidCounter, MAX_COUNTERS, newCounte
 import { buildPanelComponents, buildPanelMessage, panelLook, TICKET_COLOR } from "../tickets/tickets.js";
 import { DEFAULT_NAME_FORMAT, normalizeLook } from "../tickets/panel.js";
 import { checkTicketSupport, normalizeTicketSupport } from "../tickets/support.js";
+import { normalizeWarnThresholds } from "../moderation/warnThresholds.js";
 import { BUILT_IN_GUIDE_KEYS, buildPostedGuide } from "../commands/countryHelp.js";
 import { CONTINENT_EMOJI } from "../commands/countryPicker.js";
 import { continentOf, CONTINENTS } from "../countries/continents.js";
@@ -604,6 +605,7 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     // With the title and text of panels set up before the look was saved on its own.
     [Setting.TICKET_PANEL]: panelLook(guildSettings, guildId),
     [Setting.TICKET_SUPPORT]: normalizeTicketSupport(guildSettings.get(guildId, Setting.TICKET_SUPPORT)),
+    [Setting.WARN_THRESHOLDS]: normalizeWarnThresholds(guildSettings.get(guildId, Setting.WARN_THRESHOLDS)),
   });
 
   // Settings saved in a fuller form than the dashboard sends, made comparable.
@@ -620,6 +622,10 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     [Setting.COMMAND_RULES]: rulesOrNull,
     [Setting.TICKET_PANEL]: (saved) => (saved ? normalizeLook(saved) : null),
     [Setting.TICKET_SUPPORT]: (saved) => checkTicketSupport(normalizeTicketSupport(saved)),
+    [Setting.WARN_THRESHOLDS]: (saved) => {
+      const list = normalizeWarnThresholds(saved);
+      return list.length > 0 ? list : null;
+    },
   };
   const savedValue = (guildId, setting) => {
     const saved = guildSettings.get(guildId, setting);

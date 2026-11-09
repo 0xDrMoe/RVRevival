@@ -969,6 +969,22 @@ describe("dashboard", () => {
     expect(refused.statusCode).toBe(400);
     await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, { ticketSupport: { autoCloseHours: 0, ratings: false } });
     expect(guildSettings.get(GUILD_ID, Setting.TICKET_SUPPORT)).toBeUndefined();
+
+    const thresholds = await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, {
+      warnThresholds: [
+        { count: 5, days: 30, action: "ban" },
+        { count: 3, days: 7, action: "timeout", minutes: 60 },
+      ],
+    });
+    expect(thresholds.statusCode).toBe(200);
+    expect(thresholds.json().settings.warnThresholds).toEqual([
+      { count: 3, days: 7, action: "timeout", minutes: 60 },
+      { count: 5, days: 30, action: "ban" },
+    ]);
+    const badThreshold = await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, { warnThresholds: [{ count: 3, days: 7, action: "timeout" }] });
+    expect(badThreshold.statusCode).toBe(400);
+    await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, { warnThresholds: null });
+    expect(guildSettings.get(GUILD_ID, Setting.WARN_THRESHOLDS)).toBeUndefined();
     const rest = (await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}/tickets?before=6`, cookies })).json();
     expect(rest.tickets.map((ticket) => ticket.number)).toEqual([5, 4, 3, 2, 1]);
     expect(rest.next).toBeNull();

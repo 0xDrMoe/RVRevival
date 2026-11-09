@@ -2239,11 +2239,56 @@ function readJoinGate(form) {
   return { minAgeDays, action: form.querySelector("#gateAction").value, alertJoins };
 }
 
+// Warning thresholds (moderation/warnThresholds.js): one row per step.
+const MAX_WARN_THRESHOLDS = 5;
+function warnThresholdRow(entry, remove) {
+  const number = (className, value, min, max, label) =>
+    h("input", { class: className, type: "number", min, max, step: 1, required: true, value: String(value), inputMode: "numeric", "aria-label": label });
+  const action = h(
+    "select",
+    { class: "threshold-action", "aria-label": t("thresholdAction") },
+    ["timeout", "kick", "ban"].map((value) => h("option", { value, selected: (entry?.action ?? "timeout") === value }, t(`thresholdAction_${value}`))),
+  );
+  const minutes = number("threshold-minutes", entry?.minutes ?? 60, 1, 40320, t("thresholdMinutes"));
+  const minutesWrap = h("label", { class: "threshold-part" }, minutes, h("span", {}, t("thresholdMinutesUnit")));
+  const syncMinutes = () => (minutesWrap.hidden = action.value !== "timeout");
+  action.addEventListener("change", syncMinutes);
+  syncMinutes();
+  const row = h(
+    "div",
+    { class: "reward-row threshold-row" },
+    icon("alert"),
+    h("label", { class: "threshold-part" }, number("threshold-count", entry?.count ?? 3, 2, 20, t("thresholdCount")), h("span", {}, t("thresholdWarningsIn"))),
+    h("label", { class: "threshold-part" }, number("threshold-days", entry?.days ?? 30, 1, 365, t("thresholdDays")), h("span", {}, t("thresholdDaysArrow"))),
+    action,
+    minutesWrap,
+    h("button", { class: "ghost small", type: "button", onclick: () => remove(row) }, t("tagRemove")),
+  );
+  return row;
+}
+
+function readWarnThresholds(form) {
+  const rows = [...form.querySelectorAll(".threshold-row")].map((row) => {
+    const action = row.querySelector(".threshold-action").value;
+    const entry = { count: Number(row.querySelector(".threshold-count").value), days: Number(row.querySelector(".threshold-days").value), action };
+    return action === "timeout" ? { ...entry, minutes: Number(row.querySelector(".threshold-minutes").value) } : entry;
+  });
+  return rows.length > 0 ? rows.sort((a, b) => a.count - b.count) : null;
+}
+
 async function showModeration(guildId) {
   const data = await loadManagedGuild(guildId);
   if (!data) {
     return;
   }
+  const thresholds = editableList({
+    items: data.settings.warnThresholds ?? [],
+    max: MAX_WARN_THRESHOLDS,
+    makeRow: warnThresholdRow,
+    focus: ".threshold-count",
+    emptyKey: "thresholdsNone",
+    addKey: "thresholdsAdd",
+  });
   const roles = roleOptions(data);
   const rolePicker = (key) => picker({ id: key, options: roles, value: data.settings[key], emptyLabel: t("notSet") });
   settingsPage({
@@ -2259,6 +2304,15 @@ async function showModeration(guildId) {
         field("modRole", "modRoleHelp", rolePicker("modRoleId")),
       ),
       card(t("sectionQuarantine"), "lock", "amber", field("quarantineRole", "quarantineRoleHelp", rolePicker("quarantineRoleId"))),
+      card(
+        t("thresholdsTitle"),
+        "alert",
+        "red",
+        h("p", { class: "help" }, t("thresholdsHelp")),
+        h("div", { class: "toolbar" }, thresholds.count, h("span", { class: "grow" }), thresholds.addButton),
+        thresholds.empty,
+        thresholds.list,
+      ),
       card(
         t("sectionModLog"),
         "list",
@@ -2280,6 +2334,7 @@ async function showModeration(guildId) {
       modRoleId: selectValue("modRoleId"),
       quarantineRoleId: selectValue("quarantineRoleId"),
       modLogChannelId: selectValue("modLogChannelId"),
+      warnThresholds: readWarnThresholds,
     },
   });
 }
@@ -5889,6 +5944,9 @@ const COMMANDS_WITH_OWN_ROLE = { "country-staff": "staff" };
 // The commands the mod role can use (they check it besides Discord's permission).
 const MODERATION_COMMANDS = ["ban", "unban", "kick", "softban", "timeout", "untimeout", "warn", "note", "purge", "case", "modlogs", "lock", "unlock", "slowmode", "role", "nick", "quarantine", "temprole", "giveaway", "tags"];
 
+// "/ban", or "Report message" for a right-click app (their names have capitals or spaces).
+const commandLabel = (name) => (/^[a-z0-9_-]+$/.test(name) ? `/${name}` : name);
+
 const permissionName = (bits) => {
   const value = BigInt(bits);
   const names = PERMISSION_NAMES.filter((entry) => (value & (1n << entry.bit)) !== 0n).map((entry) => t(entry.key));
@@ -5986,7 +6044,7 @@ function nativeHint(data, preset, roles) {
           "ul",
           { class: "change-list" },
           rows.map(([roleId, names]) =>
-            h("li", {}, h("strong", {}, roleName(data, roleId)), h("span", { class: "command-chips" }, names.map((name) => h("code", {}, `/${name}`)))),
+            h("li", {}, h("strong", {}, roleName(data, roleId)), h("span", { class: "command-chips" }, names.map((name) => h("code", {}, commandLabel(name))))),
           ),
         )
       : null,
@@ -6164,7 +6222,7 @@ function commandRuleRow(command, rules, data, roleItems, channelItems) {
   const details = h(
     "details",
     { class: "command-rule", "data-name": command.name },
-    h("summary", {}, h("code", { class: "command-name" }, `/${command.name}`), badges),
+    h("summary", {}, h("code", { class: "command-name" }, commandLabel(command.name)), badges),
     body,
   );
 

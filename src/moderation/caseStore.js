@@ -126,6 +126,13 @@ export class CaseStore {
         "SELECT COUNT(*) AS total FROM cases WHERE guild_id = ? AND user_id = ? AND action = ? AND created_at >= ?",
       ),
       deleteForUser: db.prepare("DELETE FROM cases WHERE guild_id = ? AND user_id = ? AND action = ?"),
+      // instr() rather than LIKE, so % and _ in what's typed aren't wildcards.
+      topReasons: db.prepare(`
+        SELECT reason, COUNT(*) AS uses FROM cases
+        WHERE guild_id = :guildId AND reason IS NOT NULL AND length(reason) <= :maxLength
+          AND (:typed = '' OR instr(lower(reason), lower(:typed)) > 0)
+          AND reason NOT LIKE 'Automod%' AND reason NOT LIKE 'Warning threshold%'
+        GROUP BY reason ORDER BY uses DESC, MAX(created_at) DESC LIMIT :limit`),
       updateReason: db.prepare(
         "UPDATE cases SET reason = ?, updated_at = ? WHERE guild_id = ? AND case_number = ?",
       ),
@@ -198,6 +205,11 @@ export class CaseStore {
   }
 
   // How many cases of one kind the member got since `since` (ms), for automod's warning limit.
+  // The reasons used most in this server, optionally containing `typed`.
+  topReasons(guildId, typed = "", { limit = 25, maxLength = 100 } = {}) {
+    return this.#statements.topReasons.all({ guildId, typed: typed.trim().slice(0, 100), maxLength, limit }).map((row) => row.reason);
+  }
+
   countCasesSince(guildId, userId, action, since) {
     return Number(this.#statements.countForUserSince.get(guildId, userId, action, since).total);
   }

@@ -207,6 +207,27 @@ const FEATURE_PARTS = [
           "Temporary bans survive restarts, and an automatic Unban case is added when they end.",
           "`/purge` skips pinned messages and anything older than 14 days. A `.txt` transcript of what it deleted goes to the mod log.",
           "Bans, kicks and timeouts done from Discord's own menus still get a case (read from the audit log), but the member isn't DMed. Use the bot's commands.",
+          "**Reason suggestions:** while you type a reason, Discord suggests the reasons your team uses most. Pick one or keep typing your own.",
+          "**Warning thresholds** (Moderation page on the dashboard): for example 3 warnings in 30 days gives a 1 hour timeout, 5 in 30 days a ban. A threshold fires when a `/warn` makes the count reach it, and the bot says so in its reply. Its case shows `Warning threshold` as the reason.",
+        ],
+      },
+      {
+        id: "apps",
+        title: "Right-click apps",
+        icon: "message",
+        tone: "amber",
+        page: "cases",
+        summary: "Right-click (or long-press) a message or member, then **Apps**, for quick tools without typing a command.",
+        who: "Report message and User info: everyone. Moderation history: the mod role or Timeout Members.",
+        steps: [
+          "**Report message** (on a message): asks the member why, then posts the message to the mod-log channel (else the logs channel) with a jump link, who reported it and how often that author was reported in the last 30 days. Staff get **Delete message**, **Time out 10 min** and **Dismiss** buttons; the report then shows who handled it.",
+          "**User info** (on a member): the same card as `/userinfo`, shown only to you.",
+          "**Moderation history** (on a member): the same list as `/modlogs`, shown only to you.",
+        ],
+        tips: [
+          "A message can only have one open report at a time, and each member can send 5 reports every 10 minutes. Members can't report their own messages or bots.",
+          "Reports need a mod-log or logs channel. Without one, members are told to contact a moderator directly.",
+          "You can switch an app off or limit it to roles on the dashboard's **Permissions** page, like any command.",
         ],
       },
       {

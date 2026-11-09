@@ -1606,5 +1606,19 @@
   "ticketsAutoClose": "Chiusura automatica dopo (ore)",
   "ticketsAutoCloseHelp": "Dopo queste ore senza messaggi il ticket riceve un avviso e si chiude fino a 12 ore dopo se resta fermo. 0 lo disattiva.",
   "ticketsRatings": "Chiedi una valutazione",
-  "ticketsRatingsHelp": "Alla chiusura di un ticket, il membro riceve un DM che chiede da 1 a 5 stelle. Le valutazioni compaiono su ogni ticket e nelle medie qui sopra."
+  "ticketsRatingsHelp": "Alla chiusura di un ticket, il membro riceve un DM che chiede da 1 a 5 stelle. Le valutazioni compaiono su ogni ticket e nelle medie qui sopra.",
+  "thresholdsTitle": "Soglie di avvertimenti",
+  "thresholdsHelp": "Quando un membro raggiunge un numero di avvertimenti in alcuni giorni, il bot agisce da solo e apre un caso. Vale il passo più alto che corrisponde.",
+  "thresholdsNone": "Nessuna soglia. Gli avvertimenti si sommano solo allo storico del membro.",
+  "thresholdsAdd": "Aggiungi passo",
+  "thresholdAction": "Azione",
+  "thresholdAction_timeout": "Timeout",
+  "thresholdAction_kick": "Espelli",
+  "thresholdAction_ban": "Banna",
+  "thresholdMinutes": "Durata del timeout in minuti",
+  "thresholdMinutesUnit": "minuti",
+  "thresholdCount": "Numero di avvertimenti",
+  "thresholdWarningsIn": "avvertimenti in",
+  "thresholdDays": "Numero di giorni",
+  "thresholdDaysArrow": "giorni →"
 }

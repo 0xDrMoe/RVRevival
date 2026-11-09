@@ -95,7 +95,9 @@ export function buildBulkDeleteEmbed(channelId, count, logged) {
   return new EmbedBuilder().setColor(COLOR.deleted).setDescription(lines.join("\n")).setTimestamp();
 }
 
-export function buildMemberJoinedEmbed(member, now = Date.now()) {
+// `altMatches` ([{ userId, reason }], moderation/altHints.js) adds a warning
+// for each banned account the new member looks like.
+export function buildMemberJoinedEmbed(member, now = Date.now(), altMatches = []) {
   const created = member.user.createdTimestamp;
   const lines = [
     `**Member joined** · <@${member.id}>`,
@@ -104,11 +106,14 @@ export function buildMemberJoinedEmbed(member, now = Date.now()) {
   if (now - created < NEW_ACCOUNT_MS) {
     lines.push("⚠️ New account");
   }
+  for (const match of altMatches) {
+    lines.push(`🚩 Looks like banned <@${match.userId}> (${match.reason === "avatar" ? "same avatar" : "similar name"})`);
+  }
   if (member.guild?.memberCount) {
     lines.push(`Member #${member.guild.memberCount}`);
   }
   return new EmbedBuilder()
-    .setColor(COLOR.joined)
+    .setColor(altMatches.length > 0 ? COLOR.deleted : COLOR.joined)
     .setAuthor(authorOf(member.user))
     .setDescription(lines.join("\n"))
     .setFooter({ text: `User ID ${member.id}` })
@@ -166,7 +171,8 @@ export function buildMemberChangedEmbed(oldMember, newMember) {
 //   poster          posts in log channels (see logChannel.js)
 //   botDeletions    messages the bot deleted itself (RecentIds)
 //   guildSettings   which events are switched off and which channels are ignored
-export function createServerLog({ poster, botDeletions, guildSettings }) {
+// `altHints` (moderation/altHints.js) flags joins that look like banned accounts.
+export function createServerLog({ poster, botDeletions, guildSettings, altHints }) {
   // Each event can have its own channel (log routes), named after the event.
   const post = (guild, event, build) => poster.post(guild, SERVER_LOG_SETTINGS, build, { route: event });
 
@@ -227,7 +233,8 @@ export function createServerLog({ poster, botDeletions, guildSettings }) {
 
     async memberJoined(member) {
       if (wants(member.guild, LogEvent.MEMBER_JOIN)) {
-        await post(member.guild, LogEvent.MEMBER_JOIN, () => ({ embed: buildMemberJoinedEmbed(member) }));
+        const matches = member.user ? (altHints?.matches(member.guild.id, member.user) ?? []) : [];
+        await post(member.guild, LogEvent.MEMBER_JOIN, () => ({ embed: buildMemberJoinedEmbed(member, Date.now(), matches) }));
       }
     },
 
