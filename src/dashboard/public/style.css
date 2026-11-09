@@ -6011,6 +6011,224 @@ input.has-variable-problem {
   color: var(--accent);
 }
 
+/* The footer on every public page: about text, then link columns. */
+.site-footer {
+  align-items: flex-start;
+  margin-top: 0;
+}
+
+.site-footer-about {
+  display: grid;
+  gap: 6px;
+  max-width: 36ch;
+}
+
+.site-footer-about p {
+  margin: 0;
+}
+
+.site-footer-columns {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(120px, auto));
+  gap: 16px 48px;
+}
+
+.site-footer-column {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+}
+
+.site-footer-column h3 {
+  margin: 0 0 2px;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text);
+}
+
+.landing-dash.landing-why {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+/* What each invite permission is for. */
+.landing-perms {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--gap);
+}
+
+.landing-perm {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+}
+
+.landing-perm h3 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-size: 1rem;
+}
+
+.landing-perm p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.landing-perm-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* Status and What's new: public pages with the guide's width. */
+.public-page {
+  display: grid;
+  gap: var(--gap);
+  width: 100%;
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+.public-page h1 {
+  margin: 8px 0 0;
+  font-size: clamp(1.6rem, 4vw, 2.2rem);
+  letter-spacing: -0.02em;
+}
+
+.status-body {
+  display: grid;
+  gap: var(--gap);
+}
+
+.status-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 18px 20px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  font-size: 1.05rem;
+}
+
+.status-banner.up {
+  background: color-mix(in srgb, var(--green, #23a55a) 12%, var(--surface));
+  border-color: color-mix(in srgb, var(--green, #23a55a) 40%, var(--border));
+}
+
+.status-banner.down {
+  background: color-mix(in srgb, var(--red, #f23f43) 12%, var(--surface));
+  border-color: color-mix(in srgb, var(--red, #f23f43) 40%, var(--border));
+}
+
+.status-banner .muted {
+  margin-inline-start: auto;
+  font-size: 0.88rem;
+}
+
+.status-components {
+  display: grid;
+  padding: 0;
+}
+
+.status-component {
+  display: grid;
+  grid-template-columns: auto auto 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+}
+
+.status-component + .status-component {
+  border-top: 1px solid var(--border);
+}
+
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--green, #23a55a);
+}
+
+.status-component.down .status-dot {
+  background: var(--red, #f23f43);
+}
+
+.status-uptime-total {
+  margin: 0 0 12px;
+}
+
+.status-uptime-total strong {
+  font-size: 1.6rem;
+}
+
+.status-uptime .landing-uptime {
+  padding: 0;
+  border: 0;
+  background: none;
+}
+
+.status-monitor h2 {
+  margin: 0 0 4px;
+  font-size: 1.1rem;
+}
+
+.status-monitor p {
+  margin: 0 0 10px;
+  color: var(--muted);
+}
+
+.status-monitor code {
+  word-break: break-all;
+}
+
+.changelog {
+  display: grid;
+  gap: var(--gap);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.changelog-entry h2 {
+  margin: 4px 0 8px;
+  font-size: 1.15rem;
+}
+
+.changelog-entry ul {
+  margin: 0;
+  padding-inline-start: 20px;
+  display: grid;
+  gap: 4px;
+}
+
+@media (max-width: 1100px) {
+  .landing-dash.landing-why {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .landing-dash.landing-why,
+  .site-footer-columns {
+    grid-template-columns: 1fr;
+  }
+
+  .status-component {
+    grid-template-columns: auto 1fr auto;
+  }
+
+  .status-component > .muted {
+    grid-column: 2 / 3;
+    grid-row: 2;
+    font-size: 0.85rem;
+  }
+}
+
 /* --- Terms and Privacy pages (src/dashboard/legal) --------------------------- */
 
 .legal {

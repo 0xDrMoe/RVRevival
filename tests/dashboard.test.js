@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { loadDashboardConfig } from "../src/config.js";
-import { buildDashboard, idCreatedAt } from "../src/dashboard/app.js";
+import { assetVersion, buildDashboard, idCreatedAt, PUBLIC_PAGES } from "../src/dashboard/app.js";
 import { canManage, DiscordApiError } from "../src/dashboard/discordApi.js";
 import { SessionStore } from "../src/dashboard/sessions.js";
 import { checkSettingChanges, InvalidSetting } from "../src/dashboard/settingsRules.js";
@@ -169,12 +169,52 @@ describe("dashboard", () => {
   });
 
   it("serves the page for every address the app draws, without logging in", async () => {
-    for (const url of ["/", "/servers", "/guide", `/appeal/${GUILD_ID}`, `/g/${GUILD_ID}`, `/g/${GUILD_ID}/cases?user=1`]) {
+    for (const url of ["/", "/servers", "/guide", "/status", "/changelog", `/appeal/${GUILD_ID}`, `/g/${GUILD_ID}`, `/g/${GUILD_ID}/cases?user=1`]) {
       const page = await app.inject({ method: "GET", url });
       expect(page.statusCode, url).toBe(200);
       expect(page.headers["content-type"], url).toContain("text/html");
-      expect(page.body, url).toContain('<script type="module" src="/app.js">');
+      expect(page.body, url).toMatch(/<script type="module" src="\/app\.js\?v=[0-9a-f]{12}">/);
     }
+  });
+
+  it("caches versioned scripts and styles for a year, and the page never", async () => {
+    const page = await app.inject({ method: "GET", url: "/" });
+    const version = page.body.match(/app\.js\?v=([0-9a-f]{12})/)[1];
+    expect(page.body).toContain(`/style.css?v=${version}`);
+    expect(page.body).toContain('"@type": "SoftwareApplication"');
+    expect(page.body).toContain('<meta name="theme-color" content="#7c5cff" />');
+    const script = await app.inject({ method: "GET", url: `/app.js?v=${version}` });
+    expect(script.headers["cache-control"]).toBe("public, max-age=31536000, immutable");
+    const unversioned = await app.inject({ method: "GET", url: "/guide.js" });
+    expect(unversioned.headers["cache-control"]).not.toContain("immutable");
+    const font = await app.inject({ method: "GET", url: "/og-image.jpg" });
+    expect(font.headers["cache-control"]).toBe("public, max-age=604800");
+    expect(assetVersion()).toBe(version);
+  });
+
+  it("tells search engines what to crawl", async () => {
+    const robots = await app.inject({ method: "GET", url: "/robots.txt" });
+    expect(robots.statusCode).toBe(200);
+    expect(robots.body).toContain("Disallow: /api/");
+    expect(robots.body).toContain(`Sitemap: ${URL_ORIGIN}/sitemap.xml`);
+    const sitemap = await app.inject({ method: "GET", url: "/sitemap.xml" });
+    expect(sitemap.headers["content-type"]).toContain("application/xml");
+    for (const path of PUBLIC_PAGES) {
+      expect(sitemap.body).toContain(`<loc>${URL_ORIGIN}${path}</loc>`);
+    }
+  });
+
+  it("answers uptime monitors, with a 503 while the bot is offline", async () => {
+    const offline = await app.inject({ method: "GET", url: "/healthz/bot" });
+    expect(offline.statusCode).toBe(503);
+    expect(offline.json()).toMatchObject({ bot: "offline" });
+    const dashboard = await app.inject({ method: "GET", url: "/healthz" });
+    expect(dashboard.statusCode).toBe(200);
+    expect(dashboard.json()).toMatchObject({ dashboard: "ok", bot: "offline" });
+    new BotStatsStore(db).heartbeat(Date.now(), 30);
+    const online = await app.inject({ method: "GET", url: "/healthz/bot" });
+    expect(online.statusCode).toBe(200);
+    expect(online.json()).toMatchObject({ bot: "online", ping: 30 });
   });
 
   it("keeps files, the API and unknown addresses apart from the app's pages", async () => {

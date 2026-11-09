@@ -168,4 +168,15 @@ describe("dashboard guide", () => {
       }
     }
   });
+
+  it("explains exactly the permissions the invite link asks for", async () => {
+    const { PermissionsBitField } = await import("discord.js");
+    const block = page.slice(page.indexOf("const LANDING_PERMISSIONS = ["), page.indexOf("];", page.indexOf("const LANDING_PERMISSIONS = [")));
+    const explained = [...block.matchAll(/\[((?:"\w+"(?:, )?)+)\]\]/g)].flatMap((match) => [...match[1].matchAll(/"(\w+)"/g)].map((name) => name[1]));
+    const { INVITE_PERMISSIONS: invite } = await import("../src/guilds/invite.js");
+    expect(explained.sort()).toEqual(new PermissionsBitField(BigInt(invite)).toArray().sort());
+    for (const [, iconName] of block.matchAll(/^ {2}\["(\w+)"/gm)) {
+      expect(icons.has(iconName), iconName).toBe(true);
+    }
+  });
 });
