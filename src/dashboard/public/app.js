@@ -6657,7 +6657,9 @@ async function showBackup(guildId) {
   const download = h("a", { class: "button primary", href: `/api/guilds/${guildId}/backup`, download: "" }, icon("download", "icon small"), t("backupDownload"));
   const file = h("input", { id: "backupFile", type: "file", accept: ".json,application/json" });
   const review = h("div", { class: "backup-review", hidden: true });
-  let backup = null;
+  // The chosen file as uploaded: { file: its text, fileName }. The server
+  // checks it again in full; these checks only spare a pointless upload.
+  let upload = null;
 
   const itemList = (items, line) => h("ul", { class: "backup-list" }, ...items.map((item) => h("li", {}, line(item))));
 
@@ -6685,7 +6687,7 @@ async function showBackup(guildId) {
         }
         confirmButton.disabled = true;
         try {
-          const result = await api(`/api/guilds/${guildId}/backup/restore`, { method: "POST", body: { backup, dryRun: false } });
+          const result = await api(`/api/guilds/${guildId}/backup/restore`, { method: "POST", body: { ...upload, dryRun: false } });
           toast(t("backupRestored", { count: result.changes.length }));
           await showBackup(guildId);
         } catch (error) {
@@ -6701,23 +6703,32 @@ async function showBackup(guildId) {
 
   file.addEventListener("change", async () => {
     review.hidden = true;
-    backup = null;
+    upload = null;
     const chosen = file.files?.[0];
     if (!chosen) {
       return;
     }
-    if (chosen.size > 1_000_000) {
+    if (chosen.size > 512 * 1024) {
       toast(t("backupTooBig"), "error");
       return;
     }
-    try {
-      backup = JSON.parse(await chosen.text());
-    } catch {
+    // Only a .json file whose type is JSON or unknown (some systems give none).
+    if (!/\.json$/i.test(chosen.name) || !["", "application/json", "text/json"].includes(chosen.type)) {
       toast(t("backupNotJson"), "error");
+      file.value = "";
       return;
     }
+    const text = await chosen.text();
     try {
-      showPlan(await api(`/api/guilds/${guildId}/backup/restore`, { method: "POST", body: { backup, dryRun: true } }));
+      JSON.parse(text.replace(/^\uFEFF/, ""));
+    } catch {
+      toast(t("backupNotJson"), "error");
+      file.value = "";
+      return;
+    }
+    upload = { file: text, fileName: chosen.name };
+    try {
+      showPlan(await api(`/api/guilds/${guildId}/backup/restore`, { method: "POST", body: { ...upload, dryRun: true } }));
     } catch (error) {
       failed(error);
     }

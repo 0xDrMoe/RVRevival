@@ -60,7 +60,7 @@ import { FEED_KINDS } from "../feeds/fetchFeed.js";
 import { FeedStore, MAX_FEEDS } from "../feeds/feedStore.js";
 import { createLiveApis } from "../feeds/liveApis.js";
 import { normalizeMediaOnly } from "../community/mediaOnly.js";
-import { buildBackup, InvalidBackup, planRestore, settingLabel } from "./backup.js";
+import { BACKUP_LIMITS, buildBackup, InvalidBackup, planRestore, readBackupFile, settingLabel } from "./backup.js";
 import { MAX_STICKIES, MAX_STICKY_LENGTH, StickyStore } from "../sticky/stickyStore.js";
 import { BotStatsStore } from "../stats/botStats.js";
 import { checkTemplate, COUNTER_PRESETS, InvalidCounter, MAX_COUNTERS, newCounterId, normalizeCounters } from "../stats/statsCounters.js";
@@ -2086,17 +2086,36 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
       .send(JSON.stringify(backup, null, 2));
   });
 
-  // { backup, dryRun }: what would change (dryRun), or restores it.
-  app.post("/api/guilds/:id/backup/restore", { bodyLimit: 1024 * 1024, config: { rateLimit: { max: 10, timeWindow: "1 minute" } } }, async (request, reply) => {
+  // { file, fileName, dryRun }: what restoring the uploaded file would change
+  // (dryRun), or restores it. `file` is the file's text exactly as uploaded:
+  // the server checks the file itself (readBackupFile), never a copy the
+  // browser already parsed.
+  // Room for the file's text once it's escaped into the JSON body.
+  const restoreBodyLimit = BACKUP_LIMITS.bytes * 2 + 4096;
+  app.post("/api/guilds/:id/backup/restore", { bodyLimit: restoreBodyLimit, config: { rateLimit: { max: 10, timeWindow: "1 minute" } } }, async (request, reply) => {
     const access = await requireGuild(request, reply, { manage: true });
     if (!access) {
       return reply;
     }
     const { guildId, session } = access;
+    const body = request.body;
+    const fields = body && typeof body === "object" && !Array.isArray(body) ? Object.keys(body) : null;
+    if (!fields || fields.some((key) => !["file", "fileName", "dryRun"].includes(key)) || (body.dryRun !== undefined && typeof body.dryRun !== "boolean")) {
+      return reply.code(400).send({ error: "invalid-backup", message: "Pick the .json file the Backup page downloaded." });
+    }
+    let backup;
+    try {
+      backup = readBackupFile(body.file, body.fileName);
+    } catch (error) {
+      if (error instanceof InvalidBackup) {
+        return reply.code(400).send({ error: "invalid-backup", message: error.message });
+      }
+      throw error;
+    }
     const [guild, channels] = await Promise.all([discord.guild(guildId), discord.channels(guildId)]);
     let plan;
     try {
-      plan = planRestore(request.body?.backup, {
+      plan = planRestore(backup, {
         guildId,
         channels,
         roles: guild.roles,
@@ -2116,7 +2135,7 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
       skipped: plan.skipped.map((entry) => ({ ...entry, label: settingLabel(entry.setting) })),
       unchanged: plan.unchanged,
     };
-    if (request.body?.dryRun !== false) {
+    if (body.dryRun !== false) {
       return { dryRun: true, ...summary };
     }
     for (const [setting, value] of Object.entries(plan.apply)) {
