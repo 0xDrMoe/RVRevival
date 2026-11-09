@@ -3478,6 +3478,20 @@ dialog textarea {
   flex-wrap: wrap;
 }
 
+/* A feed's message box with its "using the default" note and reset button. */
+.feed-message {
+  max-width: 760px;
+  margin-bottom: 16px;
+}
+
+.feed-message .field {
+  margin-bottom: 0;
+}
+
+.feed-message .toolbar {
+  margin: 8px 0 0;
+}
+
 .feed-editor {
   flex-basis: 100%;
   margin-top: 6px;

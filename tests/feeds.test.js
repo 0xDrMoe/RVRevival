@@ -3,8 +3,8 @@ import { describe, expect, it, vi } from "vitest";
 import { buildFeedCommandData, createFeedCommand } from "../src/commands/feed.js";
 import { createFeedPoller, CHECK_EVERY_MS } from "../src/feeds/feedPoller.js";
 import { FeedStore, MAX_FEEDS, SEEN_KEEP } from "../src/feeds/feedStore.js";
-import { addFeed, buildFeedPost, FeedDuplicate, FeedLimit } from "../src/feeds/feeds.js";
-import { FeedError, fetchFeed, isPrivateAddress, resolveSource, safeFetchText } from "../src/feeds/fetchFeed.js";
+import { addFeed, buildFeedPost, defaultFeedMessages, FeedDuplicate, FeedLimit } from "../src/feeds/feeds.js";
+import { FEED_KINDS, FeedError, fetchFeed, isPrivateAddress, resolveSource, safeFetchText } from "../src/feeds/fetchFeed.js";
 import { decodeXml, MAX_ITEMS, parseFeed } from "../src/feeds/parseFeed.js";
 import { Status } from "../src/logs/actionLog.js";
 import { fakeLogger } from "./helpers/fakes.js";
@@ -229,6 +229,17 @@ describe("adding feeds", () => {
     });
     const post = buildFeedPost(sample({ roleId: ROLE_ID, message: "{feed} by {author}: {title} {link} {other}" }), item, "en");
     expect(post).toEqual({ content: `<@&${ROLE_ID}> Patch News by Patch News: Season 2 https://example.com/s2 {other}`, allowedMentions: { parse: [], roles: [ROLE_ID] } });
+  });
+
+  it("lists the default message of every kind, exactly what a feed without a message posts", () => {
+    const defaults = defaultFeedMessages("en");
+    expect(Object.keys(defaults).sort()).toEqual([...FEED_KINDS].sort());
+    const item = { id: "1", title: "Season 2", link: "https://example.com/s2", author: "Rabble" };
+    for (const kind of FEED_KINDS) {
+      const expected = defaults[kind].replace("{title}", "Season 2").replace("{link}", "https://example.com/s2").replace("{author}", "Rabble").replace("{feed}", "Patch News").replace("{game}", "");
+      expect(buildFeedPost(sample({ kind, roleId: null, message: null }), item, "en").content).toBe(expected.trim());
+    }
+    expect(defaultFeedMessages("de").youtube).toContain("Video");
   });
 
   it("pings @everyone as plain text, since Discord won't ping it as a role mention", () => {

@@ -530,6 +530,9 @@ describe("dashboard", () => {
     const cookies = await login();
     const guild = await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}`, cookies });
     expect(guild.json().communityDefaults.welcomeMessage).toContain("{user}");
+    // The Feeds page shows these as each message box's placeholder.
+    expect(guild.json().communityDefaults.feedMessages.twitch).toContain("Twitch");
+    expect(guild.json().communityDefaults.feedMessages.youtube).toContain("{title}");
     expect(guild.json().guild.community).toBe(false);
 
     const saved = await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, {

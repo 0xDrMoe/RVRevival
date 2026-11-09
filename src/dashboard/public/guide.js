@@ -1014,7 +1014,7 @@ const FEATURE_PARTS = [
         },
         steps: [
           "On the **Feeds** page (or with `/feed add`), pick the type, paste the source and pick the channel.",
-          "Optionally pick a role to ping, and write your own message with `{title}`, `{link}`, `{author}`, `{feed}` and, for Twitch and Kick, `{game}`.",
+          "Optionally pick a role to ping, and write your own message with `{title}`, `{link}`, `{author}`, `{feed}` and, for Twitch and Kick, `{game}`. Leave it empty to post the default message for the type: it shows in grey in the box, **Edit the default** copies it in to change, and **Reset to default** goes back to it.",
           "Only things posted after you add it are announced, so nothing old floods the channel.",
           "To change where it posts, who it pings or its message, press **Edit** next to it on the Feeds page.",
         ],

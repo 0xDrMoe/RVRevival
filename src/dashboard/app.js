@@ -55,7 +55,7 @@ import { normalizeCategories } from "../tickets/categories.js";
 import { checkMessage, editableMessage, InvalidMessage, messageSummary, parseMessageLink } from "../messages/embedMessage.js";
 import { inviteLink } from "../guilds/invite.js";
 import { SentMessageStore } from "../messages/sentMessageStore.js";
-import { addFeed, FeedDuplicate, FeedError, FeedLimit, MAX_FEED_MESSAGE_LENGTH } from "../feeds/feeds.js";
+import { addFeed, defaultFeedMessages, FeedDuplicate, FeedError, FeedLimit, MAX_FEED_MESSAGE_LENGTH } from "../feeds/feeds.js";
 import { FEED_KINDS } from "../feeds/fetchFeed.js";
 import { FeedStore, MAX_FEEDS } from "../feeds/feedStore.js";
 import { createLiveApis } from "../feeds/liveApis.js";
@@ -652,6 +652,8 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
       [Setting.LEAVE_MESSAGE]: translate(language, "welcomeDefaultLeave"),
       levelUpMessage: translate(language, "levelUpDefault"),
       birthdayMessage: translate(language, "birthdayDefaultMessage"),
+      // Per feed kind, what a feed with no message of its own posts.
+      feedMessages: defaultFeedMessages(language),
     };
   };
 
