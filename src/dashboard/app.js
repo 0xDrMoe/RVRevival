@@ -17,6 +17,9 @@
 //   GET  /api/guilds/:id/tickets          support tickets (?status=open|closed|all&user=&before=)
 //   GET  /api/guilds/:id/tickets/:number  one ticket, its history and transcript (?download=1 for a .txt file)
 //   POST /api/guilds/:id/permissions/preset  preview or apply a premade permission setup
+//   POST   /api/guilds/:id/role-panels           post a new role panel
+//   PUT    /api/guilds/:id/role-panels/:panel    change a role panel (edits its message)
+//   DELETE /api/guilds/:id/role-panels/:panel    delete a role panel and its message
 //
 // Two levels of access to a server the bot is in:
 //   - "manage": Manage Server, Administrator or the owner. Everything.
@@ -60,6 +63,8 @@ import { FEED_KINDS } from "../feeds/fetchFeed.js";
 import { FeedStore, MAX_FEEDS } from "../feeds/feedStore.js";
 import { createLiveApis } from "../feeds/liveApis.js";
 import { normalizeMediaOnly } from "../community/mediaOnly.js";
+import { checkPanelInput, InvalidPanel, MAX_PANELS, panelMessage, panelsOf } from "../community/rolePanels.js";
+import { KeyedLock } from "../utils/keyedLock.js";
 import { BACKUP_LIMITS, buildBackup, InvalidBackup, planRestore, readBackupFile, settingLabel } from "./backup.js";
 import { MAX_STICKIES, MAX_STICKY_LENGTH, StickyStore } from "../sticky/stickyStore.js";
 import { BotStatsStore } from "../stats/botStats.js";
@@ -2079,6 +2084,145 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     }
     await logAction(access.guildId, access.session, `**Sticky message removed** from <#${sticky.channelId}>`, []);
     return { ok: true };
+  });
+
+  // --- Role panels ------------------------------------------------------------
+  // The same panels /rolepanel makes (community/rolePanels.js), with the same
+  // checks. Saving posts or edits the panel's message first and only then
+  // saves it, so a panel Discord refused is never saved half done. Changes
+  // here take turns per server.
+
+  const panelLocks = new KeyedLock();
+  const panelLimit = { config: { rateLimit: { max: 20, timeWindow: "1 minute" } } };
+  const panelNumber = (text) => (/^\d{1,6}$/.test(text ?? "") ? Number(text) : undefined);
+
+  // What checkPanelInput needs: where panels may go, the server's roles, and
+  // how high the bot's and this person's roles reach.
+  async function panelContext(guildId, session) {
+    const [guild, channels, botMember, member] = await Promise.all([
+      discord.guild(guildId),
+      discord.channels(guildId),
+      discord.botMember(guildId).catch(() => null),
+      discord.member(guildId, session.userId).catch(() => null),
+    ]);
+    const highest = (roleIds) => Math.max(0, ...guild.roles.filter((role) => roleIds?.includes(role.id)).map((role) => role.position));
+    return {
+      guild,
+      guildId,
+      roles: guild.roles,
+      channelIds: new Set(channels.filter((channel) => POSTABLE.has(channel.type)).map((channel) => channel.id)),
+      botTop: highest(botMember?.roles),
+      adminTop: highest(member?.roles),
+      isOwner: guild.owner_id === session.userId,
+    };
+  }
+
+  // Edits the panel's message, or posts it (again) when it's new, was
+  // deleted or moves to another channel. Returns the panel with its message ID.
+  async function publishRolePanel(guildId, guild, panel, previous) {
+    const language = pickLanguage(guild.preferred_locale, config.forcedLanguage);
+    const roleName = (roleId) => guild.roles.find((role) => role.id === roleId)?.name;
+    const message = panelMessage(panel, roleName, translate(language, "rolePanelEmpty"), brandingOf(guildSettings, guildId).color ?? undefined);
+    const payload = { embeds: message.embeds.map((embed) => embed.toJSON()), components: message.components.map((row) => row.toJSON()) };
+    const sameChannel = Boolean(previous?.messageId) && previous.channelId === panel.channelId;
+    if (sameChannel) {
+      try {
+        await discord.editMessage(panel.channelId, previous.messageId, payload);
+        return { ...panel, messageId: previous.messageId };
+      } catch (error) {
+        if (error.status !== 404) {
+          throw error;
+        }
+      }
+    }
+    const posted = await discord.postMessage(panel.channelId, payload);
+    if (previous?.messageId && !sameChannel) {
+      await discord.deleteMessage(previous.channelId, previous.messageId).catch(() => {});
+    }
+    return { ...panel, messageId: posted.id };
+  }
+
+  const savePanels = (guildId, panels) =>
+    panels.length > 0 ? guildSettings.set(guildId, Setting.ROLE_PANELS, panels) : guildSettings.clear(guildId, Setting.ROLE_PANELS);
+
+  function panelRefused(reply, error) {
+    if (error.status === 400) {
+      return reply.code(400).send({ error: "discord-refused", message: "Discord refused the panel. Check the emojis: a server emoji must be one the bot can use." });
+    }
+    return discordRefused(reply, error);
+  }
+
+  // Creates (panelId null) or changes a panel.
+  async function saveRolePanel(request, reply, panelId) {
+    const access = await requireGuild(request, reply, { manage: true });
+    if (!access) {
+      return reply;
+    }
+    const { guildId, session } = access;
+    const context = await panelContext(guildId, session);
+    let content;
+    try {
+      content = checkPanelInput(request.body, context);
+    } catch (error) {
+      if (error instanceof InvalidPanel) {
+        return reply.code(400).send({ error: "invalid-panel", message: error.message });
+      }
+      throw error;
+    }
+    return panelLocks.run(guildId, async () => {
+      // /rolepanel may have changed the panels from the bot's process.
+      guildSettings.reloadIfChanged();
+      const panels = panelsOf(guildSettings, guildId);
+      const current = panelId === null ? undefined : panels.find((panel) => panel.id === panelId);
+      if (panelId !== null && !current) {
+        return reply.code(404).send({ error: "not-found", message: "That role panel was deleted. Reload the page." });
+      }
+      if (!current && panels.length >= MAX_PANELS) {
+        return reply.code(409).send({ error: "panels-full", message: `A server can have up to ${MAX_PANELS} role panels.` });
+      }
+      const draft = { id: current?.id ?? Math.max(0, ...panels.map((panel) => panel.id)) + 1, ...content, messageId: current?.messageId ?? null };
+      let posted;
+      try {
+        posted = await publishRolePanel(guildId, context.guild, draft, current);
+      } catch (error) {
+        return panelRefused(reply, error);
+      }
+      await savePanels(guildId, current ? panels.map((panel) => (panel === current ? posted : panel)) : [...panels, posted]);
+      logger.info("Role panel saved from the dashboard", { guildId, userId: session.userId, panel: posted.id, roles: posted.roles.length });
+      const roles = posted.roles.map((entry) => `<@&${entry.roleId}>`).join(" ");
+      await logAction(guildId, session, `**Role panel ${current ? "changed" : "posted"}:** #${posted.id} ${posted.title} in <#${posted.channelId}>`, roles ? [roles] : []);
+      return { panel: posted, settings: settingsJson(guildId) };
+    });
+  }
+
+  app.post("/api/guilds/:id/role-panels", panelLimit, (request, reply) => saveRolePanel(request, reply, null));
+
+  app.put("/api/guilds/:id/role-panels/:panelId", panelLimit, (request, reply) => {
+    const panelId = panelNumber(request.params.panelId);
+    return panelId === undefined ? reply.code(404).send({ error: "not-found" }) : saveRolePanel(request, reply, panelId);
+  });
+
+  app.delete("/api/guilds/:id/role-panels/:panelId", panelLimit, async (request, reply) => {
+    const access = await requireGuild(request, reply, { manage: true });
+    if (!access) {
+      return reply;
+    }
+    const { guildId, session } = access;
+    const panelId = panelNumber(request.params.panelId);
+    return panelLocks.run(guildId, async () => {
+      guildSettings.reloadIfChanged();
+      const panels = panelsOf(guildSettings, guildId);
+      const panel = panels.find((entry) => entry.id === panelId);
+      if (!panel) {
+        return reply.code(404).send({ error: "not-found", message: "That role panel was already deleted." });
+      }
+      if (panel.messageId) {
+        await discord.deleteMessage(panel.channelId, panel.messageId).catch(() => {});
+      }
+      await savePanels(guildId, panels.filter((entry) => entry !== panel));
+      await logAction(guildId, session, `**Role panel deleted:** #${panel.id} ${panel.title}`, []);
+      return { settings: settingsJson(guildId) };
+    });
   });
 
   // --- Backup ---------------------------------------------------------------

@@ -64,7 +64,7 @@ const FEATURE_PARTS = [
             ["Stop a raid", "`/raid lockdown`, clean up with `/purge` and `/ban`, then `/raid end`."],
             ["Block bad words or invite links", "Turn on **Automod** and pick its rules. On a Community server, start with Discord's own AutoMod."],
             ["Greet new members", "`/welcome channel`, or the **Welcome & leave** page."],
-            ["Let members pick roles", "Discord's **Onboarding** on a Community server; otherwise `/rolepanel setup`."],
+            ["Let members pick roles", "Discord's **Onboarding** on a Community server; otherwise **New panel** on the **Roles & panels** page, or `/rolepanel setup`."],
             ["Open a support desk", "Design the panel on the **Tickets** page, then `/tickets panel`."],
             ["Post YouTube videos or stream alerts", "`/feed add`, or the **Feeds** page."],
             ["Answer the same question again and again", "A custom command (`/tags add`), or an auto-responder for questions people don't ask on purpose."],
@@ -147,7 +147,7 @@ const FEATURE_PARTS = [
             ["**General**", "**Overview** (counts, a 30-day chart, the busiest mods and the Setup card), **Guide** (this page) and **Activity** (every dashboard change, with who made it)."],
             ["**Moderation**", "**Cases** (search, filter, edit reasons, export CSV), **Members** (anyone's full history), **Tickets** (with transcripts) and **Ban appeals**."],
             ["**Protection**", "**Automod** (with media-only channels), **Anti-nuke** and **Raid protection**."],
-            ["**Community**", "**Welcome & leave**, **Autoroles** (with role panels and roles on rejoin), **Starboard**, **Birthdays**, **Leveling**, **Country** and **Server stats**."],
+            ["**Community**", "**Welcome & leave**, **Roles & panels** (autoroles, roles on rejoin and role panels), **Starboard**, **Birthdays**, **Leveling**, **Country** and **Server stats**."],
             ["**Messages**", "**Custom commands**, **Auto-responders**, **Scheduled**, **Embed builder**, **Feeds** and **Sticky messages**."],
             ["**Settings**", "**Staff roles**, **Logging**, **Permissions**, **Branding** and **Backup**."],
           ],
@@ -574,12 +574,12 @@ const FEATURE_PARTS = [
       },
       {
         id: "roles",
-        title: "Autoroles and role panels",
+        title: "Roles & panels",
         icon: "layers",
         tone: "green",
         page: "roles",
         summary: "Starter roles for new members, buttons members click to pick roles, and giving roles back when someone rejoins.",
-        who: "Admins for autoroles and roles on rejoin. **Manage Roles** for role panels.",
+        who: "Admins for autoroles and roles on rejoin. Role panels: anyone who can manage the dashboard, or **Manage Roles** for `/rolepanel` in Discord.",
         native: "**Onboarding comes first.** On a Community server, Discord's own Onboarding (*Server Settings → Onboarding*) is the best way to give roles to new members and let them pick channels and interests. Autoroles and role panels are for servers that don't use it.",
         commands: [
           ["/welcome autorole role", "Gives every new member that role, or stops (up to 10)."],
@@ -593,6 +593,7 @@ const FEATURE_PARTS = [
         ],
         example: ["/rolepanel setup", "/rolepanel setup panel:Platforms", "/rolepanel add panel:Platforms role:@PC emoji:🖥️"],
         tips: [
+          "On the dashboard's **Roles & panels** page, **New panel** opens an editor with a live preview: pick the channel, title, text and mode, add roles, give each an emoji and button text, and put them in order. **Post panel** posts it; **Save and update panel** edits the posted message. Moving a panel to another channel posts it there and deletes the old message.",
           "In `/rolepanel setup`, nothing changes until you press **Save**. **Cancel all changes** throws the draft away. An editor left alone for 30 minutes closes.",
           "If members must accept the rules first (Rules Screening), autoroles wait until they do.",
           "Autoroles can't be staff or admin roles (Ban, Kick, Timeout, Manage Messages and similar), so joining never gives anyone moderator powers.",
@@ -610,7 +611,7 @@ const FEATURE_PARTS = [
         tone: "green",
         page: "roles",
         summary: "Before a role panel button or the country guide changes someone's roles, the bot asks first, so a stray click never gives or takes a role. **On by default.**",
-        who: "Admins set the server's default on the **Autoroles** page. Each member can turn it off or on for themselves.",
+        who: "Admins set the server's default on the **Roles & panels** page. Each member can turn it off or on for themselves.",
         steps: [
           "A member clicks a role button (or picks a country). The bot answers privately: *Add the PC role?* with **Confirm** and **Cancel**.",
           "**Confirm** makes the change. **Cancel** leaves everything as it was.",
@@ -627,7 +628,7 @@ const FEATURE_PARTS = [
         },
         tips: [
           "A member's own choice wins over the server's default, and is forgotten when they leave the server.",
-          "Switching the default off on the Autoroles page changes it for everyone who hasn't picked for themselves.",
+          "Switching the default off on the Roles & panels page changes it for everyone who hasn't picked for themselves.",
         ],
       },
       {
@@ -1212,7 +1213,7 @@ const FEATURE_PARTS = [
             ["A feed stopped posting", "`/feed list` or the Feeds page shows the problem."],
             ["Twitch or Kick says it's off", "The bot's owner hasn't added that site's keys yet. Use another type for now."],
             ["A feed's @everyone didn't ping", "Rabble needs **Mention @everyone** in that channel."],
-            ["Members get asked to confirm every role", "That's role pick confirmations. They can press **Turn off confirmations**, or turn the default off on the Autoroles page."],
+            ["Members get asked to confirm every role", "That's role pick confirmations. They can press **Turn off confirmations**, or turn the default off on the Roles & panels page."],
             ["The ticket panel looks old", "Save on the Tickets page again. If the panel message was deleted, run `/tickets panel` to post it again."],
             ["The bot's new avatar or name doesn't show", "Discord limits how often it can change. Wait a few minutes and save once more."],
             ["A stats channel name is out of date", "Discord limits renames. It catches up within about 5 minutes."],
