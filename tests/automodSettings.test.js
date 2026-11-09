@@ -79,7 +79,7 @@ describe("/settings automod", () => {
 
   it("switches a rule on with an action, and reminds that automod is off", async () => {
     const { interaction, outcome } = await run("rule", { rule: "invites", enabled: true, action: "warn" });
-    expect(config().rules.invites).toEqual({ enabled: true, action: "warn" });
+    expect(config().rules.invites).toMatchObject({ enabled: true, action: "warn" });
     expect(replyText(interaction)).toBe(
       `Invite links is now on: Delete and warn.\n${translate("en", "automodStillOff")}`,
     );
@@ -88,7 +88,7 @@ describe("/settings automod", () => {
 
     // Leaving out the action keeps the one chosen before.
     await run("rule", { rule: "invites", enabled: false });
-    expect(config().rules.invites).toEqual({ enabled: false, action: "warn" });
+    expect(config().rules.invites).toMatchObject({ enabled: false, action: "warn" });
   });
 
   it("changes limits within their range", async () => {

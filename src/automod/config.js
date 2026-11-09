@@ -36,6 +36,7 @@ export const AutomodAction = Object.freeze({
   DELETE: "delete", // delete it, tell the member in the channel and note it in the mod log
   WARN: "warn", // delete it and warn the member (a case)
   TIMEOUT: "timeout", // delete it and time the member out (a case)
+  LOG: "log", // leave it, only note it in the mod log (to try a rule out first)
 });
 
 export const AUTOMOD_ACTIONS = Object.values(AutomodAction);
@@ -63,6 +64,14 @@ export const MAX_WORD_LENGTH = 60;
 export const MAX_ALLOWED_DOMAINS = 100;
 export const MAX_EXEMPT_ROLES = 50;
 export const MAX_EXEMPT_CHANNELS = 50;
+// Each rule can also skip its own roles and channels (on top of the ones above).
+export const MAX_RULE_EXEMPT_ROLES = 25;
+export const MAX_RULE_EXEMPT_CHANNELS = 25;
+
+// What every rule has besides its own settings. `notify` posts the
+// "please don't…" notice in the channel; `timeoutMinutes` (null = the server's
+// timeout length) is how long "delete and time out" lasts for this rule.
+const RULE_EXTRAS = { notify: true, timeoutMinutes: null, exemptRoleIds: [], exemptChannelIds: [] };
 
 // Each rule's default action and its own settings.
 const RULE_DEFAULTS = {
@@ -87,7 +96,9 @@ const RULE_DEFAULTS = {
 export function defaultAutomod() {
   return {
     enabled: false,
-    rules: Object.fromEntries(AUTOMOD_RULES.map((rule) => [rule, { enabled: false, ...structuredClone(RULE_DEFAULTS[rule]) }])),
+    rules: Object.fromEntries(
+      AUTOMOD_RULES.map((rule) => [rule, { enabled: false, ...structuredClone(RULE_EXTRAS), ...structuredClone(RULE_DEFAULTS[rule]) }]),
+    ),
     exemptRoleIds: [],
     exemptChannelIds: [],
     timeoutMinutes: AUTOMOD_LIMITS.timeoutMinutes.default,
@@ -133,6 +144,7 @@ export function withPath(object, path, value) {
 
 const inRange = (value, { min, max }) => Number.isInteger(value) && value >= min && value <= max;
 const uniqueStrings = (list) => [...new Set(list)];
+const validIds = (list, max) => (Array.isArray(list) ? uniqueStrings(list.filter((id) => typeof id === "string" && DISCORD_ID.test(id))).slice(0, max) : []);
 
 // The saved value with defaults filled in. Never throws.
 export function normalizeAutomod(saved) {
@@ -150,6 +162,12 @@ export function normalizeAutomod(saved) {
     if (AUTOMOD_ACTIONS.includes(savedRule.action)) {
       config.rules[rule].action = savedRule.action;
     }
+    config.rules[rule].notify = savedRule.notify !== false;
+    if (inRange(savedRule.timeoutMinutes, AUTOMOD_LIMITS.timeoutMinutes)) {
+      config.rules[rule].timeoutMinutes = savedRule.timeoutMinutes;
+    }
+    config.rules[rule].exemptRoleIds = validIds(savedRule.exemptRoleIds, MAX_RULE_EXEMPT_ROLES);
+    config.rules[rule].exemptChannelIds = validIds(savedRule.exemptChannelIds, MAX_RULE_EXEMPT_CHANNELS);
   }
   const words = readPath(saved, ["rules", AutomodRule.BANNED_WORDS, "words"]);
   if (Array.isArray(words)) {
@@ -173,9 +191,8 @@ export function normalizeAutomod(saved) {
   if (ESCALATION_ACTIONS.includes(saved.escalation?.action)) {
     config.escalation.action = saved.escalation.action;
   }
-  const ids = (list, max) => (Array.isArray(list) ? uniqueStrings(list.filter((id) => DISCORD_ID.test(id))).slice(0, max) : []);
-  config.exemptRoleIds = ids(saved.exemptRoleIds, MAX_EXEMPT_ROLES);
-  config.exemptChannelIds = ids(saved.exemptChannelIds, MAX_EXEMPT_CHANNELS);
+  config.exemptRoleIds = validIds(saved.exemptRoleIds, MAX_EXEMPT_ROLES);
+  config.exemptChannelIds = validIds(saved.exemptChannelIds, MAX_EXEMPT_CHANNELS);
   return config;
 }
 
@@ -193,6 +210,22 @@ export function checkAutomod(value, { isRole, isChannel }) {
     const entry = readPath(value, ["rules", rule]);
     if (!isObject(entry) || typeof entry.enabled !== "boolean" || !AUTOMOD_ACTIONS.includes(entry.action)) {
       throw new InvalidAutomod(`Say whether the ${rule} rule is on and what it does.`);
+    }
+    // The per-rule extras are optional, so older pages and backups still save.
+    if (entry.notify !== undefined && typeof entry.notify !== "boolean") {
+      throw new InvalidAutomod(`Say whether the ${rule} rule posts a notice.`);
+    }
+    const minutes = AUTOMOD_LIMITS.timeoutMinutes;
+    if (entry.timeoutMinutes !== undefined && entry.timeoutMinutes !== null && !inRange(entry.timeoutMinutes, minutes)) {
+      throw new InvalidAutomod(`The ${rule} rule's timeout must be a whole number from ${minutes.min} to ${minutes.max} minutes, or empty.`);
+    }
+    const ruleRoles = entry.exemptRoleIds ?? [];
+    if (!Array.isArray(ruleRoles) || ruleRoles.length > MAX_RULE_EXEMPT_ROLES || !ruleRoles.every(isRole)) {
+      throw new InvalidAutomod(`Pick at most ${MAX_RULE_EXEMPT_ROLES} roles from this server for the ${rule} rule to skip.`);
+    }
+    const ruleChannels = entry.exemptChannelIds ?? [];
+    if (!Array.isArray(ruleChannels) || ruleChannels.length > MAX_RULE_EXEMPT_CHANNELS || !ruleChannels.every(isChannel)) {
+      throw new InvalidAutomod(`Pick at most ${MAX_RULE_EXEMPT_CHANNELS} channels or categories for the ${rule} rule to skip.`);
     }
   }
   for (const [name, limit] of Object.entries(AUTOMOD_LIMITS)) {
@@ -226,6 +259,12 @@ export function checkAutomod(value, { isRole, isChannel }) {
     throw new InvalidAutomod(`Pick at most ${MAX_EXEMPT_CHANNELS} channels or categories from this server.`);
   }
   return normalizeAutomod(value);
+}
+
+// Whether one rule leaves a member alone: one of its own exempt roles, or a
+// channel (or its category) it skips. `channelIds` = the channel, its parent and grandparent.
+export function ruleSkips(settings, { channelIds, roleIds }) {
+  return settings.exemptChannelIds.some((id) => channelIds.includes(id)) || settings.exemptRoleIds.some((id) => roleIds?.has(id));
 }
 
 // The rules that are switched on, in checking order.

@@ -1182,7 +1182,8 @@ form.settings > * + * {
   }
 
   /* Side-by-side editors with a live preview need the full width. */
-  .settings-cards > .embed-layout {
+  .settings-cards > .embed-layout,
+  .settings-cards > .span-all {
     column-span: all;
   }
 
@@ -2735,6 +2736,114 @@ dialog textarea {
 
 .rule:not(:has(.rule-head input:checked)) .rule-body {
   opacity: 0.6;
+}
+
+/* Simple view: presets and one switch per rule. */
+.am-presets {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: 10px;
+}
+
+.am-preset {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-2);
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  white-space: normal;
+  cursor: pointer;
+}
+
+.am-preset:hover {
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+}
+
+.am-preset[aria-pressed="true"] {
+  border-color: color-mix(in srgb, var(--accent) 60%, var(--border));
+  background: color-mix(in srgb, var(--accent) 9%, var(--surface));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+.am-preset-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.am-preset .help {
+  margin: 0;
+}
+
+.am-points {
+  margin: 4px 0 0;
+  padding-inline-start: 18px;
+  font-size: 0.85rem;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.am-points li + li {
+  margin-top: 2px;
+}
+
+.am-points strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.am-quick-rules {
+  display: grid;
+  gap: 8px;
+}
+
+.am-quick-rule strong {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.am-quick-rule .badge {
+  font-weight: 500;
+}
+
+/* Advanced view: each rule's fine-tuning, folded away until opened. */
+.am-fine-tune {
+  grid-column: 1 / -1;
+  border-top: 1px dashed var(--border);
+  padding-top: 10px;
+}
+
+.am-fine-tune > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.am-fine-tune[open] > summary {
+  color: var(--text);
+}
+
+.am-fine-tune-body {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.am-fine-tune-body .field,
+.am-fine-tune-body .field-label {
+  margin: 0;
 }
 
 /* --- Community ------------------------------------------------------------------ */

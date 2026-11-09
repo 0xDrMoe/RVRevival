@@ -271,6 +271,57 @@ describe("automod", () => {
     }
   });
 
+  it("only logs a log-only rule, once per member in the cooldown", async () => {
+    await use(automodWith({ bannedWords: { action: "log", words: ["noob"] } }));
+    const first = message("noob");
+    expect(await automod.handleMessage(first)).toBe(false);
+    await automod.handleMessage(message("noob again"));
+
+    expect(first.delete).not.toHaveBeenCalled();
+    expect(channel.send).not.toHaveBeenCalled();
+    expect(modLog.post).toHaveBeenCalledTimes(1);
+    expect(modLog.post.mock.calls[0][1]().embed.data.description).toContain("**Automod (log only): Banned word**");
+    expect(store.countGuildCases(GUILD_ID)).toEqual({});
+    clock += PUNISH_COOLDOWN_MS + 1;
+    await automod.handleMessage(message("noob"));
+    expect(modLog.post).toHaveBeenCalledTimes(2);
+  });
+
+  it("skips the notice when a rule says so, and uses the rule's own timeout", async () => {
+    await use(automodWith({ mentions: { limit: 2, notify: false, timeoutMinutes: 45 } }, { timeoutMinutes: 15 }));
+    const sent = message("<@1> <@2>");
+    expect(await automod.handleMessage(sent)).toBe(true);
+    expect(sent.delete).toHaveBeenCalled();
+    expect(channel.send).not.toHaveBeenCalled();
+    expect(member.timeout).toHaveBeenCalledWith(45 * 60_000, expect.any(String));
+  });
+
+  it("lets one rule skip its own roles and channels while the others still check", async () => {
+    const ROLE = "700000000000000005";
+    await use(
+      automodWith({
+        links: { exemptRoleIds: [ROLE], exemptChannelIds: ["800000000000000007"] },
+        bannedWords: { words: ["noob"] },
+      }),
+    );
+    const linkByRole = message("see https://example.com", { member: fakeMember(TARGET_ID, { roleIds: [ROLE] }) });
+    await automod.handleMessage(linkByRole);
+    expect(linkByRole.delete).not.toHaveBeenCalled();
+
+    const linkInChannel = message("see https://example.com", { channelId: "800000000000000007", channel: { ...channel, id: "800000000000000007" } });
+    await automod.handleMessage(linkInChannel);
+    expect(linkInChannel.delete).not.toHaveBeenCalled();
+
+    clock += PUNISH_COOLDOWN_MS + 1;
+    const wordByRole = message("noob", { member: fakeMember(TARGET_ID, { roleIds: [ROLE] }) });
+    await automod.handleMessage(wordByRole);
+    expect(wordByRole.delete).toHaveBeenCalled();
+
+    const linkElsewhere = message("see https://example.com");
+    await automod.handleMessage(linkElsewhere);
+    expect(linkElsewhere.delete).toHaveBeenCalled();
+  });
+
   it("keeps going when it can't delete", async () => {
     await use(automodWith({ bannedWords: { action: "warn", words: ["noob"] } }));
     const sent = message("noob", { delete: vi.fn(async () => Promise.reject(Object.assign(new Error("Missing Permissions"), { code: 50013 }))) });

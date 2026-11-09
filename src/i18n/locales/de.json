@@ -318,6 +318,7 @@
   "automodAction_delete": "Nachricht löschen",
   "automodAction_warn": "Löschen und verwarnen",
   "automodAction_timeout": "Löschen und Timeout",
+  "automodAction_log": "Nur protokollieren (Nachricht bleibt)",
   "automodEscalation_timeout": "Timeout",
   "automodEscalation_kick": "Kicken",
   "automodEscalation_ban": "Bannen",
