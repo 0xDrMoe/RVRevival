@@ -338,6 +338,7 @@ function interaction(subcommand, options = {}, { canPost = true, memberEveryone 
       getChannel: () => channel,
       getRole: () => options.role ?? null,
       getInteger: (name) => options[name] ?? null,
+      getBoolean: (name) => options[name] ?? null,
     },
     get deferred() {
       return Boolean(replyState.deferred);

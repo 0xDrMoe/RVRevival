@@ -1043,9 +1043,7 @@ const FEATURE_PARTS = [
         table: {
           head: ["Type", "Source looks like", "Checked"],
           rows: [
-            ["YouTube videos", "`youtube.com/@name` (long videos only)", "Every 10 minutes"],
-            ["YouTube Shorts", "`youtube.com/@name`", "Every 10 minutes"],
-            ["YouTube live streams", "`youtube.com/@name`", "Every 3 minutes"],
+            ["YouTube channel: videos, Shorts and live streams (tick the ones you want)", "`youtube.com/@name`", "Videos and Shorts every 10 minutes, live every 3"],
             ["Twitch channel (goes live)", "`twitch.tv/name`", "Every 2 minutes"],
             ["Kick channel (goes live)", "`kick.com/name`", "Every 2 minutes"],
             ["Bluesky account", "`name.bsky.social`", "Every 10 minutes"],
@@ -1056,25 +1054,25 @@ const FEATURE_PARTS = [
           ],
         },
         steps: [
-          "On the **Feeds** page (or with `/feed add`), pick the type, paste the source and pick the channel.",
+          "On the **Feeds** page (or with `/feed add`), pick the type, paste the source and pick the channel. For YouTube, tick **Videos**, **Shorts** and/or **Live streams** (all three are on to start).",
           "Optionally pick a role to ping, and write your own message with `{title}`, `{link}`, `{author}`, `{feed}` and, for Twitch and Kick, `{game}`. Leave it empty to post the default message for the type: it shows in grey in the box, **Edit the default** copies it in to change, and **Reset to default** goes back to it.",
           "Only things posted after you add it are announced, so nothing old floods the channel.",
-          "To change where it posts, who it pings or its message, press **Edit** next to it on the Feeds page.",
+          "To change where it posts, who it pings or its message, press **Edit** next to it on the Feeds page. A YouTube channel is one row: tick or untick Videos, Shorts and Live streams there at any time, and Edit has a message box for each.",
         ],
         commands: [
-          ["/feed add type source channel [role] [message]", "Follows something. `role` is pinged with each post (it can be @everyone)."],
+          ["/feed add type source channel [role] [message] [videos] [shorts] [live]", "Follows something. `role` is pinged with each post (it can be @everyone). For YouTube, set `videos`, `shorts` or `live` to False to leave that out."],
           ["/feed remove id", "Stops following it."],
           ["/feed list", "Shows every feed, with the problem next to any that can't be read or posted."],
         ],
         example: [
-          "/feed add type:YouTube videos source:https://youtube.com/@yourchannel channel:#news",
+          "/feed add type:YouTube channel (videos, Shorts, live) source:https://youtube.com/@yourchannel channel:#news",
           "/feed add type:Twitch channel (goes live) source:twitch.tv/yourchannel channel:#live role:@Stream pings",
-          "/feed add type:YouTube live streams source:https://youtube.com/@yourchannel channel:#live",
+          "/feed add type:YouTube channel (videos, Shorts, live) source:https://youtube.com/@yourchannel channel:#live videos:False shorts:False",
           "/feed add type:Bluesky account source:yourname.bsky.social channel:#socials",
         ],
         tips: [
-          "At most three new items are posted at a time, and a server can follow up to 20 feeds.",
-          "YouTube videos skips Shorts and live streams: follow those with their own types, in the same channel or another one.",
+          "At most three new items are posted at a time, and a server can follow up to 20 feeds. A YouTube channel posting in one channel counts once, whichever of its types are on.",
+          "Want Shorts in a different channel from videos? Add the YouTube channel twice, once per channel, with different boxes ticked.",
           "Twitch and Kick post once each time the channel goes live. Each works once the bot's owner adds its keys; until then adding one says it's off.",
           "X (Twitter), TikTok and Instagram don't let bots read posts for free. If you have an RSS link for an account (from a feed service), add it as RSS.",
           "To follow something else, remove the feed and add a new one. Editing keeps the source.",

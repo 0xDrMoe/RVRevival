@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createFeedCommand } from "../src/commands/feed.js";
 import { FeedStore, PENDING_FIRST_READ } from "../src/feeds/feedStore.js";
 import { CHECK_EVERY_MS, createFeedPoller, LIVE_CHECK_EVERY_MS as YOUTUBE_LIVE_EVERY_MS } from "../src/feeds/feedPoller.js";
-import { addFeed, buildFeedPost } from "../src/feeds/feeds.js";
+import { addFeed, addYoutubeFeeds, buildFeedPost, countFeeds, youtubeChannelOf } from "../src/feeds/feeds.js";
 import { kickSlug, resolveSource, twitchLogin } from "../src/feeds/fetchFeed.js";
 import { createKickApi } from "../src/feeds/kick.js";
 import { createLiveApis } from "../src/feeds/liveApis.js";
@@ -424,6 +424,95 @@ describe("YouTube videos, Shorts and live", () => {
     const store = new FeedStore();
     await expect(addFeed({ ...base, store, kind: "youtube_shorts", source: CHANNEL, fetchOptions: fakeNet({}) })).rejects.toMatchObject({ reason: "unreachable" });
     expect(store.count(GUILD_ID)).toBe(0);
+  });
+
+  describe("one YouTube channel, several types", () => {
+    const videos = `https://www.youtube.com/feeds/videos.xml?playlist_id=UULF${REST}`;
+    const shorts = `https://www.youtube.com/feeds/videos.xml?playlist_id=UUSH${REST}`;
+    const liveUrl = `https://www.youtube.com/channel/${CHANNEL}/live`;
+    const everything = () =>
+      fakeNet({ [videos]: atom("Videos", ["v1"]), [shorts]: atom("Shorts", ["s1"]), [liveUrl]: "<html>not live</html>", [channelFeed]: atom("Rabble", ["v1", "s1"]), "https://www.youtube.com/@rabble": `<script>{"externalId":"${CHANNEL}"}</script>` });
+
+    it("adds the ticked types as one feed toward the limit, each with its own message", async () => {
+      const store = new FeedStore();
+      const net = everything();
+      const added = await addYoutubeFeeds({ ...base, store, types: ["videos", "shorts", "live"], messages: { shorts: "Short: {title}" }, message: "New: {title}", source: "https://youtube.com/@rabble/shorts", fetchOptions: net });
+      expect(added.map((feed) => [feed.kind, feed.message])).toEqual([
+        ["youtube", "New: {title}"],
+        ["youtube_shorts", "Short: {title}"],
+        ["youtube_live", "New: {title}"],
+      ]);
+      expect(added.map((feed) => youtubeChannelOf(feed))).toEqual([CHANNEL, CHANNEL, CHANNEL]);
+      // The handle page is read once, not once per type.
+      expect(net.fetchImpl.mock.calls.filter(([url]) => String(url) === "https://www.youtube.com/@rabble")).toHaveLength(1);
+      expect(countFeeds(store, GUILD_ID)).toBe(1);
+      // The same channel posting somewhere else is another feed.
+      await addYoutubeFeeds({ ...base, store, channelId: "800000000000000009", types: ["live"], source: CHANNEL, fetchOptions: net });
+      expect(countFeeds(store, GUILD_ID)).toBe(2);
+    });
+
+    it("skips types already there and refuses when all are", async () => {
+      const store = new FeedStore();
+      await addYoutubeFeeds({ ...base, store, types: ["shorts"], source: CHANNEL, fetchOptions: everything() });
+      const added = await addYoutubeFeeds({ ...base, store, types: ["videos", "shorts"], source: CHANNEL, fetchOptions: everything() });
+      expect(added.map((feed) => feed.kind)).toEqual(["youtube"]);
+      await expect(addYoutubeFeeds({ ...base, store, types: ["videos", "shorts"], source: CHANNEL, fetchOptions: everything() })).rejects.toThrow(/already posts/);
+      await expect(addYoutubeFeeds({ ...base, store, types: [], source: CHANNEL, fetchOptions: everything() })).rejects.toMatchObject({ reason: "no-types" });
+    });
+
+    it("adds all or nothing", async () => {
+      const store = new FeedStore();
+      // The /live page doesn't answer, so the videos feed added first is removed again.
+      const net = fakeNet({ [videos]: atom("Videos", ["v1"]), [channelFeed]: atom("Rabble", ["v1"]) });
+      await expect(addYoutubeFeeds({ ...base, store, types: ["videos", "live"], source: CHANNEL, fetchOptions: net })).rejects.toMatchObject({ reason: "unreachable" });
+      expect(store.list(GUILD_ID)).toEqual([]);
+    });
+
+    it("lets a full server add another type for a channel it already follows", async () => {
+      const store = new FeedStore();
+      for (let index = 0; index < 19; index += 1) {
+        store.add({ ...base, kind: "rss", source: `https://example.com/${index}`, url: `https://example.com/${index}`, name: `Feed ${index}`, createdBy: USER_ID });
+      }
+      await addYoutubeFeeds({ ...base, store, types: ["videos"], source: CHANNEL, fetchOptions: everything() });
+      expect(countFeeds(store, GUILD_ID)).toBe(20);
+      await addYoutubeFeeds({ ...base, store, types: ["shorts", "live"], source: CHANNEL, fetchOptions: everything() });
+      expect(store.list(GUILD_ID)).toHaveLength(22);
+      await expect(addYoutubeFeeds({ ...base, store, channelId: "800000000000000009", types: ["videos"], source: CHANNEL, fetchOptions: everything() })).rejects.toThrow(/up to 20/);
+      await expect(addFeed({ ...base, store, kind: "rss", source: "https://example.com/rss", fetchOptions: everything() })).rejects.toThrow(/up to 20/);
+    });
+
+    it("adds a channel's types with /feed and lists them on one line", async () => {
+      const store = new FeedStore();
+      const command = createFeedCommand({ store, fetchOptions: everything() });
+      const channel = { id: CHANNEL_ID, type: 0, permissionsFor: () => ({ has: () => true }) };
+      const interaction = (subcommand, options = {}) => ({
+        locale: "en-US",
+        guildId: GUILD_ID,
+        guild: { id: GUILD_ID, members: { me: { id: "bot" } }, channels: { cache: new Map([[CHANNEL_ID, channel]]) } },
+        user: { id: USER_ID },
+        memberPermissions: { has: () => true },
+        inCachedGuild: () => true,
+        options: { getSubcommand: () => subcommand, getString: (name) => options[name] ?? null, getChannel: () => channel, getRole: () => null, getInteger: (name) => options[name] ?? null, getBoolean: (name) => options[name] ?? null },
+        deferred: false,
+        replied: false,
+        deferReply: vi.fn(async function () {
+          this.deferred = true;
+        }),
+        reply: vi.fn(async () => {}),
+        editReply: vi.fn(async () => {}),
+      });
+      expect(await command.execute(interaction("add", { type: "youtube", source: CHANNEL, videos: false, shorts: false, live: false }))).toMatchObject({ status: Status.REFUSED, key: "feedYoutubeNoTypes" });
+      const add = interaction("add", { type: "youtube", source: CHANNEL, live: false });
+      expect(await command.execute(add)).toMatchObject({ status: Status.SUCCESS, key: "feedAddedYoutube" });
+      expect(add.editReply.mock.calls[0][0].content).toContain("Videos `1`, Shorts `2`");
+      expect(store.list(GUILD_ID).map((feed) => feed.kind)).toEqual(["youtube", "youtube_shorts"]);
+
+      const list = interaction("list");
+      await command.execute(list);
+      const content = list.reply.mock.calls[0][0].content;
+      expect(content).toContain("**Feeds (1/20)**");
+      expect(content).toContain("📺 **Rabble** → <#800000000000000001> · Videos `1`, Shorts `2`");
+    });
   });
 
   it("reads the /live page", () => {

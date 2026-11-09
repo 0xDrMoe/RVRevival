@@ -1849,22 +1849,25 @@ export const COMMAND_PARTS = [
         who: "Admins (**Manage Server**).",
         usages: [
           {
-            usage: "/feed add type source channel [role] [message]",
-            what: "Follows something. Only items that appear after you add it are posted. Up to 20 feeds.",
+            usage: "/feed add type source channel [role] [message] [videos] [shorts] [live]",
+            what: "Follows something. Only items that appear after you add it are posted. Up to 20 feeds; a YouTube channel counts once.",
             options: [
-              ["type", "YouTube videos, Shorts or live streams, a Twitch or Kick channel, a Bluesky or Mastodon account, a subreddit, GitHub releases, or an RSS or Atom feed."],
+              ["type", "A YouTube channel (videos, Shorts and live streams), a Twitch or Kick channel, a Bluesky or Mastodon account, a subreddit, GitHub releases, or an RSS or Atom feed."],
               [
                 "source",
                 "The YouTube link (`youtube.com/@name`), Twitch or Kick channel (`twitch.tv/name`, `kick.com/name`), Bluesky handle (`name.bsky.social`), Mastodon account (`@name@mastodon.social`), subreddit (`r/name`), GitHub repository (`owner/name`) or feed link, up to 500 characters.",
               ],
               ["channel", "Where new posts go."],
               ["role", "A role to ping with each post, or @everyone (needs Mention @everyone, for you and Rabble)."],
-              ["message", "Your own message, up to 500 characters. Use `{title}`, `{link}`, `{author}`, `{feed}` and, for Twitch and Kick, `{game}`."],
+              ["message", "Your own message, up to 500 characters. Use `{title}`, `{link}`, `{author}`, `{feed}` and, for Twitch and Kick, `{game}`. For YouTube it's used for every type you add; give each its own on the **Feeds** page."],
+              ["videos", "YouTube only: post new videos. On unless you pick False."],
+              ["shorts", "YouTube only: post new Shorts. On unless you pick False."],
+              ["live", "YouTube only: post when the channel goes live. On unless you pick False."],
             ],
           },
           {
             usage: "/feed remove id",
-            what: "Stops following a feed.",
+            what: "Stops following a feed. A YouTube channel lists a number per type, so you can stop just its Shorts, for example.",
             options: [["id", "The feed's number from `/feed list`."]],
           },
           {
@@ -1874,8 +1877,8 @@ export const COMMAND_PARTS = [
           },
         ],
         example: [
-          "/feed add type:YouTube videos source:https://youtube.com/@yourchannel channel:#news role:@Video pings",
-          "/feed add type:YouTube Shorts source:https://youtube.com/@yourchannel channel:#shorts",
+          "/feed add type:YouTube channel (videos, Shorts, live) source:https://youtube.com/@yourchannel channel:#news role:@Video pings",
+          "/feed add type:YouTube channel (videos, Shorts, live) source:https://youtube.com/@yourchannel channel:#shorts videos:False live:False",
           "/feed add type:Twitch channel (goes live) source:twitch.tv/yourchannel channel:#live role:@Stream pings",
           "/feed add type:Kick channel (goes live) source:kick.com/yourchannel channel:#live",
           "/feed add type:Bluesky account source:yourname.bsky.social channel:#socials",
@@ -1883,7 +1886,7 @@ export const COMMAND_PARTS = [
         ],
         tips: [
           "Feeds are checked every 10 minutes, YouTube live every 3, and Twitch and Kick every 2. At most three new items are posted at a time.",
-          "YouTube videos skips Shorts and live streams; they have their own types. YouTube live reads the channel's public live page, so it needs no keys.",
+          "A YouTube channel posts videos, Shorts and live streams unless you switch one off. Live reads the channel's public live page, so it needs no keys.",
           "Twitch and Kick need keys on the bot's server; until then they say so. Each broadcast is announced once.",
           "X (Twitter), TikTok and Instagram can't be followed directly: they don't let bots read posts for free. An RSS link for the account works as RSS.",
           "To change a feed's channel, ping or message, press **Edit** next to it on the **Feeds** page. There's no command for that.",

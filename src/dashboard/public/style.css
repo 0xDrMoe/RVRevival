@@ -4347,6 +4347,28 @@ input.has-variable-problem {
   margin: 8px 0 0;
 }
 
+/* A YouTube feed's switches: videos, Shorts, live streams. */
+.feed-types {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 4px 0 2px;
+}
+
+.feed-youtube .field {
+  max-width: 760px;
+}
+
+.feed-youtube-messages {
+  margin-bottom: 16px;
+}
+
+.feed-youtube-messages > summary {
+  cursor: pointer;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
 .feed-editor {
   flex-basis: 100%;
   margin-top: 6px;
