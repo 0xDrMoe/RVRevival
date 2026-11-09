@@ -285,6 +285,8 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
   const sendPage = (request, reply) => reply.header("Cache-Control", "no-cache").type("text/html; charset=utf-8").send(page);
   app.get("/", sendPage);
   app.get("/index.html", sendPage);
+  // The guide is public: /guide is a short address for the page's #/guide.
+  app.get("/guide", (request, reply) => reply.redirect("/#/guide"));
 
   // The Terms of Service and Privacy Policy, linked from the landing page and
   // given to Discord in the Developer Portal. Plain pages, readable without JavaScript.

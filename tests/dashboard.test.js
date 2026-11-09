@@ -168,6 +168,12 @@ describe("dashboard", () => {
     expect(image.headers["content-type"]).toBe("image/jpeg");
   });
 
+  it("sends /guide to the public guide without logging in", async () => {
+    const page = await app.inject({ method: "GET", url: "/guide" });
+    expect(page.statusCode).toBe(302);
+    expect(page.headers.location).toBe("/#/guide");
+  });
+
   it("serves the Terms of Service and Privacy Policy without logging in", async () => {
     for (const [url, title] of [["/terms", "Terms of Service"], ["/privacy", "Privacy Policy"]]) {
       const page = await app.inject({ method: "GET", url });
