@@ -63,7 +63,9 @@ export function checkMessage(value) {
   return { content, embeds: embed ? [embed] : [] };
 }
 
-function checkEmbed(value) {
+// Checks one embed. Returns it in Discord's shape, or null when nothing in it
+// would show.
+export function checkEmbed(value) {
   if (typeof value !== "object" || Array.isArray(value)) {
     throw new InvalidMessage("The embed must be an object.");
   }

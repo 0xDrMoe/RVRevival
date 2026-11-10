@@ -1125,6 +1125,21 @@ export const COMMAND_PARTS = [
             options: [["text", "Up to 1000 characters, with the same variables. Members with closed DMs don't get it."]],
           },
           {
+            usage: "/welcome embed message [title] [description] [colour] [image] [thumbnail] [avatar] [footer] [remove]",
+            what: "Sends the welcome message, leave message or welcome DM as an embed. Only the parts you give change, and you get a preview. Type `-` in a part to remove it. Fields are on the dashboard's **Welcome & leave** page.",
+            options: [
+              ["message", "Which message gets the embed: the welcome message, the leave message or the welcome DM."],
+              ["title", "Up to 256 characters. Can use the same variables."],
+              ["description", "The main text, up to 4096 characters, with the same variables. Type `\\n` for a new line."],
+              ["colour", "A hex colour like `#7c5cff`. Type `-` to use your **Branding** colour (the default)."],
+              ["image", "A big image at the bottom: a link starting with `https://`."],
+              ["thumbnail", "A small image at the top right: a link starting with `https://`."],
+              ["avatar", "`True` shows the new member's avatar as the small image."],
+              ["footer", "Small text at the bottom, with the same variables."],
+              ["remove", "`True` removes this embed. Your text stays."],
+            ],
+          },
+          {
             usage: "/welcome autorole role",
             what: "Gives every new member that role, or stops giving it if it's already one. Up to 10.",
             options: [["role", "A role below the bot's, without staff or admin permissions."]],
@@ -1137,7 +1152,7 @@ export const COMMAND_PARTS = [
           {
             usage: "/welcome off what",
             what: "Switches one part off, or puts the messages back to the default.",
-            options: [["what", "Welcome messages, leave messages, the welcome DM, autoroles, or custom messages (back to the default text)."]],
+            options: [["what", "Welcome messages, leave messages, the welcome DM (with its embed), autoroles, or custom messages (back to the default text)."]],
           },
           {
             usage: "/welcome test",
@@ -1150,9 +1165,15 @@ export const COMMAND_PARTS = [
             options: [],
           },
         ],
-        example: ["/welcome channel channel:#welcome", "/welcome message text:Welcome {user} to {server}! You're member #{members}.\\nRead #rules first.", "/welcome autorole role:@Member"],
+        example: [
+          "/welcome channel channel:#welcome",
+          "/welcome message text:Welcome {user} to {server}! You're member #{members}.\\nRead #rules first.",
+          "/welcome embed message:Welcome message title:Welcome to {server}! description:You're member #{members}. avatar:True",
+          "/welcome autorole role:@Member",
+        ],
         tips: [
-          "Only `{user}` pings anyone.",
+          "Only `{user}` pings anyone, and only in the message text: mentions in an embed never ping.",
+          "With an embed on, the default text is left out; only text you wrote goes with the embed.",
           "If members must accept the rules first (Rules Screening), autoroles wait until they do.",
           "Roles on rejoin never give back staff, bot or booster roles.",
           "On a Community server, Discord's **Onboarding** is the better way to give roles to new members.",

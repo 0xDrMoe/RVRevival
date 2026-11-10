@@ -150,7 +150,7 @@ const NAV = [
   {
     group: "community",
     pages: [
-      { id: "welcome", icon: "userPlus", tone: "pink", manage: true, on: (s) => Boolean(s.welcomeChannelId || s.welcomeDm || s.leaveChannelId) },
+      { id: "welcome", icon: "userPlus", tone: "pink", manage: true, on: (s) => Boolean(s.welcomeChannelId || s.welcomeDm || s.welcomeDmEmbed || s.leaveChannelId) },
       { id: "roles", icon: "layers", tone: "green", manage: true, on: (s) => Boolean(s.rolePersist?.enabled) || (s.autoroleIds ?? []).length > 0 || (s.rolePanels ?? []).length > 0 },
       { id: "starboard", icon: "star", tone: "amber", manage: true, on: (s) => Boolean(s.starboard?.channelId) },
       { id: "birthdays", icon: "cake", tone: "pink", manage: true, on: (s) => Boolean(s.birthdays) },
@@ -3995,6 +3995,149 @@ function birthdayCard(data, postable, defaults) {
 // The channels the bot can post in, with "Off" first, for community pickers.
 const offPicker = (data, id, value) => picker({ id, options: postableChannels(data), value, emptyLabel: t("communityOff") });
 
+// An embed for the welcome message, the leave message or the welcome DM: a
+// switch that opens a small embed editor, with a live preview of the whole
+// message (the text box above it plus the embed) using example values.
+// `read(form)` gives what the server saves: the embed without empty parts, or
+// null when it's off (the same shape the server sends back, so an untouched
+// editor doesn't count as a change).
+function welcomeEmbedEditor({ id, saved, data, textBox, examples, defaultColor }) {
+  const embedOf = saved && typeof saved === "object" ? saved : null;
+  const brand = Number.isInteger(defaultColor) ? defaultColor : 0x7c5cff;
+  const input = (suffix, attributes = {}) => h("input", { id: `${id}${suffix}`, type: "text", ...attributes });
+  const enabled = h("input", { id: `${id}On`, type: "checkbox", checked: Boolean(embedOf) });
+  const ownColor = h("input", { id: `${id}OwnColor`, type: "checkbox", checked: Number.isInteger(embedOf?.color) });
+  const colorInput = h("input", { id: `${id}Color`, type: "color", value: hexColor(Number.isInteger(embedOf?.color) ? embedOf.color : brand), "aria-label": t("embedColor") });
+  const swatches = EMBED_SWATCHES.map((swatch) => {
+    const button = h("button", {
+      type: "button",
+      class: "swatch",
+      title: swatch,
+      "aria-label": swatch,
+      onclick: () => {
+        colorInput.value = swatch;
+        ownColor.checked = true;
+        colorInput.dispatchEvent(new Event("input", { bubbles: true }));
+      },
+    });
+    button.style.setProperty("--swatch", swatch);
+    return button;
+  });
+  const title = input("Title", { maxLength: 256, value: embedOf?.title ?? "" });
+  const description = h("textarea", { id: `${id}Description`, rows: 4, maxLength: 4096 }, embedOf?.description ?? "");
+  const image = input("Image", { placeholder: "https://…", value: embedOf?.image?.url ?? "" });
+  const thumbnail = input("Thumbnail", { placeholder: "https://…", value: embedOf?.thumbnail?.url ?? "" });
+  const avatar = h("input", { id: `${id}Avatar`, type: "checkbox", checked: Boolean(embedOf?.memberAvatar) });
+  const footer = input("Footer", { maxLength: 2048, value: embedOf?.footer?.text ?? "" });
+  const fields = editableList({ items: embedOf?.fields ?? [], max: MAX_EMBED_FIELDS, makeRow: embedFieldRow, focus: ".embed-field-name", emptyKey: "embedNoFields", addKey: "embedAddField" });
+  const preview = h("div", { class: "embed-preview" });
+  const count = h("span", { class: "char-count" });
+  const values = { ...exampleValues("welcome"), ...examples };
+  const fill = (text) => fillVariables(text, "welcome", values);
+  const tools = (box) => withVariables(box, "welcome", { preview: false, examples });
+
+  const read = () => {
+    if (!enabled.checked) {
+      return null;
+    }
+    const embed = {};
+    const put = (key, value) => value && (embed[key] = value);
+    put("title", title.value.trim());
+    put("description", description.value.replace(/\r\n?/g, "\n").trim());
+    if (ownColor.checked) {
+      embed.color = colorNumber(colorInput.value);
+    }
+    const footerText = footer.value.trim();
+    if (footerText) {
+      embed.footer = { text: footerText };
+    }
+    if (image.value.trim()) {
+      embed.image = { url: image.value.trim() };
+    }
+    if (avatar.checked) {
+      embed.memberAvatar = true;
+    } else if (thumbnail.value.trim()) {
+      embed.thumbnail = { url: thumbnail.value.trim() };
+    }
+    const rows = [...fields.list.querySelectorAll(".embed-field-row")]
+      .map((row) => ({
+        name: row.querySelector(".embed-field-name").value.trim(),
+        value: row.querySelector(".embed-field-value").value.trim(),
+        inline: row.querySelector(".embed-field-inline").checked,
+      }))
+      .filter((row) => row.name || row.value);
+    if (rows.length > 0) {
+      embed.fields = rows;
+    }
+    // Only a colour isn't an embed Discord shows; the server drops it too.
+    return Object.keys(embed).some((key) => key !== "color") ? embed : null;
+  };
+
+  const body = h(
+    "div",
+    { class: "welcome-embed-body", hidden: !embedOf },
+    h(
+      "div",
+      { class: "embed-color-row" },
+      h("label", { class: "switch" }, ownColor, h("span", {}, t("welcomeEmbedOwnColor"))),
+      colorInput,
+      h("div", { class: "swatches" }, swatches),
+    ),
+    field("embedTitle", null, tools(title)),
+    field("embedDescription", "embedDescriptionHelp", tools(description)),
+    h("div", { class: "toolbar" }, h("strong", { class: "grow" }, t("embedFields")), fields.count, fields.addButton),
+    fields.empty,
+    fields.list,
+    h("div", { class: "embed-grid" }, field("embedImage", null, image), field("embedThumbnail", null, thumbnail)),
+    h("label", { class: "switch" }, avatar, h("span", {}, t("welcomeEmbedAvatar"))),
+    field("embedFooter", null, tools(footer)),
+    h("div", { class: "toolbar" }, count),
+    h("strong", {}, t("embedPreview")),
+    preview,
+  );
+
+  const refresh = () => {
+    body.hidden = !enabled.checked;
+    thumbnail.disabled = avatar.checked;
+    if (!enabled.checked) {
+      return;
+    }
+    const embed = read() ?? {};
+    const rows = (embed.fields ?? []).map((row) => ({ name: fill(row.name), value: fill(row.value), inline: row.inline }));
+    const ownText = textBox.value.trim();
+    const message = {
+      content: ownText ? fill(ownText) : "",
+      embed: {
+        title: fill(embed.title ?? ""),
+        url: "",
+        description: fill(embed.description ?? ""),
+        color: embed.color ?? brand,
+        author: { name: "", icon_url: "" },
+        footer: { text: fill(embed.footer?.text ?? "") },
+        image: { url: embed.image?.url ?? "" },
+        thumbnail: { url: embed.memberAvatar ? new URL("/favicon.svg", location.href).href : embed.thumbnail?.url ?? "" },
+        fields: rows,
+      },
+    };
+    preview.replaceChildren(embedPreview(message, data));
+    preview.querySelectorAll("[data-color]").forEach((element) => element.style.setProperty("--embed-color", element.dataset.color || "transparent"));
+    const total = [embed.title, embed.description, embed.footer?.text, ...rows.flatMap((row) => [row.name, row.value])].filter(Boolean).join("").length;
+    count.textContent = t("embedTotal", { count: formatNumber(total), max: "6,000" });
+    count.classList.toggle("danger-text", total > 6000);
+  };
+
+  const element = h(
+    "div",
+    { class: "welcome-embed", oninput: refresh, onchange: refresh },
+    h("label", { class: "switch" }, enabled, h("span", {}, t("welcomeEmbedOn"))),
+    h("span", { class: "help" }, t("welcomeEmbedHelp")),
+    body,
+  );
+  textBox.addEventListener("input", refresh);
+  refresh();
+  return { element, read };
+}
+
 async function showWelcome(guildId) {
   const data = await loadManagedGuild(guildId);
   if (!data) {
@@ -4003,6 +4146,15 @@ async function showWelcome(guildId) {
   const { settings } = data;
   const defaults = data.communityDefaults ?? {};
   const serverExample = { examples: { server: data.guild.name } };
+  const box = (id, placeholder) => messageBox(id, settings[id], placeholder, MAX_MESSAGE_LENGTH, "welcome", serverExample);
+  const welcomeBox = box("welcomeMessage", defaults.welcomeMessage);
+  const dmBox = box("welcomeDm", t("welcomeDmPlaceholder"));
+  const leaveBox = box("leaveMessage", defaults.leaveMessage);
+  const editor = (id, wrapper) =>
+    welcomeEmbedEditor({ id, saved: settings[id], data, textBox: wrapper.querySelector("textarea"), examples: serverExample.examples, defaultColor: defaults.embedColor });
+  const welcomeEmbed = editor("welcomeEmbed", welcomeBox);
+  const dmEmbed = editor("welcomeDmEmbed", dmBox);
+  const leaveEmbed = editor("leaveEmbed", leaveBox);
   settingsPage({
     data,
     pageId: "welcome",
@@ -4013,23 +4165,28 @@ async function showWelcome(guildId) {
         "userPlus",
         "pink",
         field("welcomeChannel", "welcomeChannelHelp", offPicker(data, "welcomeChannelId", settings.welcomeChannelId)),
-        field("welcomeMessage", "messagePlaceholdersHelp", messageBox("welcomeMessage", settings.welcomeMessage, defaults.welcomeMessage, MAX_MESSAGE_LENGTH, "welcome", serverExample)),
+        field("welcomeMessage", "messagePlaceholdersHelp", welcomeBox),
+        welcomeEmbed.element,
       ),
-      card(t("welcomeDm"), "message", "blue", field("welcomeDm", "welcomeDmHelp", messageBox("welcomeDm", settings.welcomeDm, t("welcomeDmPlaceholder"), MAX_MESSAGE_LENGTH, "welcome", serverExample))),
+      card(t("welcomeDm"), "message", "blue", field("welcomeDm", "welcomeDmHelp", dmBox), dmEmbed.element),
       card(
         t("sectionLeave"),
         "logout",
         "gray",
         field("leaveChannel", "leaveChannelHelp", offPicker(data, "leaveChannelId", settings.leaveChannelId)),
-        field("leaveMessage", "messagePlaceholdersHelp", messageBox("leaveMessage", settings.leaveMessage, defaults.leaveMessage, MAX_MESSAGE_LENGTH, "welcome", serverExample)),
+        field("leaveMessage", "messagePlaceholdersHelp", leaveBox),
+        leaveEmbed.element,
       ),
     ],
     fields: {
       welcomeChannelId: selectValue("welcomeChannelId"),
       welcomeMessage: textValue("welcomeMessage"),
+      welcomeEmbed: welcomeEmbed.read,
       welcomeDm: textValue("welcomeDm"),
+      welcomeDmEmbed: dmEmbed.read,
       leaveChannelId: selectValue("leaveChannelId"),
       leaveMessage: textValue("leaveMessage"),
+      leaveEmbed: leaveEmbed.read,
     },
   });
 }

@@ -4367,6 +4367,25 @@ input.has-variable-problem {
   }
 }
 
+/* Welcome page: the embed under each message box. */
+.welcome-embed {
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.welcome-embed-body {
+  display: grid;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.welcome-embed-body .embed-color-row {
+  margin-bottom: 0;
+}
+
 .embed-color-row {
   display: flex;
   flex-wrap: wrap;

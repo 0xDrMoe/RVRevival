@@ -92,6 +92,7 @@ import { SESSION_DAYS, SessionStore } from "./sessions.js";
 import { checkSettingChanges, describeValue, InvalidSetting, SETTING_RULES } from "./settingsRules.js";
 import { LogRoute, routedChannelId } from "../logs/logRoutes.js";
 import { brandingOf, InvalidBranding, planBrandingChange } from "../branding/branding.js";
+import { defaultEmbedColor } from "../community/welcomeEmbeds.js";
 import { botCommandCatalog } from "../permissions/catalog.js";
 import { normalizeCommandRules } from "../permissions/commandRules.js";
 import { CUSTOM, InvalidPreset, planPreset } from "../permissions/presets.js";
@@ -801,6 +802,8 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
       [Setting.LEAVE_MESSAGE]: translate(language, "welcomeDefaultLeave"),
       levelUpMessage: translate(language, "levelUpDefault"),
       birthdayMessage: translate(language, "birthdayDefaultMessage"),
+      // The colour welcome, leave and DM embeds get when they have none of their own.
+      embedColor: defaultEmbedColor(guildSettings, guild.id),
       // Per feed kind, what a feed with no message of its own posts.
       feedMessages: defaultFeedMessages(language),
     };

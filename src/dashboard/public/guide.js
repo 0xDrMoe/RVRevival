@@ -601,6 +601,7 @@ const FEATURE_PARTS = [
           ["/welcome leave-channel channel", "Posts a message there when someone leaves."],
           ["/welcome leave-message text", "Your own leave message."],
           ["/welcome dm text", "Sends new members a private message."],
+          ["/welcome embed message [title] [description] [colour] [image] [thumbnail] [avatar] [footer] [remove]", "Sends the welcome message, leave message or DM as an embed. Only the parts you give change."],
           ["/welcome off what", "Switches one of these off, or goes back to the default text."],
           ["/welcome test", "Previews everything privately, with you as the new member."],
           ["/welcome show", "Shows the setup."],
@@ -608,6 +609,8 @@ const FEATURE_PARTS = [
         example: ["/welcome channel channel:#welcome", "/welcome message text:Welcome {user} to {server}! You're member #{members}."],
         tips: [
           "Messages can use `{user}` (a mention), `{username}`, `{server}` and `{members}` (see **Message variables**). Type `\\n` for a new line. Only `{user}` pings anyone.",
+          "**Embeds:** each of the three messages can have an embed with a title, description, colour, big image, small image (or the new member's avatar), footer and fields. Variables work in its text. The colour defaults to your **Branding** colour. Build it on the **Welcome & leave** page (with a live preview) or with `/welcome embed`.",
+          "With an embed on, only text you wrote is sent with it; the default line is left out. An embed can't ping, so put `{user}` in the text if you want the member pinged.",
           "When lots of people join at once, their welcome messages are combined into fewer posts, and only the first 10 a minute get the welcome DM (Discord treats mass DMs as spam).",
         ],
       },

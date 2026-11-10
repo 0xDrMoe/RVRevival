@@ -655,6 +655,26 @@ describe("dashboard", () => {
     const voice = await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, { leaveChannelId: VOICE_ID });
     expect(voice.statusCode).toBe(400);
 
+    // Embeds: saved without empty parts, logged in short, refused with bad variables or links.
+    expect(guild.json().communityDefaults.embedColor).toBe(0x7c5cff);
+    const embed = await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, {
+      welcomeEmbed: { title: "Welcome {username}", description: "", memberAvatar: true, image: { url: "" } },
+      welcomeDmEmbed: { description: "Rules are in {server}", color: 0xff0000 },
+    });
+    expect(embed.statusCode).toBe(200);
+    expect(embed.json().settings).toMatchObject({
+      welcomeEmbed: { title: "Welcome {username}", memberAvatar: true },
+      welcomeDmEmbed: { description: "Rules are in {server}", color: 0xff0000 },
+    });
+    expect(discord.postMessage.mock.calls.at(-1)[1].embeds[0].description).toContain("member's avatar");
+    const badVariable = await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, { leaveEmbed: { title: "Level {level}" } });
+    expect(badVariable.json()).toMatchObject({ error: "invalid-setting", setting: "leaveEmbed" });
+    const badLink = await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, { leaveEmbed: { title: "x", image: { url: "ftp://x" } } });
+    expect(badLink.json()).toMatchObject({ error: "invalid-setting", setting: "leaveEmbed" });
+    const off = await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, { welcomeEmbed: null });
+    expect(off.statusCode).toBe(200);
+    expect(guildSettings.get(GUILD_ID, Setting.WELCOME_EMBED)).toBeUndefined();
+
     const ADMIN_ROLE = "700000000000000002";
     const BOT_ROLE = "700000000000000003";
     discord.guild.mockImplementation(async (id) => ({

@@ -10,6 +10,8 @@ import { cleanEmoji } from "../community/rolePanels.js";
 import { MAX_THRESHOLD, MIN_THRESHOLD } from "../community/starboard.js";
 import { cleanTagContent, cleanTagName, MAX_TAG_LENGTH, MAX_TAGS, sortTags } from "../community/tags.js";
 import { MAX_AUTOROLES, MAX_MESSAGE_LENGTH } from "../community/welcome.js";
+import { checkWelcomeEmbed, describeWelcomeEmbed } from "../community/welcomeEmbeds.js";
+import { InvalidMessage } from "../messages/embedMessage.js";
 import { checkLeveling, DEFAULT_LEVELING, InvalidLeveling, normalizeLeveling } from "../leveling/config.js";
 import { checkAntiNuke, describeAntiNuke, InvalidAntiNuke } from "../raid/antiNuke.js";
 import { checkRolePersist, InvalidRolePersist } from "../members/rolePersistence.js";
@@ -82,6 +84,9 @@ export const SETTING_RULES = Object.freeze({
   [Setting.LEAVE_CHANNEL]: { kind: "channel", types: POSTING_CHANNELS, label: "Leave channel" },
   [Setting.LEAVE_MESSAGE]: { kind: "text", variables: "welcome", label: "Leave message" },
   [Setting.WELCOME_DM]: { kind: "text", variables: "welcome", label: "Welcome DM" },
+  [Setting.WELCOME_EMBED]: { kind: "welcomeEmbed", label: "Welcome embed" },
+  [Setting.LEAVE_EMBED]: { kind: "welcomeEmbed", label: "Leave embed" },
+  [Setting.WELCOME_DM_EMBED]: { kind: "welcomeEmbed", label: "Welcome DM embed" },
   [Setting.AUTOROLES]: { kind: "autoroles", label: "Autoroles" },
   [Setting.ROLE_CONFIRM]: { kind: "onByDefault", label: "Role pick confirmations" },
   [Setting.ROLE_PERSIST]: { kind: "rolePersist", label: "Roles on rejoin" },
@@ -316,6 +321,15 @@ function checkValue(setting, value, { guildId, channels, roles }) {
         }
         throw error;
       }
+    case "welcomeEmbed":
+      try {
+        return checkWelcomeEmbed(value);
+      } catch (error) {
+        if (error instanceof InvalidMessage) {
+          throw new InvalidSetting(setting, error.message);
+        }
+        throw error;
+      }
     case "rolePersist":
       try {
         return checkRolePersist(value, { isRole: roleOk });
@@ -529,6 +543,8 @@ export function describeValue(setting, value) {
         value.minAgeDays ? `${value.action} accounts under ${value.minAgeDays} days` : "no account-age gate",
         value.alertJoins ? `alert at ${value.alertJoins} joins a minute` : "no join alerts",
       ].join(" · ");
+    case "welcomeEmbed":
+      return describeWelcomeEmbed(value);
     case "text":
       return `"${value.length > 80 ? `${value.slice(0, 80)}…` : value}"`.replace(/\n/g, " ");
     case "leveling": {

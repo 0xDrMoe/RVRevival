@@ -3,6 +3,14 @@
 
 export const CHANGELOG = [
   {
+    date: "2026-11-10",
+    title: "Welcome, leave and DM messages as embeds",
+    items: [
+      "The welcome message, the leave message and the welcome DM can each have an embed: a title, description, colour, big and small images (or the new member's avatar), footer and fields. Variables like {user} and {server} work in it.",
+      "Build them on the Welcome & leave page with a live preview, or with /welcome embed. The colour defaults to your Branding colour.",
+    ],
+  },
+  {
     date: "2026-11-09",
     title: "Link previews for every page",
     items: [
