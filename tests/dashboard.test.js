@@ -1836,6 +1836,60 @@ describe("dashboard", () => {
     expect(discord.revokeToken).toHaveBeenCalledWith("user-access-token");
     expect((await app.inject({ method: "GET", url: "/api/me", cookies })).statusCode).toBe(401);
   });
+
+  it("sends labelled test messages where the real ones go, and says why one can't be sent", async () => {
+    discord.dm = vi.fn(async () => ({}));
+    const cookies = await login();
+    const test = (body) => write(cookies, "POST", `/api/guilds/${GUILD_ID}/test`, body);
+
+    const unavailable = await test({ kind: "welcome" });
+    expect(unavailable.statusCode).toBe(400);
+    expect(unavailable.json()).toEqual({ error: "test-unavailable", reason: "noChannel" });
+    expect((await test({ kind: "nope" })).statusCode).toBe(400);
+
+    await guildSettings.set(GUILD_ID, Setting.WELCOME_CHANNEL, TEXT_ID);
+    await guildSettings.set(GUILD_ID, Setting.WELCOME_MESSAGE, "Hi {user}, welcome to {server}!");
+    // A test that couldn't be sent doesn't count toward the cooldown.
+    const sent = await test({ kind: "welcome" });
+    expect(sent.statusCode).toBe(200);
+    expect(sent.json()).toEqual({ sent: [{ channelId: TEXT_ID }], failures: [] });
+    const [channelId, payload] = discord.postMessage.mock.calls.at(-1);
+    expect(channelId).toBe(TEXT_ID);
+    expect(payload.content).toBe(`-# 🧪 Test sent by <@${USER_ID}>. The real message won't have this line.\nHi <@${USER_ID}>, welcome to Rumbleverse Revival!`);
+    expect(payload).not.toHaveProperty("allowedMentions");
+
+    // One test every few seconds per person.
+    const again = await test({ kind: "welcome" });
+    expect(again.statusCode).toBe(429);
+    expect(again.json()).toMatchObject({ error: "test-cooldown" });
+  });
+
+  it("tests the log channels and checks text against automod without posting", async () => {
+    const cookies = await login();
+    await guildSettings.set(GUILD_ID, Setting.LOGS_CHANNEL, LOGS_ID);
+    await guildSettings.set(GUILD_ID, Setting.LOG_ROUTES, { caseBan: TEXT_ID });
+    discord.postMessage.mockRejectedValueOnce(Object.assign(new Error("Missing Permissions"), { code: 50013 }));
+    const logs = await write(cookies, "POST", `/api/guilds/${GUILD_ID}/test`, { kind: "logs" });
+    expect(logs.statusCode).toBe(200);
+    const body = logs.json();
+    expect(body.sent.length + body.failures.length).toBe(2);
+    expect(body.failures).toEqual([{ channelId: LOGS_ID, reason: "cannotPost" }]);
+    expect(body.sent).toEqual([{ channelId: TEXT_ID }]);
+    // Server log events have no channel yet.
+    expect(body.nowhere).toContain("Edited messages");
+    const banPost = discord.postMessage.mock.calls.find(([id]) => id === TEXT_ID)[1];
+    expect(banPost.embeds[0].description).toContain("Bans and temporary bans");
+
+    const posts = discord.postMessage.mock.calls.length;
+    const check = await write(cookies, "POST", `/api/guilds/${GUILD_ID}/automod/test`, {
+      text: "join discord.gg/abcdef",
+      config: { enabled: true, rules: { invites: { enabled: true, action: "warn" } } },
+    });
+    expect(check.statusCode).toBe(200);
+    expect(check.json()).toMatchObject({ enabled: true, acted: "invites", hits: [{ rule: "invites", detail: "abcdef", action: "warn", on: true }] });
+    expect(discord.postMessage.mock.calls.length).toBe(posts);
+    expect((await write(cookies, "POST", `/api/guilds/${GUILD_ID}/automod/test`, { text: "" })).statusCode).toBe(400);
+  });
 });
 
 describe("dashboard sessions", () => {

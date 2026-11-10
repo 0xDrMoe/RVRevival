@@ -36,6 +36,7 @@ import { createHighlightCommand } from "./highlight.js";
 import { createMediaOnlyCommand } from "./mediaOnly.js";
 import { createBirthdayCommand } from "./birthday.js";
 import { createWelcomeCommand } from "./welcome.js";
+import { createTestCommand } from "./test.js";
 import { createServerInfoCommand } from "./serverInfo.js";
 import { createInfoCommands } from "./infoCommands.js";
 import { createBotInfoCommands } from "./botInfo.js";
@@ -124,6 +125,7 @@ export function createCommands({
     ...createMemberToolCommands({ guildSettings, modLog, forcedLanguage }),
     createMassRoleCommand({ guildSettings, modLog, forcedLanguage, memberLoader }),
     createWelcomeCommand({ guildSettings, forcedLanguage }),
+    createTestCommand({ guildSettings, forcedLanguage }),
     createRolePanelCommand({ guildSettings, logger, forcedLanguage, confirmations: roleConfirmations }),
     ...createTagCommands({ guildSettings, forcedLanguage }),
     createEmbedCommand({ guildSettings, forcedLanguage, sentMessages }),
