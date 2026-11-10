@@ -15,6 +15,7 @@
   "createdButNotAssigned": "I created the {country} role but couldn't assign it to you. Please contact a server admin.",
   "assignFailed": "I couldn't assign the {country} role to you. Please contact a server admin.",
   "unexpected": "Something went wrong. Please try again later.",
+  "slowDown": "You're going a bit fast. Try again in {seconds} seconds.",
   "wrongChannel": "This command can only be used in {channel}.",
 
   "staffCommandDescription": "Staff only: change or remove a member's country role.",

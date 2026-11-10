@@ -7,6 +7,11 @@
 // accepted, since Discord doesn't let pending members have roles. When someone
 // leaves, the leave message goes in the leave channel. Bots get none of this.
 //
+// Rate limits: when many people join or leave at once, the messages that pile
+// up while one is being posted go out together, one per line. Welcome DMs stop
+// at WELCOME_DMS_PER_MINUTE per server (Discord flags bots that DM lots of new
+// members as spam); the welcome message in the channel still goes out.
+//
 // Messages can use the "welcome" variables (dashboard/public/variables.js):
 // {user} (a mention), {username}, {server} and {members} (the member count;
 // the old {count} still works). Unset messages use a default in the server's
@@ -17,9 +22,12 @@ import { pickLanguage, translate } from "../i18n/i18n.js";
 import { isModeratorRole } from "../permissions/moderatorPermissions.js";
 import { Setting } from "../settings/guildSettings.js";
 import { fillVariables } from "../dashboard/public/variables.js";
+import { sendDm } from "../utils/dms.js";
+import { canPost, createBatchSender, createRateLimiter } from "../utils/rateLimits.js";
 
 export const MAX_MESSAGE_LENGTH = 1000;
 export const MAX_AUTOROLES = 10;
+export const WELCOME_DMS_PER_MINUTE = 10;
 
 // Fills in the placeholders. The member's name and the server's name can't add
 // formatting; only {user} mentions anyone.
@@ -46,7 +54,9 @@ export function welcomeText(guildSettings, guild, member, kind, forcedLanguage) 
 //   guildSettings, logger
 //   forcedLanguage   the default messages' language (BOT_LANGUAGE); otherwise the server's
 //   skipAutoroles    (member) => true for members who mustn't get autoroles (quarantined)
-export function createWelcomer({ guildSettings, logger, forcedLanguage, skipAutoroles = () => false }) {
+export function createWelcomer({ guildSettings, logger, forcedLanguage, skipAutoroles = () => false, now = Date.now }) {
+  const sender = createBatchSender();
+  const dmLimit = createRateLimiter({ limit: WELCOME_DMS_PER_MINUTE, windowMs: 60_000, now });
   // "<server>:<what>" already warned about, so a busy server can't flood the console.
   const warned = new Set();
   const warnOnce = (guild, what, message, error) => {
@@ -63,8 +73,13 @@ export function createWelcomer({ guildSettings, logger, forcedLanguage, skipAuto
     if (!channel?.isTextBased?.()) {
       return;
     }
+    // Asking anyway would only get a refusal, which Discord counts against the bot.
+    if (!canPost(channel)) {
+      warnOnce(guild, what, `Couldn't post the ${what} message. Give the bot View Channel and Send Messages there.`);
+      return;
+    }
     try {
-      await channel.send({ content, allowedMentions: { users: [userId] } });
+      await sender.send(channel, { content, allowedMentions: { users: [userId] } });
       warned.delete(`${guild.id}:${what}`);
     } catch (error) {
       warnOnce(guild, what, `Couldn't post the ${what} message. Give the bot View Channel and Send Messages there.`, error);
@@ -105,10 +120,12 @@ export function createWelcomer({ guildSettings, logger, forcedLanguage, skipAuto
       const guild = member.guild;
       await post(guild, Setting.WELCOME_CHANNEL, welcomeText(guildSettings, guild, member, "welcome", forcedLanguage), member.id, "welcome");
       const dm = guildSettings.get(guild.id, Setting.WELCOME_DM);
-      if (dm) {
-        await member
-          .send({ content: renderTemplate(dm, { member, guild }), allowedMentions: { parse: [] } })
-          .catch(() => logger.debug("Couldn't DM a new member; their DMs are closed", { guildId: guild.id }));
+      if (dm && dmLimit.take(guild.id)) {
+        await sendDm(member, { content: renderTemplate(dm, { member, guild }), allowedMentions: { parse: [] } }).catch(() =>
+          logger.debug("Couldn't DM a new member; their DMs are closed", { guildId: guild.id }),
+        );
+      } else if (dm) {
+        logger.debug("Skipped a welcome DM; too many people joined at once", { guildId: guild.id });
       }
       if (!member.pending) {
         await giveAutoroles(member);

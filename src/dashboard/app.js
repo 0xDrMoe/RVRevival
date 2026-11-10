@@ -144,6 +144,8 @@ const SESSION_COOKIE = "rv_session";
 const STATE_COOKIE = "rv_oauth_state";
 // How long a person's Discord server list (and their permissions) is trusted.
 const GUILD_LIST_MS = 5 * 60 * 1000;
+// The soonest a Refresh asks Discord for the list again.
+const GUILD_REFRESH_MS = 15_000;
 // How long the landing page's public numbers are reused before they're counted again.
 const PUBLIC_STATS_MS = 2 * 60 * 1000;
 const MAX_REASON_LENGTH = 512;
@@ -491,17 +493,29 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
   // bot is in (where a dashboard role could let them in). [{ id, name, icon,
   // manage }], from Discord at most every GUILD_LIST_MS (or right away with
   // `refresh`). Lists saved by older versions only held managed servers.
+  // Discord allows only a few server-list requests per person, so a refresh
+  // asks again only if the list is older than GUILD_REFRESH_MS, and requests
+  // for the same login at the same time share one.
+  const guildListLoads = new Map();
   async function knownGuilds(session, { refresh = false } = {}) {
-    const fresh = session.guilds && Date.now() - session.guildsLoadedAt < GUILD_LIST_MS;
-    if (fresh && !refresh) {
+    const age = Date.now() - session.guildsLoadedAt;
+    const fresh = session.guilds && age < (refresh ? GUILD_REFRESH_MS : GUILD_LIST_MS);
+    if (fresh) {
       return session.guilds.map((guild) => ({ manage: true, ...guild }));
     }
-    const [userGuilds, botGuilds] = await Promise.all([discord.fetchUserGuilds(session.accessToken), discord.botGuildIds()]);
-    const guilds = userGuilds
-      .filter((guild) => canManage(guild) || botGuilds.has(guild.id))
-      .map((guild) => ({ id: guild.id, name: guild.name, icon: guild.icon ?? null, manage: canManage(guild) }));
-    sessions.setGuilds(session.token, guilds);
-    return guilds;
+    if (guildListLoads.has(session.token)) {
+      return guildListLoads.get(session.token);
+    }
+    const loading = (async () => {
+      const [userGuilds, botGuilds] = await Promise.all([discord.fetchUserGuilds(session.accessToken), discord.botGuildIds()]);
+      const guilds = userGuilds
+        .filter((guild) => canManage(guild) || botGuilds.has(guild.id))
+        .map((guild) => ({ id: guild.id, name: guild.name, icon: guild.icon ?? null, manage: canManage(guild) }));
+      sessions.setGuilds(session.token, guilds);
+      return guilds;
+    })().finally(() => guildListLoads.delete(session.token));
+    guildListLoads.set(session.token, loading);
+    return loading;
   }
 
   // Access.MANAGE, Access.CASES or undefined, for one entry of knownGuilds.

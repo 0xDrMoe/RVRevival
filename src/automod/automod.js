@@ -34,6 +34,7 @@ import {
 } from "./config.js";
 import { countMentions, findBannedWord, findBlockedLink, findInvites, isMostlyCaps, repeatKey } from "./rules.js";
 import { LogRoute } from "../logs/logRoutes.js";
+import { deleteMessage } from "../utils/rateLimits.js";
 
 // How far back repeated messages are compared.
 export const REPEAT_WINDOW_MS = 60_000;
@@ -281,7 +282,7 @@ export function createAutomod({
       const channel = channelId === message.channelId ? message.channel : message.guild.channels.cache.get(channelId);
       try {
         if (ids.length === 1 && ids[0] === message.id) {
-          await message.delete();
+          await deleteMessage(message);
         } else if (ids.length === 1) {
           await channel?.messages.delete(ids[0]);
         } else {

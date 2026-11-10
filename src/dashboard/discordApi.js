@@ -109,7 +109,8 @@ const isProfileChange = (limit) => limit.method.toUpperCase() === "PATCH" && /\/
 export function createDiscordApi({ config, fetch = globalThis.fetch, rest }) {
   // Changing the bot's profile has a tight limit. Waiting it out would leave
   // the Branding page hanging, so that request fails at once instead.
-  const bot = rest ?? new REST({ version: "10", rejectOnRateLimit: isProfileChange }).setToken(config.token);
+  // Discord's 50 requests a second are shared with the bot process, which keeps 40 (index.js).
+  const bot = rest ?? new REST({ version: "10", rejectOnRateLimit: isProfileChange, globalRequestsPerSecond: 10 }).setToken(config.token);
   const redirectUri = `${config.url}/auth/callback`;
 
   async function oauthRequest(path, init) {

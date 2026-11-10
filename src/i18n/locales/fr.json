@@ -15,6 +15,7 @@
   "createdButNotAssigned": "J'ai créé le rôle {country}, mais je n'ai pas pu vous l'attribuer. Veuillez contacter un administrateur du serveur.",
   "assignFailed": "Je n'ai pas pu vous attribuer le rôle {country}. Veuillez contacter un administrateur du serveur.",
   "unexpected": "Une erreur s'est produite. Veuillez réessayer plus tard.",
+  "slowDown": "Tu vas un peu vite. Réessaie dans {seconds} secondes.",
   "wrongChannel": "Cette commande ne peut être utilisée que dans {channel}.",
 
   "staffCommandDescription": "Staff uniquement : modifier ou retirer le rôle de pays d'un membre.",

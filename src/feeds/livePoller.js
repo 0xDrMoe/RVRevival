@@ -6,6 +6,7 @@
 
 import { pickLanguage } from "../i18n/i18n.js";
 import { buildFeedPost } from "./feeds.js";
+import { canPost, CANT_POST } from "../utils/rateLimits.js";
 
 export const LIVE_CHECK_EVERY_MS = 2 * 60 * 1000;
 const POST_ERROR = "Couldn't post in the channel";
@@ -30,6 +31,9 @@ export function createLivePoller({ client, store, providers, logger, forcedLangu
     try {
       if (!channel?.isTextBased?.()) {
         throw new Error("The feed's channel is gone.");
+      }
+      if (!canPost(channel)) {
+        throw new Error(CANT_POST);
       }
       await channel.send(buildFeedPost(feed, item, pickLanguage(guild.preferredLocale, forcedLanguage)));
     } catch (error) {

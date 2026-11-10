@@ -77,6 +77,7 @@ import { buildTicketTranscript, fetchThreadMessages } from "../tickets/transcrip
 import { noTicketLog, TICKET_EVENTS, TicketEvent } from "../tickets/ticketLog.js";
 import { isPermissionError } from "../utils/discordErrors.js";
 import { accentColor } from "../branding/branding.js";
+import { sendDm } from "../utils/dms.js";
 
 const COMMAND_NAME = "tickets";
 
@@ -439,7 +440,7 @@ export function createTicketsCommand({
     }
     try {
       const user = await guild.client.users.fetch(ticket.userId);
-      await user.send(buildRatingRequest(serverLanguage(guild, forcedLanguage), { ticket, serverName: guild.name }));
+      await sendDm(user, buildRatingRequest(serverLanguage(guild, forcedLanguage), { ticket, serverName: guild.name }));
     } catch (error) {
       logger.debug("Couldn't ask for a ticket rating", { guildId: guild.id, ticket: ticket.number, error });
     }

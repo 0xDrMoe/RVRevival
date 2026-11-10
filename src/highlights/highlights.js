@@ -7,6 +7,7 @@
 import { EmbedBuilder, PermissionFlagsBits } from "discord.js";
 import { pickLanguage, translate } from "../i18n/i18n.js";
 import { MAX_WORD_LENGTH, MIN_WORD_LENGTH } from "./highlightStore.js";
+import { sendDm } from "../utils/dms.js";
 
 const ACTIVE_MS = 5 * 60 * 1000;
 const COOLDOWN_MS = 5 * 60 * 1000;
@@ -80,7 +81,7 @@ export function createHighlights({ store, logger, forcedLanguage, now = Date.now
       .setAuthor({ name: message.member?.displayName ?? message.author.username, iconURL: message.author.displayAvatarURL?.() ?? undefined })
       .setDescription(`${message.content.slice(0, 1500)}\n\n[${translate(language, "highlightJump")}](${message.url})`)
       .setTimestamp(message.createdTimestamp ?? now());
-    await member.send({
+    await sendDm(member, {
       content: translate(language, "highlightDm", { word, channel: `<#${message.channelId}>`, server: guild.name }),
       embeds: [embed],
       allowedMentions: { parse: [] },

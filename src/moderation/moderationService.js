@@ -7,6 +7,7 @@ import { escapeMarkdown, time, TimestampStyles } from "discord.js";
 import { pickLanguage, translate } from "../i18n/i18n.js";
 import { CaseAction } from "./caseStore.js";
 import { noModLog } from "./modLog.js";
+import { sendDm } from "../utils/dms.js";
 
 // Discord's longest audit log reason.
 const MAX_AUDIT_REASON = 512;
@@ -67,7 +68,7 @@ export function createModerationService({ store, modLog = noModLog, logger, forc
       lines.push(translate(language, "dmAppeal", { url: appeal }));
     }
     try {
-      await user.send({ content: lines.join("\n").slice(0, 2000), allowedMentions: { parse: [] } });
+      await sendDm(user, { content: lines.join("\n").slice(0, 2000), allowedMentions: { parse: [] } });
       return true;
     } catch (error) {
       logger?.debug("Couldn't DM a member about a moderation action", { userId: user.id, action, error });

@@ -7,6 +7,7 @@
 import { PermissionFlagsBits } from "discord.js";
 import { pickLanguage, translate } from "../i18n/i18n.js";
 import { derivedSetting, Setting } from "../settings/guildSettings.js";
+import { deleteMessage } from "../utils/rateLimits.js";
 
 export const MAX_MEDIA_CHANNELS = 10;
 const NOTE_LIFETIME_MS = 6_000;
@@ -82,7 +83,7 @@ export function createMediaOnly({ guildSettings, logger, forcedLanguage, botDele
       }
       botDeletions?.add(message.id);
       try {
-        await message.delete();
+        await deleteMessage(message);
       } catch (error) {
         logger.debug("Couldn't delete a message in a media-only channel", { guildId: message.guildId, channelId: message.channelId, error });
         return false;

@@ -101,12 +101,13 @@ export function createCommands({
   reports,
   roleConfirmations = createRoleConfirmations({ guildSettings, store: new RoleConfirmStore(), forcedLanguage }),
   dashboardUrl,
+  memberLoader = createMemberLoader(),
 }) {
   // Shared, so /country and /country-staff can't change the same member at the same time.
   const roleService = new CountryRoleService(logger);
   const moderationOptions = { logger, guildSettings, forcedLanguage, moderation };
-  // Shared, so /roleinfo and /massrole load a server's member list only once.
-  const memberLoader = createMemberLoader();
+  // memberLoader is shared, so /roleinfo, /massrole and the stats counters load a
+  // server's member list only once.
   const commands = [
     createCountryCommand({ logger, guildSettings, forcedLanguage, roleService, confirmations: roleConfirmations }),
     createCountryStaffCommand({ logger, guildSettings, forcedLanguage, roleService }),

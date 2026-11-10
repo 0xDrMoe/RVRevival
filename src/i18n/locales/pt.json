@@ -15,6 +15,7 @@
   "createdButNotAssigned": "Criei o cargo {country}, mas não consegui atribuí-lo a você. Entre em contato com um administrador do servidor.",
   "assignFailed": "Não consegui atribuir o cargo {country} a você. Entre em contato com um administrador do servidor.",
   "unexpected": "Algo deu errado. Tente novamente mais tarde.",
+  "slowDown": "Você está indo rápido demais. Tente novamente em {seconds} segundos.",
   "wrongChannel": "Este comando só pode ser usado em {channel}.",
 
   "staffCommandDescription": "Só staff: altere ou remova o cargo de país de um membro.",

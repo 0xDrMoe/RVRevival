@@ -37,6 +37,14 @@ function fakeChannel(id, { everyoneCanSee = true, nsfw = false } = {}) {
         return message;
       }),
       delete: vi.fn(async (messageId) => posted.delete(messageId)),
+      edit: vi.fn(async (messageId, update) => {
+        const message = posted.get(messageId);
+        if (!message) {
+          throw Object.assign(new Error("Unknown Message"), { code: 10008 });
+        }
+        message.payload = update;
+        return message;
+      }),
     },
   };
 }
@@ -143,6 +151,22 @@ describe("starboard", () => {
     expect(board.send).toHaveBeenCalledTimes(1);
     expect(post.payload.content).toContain("**3**");
     expect(store.get(msg.id)).toMatchObject({ starMessageId: post.id, stars: 3 });
+
+    // Same count (a non-counting reaction came and went): the post isn't edited.
+    board.messages.edit.mockClear();
+    await react(msg, [fan(1), fan(2), fan(3)]);
+    expect(board.messages.edit).not.toHaveBeenCalled();
+  });
+
+  it("posts again when its starboard post is gone", async () => {
+    const { message, react, board, store } = setup({ threshold: 1 });
+    const msg = message();
+    await react(msg, [fan(1)]);
+    const [post] = [...board.posted.values()];
+    board.posted.delete(post.id);
+    await react(msg, [fan(1), fan(2)]);
+    expect(board.send).toHaveBeenCalledTimes(2);
+    expect(store.get(msg.id).starMessageId).not.toBe(post.id);
   });
 
   it("doesn't count the author's own star or bots", async () => {

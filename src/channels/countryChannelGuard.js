@@ -12,6 +12,7 @@ import { RESTJSONErrorCodes } from "discord.js";
 import { noActionLog, Status } from "../logs/actionLog.js";
 import { Setting } from "../settings/guildSettings.js";
 import { getDiscordErrorCode, isPermissionError } from "../utils/discordErrors.js";
+import { deleteMessage } from "../utils/rateLimits.js";
 
 // Errors that just mean there's nothing to delete.
 const IGNORED_ERRORS = new Set([
@@ -44,7 +45,7 @@ export function createCountryChannelGuard({ guildSettings, logger, actionLog = n
     const saving = actionLog.saveAttachments(message);
     botDeletions?.add(message.id);
     try {
-      await message.delete();
+      await deleteMessage(message);
     } catch (error) {
       saving.catch(() => {});
       if (IGNORED_ERRORS.has(getDiscordErrorCode(error))) {
