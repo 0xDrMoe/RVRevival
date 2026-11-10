@@ -1292,6 +1292,7 @@ const FEATURE_PARTS = [
             ["The bot's new avatar or name doesn't show", "Discord limits how often it can change. Wait a few minutes and save once more."],
             ["A stats channel name is out of date", "Discord limits renames. It catches up within about 5 minutes."],
             ["No highlight DM", "DMs closed, chatting in that channel, or within 5 minutes of the last one."],
+            ["\"Rabble is thinking…\" for a while", "Discord is making the bot wait (rate limits), usually on big jobs like `/raid lockdown` or `/massrole`. The answer arrives when it's done, with progress on the long ones. Don't run it again."],
             ["\"You're going a bit fast\"", "Each person can use 10 commands or buttons every 10 seconds. Wait a moment and try again."],
             ["You lost dashboard access", "Your dashboard role or admin permission was removed, or you need to log in again."],
           ],

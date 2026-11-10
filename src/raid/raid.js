@@ -128,8 +128,10 @@ export function planLockdown(guild, guildSettings) {
 const denied = Object.fromEntries(LOCKED_PERMISSIONS.map((name) => [name, false]));
 
 // Locks the planned channels. Returns the ones that worked, to save.
-export async function applyLockdown(guild, plan, auditReason) {
+// onProgress(done, total) is called after each channel.
+export async function applyLockdown(guild, plan, auditReason, onProgress = async () => {}) {
   const locked = [];
+  let done = 0;
   for (const entry of plan) {
     const channel = guild.channels.cache.get(entry.id);
     try {
@@ -141,6 +143,8 @@ export async function applyLockdown(guild, plan, auditReason) {
       // Put back what this channel already got, then move on.
       await restoreChannel(channel, entry, auditReason).catch(() => {});
     }
+    done += 1;
+    await onProgress(done, plan.length);
   }
   return locked;
 }
@@ -153,20 +157,21 @@ async function restoreChannel(channel, entry, auditReason) {
 
 // Puts every locked channel back as it was. Returns how many were restored
 // and how many couldn't be (deleted channels are skipped quietly).
-export async function liftLockdown(guild, lockdown, auditReason) {
+export async function liftLockdown(guild, lockdown, auditReason, onProgress = async () => {}) {
   let restored = 0;
   let failed = 0;
-  for (const entry of lockdown.channels ?? []) {
+  const entries = lockdown.channels ?? [];
+  for (const [index, entry] of entries.entries()) {
     const channel = guild.channels.cache.get(entry.id);
-    if (!channel) {
-      continue;
+    if (channel) {
+      try {
+        await restoreChannel(channel, entry, auditReason);
+        restored += 1;
+      } catch {
+        failed += 1;
+      }
     }
-    try {
-      await restoreChannel(channel, entry, auditReason);
-      restored += 1;
-    } catch {
-      failed += 1;
-    }
+    await onProgress(index + 1, entries.length);
   }
   return { restored, failed };
 }

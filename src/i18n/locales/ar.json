@@ -847,6 +847,8 @@
   "raidNothingToLock": "لا يوجد ما يُقفل: لا يستطيع الأعضاء الكتابة في أي قناة الآن.",
   "raidLockdownBotMissingPermission": "لم أستطع قفل أي قناة. أحتاج **إدارة القنوات** و**إدارة الرتب** فيها.",
   "raidLockdownDone": "🔒 القفل مفعّل: تم قفل {count} قناة. أنهِه عبر `/raid end`.",
+  "raidEndProgress": "🔓 جارٍ فتح القنوات… {done} من {total}",
+  "raidLockdownProgress": "🔒 جارٍ قفل القنوات… {done} من {total}",
   "raidLockdownDoneSkipped": "🔒 القفل مفعّل: تم قفل {count} قناة. تم تخطّي {skipped} لأنني لا أستطيع تعديلها. أنهِه عبر `/raid end`.",
   "raidNotLocked": "لا يوجد قفل قيد التشغيل.",
   "raidEndDone": "🔓 انتهى القفل: عادت {count} قناة كما كانت.",

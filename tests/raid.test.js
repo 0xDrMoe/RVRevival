@@ -112,8 +112,14 @@ describe("lockdown", () => {
     expect(plan.channels[1].targets.map((target) => target.id)).toEqual([GUILD_ID, MEMBERS_ROLE]);
     expect(plan.channels[1].targets[1].previous).toEqual({ SendMessages: true, SendMessagesInThreads: null, CreatePublicThreads: null, CreatePrivateThreads: null });
 
-    const done = await applyLockdown(guild, plan.channels, "test");
+    const steps = [];
+    const done = await applyLockdown(guild, plan.channels, "test", async (count, total) => steps.push([count, total]));
     expect(done).toHaveLength(2);
+    // Progress after each channel, for the reply.
+    expect(steps).toEqual([
+      [1, 2],
+      [2, 2],
+    ]);
     expect(chat.permissionOverwrites.cache.get(MEMBERS_ROLE).deny.has(SendMessages)).toBe(true);
     // Its view permission is untouched.
     expect(chat.permissionOverwrites.cache.get(MEMBERS_ROLE).allow.has(ViewChannel)).toBe(true);

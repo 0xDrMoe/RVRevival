@@ -14,6 +14,7 @@ import { noActionLog, result, Status } from "./logs/actionLog.js";
 import { commandVerdict, withGrant } from "./permissions/commandRules.js";
 import { isExpiredInteractionError } from "./utils/discordErrors.js";
 import { errorReference } from "./utils/errorReference.js";
+import { guardAcknowledgement } from "./utils/ackWatchdog.js";
 import { createRateLimiter } from "./utils/rateLimits.js";
 
 export const ACTIONS_PER_WINDOW = 10;
@@ -21,7 +22,8 @@ export const ACTIONS_WINDOW_MS = 10_000;
 
 // `guildSettings` holds each server's command rules (permissions/commandRules.js);
 // without it every command runs as Discord allows.
-export function createInteractionHandler({ commands, logger, forcedLanguage, actionLog = noActionLog, guildSettings, now = Date.now }) {
+// ackOptions: options for guardAcknowledgement (tests).
+export function createInteractionHandler({ commands, logger, forcedLanguage, actionLog = noActionLog, guildSettings, now = Date.now, ackOptions = {} }) {
   const perUser = createRateLimiter({ limit: ACTIONS_PER_WINDOW, windowMs: ACTIONS_WINDOW_MS, now });
 
   // True (after telling them) when this person is going too fast.
@@ -183,10 +185,8 @@ export function createInteractionHandler({ commands, logger, forcedLanguage, act
     }
   }
 
-  return async function handleInteraction(interaction) {
-    if (interaction.isAutocomplete()) {
-      await handleAutocomplete(interaction);
-    } else if (interaction.isChatInputCommand()) {
+  async function dispatch(interaction) {
+    if (interaction.isChatInputCommand()) {
       if (!(await tooFast(interaction))) {
         await handleCommand(interaction);
       }
@@ -201,6 +201,20 @@ export function createInteractionHandler({ commands, logger, forcedLanguage, act
       if (!(await tooFast(interaction))) {
         await handleComponent(interaction);
       }
+    }
+  }
+
+  return async function handleInteraction(interaction) {
+    if (interaction.isAutocomplete()) {
+      await handleAutocomplete(interaction);
+      return;
+    }
+    // Work that waits on Discord's rate limits can't make the interaction fail.
+    const stop = guardAcknowledgement(interaction, { logger, ...ackOptions });
+    try {
+      await dispatch(interaction);
+    } finally {
+      stop();
     }
   };
 }
