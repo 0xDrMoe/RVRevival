@@ -15,6 +15,7 @@
   "createdButNotAssigned": "Ich habe die Rolle {country} erstellt, konnte sie dir aber nicht zuweisen. Bitte wende dich an einen Server-Admin.",
   "assignFailed": "Ich konnte dir die Rolle {country} nicht zuweisen. Bitte wende dich an einen Server-Admin.",
   "unexpected": "Etwas ist schiefgelaufen. Bitte versuche es später erneut.",
+  "slowDown": "Du bist etwas zu schnell. Versuche es in {seconds} Sekunden erneut.",
   "wrongChannel": "Dieser Befehl kann nur in {channel} verwendet werden.",
 
   "staffCommandDescription": "Nur Team: Länderrolle eines Mitglieds ändern oder entfernen.",

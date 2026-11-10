@@ -15,6 +15,7 @@
   "createdButNotAssigned": "Creé el rol {country}, pero no pude asignártelo. Contacta con un administrador del servidor.",
   "assignFailed": "No pude asignarte el rol {country}. Contacta con un administrador del servidor.",
   "unexpected": "Algo salió mal. Inténtalo de nuevo más tarde.",
+  "slowDown": "Vas un poco rápido. Inténtalo de nuevo en {seconds} segundos.",
   "wrongChannel": "Este comando solo se puede usar en {channel}.",
 
   "staffCommandDescription": "Solo staff: cambia o quita el rol de país de un miembro.",

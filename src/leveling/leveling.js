@@ -16,6 +16,8 @@ import {
   multiplierFor,
   normalizeLeveling,
 } from "./config.js";
+import { sendDm } from "../utils/dms.js";
+import { createBatchSender } from "../utils/rateLimits.js";
 
 const ANNOUNCE_PERMISSIONS = [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages];
 const VOICE_TICK_MS = 60 * 1000;
@@ -42,6 +44,7 @@ export function rewardRolesFor(config, level) {
 // Options: guildSettings, store (LevelStore), logger, forcedLanguage, random(max), now
 export function createLeveling({ guildSettings, store, logger, forcedLanguage, random = randomInt, now = Date.now }) {
   const configFor = (guildId) => normalizeLeveling(guildSettings.get(guildId, Setting.LEVELING));
+  const announcer = createBatchSender();
   // The same, shared and kept until the settings change: for every message and voice minute.
   const liveConfigFor = (guildId) => derivedSetting(guildSettings, guildId, Setting.LEVELING, normalizeLeveling);
 
@@ -105,7 +108,7 @@ export function createLeveling({ guildSettings, store, logger, forcedLanguage, r
     const language = pickLanguage(guild.preferredLocale, forcedLanguage);
     const text = fillLevelMessage(config.message ?? translate(language, "levelUpDefault"), { member, level, guild });
     if (config.announce === Announce.DM) {
-      await member.send({ content: text, allowedMentions: { parse: [] } }).catch(() => {});
+      await sendDm(member, { content: text, allowedMentions: { parse: [] } }).catch(() => {});
       return;
     }
     const channel = config.announce === Announce.CHANNEL ? guild.channels.cache.get(config.announceChannelId) : here;
@@ -113,8 +116,9 @@ export function createLeveling({ guildSettings, store, logger, forcedLanguage, r
     if (!channel?.isTextBased?.() || !me || !channel.permissionsFor(me)?.has(ANNOUNCE_PERMISSIONS)) {
       return;
     }
-    await channel
-      .send({ content: text, allowedMentions: { users: [member.id] } })
+    // Level-ups that pile up while one is being posted go out together.
+    await announcer
+      .send(channel, { content: text, allowedMentions: { users: [member.id] } })
       .catch((error) => logger.debug("Couldn't announce a level-up", { guildId: guild.id, error }));
   }
 

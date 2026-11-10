@@ -14,6 +14,7 @@ import { pickLanguage, translate } from "../i18n/i18n.js";
 import { buildActionLogEmbed, noModLog } from "../moderation/modLog.js";
 import { Setting } from "../settings/guildSettings.js";
 import { LogRoute } from "../logs/logRoutes.js";
+import { sendDm } from "../utils/dms.js";
 
 export const NukeAction = Object.freeze({
   CHANNEL_DELETE: "channelDelete",
@@ -185,7 +186,7 @@ export function createAntiNuke({ guildSettings, moderation, quarantine, modLog =
     try {
       const owner = await guild.fetchOwner();
       const language = pickLanguage(guild.preferredLocale, forcedLanguage);
-      await owner.send({ content: translate(language, "antinukeOwnerDm", values(language)), allowedMentions: { parse: [] } });
+      await sendDm(owner, { content: translate(language, "antinukeOwnerDm", values(language)), allowedMentions: { parse: [] } });
     } catch {
       // Closed DMs; the mod log still has it.
     }

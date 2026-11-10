@@ -1,6 +1,12 @@
 // Sends each Discord interaction to the right command (or button, form or menu),
 // makes sure the user always gets an answer, even if it crashes, and records
 // every use in the server's logs channel.
+//
+// Each person gets at most ACTIONS_PER_WINDOW commands, buttons and menus per
+// ACTIONS_WINDOW_MS; past that they're asked to slow down and nothing runs.
+// Someone mashing a role button or a command can't make the bot flood Discord
+// with requests on their behalf. Forms (modals) aren't counted: they follow a
+// button that already was.
 
 import { MessageFlags } from "discord.js";
 import { pickLanguage, translate } from "./i18n/i18n.js";
@@ -8,10 +14,28 @@ import { noActionLog, result, Status } from "./logs/actionLog.js";
 import { commandVerdict, withGrant } from "./permissions/commandRules.js";
 import { isExpiredInteractionError } from "./utils/discordErrors.js";
 import { errorReference } from "./utils/errorReference.js";
+import { createRateLimiter } from "./utils/rateLimits.js";
+
+export const ACTIONS_PER_WINDOW = 10;
+export const ACTIONS_WINDOW_MS = 10_000;
 
 // `guildSettings` holds each server's command rules (permissions/commandRules.js);
 // without it every command runs as Discord allows.
-export function createInteractionHandler({ commands, logger, forcedLanguage, actionLog = noActionLog, guildSettings }) {
+export function createInteractionHandler({ commands, logger, forcedLanguage, actionLog = noActionLog, guildSettings, now = Date.now }) {
+  const perUser = createRateLimiter({ limit: ACTIONS_PER_WINDOW, windowMs: ACTIONS_WINDOW_MS, now });
+
+  // True (after telling them) when this person is going too fast.
+  async function tooFast(interaction) {
+    if (perUser.take(interaction.user.id)) {
+      return false;
+    }
+    const language = pickLanguage(interaction.locale, forcedLanguage);
+    const seconds = Math.max(1, Math.ceil(perUser.waitTime(interaction.user.id) / 1000));
+    await interaction
+      .reply({ content: translate(language, "slowDown", { seconds }), flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] } })
+      .catch(() => {});
+    return true;
+  }
   // Buttons, forms and menus by custom ID, collected from every command.
   const components = new Map(
     [...commands.values()].flatMap((command) => Object.entries(command.components ?? {})),
@@ -163,12 +187,20 @@ export function createInteractionHandler({ commands, logger, forcedLanguage, act
     if (interaction.isAutocomplete()) {
       await handleAutocomplete(interaction);
     } else if (interaction.isChatInputCommand()) {
-      await handleCommand(interaction);
+      if (!(await tooFast(interaction))) {
+        await handleCommand(interaction);
+      }
     } else if (interaction.isContextMenuCommand?.()) {
       // Right-click apps (commands/contextMenus.js) go through the same checks.
-      await handleCommand(interaction);
-    } else if (interaction.isButton() || interaction.isModalSubmit() || interaction.isAnySelectMenu()) {
+      if (!(await tooFast(interaction))) {
+        await handleCommand(interaction);
+      }
+    } else if (interaction.isModalSubmit?.()) {
       await handleComponent(interaction);
+    } else if (interaction.isButton() || interaction.isAnySelectMenu()) {
+      if (!(await tooFast(interaction))) {
+        await handleComponent(interaction);
+      }
     }
   };
 }

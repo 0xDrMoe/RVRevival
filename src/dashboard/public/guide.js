@@ -606,7 +606,10 @@ const FEATURE_PARTS = [
           ["/welcome show", "Shows the setup."],
         ],
         example: ["/welcome channel channel:#welcome", "/welcome message text:Welcome {user} to {server}! You're member #{members}."],
-        tips: ["Messages can use `{user}` (a mention), `{username}`, `{server}` and `{members}` (see **Message variables**). Type `\\n` for a new line. Only `{user}` pings anyone."],
+        tips: [
+          "Messages can use `{user}` (a mention), `{username}`, `{server}` and `{members}` (see **Message variables**). Type `\\n` for a new line. Only `{user}` pings anyone.",
+          "When lots of people join at once, their welcome messages are combined into fewer posts, and only the first 10 a minute get the welcome DM (Discord treats mass DMs as spam).",
+        ],
       },
       {
         id: "roles",
@@ -788,7 +791,11 @@ const FEATURE_PARTS = [
           ["/stats list", "Shows them."],
         ],
         example: ["/stats add counter:Members name:👥 Members: {members}"],
-        tips: ["Up to 5. Discord only allows two renames every 10 minutes, so names catch up within about 5 minutes.", "Deleting the channel in Discord removes the counter too."],
+        tips: [
+          "Up to 5. Discord only allows two renames every 10 minutes, so names catch up within about 5 minutes, and only change when the number does.",
+          "If a counter's channel can't be made, the bot tries again after a growing pause (up to an hour). The Server stats page shows why.",
+          "Deleting the channel in Discord removes the counter too.",
+        ],
       },
       {
         id: "voice",
@@ -808,6 +815,7 @@ const FEATURE_PARTS = [
         tips: [
           "Owners can rename, change the limit and disconnect people with Discord's own channel menu.",
           "The bot needs Manage Channels, Move Members and Connect in that category. Up to 50 channels per server.",
+          "Each member gets up to 3 new channels a minute. Hopping in and out of the hub faster than that leaves them in the hub for a moment.",
         ],
       },
       {
@@ -1284,6 +1292,7 @@ const FEATURE_PARTS = [
             ["The bot's new avatar or name doesn't show", "Discord limits how often it can change. Wait a few minutes and save once more."],
             ["A stats channel name is out of date", "Discord limits renames. It catches up within about 5 minutes."],
             ["No highlight DM", "DMs closed, chatting in that channel, or within 5 minutes of the last one."],
+            ["\"You're going a bit fast\"", "Each person can use 10 commands or buttons every 10 seconds. Wait a moment and try again."],
             ["You lost dashboard access", "Your dashboard role or admin permission was removed, or you need to log in again."],
           ],
         },

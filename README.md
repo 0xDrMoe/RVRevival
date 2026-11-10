@@ -929,6 +929,16 @@ Set `LOG_LEVEL=debug` for more detail.
 
 - **Run one instance.** Some safeguards (like the duplicate-role guard) are in memory, so two instances could race.
 - **Settings and moderation cases** are stored in `data/bot.db` (plus `bot.db-wal` and `bot.db-shm` while running). Back up the whole `data/` folder, and keep it when moving or updating the bot; to copy the database safely while the bot runs, use `sqlite3 data/bot.db ".backup backup.db"`.
+- **Discord rate limits.** discord.js waits out every limit Discord reports, and on top of that the bot avoids asking more than it needs (`src/utils/rateLimits.js`, `src/utils/dms.js`):
+  - stats channels are renamed only when the count changed and at most every 5 minutes; if Discord still says to wait, the bot retries after Discord's wait instead of holding up the channel. A counter whose channel can't be made is retried after 1, 2, 4… minutes (up to an hour), and not at all without Manage Channels;
+  - join-to-create makes at most 3 channels a minute per member and 5 every 10 seconds per server;
+  - starboard posts are edited once per burst of reactions, and only when the count changed;
+  - welcome, leave and level-up messages that pile up while one is posting go out together; welcome DMs stop at 10 a minute per server;
+  - every DM is paced (5 a second bot-wide) and people with closed DMs aren't tried again for 6 hours;
+  - deletes by automod, media-only channels and the country channel that pile up go out as one bulk delete;
+  - feeds, scheduled messages and welcome messages check the bot's permissions first, since refused requests count toward Discord's 10,000-per-10-minutes block; a warning is logged every 500 refused requests;
+  - each person can use 10 commands, buttons or menus every 10 seconds;
+  - the bot process uses up to 40 requests a second and the dashboard 10, sharing Discord's 50; the dashboard's server-list Refresh asks Discord at most every 15 seconds.
 - **Upgrading from older versions.** Settings saved in `data/settings.json` (or the even older `data/country-channels.json`) are copied into the database the first time the new version starts, and `settings.json` is renamed to `settings.json.migrated` as a backup. The database is upgraded in place; existing cases are kept.
 
 ## Security

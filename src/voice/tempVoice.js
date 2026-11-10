@@ -5,16 +5,24 @@
 // The owner gets Manage Channels and Move Members on their channel, so they
 // rename it, set a user limit or disconnect people with Discord's own menus;
 // /voice adds lock, unlock and claim (see commands/voice.js).
+//
+// Rate limits: each new channel costs Discord several requests, so a member
+// gets at most CREATES_PER_MEMBER channels per minute (hopping in and out of
+// the hub after that leaves them in the hub), and a server at most
+// CREATES_PER_SERVER per 10 seconds (the rest wait their turn).
 
 import { ChannelType, PermissionFlagsBits } from "discord.js";
 import { fillVariables } from "../dashboard/public/variables.js";
 import { Setting } from "../settings/guildSettings.js";
 import { KeyedLock } from "../utils/keyedLock.js";
+import { createRateLimiter } from "../utils/rateLimits.js";
 
 export const MAX_TEMP_CHANNELS = 50;
 export const MAX_NAME_TEMPLATE_LENGTH = 80;
 export const MAX_USER_LIMIT = 99;
 export const DEFAULT_NAME_TEMPLATE = "🔊 {username}";
+export const CREATES_PER_MEMBER = 3;
+export const CREATES_PER_SERVER = 5;
 
 // What the owner may do in their own channel.
 export const OWNER_PERMISSIONS = { ViewChannel: true, Connect: true, Speak: true, ManageChannels: true, MoveMembers: true };
@@ -44,6 +52,8 @@ export function channelName(template, member) {
 export function createTempVoice({ guildSettings, store, logger, now = Date.now }) {
   // One create at a time per member, so a quick re-join can't make two channels.
   const lock = new KeyedLock();
+  const memberCreates = createRateLimiter({ limit: CREATES_PER_MEMBER, windowMs: 60_000, now });
+  const serverCreates = createRateLimiter({ limit: CREATES_PER_SERVER, windowMs: 10_000, now });
 
   async function deleteIfEmpty(channel) {
     if (channel.members.size > 0) {
@@ -71,6 +81,16 @@ export function createTempVoice({ guildSettings, store, logger, now = Date.now }
     }
     if (store.count(guild.id) >= MAX_TEMP_CHANNELS) {
       logger.warn("Too many join-to-create channels; not making another", { guildId: guild.id });
+      return;
+    }
+    if (!memberCreates.take(`${guild.id}:${member.id}`)) {
+      logger.debug("Not making another join-to-create channel; this member made several in the last minute", { guildId: guild.id });
+      return;
+    }
+    const waited = serverCreates.waitTime(guild.id) > 0;
+    await serverCreates.acquire(guild.id);
+    // They may have left the hub while waiting.
+    if (waited && member.voice?.channelId !== settings.hubChannelId) {
       return;
     }
     const hub = guild.channels.cache.get(settings.hubChannelId);

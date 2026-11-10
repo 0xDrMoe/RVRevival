@@ -7,6 +7,7 @@
 // can't post there any more, it falls back to a DM.
 
 import { pickLanguage, translate } from "../i18n/i18n.js";
+import { sendDm as sendUserDm } from "../utils/dms.js";
 
 // Options:
 //   client, store (ReminderStore), logger
@@ -17,7 +18,7 @@ export function createReminderScheduler({ client, store, logger, forcedLanguage,
 
   async function sendDm(reminder, content) {
     const user = await client.users.fetch(reminder.userId);
-    await user.send({ content, allowedMentions: { parse: [] } });
+    await sendUserDm(user, { content, allowedMentions: { parse: [] } });
   }
 
   async function deliver(reminder) {

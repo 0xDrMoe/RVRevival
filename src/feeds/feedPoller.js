@@ -9,6 +9,7 @@
 import { pickLanguage } from "../i18n/i18n.js";
 import { PENDING_FIRST_READ } from "./feedStore.js";
 import { buildFeedPost, readFeed } from "./feeds.js";
+import { canPost, CANT_POST } from "../utils/rateLimits.js";
 
 export const CHECK_EVERY_MS = 10 * 60 * 1000;
 export const LIVE_CHECK_EVERY_MS = 3 * 60 * 1000;
@@ -68,6 +69,10 @@ export function createFeedPoller({ client, store, logger, forcedLanguage, fetchF
     try {
       if (!channel?.isTextBased?.()) {
         throw new Error("The feed's channel is gone.");
+      }
+      // Asking anyway would only be refused, which Discord counts against the bot.
+      if (!canPost(channel)) {
+        throw new Error(CANT_POST);
       }
       for (const item of toPost) {
         await channel.send(buildFeedPost(feed, item, language));

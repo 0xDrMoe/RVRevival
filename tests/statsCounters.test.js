@@ -116,8 +116,75 @@ describe("stats updater", () => {
     const guildSettings = new GuildSettings();
     await guildSettings.set(GUILD_ID, Setting.STATS_COUNTERS, [counter({ channelId: "800000000000000555" }), counter({ id: "bbbbbbbb" })]);
     const updater = createStatsUpdater({ guildSettings, logger: fakeLogger() });
-    await updater.refresh(fakeGuild({ canManage: false }));
-    expect(guildSettings.get(GUILD_ID, Setting.STATS_COUNTERS)).toEqual([counter({ id: "bbbbbbbb", error: "Couldn't create the channel: Missing Permissions" })]);
+    const guild = fakeGuild({ canManage: false });
+    await updater.refresh(guild);
+    expect(guildSettings.get(GUILD_ID, Setting.STATS_COUNTERS)).toEqual([counter({ id: "bbbbbbbb", error: "Couldn't create the channel: the bot needs Manage Channels." })]);
+    // Without the permission Discord isn't asked (it would only refuse).
+    expect(guild.channels.create).not.toHaveBeenCalled();
+  });
+
+  it("waits longer and longer between tries at a channel that can't be made", async () => {
+    let time = 1_000_000;
+    const guildSettings = new GuildSettings();
+    await guildSettings.set(GUILD_ID, Setting.STATS_COUNTERS, [counter()]);
+    const guild = fakeGuild();
+    guild.channels.create.mockRejectedValue(new Error("Maximum number of channels reached"));
+    const updater = createStatsUpdater({ guildSettings, logger: fakeLogger(), now: () => time });
+
+    await updater.refresh(guild);
+    expect(guildSettings.get(GUILD_ID, Setting.STATS_COUNTERS)[0].error).toBe("Couldn't create the channel: Maximum number of channels reached");
+    time += 30_000;
+    await updater.refresh(guild);
+    expect(guild.channels.create).toHaveBeenCalledTimes(1);
+    time += 30_000;
+    await updater.refresh(guild);
+    expect(guild.channels.create).toHaveBeenCalledTimes(2);
+    // Now two minutes.
+    time += MINUTE;
+    await updater.refresh(guild);
+    expect(guild.channels.create).toHaveBeenCalledTimes(2);
+    time += MINUTE;
+    await updater.refresh(guild);
+    expect(guild.channels.create).toHaveBeenCalledTimes(3);
+  });
+
+  it("doesn't wait in Discord's queue when a rename is rate-limited, and tries again after", async () => {
+    let time = 1_000_000;
+    const guildSettings = new GuildSettings();
+    await guildSettings.set(GUILD_ID, Setting.STATS_COUNTERS, [counter()]);
+    const guild = fakeGuild({ memberCount: 100 });
+    const logger = fakeLogger();
+    const updater = createStatsUpdater({ guildSettings, logger, now: () => time });
+    await updater.refresh(guild);
+    const channel = guild.channels.cache.get(guildSettings.get(GUILD_ID, Setting.STATS_COUNTERS)[0].channelId);
+
+    const limited = Object.assign(new Error("Rate limited"), { name: "RateLimitError", sublimitTimeout: 8 * MINUTE, retryAfter: 8 * MINUTE, timeToReset: 0 });
+    channel.setName.mockRejectedValueOnce(limited);
+    guild.memberCount = 101;
+    time += RENAME_EVERY_MS;
+    await updater.refresh(guild);
+    expect(channel.setName).toHaveBeenCalledTimes(1);
+    // Not shown as a problem on the dashboard.
+    expect(guildSettings.get(GUILD_ID, Setting.STATS_COUNTERS)[0].error).toBeNull();
+
+    time += 5 * MINUTE;
+    await updater.refresh(guild);
+    expect(channel.setName).toHaveBeenCalledTimes(1);
+    time += 3 * MINUTE;
+    await updater.refresh(guild);
+    expect(channel.setName).toHaveBeenCalledTimes(2);
+    expect(channel.name).toBe("👥 Members: 101");
+  });
+
+  it("asks for the member list through the shared loader", async () => {
+    const guildSettings = new GuildSettings();
+    await guildSettings.set(GUILD_ID, Setting.STATS_COUNTERS, [counter({ template: "Humans: {humans}" })]);
+    const guild = fakeGuild({ memberCount: 50 });
+    const memberLoader = { loadAll: vi.fn(async () => true) };
+    const updater = createStatsUpdater({ guildSettings, logger: fakeLogger(), memberLoader });
+    await updater.refresh(guild);
+    expect(memberLoader.loadAll).toHaveBeenCalledWith(guild, expect.any(Object));
+    expect(guild.members.fetch).not.toHaveBeenCalled();
   });
 
   it("fetches members to count bots, but not too often", async () => {

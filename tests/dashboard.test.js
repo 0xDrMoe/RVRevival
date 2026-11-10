@@ -398,6 +398,11 @@ describe("dashboard", () => {
     await app.inject({ method: "GET", url: "/api/me", cookies });
     await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}`, cookies });
     expect(discord.fetchUserGuilds).toHaveBeenCalledTimes(1);
+    // A refresh right away reuses the list (Discord allows few of these).
+    await app.inject({ method: "GET", url: "/api/me?refresh=1", cookies });
+    expect(discord.fetchUserGuilds).toHaveBeenCalledTimes(1);
+    const later = Date.now() + 20_000;
+    vi.spyOn(Date, "now").mockReturnValue(later);
     await app.inject({ method: "GET", url: "/api/me?refresh=1", cookies });
     expect(discord.fetchUserGuilds).toHaveBeenCalledTimes(2);
   });

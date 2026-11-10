@@ -5,5 +5,6 @@ export default defineConfig({
     include: ["tests/**/*.test.js"],
     environment: "node",
     restoreMocks: true,
+    setupFiles: ["tests/helpers/setup.js"],
   },
 });

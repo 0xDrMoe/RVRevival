@@ -111,6 +111,32 @@ describe("welcomer", () => {
     expect(member.roles.add).toHaveBeenCalledWith([MEMBER_ROLE_ID], "Autorole");
   });
 
+  it("stops welcome DMs when too many people join at once, but still welcomes them", async () => {
+    const guild = fakeGuild();
+    const guildSettings = await settingsWith({ [Setting.WELCOME_CHANNEL]: WELCOME_CHANNEL_ID, [Setting.WELCOME_DM]: "Hi" });
+    const welcomer = createWelcomer({ guildSettings, logger: fakeLogger(), now: () => 1000 });
+    const members = Array.from({ length: 15 }, () => fakeMember(guild));
+    await Promise.all(members.map((member) => welcomer.memberJoined(member)));
+    expect(members.filter((member) => member.send.mock.calls.length > 0)).toHaveLength(10);
+    // The welcomes that piled up went out together.
+    const channel = guild.channels.cache.get(WELCOME_CHANNEL_ID);
+    expect(channel.send.mock.calls.length).toBeLessThan(15);
+    expect(channel.send.mock.calls.map(([payload]) => payload.content.split("\n").length).reduce((sum, count) => sum + count, 0)).toBe(15);
+  });
+
+  it("doesn't try to post where the bot can't", async () => {
+    const guild = fakeGuild();
+    const channel = guild.channels.cache.get(WELCOME_CHANNEL_ID);
+    guild.members.me.id = "bot";
+    channel.guild = guild;
+    channel.permissionsFor = () => ({ has: () => false });
+    const logger = fakeLogger();
+    const guildSettings = await settingsWith({ [Setting.WELCOME_CHANNEL]: WELCOME_CHANNEL_ID });
+    await createWelcomer({ guildSettings, logger }).memberJoined(fakeMember(guild));
+    expect(channel.send).not.toHaveBeenCalled();
+    expect(logger.warn).toHaveBeenCalledTimes(1);
+  });
+
   it("does nothing for bots", async () => {
     const guild = fakeGuild();
     const guildSettings = await settingsWith({ [Setting.WELCOME_CHANNEL]: WELCOME_CHANNEL_ID, [Setting.AUTOROLES]: [MEMBER_ROLE_ID] });

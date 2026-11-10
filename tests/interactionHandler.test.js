@@ -249,4 +249,24 @@ describe("interaction handler", () => {
       expect(interaction.reply).toHaveBeenCalledWith({ content: errorMessage, flags: MessageFlags.Ephemeral });
     });
   });
+
+  it("asks someone going too fast to slow down instead of running the command", async () => {
+    let time = 0;
+    const execute = vi.fn(async () => {});
+    const handler = handlerFor({ execute }, { now: () => time });
+    for (let index = 0; index < 10; index += 1) {
+      await handler(fakeCommandInteraction("country"));
+    }
+    const eleventh = fakeCommandInteraction("country");
+    await handler(eleventh);
+    expect(execute).toHaveBeenCalledTimes(10);
+    expect(eleventh.reply).toHaveBeenCalledWith({
+      content: translate("en", "slowDown", { seconds: 10 }),
+      flags: MessageFlags.Ephemeral,
+      allowedMentions: { parse: [] },
+    });
+    time += 10_000;
+    await handler(fakeCommandInteraction("country"));
+    expect(execute).toHaveBeenCalledTimes(11);
+  });
 });

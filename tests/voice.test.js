@@ -150,6 +150,20 @@ describe("join-to-create", () => {
     expect(store.get(channel.id)).toBeUndefined();
   });
 
+  it("makes at most three channels a minute for one member hopping in and out of the hub", async () => {
+    const { guild, move } = setup();
+    const owner = fakeMember(guild, OWNER_ID);
+    const hub = guild.channels.cache.get(HUB_ID);
+    for (let hop = 0; hop < 5; hop += 1) {
+      await move(owner, hub);
+      await move(owner, null);
+    }
+    expect(guild.channels.create).toHaveBeenCalledTimes(3);
+    // Someone else still gets one.
+    await move(fakeMember(guild, OTHER_ID), hub);
+    expect(guild.channels.create).toHaveBeenCalledTimes(4);
+  });
+
   it("moves someone who already has a channel back into it instead of making another", async () => {
     const { guild, move } = setup();
     const owner = fakeMember(guild, OWNER_ID);

@@ -14,7 +14,9 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, PermissionFlagsBits } from "discord.js";
 import { pickLanguage, translate } from "../i18n/i18n.js";
 import { Setting } from "../settings/guildSettings.js";
-import { KeyedLock } from "../utils/keyedLock.js";
+import { RESTJSONErrorCodes } from "discord.js";
+import { getDiscordErrorCode } from "../utils/discordErrors.js";
+import { LatestOnly } from "../utils/rateLimits.js";
 import { cleanEmoji } from "./rolePanels.js";
 
 export const DEFAULT_THRESHOLD = 3;
@@ -109,7 +111,9 @@ export function buildStarboardPost(message, { stars, emoji, language }) {
 //   botDeletions   starboard posts the bot deletes itself, so the server log skips them (RecentIds)
 export function createStarboard({ guildSettings, store, logger, forcedLanguage, botDeletions }) {
   // One update at a time per message, so quick reactions can't post it twice.
-  const locks = new KeyedLock();
+  // Reactions that come in meanwhile collapse into one more update, which
+  // reads the count when it runs: 30 quick stars cost two edits, not 30.
+  const locks = new LatestOnly();
 
   // Stars from members other than the author.
   async function countStars(reaction, message) {
@@ -165,11 +169,25 @@ export function createStarboard({ guildSettings, store, logger, forcedLanguage, 
       }
       const language = pickLanguage(guild.preferredLocale, forcedLanguage);
       const payload = buildStarboardPost(message, { stars, emoji: config.emoji, language });
-      const existing = post?.starMessageId && (await board.messages.fetch(post.starMessageId).catch(() => undefined));
       let starMessageId = post?.starMessageId;
-      if (existing) {
-        await existing.edit(payload);
-      } else {
+      // Same count as the post shows: nothing to change.
+      if (starMessageId && post.stars === stars) {
+        return;
+      }
+      let edited = false;
+      if (starMessageId) {
+        edited = await board.messages.edit(starMessageId, payload).then(
+          () => true,
+          (error) => {
+            // The post was deleted: post it again. Anything else is a real failure.
+            if (getDiscordErrorCode(error) === RESTJSONErrorCodes.UnknownMessage) {
+              return false;
+            }
+            throw error;
+          },
+        );
+      }
+      if (!edited) {
         starMessageId = (await board.send(payload)).id;
       }
       store.save({ messageId: message.id, guildId: guild.id, channelId: message.channelId, starMessageId, stars });

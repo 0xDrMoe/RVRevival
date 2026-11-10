@@ -29,6 +29,7 @@ import { createLivePoller } from "./feeds/livePoller.js";
 import { BotStatsStore, HEARTBEAT_MS } from "./stats/botStats.js";
 import { commandUsageName, CommandUsageStore } from "./stats/commandUsage.js";
 import { createStatsUpdater } from "./stats/statsUpdater.js";
+import { createMemberLoader } from "./guilds/memberCache.js";
 import { createAfk } from "./afk/afk.js";
 import { AfkStore } from "./afk/afkStore.js";
 import { createStickies } from "./sticky/stickies.js";
@@ -67,6 +68,7 @@ import { TicketStore } from "./tickets/ticketStore.js";
 import { createTicketLog } from "./tickets/ticketLog.js";
 import { closeDatabase, DEFAULT_DATABASE_FILE, openDatabase, optimizeDatabase } from "./storage/database.js";
 import { logger, registerSecret } from "./utils/logger.js";
+import { isRenameLimited } from "./utils/rateLimits.js";
 import { withoutChannel } from "./logs/logRoutes.js";
 
 // Log unexpected errors instead of letting them silently kill the bot.
@@ -120,6 +122,18 @@ const MESSAGE_CACHE_HOURS = 12;
 const SWEEPERS = {
   ...Options.DefaultSweeperSettings,
   messages: { interval: 60 * 60, lifetime: MESSAGE_CACHE_HOURS * 60 * 60 },
+};
+
+// Discord's REST rate limits (utils/rateLimits.js has the tools for the rest).
+// - Channel name and topic changes (twice per 10 minutes) fail at once instead
+//   of holding every other change to that channel for minutes.
+// - The dashboard is a second process with the same bot token and Discord's
+//   50 requests a second are shared, so the bot keeps 40 and leaves it 10.
+// - discord.js warns every 500 refused requests (Discord blocks the bot at 10,000 in 10 minutes).
+const REST_OPTIONS = {
+  rejectOnRateLimit: isRenameLimited,
+  globalRequestsPerSecond: 40,
+  invalidRequestWarningInterval: 500,
 };
 
 async function start() {
@@ -224,7 +238,9 @@ async function start() {
   const feeds = new FeedStore(db);
   const live = createLiveApis(config.live);
   // Server stats channels (/stats): voice channels named after live counts.
-  const statsUpdater = createStatsUpdater({ guildSettings, logger });
+  // Loads a server's whole member list at most once at a time (Discord limits how often it's asked).
+  const memberLoader = createMemberLoader();
+  const statsUpdater = createStatsUpdater({ guildSettings, logger, memberLoader });
   // Members who are away (/afk).
   const afk = createAfk({ store: new AfkStore(db), logger, forcedLanguage });
   // Sticky messages (/sticky), kept at the bottom of their channel.
@@ -295,6 +311,7 @@ async function start() {
     sentMessages: new SentMessageStore(db),
     reports: new ReportStore(db),
     dashboardUrl: config.dashboardUrl,
+    memberLoader,
   });
   const handleInteraction = createInteractionHandler({ commands, logger, forcedLanguage, actionLog, guildSettings });
   const guardCountryChannel = createCountryChannelGuard({ guildSettings, logger, actionLog, botDeletions });
@@ -347,7 +364,7 @@ async function start() {
   let livePoller;
 
   function connect(intents) {
-    client = new Client({ intents, partials: PARTIALS, sweepers: SWEEPERS });
+    client = new Client({ intents, partials: PARTIALS, sweepers: SWEEPERS, rest: REST_OPTIONS });
     const readsContent = intents.includes(GatewayIntentBits.MessageContent);
     const seesMembers = intents.includes(GatewayIntentBits.GuildMembers);
 
@@ -585,11 +602,22 @@ async function start() {
     client.on(Events.Error, (error) => logger.error("Discord client error", { error }));
     client.on(Events.Warn, (message) => logger.warn("Discord client warning", { message }));
 
-    // discord.js waits and retries automatically when Discord rate-limits us.
+    // discord.js waits and retries automatically when Discord rate-limits us
+    // (except channel renames; see REST_OPTIONS).
     client.rest.on("rateLimited", (info) => {
-      logger.warn("Rate limited by Discord; retrying automatically", {
+      logger.warn("Rate limited by Discord", {
         route: info.route,
+        method: info.method,
         retryAfterMs: info.retryAfter,
+        global: info.global,
+      });
+    });
+    // Discord blocks a bot for an hour after 10,000 refused or rate-limited
+    // requests in 10 minutes. This warns long before that.
+    client.rest.on("invalidRequestWarning", (info) => {
+      logger.warn("Many refused requests to Discord in the last 10 minutes; check the bot's permissions", {
+        count: info.count,
+        resetsInMs: info.remainingTime,
       });
     });
 

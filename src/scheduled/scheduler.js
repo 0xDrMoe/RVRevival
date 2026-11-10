@@ -8,6 +8,7 @@
 // another reason (missing permissions) keeps its schedule.
 
 import { getDiscordErrorCode } from "../utils/discordErrors.js";
+import { canPost } from "../utils/rateLimits.js";
 
 export const MIN_INTERVAL_MS = 60 * 60 * 1000;
 export const MAX_INTERVAL_MS = 365 * 24 * 60 * 60 * 1000;
@@ -41,6 +42,11 @@ export function createScheduledMessageScheduler({ client, store, logger, interva
     if (!channel?.isTextBased?.()) {
       store.delete(scheduled.id);
       logger.info("Deleted a scheduled message whose channel is gone", { guildId: guild.id, id: scheduled.id });
+      return;
+    }
+    // Asking anyway would only be refused, which Discord counts against the bot.
+    if (!canPost(channel)) {
+      logger.warn("Couldn't post a scheduled message; check the bot's permissions in that channel", { guildId: guild.id, channelId: channel.id, id: scheduled.id });
       return;
     }
     try {
