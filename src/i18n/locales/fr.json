@@ -847,6 +847,8 @@
   "raidNothingToLock": "Rien à verrouiller : les membres ne peuvent écrire dans aucun salon en ce moment.",
   "raidLockdownBotMissingPermission": "Je n'ai pu verrouiller aucun salon. J'ai besoin de **Gérer les salons** et **Gérer les rôles** dedans.",
   "raidLockdownDone": "🔒 Verrouillage actif : {count} salons verrouillés. Terminez-le avec `/raid end`.",
+  "raidEndProgress": "🔓 Déverrouillage des salons… {done} sur {total}",
+  "raidLockdownProgress": "🔒 Verrouillage des salons… {done} sur {total}",
   "raidLockdownDoneSkipped": "🔒 Verrouillage actif : {count} salons verrouillés. {skipped} ignorés car je ne peux pas les modifier. Terminez-le avec `/raid end`.",
   "raidNotLocked": "Aucun verrouillage en cours.",
   "raidEndDone": "🔓 Verrouillage terminé : {count} salons sont revenus comme avant.",

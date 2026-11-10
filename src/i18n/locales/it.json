@@ -847,6 +847,8 @@
   "raidNothingToLock": "Niente da bloccare: ora i membri non possono scrivere in nessun canale.",
   "raidLockdownBotMissingPermission": "Non sono riuscito a bloccare nessun canale. Mi servono **Gestire canali** e **Gestire ruoli** al loro interno.",
   "raidLockdownDone": "🔒 Blocco attivo: {count} canali bloccati. Terminalo con `/raid end`.",
+  "raidEndProgress": "🔓 Sblocco dei canali… {done} di {total}",
+  "raidLockdownProgress": "🔒 Blocco dei canali… {done} di {total}",
   "raidLockdownDoneSkipped": "🔒 Blocco attivo: {count} canali bloccati. {skipped} saltati perché non posso modificarli. Terminalo con `/raid end`.",
   "raidNotLocked": "Non c'è nessun blocco attivo.",
   "raidEndDone": "🔓 Blocco finito: {count} canali sono tornati com'erano.",

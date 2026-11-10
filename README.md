@@ -938,6 +938,8 @@ Set `LOG_LEVEL=debug` for more detail.
   - deletes by automod, media-only channels and the country channel that pile up go out as one bulk delete;
   - feeds, scheduled messages and welcome messages check the bot's permissions first, since refused requests count toward Discord's 10,000-per-10-minutes block; a warning is logged every 500 refused requests;
   - each person can use 10 commands, buttons or menus every 10 seconds;
+  - any command, button or menu that hasn't answered after 2 seconds (because Discord made it wait) is acknowledged for it (`src/utils/ackWatchdog.js`), so it never shows "This interaction failed"; its answer lands in the same place when the work is done;
+  - `/raid lockdown` and `/raid end` run one at a time per server and show progress every 10 seconds, like `/massrole`;
   - the bot process uses up to 40 requests a second and the dashboard 10, sharing Discord's 50; the dashboard's server-list Refresh asks Discord at most every 15 seconds.
 - **Upgrading from older versions.** Settings saved in `data/settings.json` (or the even older `data/country-channels.json`) are copied into the database the first time the new version starts, and `settings.json` is renamed to `settings.json.migrated` as a backup. The database is upgraded in place; existing cases are kept.
 

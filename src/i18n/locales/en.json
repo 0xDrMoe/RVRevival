@@ -847,6 +847,8 @@
   "raidNothingToLock": "There's nothing to lock: members can't post in any channel right now.",
   "raidLockdownBotMissingPermission": "I couldn't lock any channel. I need **Manage Channels** and **Manage Roles** in them.",
   "raidLockdownDone": "🔒 Lockdown on: {count} channels locked. End it with `/raid end`.",
+  "raidEndProgress": "🔓 Unlocking channels… {done} of {total}",
+  "raidLockdownProgress": "🔒 Locking channels… {done} of {total}",
   "raidLockdownDoneSkipped": "🔒 Lockdown on: {count} channels locked. {skipped} were skipped because I can't edit them. End it with `/raid end`.",
   "raidNotLocked": "There's no lockdown running.",
   "raidEndDone": "🔓 Lockdown over: {count} channels are back to how they were.",

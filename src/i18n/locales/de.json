@@ -847,6 +847,8 @@
   "raidNothingToLock": "Nichts zu sperren: Mitglieder können gerade in keinem Kanal schreiben.",
   "raidLockdownBotMissingPermission": "Ich konnte keinen Kanal sperren. Ich brauche dort **Kanäle verwalten** und **Rollen verwalten**.",
   "raidLockdownDone": "🔒 Sperre aktiv: {count} Kanäle gesperrt. Beende sie mit `/raid end`.",
+  "raidEndProgress": "🔓 Kanäle werden entsperrt… {done} von {total}",
+  "raidLockdownProgress": "🔒 Kanäle werden gesperrt… {done} von {total}",
   "raidLockdownDoneSkipped": "🔒 Sperre aktiv: {count} Kanäle gesperrt. {skipped} übersprungen, weil ich sie nicht bearbeiten kann. Beende sie mit `/raid end`.",
   "raidNotLocked": "Es läuft keine Sperre.",
   "raidEndDone": "🔓 Sperre beendet: {count} Kanäle sind wieder wie vorher.",

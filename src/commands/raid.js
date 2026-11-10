@@ -12,7 +12,8 @@
 
 import { InteractionContextType, MessageFlags, PermissionFlagsBits, SlashCommandBuilder } from "discord.js";
 import { discordLocalizations, pickLanguage, translate } from "../i18n/i18n.js";
-import { Status } from "../logs/actionLog.js";
+import { result, Status } from "../logs/actionLog.js";
+import { KeyedLock } from "../utils/keyedLock.js";
 import { buildActionLogEmbed, noModLog } from "../moderation/modLog.js";
 import { auditReason } from "../moderation/moderationService.js";
 import {
@@ -72,6 +73,9 @@ export function buildRaidCommandData() {
 const timestamp = (ms, style) => `<t:${Math.floor(ms / 1000)}:${style}>`;
 
 // Options: guildSettings, modLog, forcedLanguage, now
+const PROGRESS_EVERY_MS = 10_000;
+const REPLY_EDITABLE_MS = 14 * 60_000;
+
 export function createRaidCommand({ guildSettings, modLog = noModLog, forcedLanguage, now = Date.now }) {
   // A short notice for members in the server's system channel, if the bot can post there.
   async function notice(guild, key) {
@@ -84,10 +88,33 @@ export function createRaidCommand({ guildSettings, modLog = noModLog, forcedLang
     await channel.send({ content: translate(language, key), allowedMentions: { parse: [] } }).catch(() => {});
   }
 
+  // One lockdown or end at a time per server: the second waits, then sees the first's result.
+  const locks = new KeyedLock();
+
+  // Big servers take a while: the reply shows the progress every
+  // PROGRESS_EVERY_MS for as long as Discord lets it be edited (15 minutes),
+  // and the last answer only goes in the reply while it still can.
+  function progress(interaction, text, key) {
+    const started = now();
+    let last = started;
+    const editable = () => now() - started < REPLY_EDITABLE_MS;
+    return {
+      update: async (done, total) => {
+        const time = now();
+        if (time - last < PROGRESS_EVERY_MS || !editable()) {
+          return;
+        }
+        last = time;
+        await interaction.editReply({ content: text(key, { done, total }) }).catch(() => {});
+      },
+      finish: (answer, status, resultKey, values) => (editable() ? answer(status, resultKey, values) : result(status, resultKey, values)),
+    };
+  }
+
   const logEntry = (guild, moderator, summary, lines, color) =>
     modLog.post(guild, () => ({ embed: buildActionLogEmbed({ moderator, summary, lines, color }) }), { route: LogRoute.RAID_LOCKDOWN });
 
-  async function lockdown(interaction, answer) {
+  async function lockdown(interaction, answer, text) {
     const guild = interaction.guild;
     if (guildSettings.get(guild.id, Setting.LOCKDOWN)) {
       return answer(Status.REFUSED, "raidLockdownAlready");
@@ -99,7 +126,8 @@ export function createRaidCommand({ guildSettings, modLog = noModLog, forcedLang
       return answer(Status.REFUSED, plan.skipped > 0 ? "raidLockdownBotMissingPermission" : "raidNothingToLock");
     }
     const audit = auditReason(interaction.user, `Raid lockdown${reason ? `: ${reason}` : ""}`);
-    const locked = await applyLockdown(guild, plan.channels, audit);
+    const report = progress(interaction, text, "raidLockdownProgress");
+    const locked = await applyLockdown(guild, plan.channels, audit, report.update);
     if (locked.length === 0) {
       return answer(Status.FAILED, "raidLockdownBotMissingPermission");
     }
@@ -113,10 +141,10 @@ export function createRaidCommand({ guildSettings, modLog = noModLog, forcedLang
       [reason ? `Reason: ${reason}` : null, skipped > 0 ? `${skipped} channel(s) skipped: the bot can't edit them.` : null].filter(Boolean),
       0xed4245,
     );
-    return answer(Status.SUCCESS, skipped > 0 ? "raidLockdownDoneSkipped" : "raidLockdownDone", { count: locked.length, skipped });
+    return report.finish(answer, Status.SUCCESS, skipped > 0 ? "raidLockdownDoneSkipped" : "raidLockdownDone", { count: locked.length, skipped });
   }
 
-  async function end(interaction, answer) {
+  async function end(interaction, answer, text) {
     const guild = interaction.guild;
     const saved = guildSettings.get(guild.id, Setting.LOCKDOWN);
     if (!saved) {
@@ -124,7 +152,13 @@ export function createRaidCommand({ guildSettings, modLog = noModLog, forcedLang
     }
     const reason = interaction.options.getString("reason")?.trim() || null;
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-    const { restored, failed } = await liftLockdown(guild, saved, auditReason(interaction.user, `Raid lockdown ended${reason ? `: ${reason}` : ""}`));
+    const report = progress(interaction, text, "raidEndProgress");
+    const { restored, failed } = await liftLockdown(
+      guild,
+      saved,
+      auditReason(interaction.user, `Raid lockdown ended${reason ? `: ${reason}` : ""}`),
+      report.update,
+    );
     await guildSettings.clear(guild.id, Setting.LOCKDOWN);
     await notice(guild, "raidNoticeUnlocked");
     await logEntry(
@@ -134,7 +168,7 @@ export function createRaidCommand({ guildSettings, modLog = noModLog, forcedLang
       [reason ? `Reason: ${reason}` : null, failed > 0 ? `${failed} channel(s) couldn't be restored; check them by hand.` : null].filter(Boolean),
       0x57f287,
     );
-    return answer(Status.SUCCESS, failed > 0 ? "raidEndDoneFailed" : "raidEndDone", { count: restored, failed });
+    return report.finish(answer, Status.SUCCESS, failed > 0 ? "raidEndDoneFailed" : "raidEndDone", { count: restored, failed });
   }
 
   function status(interaction, answer, text) {
@@ -183,9 +217,9 @@ export function createRaidCommand({ guildSettings, modLog = noModLog, forcedLang
 
     switch (subcommand) {
       case "lockdown":
-        return lockdown(interaction, answer);
+        return locks.run(interaction.guildId, () => lockdown(interaction, answer, text));
       case "end":
-        return end(interaction, answer);
+        return locks.run(interaction.guildId, () => end(interaction, answer, text));
       case "status":
         return status(interaction, answer, text);
       case "gate": {

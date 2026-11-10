@@ -269,4 +269,19 @@ describe("interaction handler", () => {
     await handler(fakeCommandInteraction("country"));
     expect(execute).toHaveBeenCalledTimes(11);
   });
+
+  it("acknowledges a command that waits on Discord, so it can't fail, and still delivers its answer", async () => {
+    const interaction = fakeCommandInteraction("country");
+    interaction.deferReply = vi.fn(async () => {
+      interaction.deferred = true;
+    });
+    const execute = vi.fn(async (current) => {
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      await current.reply({ content: "Done", flags: MessageFlags.Ephemeral });
+    });
+    await handlerFor({ execute }, { ackOptions: { after: 5 } })(interaction);
+    expect(interaction.deferReply).toHaveBeenCalledWith({ flags: MessageFlags.Ephemeral });
+    expect(interaction.reply).not.toHaveBeenCalled();
+    expect(interaction.editReply).toHaveBeenCalledWith({ content: "Done" });
+  });
 });
