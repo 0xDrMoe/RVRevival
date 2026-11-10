@@ -4,6 +4,16 @@
 export const CHANGELOG = [
   {
     date: "2026-11-10",
+    title: "Send test buttons",
+    items: [
+      "Check a message without waiting for the real thing: Send test on the Welcome & leave, Logging, Leveling, Birthdays and Starboard pages, and Test on each feed and scheduled message.",
+      "Tests post where the real message goes, with you as the member, a small \"Test sent by\" line on top, and no pings.",
+      "The Automod page has Try a message: type something and see which rules would catch it, without posting anything.",
+      "In Discord, /test does the same: /test welcome, /test logs, /test level-up, /test automod and more.",
+    ],
+  },
+  {
+    date: "2026-11-10",
     title: "Welcome, leave and DM messages as embeds",
     items: [
       "The welcome message, the leave message and the welcome DM can each have an embed: a title, description, colour, big and small images (or the new member's avatar), footer and fields. Variables like {user} and {server} work in it.",

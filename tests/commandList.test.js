@@ -32,6 +32,7 @@ describe("command list", () => {
       "nick",
       "massrole",
       "welcome",
+      "test",
       "rolepanel",
       "tag",
       "tags",

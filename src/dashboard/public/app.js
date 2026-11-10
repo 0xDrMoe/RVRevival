@@ -250,6 +250,7 @@ const ICONS = {
   inbox: '<path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>',
   volume: '<path d="M11 5 6 9H2v6h4l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14"/>',
   smile: '<circle cx="12" cy="12" r="9"/><path d="M8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01"/>',
+  send: '<path d="m22 2-7 20-4-9-9-4z"/><path d="M22 2 11 13"/>',
 };
 
 // Permission bits shown as badges on the roles page. Administrator includes
@@ -2221,6 +2222,68 @@ function settingsPage({ data, pageId, intro, cards, fields, after = null, heroEx
   show(guildLayout(data, pageId, header, form, after));
 }
 
+// --- Test messages -------------------------------------------------------------
+//
+// "Send test" buttons post a labelled sample of a message that otherwise only
+// appears after a real event (someone joining, a level-up, a log entry), where
+// the real one would go, with the person testing as the member. They use what's
+// saved, so a page with unsaved changes asks to save first.
+
+const testWhere = (data, entry) => {
+  if (entry.dm) {
+    return t("testYourDms");
+  }
+  const channel = data.channels.find((item) => item.id === entry.channelId);
+  return channel ? `#${channel.name}` : t("unknownOption", { id: entry.channelId });
+};
+
+// Sends one test and says how it went. `extra` goes in the request ({ feedId }).
+async function sendTest(guildId, data, kind, button, extra = {}) {
+  if (state.unsaved) {
+    toast(t("testSaveFirst"), "error");
+    return;
+  }
+  setBusy(button, true);
+  try {
+    const result = await api(`/api/guilds/${guildId}/test`, { method: "POST", body: { kind, ...extra } });
+    const parts = [];
+    if (result.sent.length > 0) {
+      parts.push(t("testSentTo", { where: result.sent.map((entry) => testWhere(data, entry)).join(", ") }));
+    }
+    for (const failure of result.failures) {
+      parts.push(t(`testFail_${failure.reason}`, { where: testWhere(data, failure) }));
+    }
+    if (result.skipped > 0) {
+      parts.push(t("testLogsSkipped", { count: result.skipped }));
+    }
+    if (result.nowhere?.length > 0) {
+      parts.push(t("testLogsNowhere", { count: result.nowhere.length }));
+    }
+    toast(parts.join(" "), result.sent.length > 0 && result.failures.length === 0 ? "ok" : "error");
+  } catch (error) {
+    if (error instanceof ApiError && error.body?.error === "test-unavailable") {
+      toast(t(`testReason_${error.body.reason}`), "error");
+    } else if (error instanceof ApiError && error.body?.error === "test-cooldown") {
+      toast(t("testCooldown", { seconds: Math.ceil((error.body.retryAfterMs ?? 1000) / 1000) }), "error");
+    } else {
+      failed(error);
+    }
+  } finally {
+    setBusy(button, false);
+  }
+}
+
+function testButton(guildId, data, kind, label = t("testSend"), extra = {}) {
+  const button = h("button", { class: "ghost small test-button", type: "button" }, icon("send", "icon small"), label);
+  button.addEventListener("click", () => sendTest(guildId, data, kind, button, extra));
+  return button;
+}
+
+// A row at the bottom of a card: what the test does, and its button.
+function testRow(guildId, data, kind, helpKey) {
+  return h("div", { class: "toolbar test-row" }, h("p", { class: "help grow" }, t(helpKey)), testButton(guildId, data, kind));
+}
+
 const selectValue = (id) => (form) => form.querySelector(`#${id}`).value || null;
 const checkedList = (name) => (form) => {
   const ids = [...form.querySelectorAll(`input[name="${name}"]:checked`)].map((box) => box.value);
@@ -2723,7 +2786,7 @@ async function showLogging(guildId) {
         field("modLogChannel", "modLogChannelHelp", channelPicker("modLogChannelId", t("useLogsChannel"))),
         field("serverLogChannel", "serverLogChannelHelp", channelPicker("serverLogChannelId")),
       ),
-      card(t("logRoutesTitle"), "list", "blue", h("p", { class: "help" }, t("logRoutesHelp")), routes.element),
+      card(t("logRoutesTitle"), "list", "blue", h("p", { class: "help" }, t("logRoutesHelp")), routes.element, testRow(guildId, data, "logs", "testLogsHelp")),
       card(
         t("sectionServerLog"),
         "zap",
@@ -2972,6 +3035,63 @@ function presetPoints(config) {
   );
 }
 
+// "Try a message": which rules a message would break with the settings on the
+// page (saved or not). Nothing is posted or deleted.
+function automodTester(guildId, current) {
+  const box = h("textarea", { id: "amTestText", rows: 3, maxLength: 2000, spellcheck: false, placeholder: t("amTestPlaceholder") });
+  const results = h("ul", { class: "automod-test-results", "aria-live": "polite" });
+  const button = h("button", { class: "ghost small", type: "button" }, icon("search", "icon small"), t("amTestCheck"));
+  const line = (tone, text) => h("li", { class: `automod-test-line ${tone}` }, text);
+  button.addEventListener("click", async () => {
+    const text = box.value.trim();
+    if (!text) {
+      toast(t("amTestEmpty"), "error");
+      return;
+    }
+    setBusy(button, true);
+    try {
+      const check = await api(`/api/guilds/${guildId}/automod/test`, { method: "POST", body: { text, config: current() } });
+      const lines = [];
+      if (!check.enabled) {
+        lines.push(line("muted", t("amTestOff")));
+      }
+      if (check.hits.length === 0) {
+        lines.push(line("ok", t("amTestClean")));
+      }
+      for (const hit of check.hits) {
+        const values = { rule: t(`amRule_${hit.rule}`), detail: hit.detail, action: t(`amAction_${hit.action}`) };
+        if (hit.rule === check.acted) {
+          lines.push(line("danger", t("amTestActs", values)));
+        } else if (hit.on) {
+          lines.push(line("muted", t("amTestAlso", values)));
+        } else {
+          lines.push(line("muted", t(hit.ruleOn ? "amTestWould" : "amTestRuleOff", values)));
+        }
+        if (hit.maybeOwnServer) {
+          lines.push(line("muted", t("amTestOwnInvite")));
+        }
+      }
+      if (check.untested.length > 0) {
+        lines.push(line("muted", t("amTestUntested", { rules: check.untested.map((rule) => t(`amRule_${rule}`)).join(", ") })));
+      }
+      results.replaceChildren(...lines);
+    } catch (error) {
+      failed(error);
+    } finally {
+      setBusy(button, false);
+    }
+  });
+  return card(
+    t("amTestTitle"),
+    "search",
+    "blue",
+    h("p", { class: "help" }, t("amTestHelp")),
+    h("label", { class: "field wide" }, h("span", { class: "field-label" }, t("amTestMessage")), box),
+    h("div", { class: "toolbar" }, h("span", { class: "grow" }), button),
+    results,
+  );
+}
+
 async function showAutomod(guildId) {
   const data = await loadManagedGuild(guildId);
   if (!data) {
@@ -3170,6 +3290,7 @@ async function showAutomod(guildId) {
           h("span", { class: "help" }, t("amSitesHelp")),
         ),
       ),
+      automodTester(guildId, current),
       card(
         t("amExemptRoles"),
         "tag",
@@ -3972,7 +4093,7 @@ function timeZonePicker({ id, value, labelKey, helpKey }) {
   return root;
 }
 
-function birthdayCard(data, postable, defaults) {
+function birthdayCard(data, postable, defaults, extra = null) {
   const saved = data.settings.birthdays ?? {};
   const roles = data.roles
     .filter((role) => role.id !== data.guild.id && !role.managed && (BigInt(role.permissions ?? 0) & BIRTHDAY_ROLE_FORBIDDEN) === 0n)
@@ -3989,6 +4110,7 @@ function birthdayCard(data, postable, defaults) {
     ),
     timeZonePicker({ id: "birthdayTimezone", value: saved.timezone ?? "UTC", labelKey: "birthdayTimezone", helpKey: "birthdayTimezoneHelp" }),
     field("birthdayMessage", "birthdayMessageHelp", messageBox("birthdayMessage", saved.message, defaults.birthdayMessage, MAX_BIRTHDAY_MESSAGE_LENGTH, "birthday", { examples: { server: data.guild.name } })),
+    extra,
   );
 }
 
@@ -4167,8 +4289,9 @@ async function showWelcome(guildId) {
         field("welcomeChannel", "welcomeChannelHelp", offPicker(data, "welcomeChannelId", settings.welcomeChannelId)),
         field("welcomeMessage", "messagePlaceholdersHelp", welcomeBox),
         welcomeEmbed.element,
+        testRow(guildId, data, "welcome", "testWelcomeHelp"),
       ),
-      card(t("welcomeDm"), "message", "blue", field("welcomeDm", "welcomeDmHelp", dmBox), dmEmbed.element),
+      card(t("welcomeDm"), "message", "blue", field("welcomeDm", "welcomeDmHelp", dmBox), dmEmbed.element, testRow(guildId, data, "welcomeDm", "testWelcomeDmHelp")),
       card(
         t("sectionLeave"),
         "logout",
@@ -4176,6 +4299,7 @@ async function showWelcome(guildId) {
         field("leaveChannel", "leaveChannelHelp", offPicker(data, "leaveChannelId", settings.leaveChannelId)),
         field("leaveMessage", "messagePlaceholdersHelp", leaveBox),
         leaveEmbed.element,
+        testRow(guildId, data, "leave", "testLeaveHelp"),
       ),
     ],
     fields: {
@@ -4301,6 +4425,7 @@ async function showStarboard(guildId) {
             emojiInput(data, { id: "starboardEmoji", value: starboard.emoji ?? STARBOARD_DEFAULTS.emoji, placeholder: STARBOARD_DEFAULTS.emoji }),
           ),
         ),
+        testRow(guildId, data, "starboard", "testStarboardHelp"),
       ),
     ],
     fields: { starboard: readStarboard },
@@ -4316,7 +4441,7 @@ async function showBirthdays(guildId) {
     data,
     pageId: "birthdays",
     intro: t("birthdaysHelp"),
-    cards: [birthdayCard(data, postableChannels(data), data.communityDefaults ?? {})],
+    cards: [birthdayCard(data, postableChannels(data), data.communityDefaults ?? {}, testRow(guildId, data, "birthday", "testBirthdayHelp"))],
     fields: { birthdays: readBirthdays },
   });
 }
@@ -4640,7 +4765,8 @@ function localDateTime(ms) {
   return date.toISOString().slice(0, 16);
 }
 
-function scheduledRow(guildId, message, channels, onDeleted) {
+function scheduledRow(guildId, message, data, onDeleted) {
+  const channels = data.channels;
   const channel = channels.find((entry) => entry.id === message.channelId);
   const remove = h("button", { class: "ghost small", type: "button" }, t("scheduledDelete"));
   remove.addEventListener("click", async () => {
@@ -4666,6 +4792,7 @@ function scheduledRow(guildId, message, channels, onDeleted) {
       h("strong", {}, `#${message.id}`),
       h("span", { class: "pill" }, channel ? channelLabel(channel, channels) : t("unknownOption", { id: message.channelId })),
       h("span", { class: "muted grow" }, `${formatDate(message.nextAt)}${message.intervalMs ? ` · ${repeatLabel(message.intervalMs)}` : ""}`),
+      testButton(guildId, data, "scheduled", t("testSendShort"), { scheduledId: message.id }),
       remove,
     ),
     h("p", { class: "scheduled-content" }, message.content),
@@ -4705,7 +4832,7 @@ async function showScheduled(guildId) {
 
   const load = async () => {
     const result = await api(`/api/guilds/${guildId}/scheduled`);
-    list.replaceChildren(...result.messages.map((message) => scheduledRow(guildId, message, data.channels, () => load().catch(failed))));
+    list.replaceChildren(...result.messages.map((message) => scheduledRow(guildId, message, data, () => load().catch(failed))));
     count.textContent = t("tagsCount", { count: result.messages.length, max: result.max });
     empty.hidden = result.messages.length > 0;
     submit.disabled = result.messages.length >= result.max;
@@ -5345,6 +5472,7 @@ async function showLevels(guildId) {
           "levelsMessageHelp",
           messageBox("levelsMessage", config.message, defaults.levelUpMessage, MAX_LEVEL_MESSAGE_LENGTH, "levelUp", { examples: { server: data.guild.name } }),
         ),
+        testRow(guildId, data, "levelUp", "testLevelUpHelp"),
       ),
       card(
         t("levelsRewardsTitle"),
@@ -9407,6 +9535,7 @@ function feedRow(guildId, feed, data, roles, onChanged) {
     h(
       "span",
       { class: "row-actions" },
+      testButton(guildId, data, "feed", t("testSendShort"), { feedId: feed.id }),
       editButton,
       h(
         "button",
@@ -9567,6 +9696,7 @@ function youtubeGroupRow(guildId, group, data, roles, onChanged) {
     h(
       "span",
       { class: "row-actions" },
+      testButton(guildId, data, "feed", t("testSendShort"), { feedId: first.id }),
       editButton,
       h(
         "button",

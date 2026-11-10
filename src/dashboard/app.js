@@ -20,6 +20,8 @@
 //   POST   /api/guilds/:id/role-panels           post a new role panel
 //   PUT    /api/guilds/:id/role-panels/:panel    change a role panel (edits its message)
 //   DELETE /api/guilds/:id/role-panels/:panel    delete a role panel and its message
+//   POST   /api/guilds/:id/test                  send a labelled test of a message (welcome, logs, level-up...)
+//   POST   /api/guilds/:id/automod/test          which automod rules a message would break
 //
 // Two levels of access to a server the bot is in:
 //   - "manage": Manage Server, Administrator or the owner. Everything.
@@ -97,6 +99,19 @@ import { botCommandCatalog } from "../permissions/catalog.js";
 import { normalizeCommandRules } from "../permissions/commandRules.js";
 import { CUSTOM, InvalidPreset, planPreset } from "../permissions/presets.js";
 import { pageRenderer, publicRobots, publicSitemap } from "./seo.js";
+import {
+  buildTestMessages,
+  checkAutomodText,
+  createTestLimiter,
+  MAX_AUTOMOD_TEST_LENGTH,
+  MAX_LOG_TEST_CHANNELS,
+  memberLike,
+  planLogTest,
+  routeName,
+  TEST_KINDS,
+  TestKind,
+  TestUnavailable,
+} from "../testing/testMessages.js";
 
 const PUBLIC_FOLDER = fileURLToPath(new URL("./public/", import.meta.url));
 
@@ -1450,6 +1465,119 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     }
     await logAction(access.guildId, access.session, `**Scheduled message #${number} deleted**`);
     return { ok: true };
+  });
+
+  // --- Test messages ------------------------------------------------------------
+  //
+  // The "Send test" buttons: a labelled sample of a message that otherwise
+  // only appears after a real event, posted where the real one would go
+  // (testing/testMessages.js). It uses what's saved, with the person testing
+  // as the member, and pings nobody. One test every few seconds per person.
+
+  const testLimiter = createTestLimiter();
+  // Discord's answers that mean the bot can't post there: Missing Access, Missing Permissions.
+  const CANNOT_POST = new Set([50001, 50013]);
+  const UNKNOWN_CHANNEL = 10003;
+  const CANNOT_DM = 50007;
+
+  // The person testing, as the message builders expect a member.
+  async function testerOf(guildId, session) {
+    const member = await discord.member(guildId, session.userId).catch(() => null);
+    const user = member?.user ?? {};
+    const avatarUrl = member?.avatar
+      ? `https://cdn.discordapp.com/guilds/${guildId}/users/${session.userId}/avatars/${member.avatar}.png?size=256`
+      : (user.avatar ?? session.avatar)
+        ? `https://cdn.discordapp.com/avatars/${session.userId}/${user.avatar ?? session.avatar}.png?size=256`
+        : `https://cdn.discordapp.com/embed/avatars/${Number((BigInt(session.userId) >> 22n) % 6n)}.png`;
+    return memberLike({
+      id: session.userId,
+      username: user.username ?? session.username,
+      globalName: user.global_name ?? null,
+      nick: member?.nick ?? null,
+      avatarUrl,
+    });
+  }
+
+  app.post("/api/guilds/:id/test", { config: { rateLimit: { max: 20, timeWindow: "1 minute" } } }, async (request, reply) => {
+    const access = await requireGuild(request, reply, { manage: true });
+    if (!access) {
+      return reply;
+    }
+    const { guildId, session } = access;
+    const body = request.body ?? {};
+    if (!TEST_KINDS.includes(body.kind)) {
+      return reply.code(400).send({ error: "bad-test" });
+    }
+    const guild = await discord.guild(guildId);
+    const feed = body.kind === TestKind.FEED && Number.isSafeInteger(body.feedId) ? feeds.get(body.feedId) : null;
+    const scheduled = body.kind === TestKind.SCHEDULED && Number.isSafeInteger(body.scheduledId) ? scheduledMessages.get(guildId, body.scheduledId) : null;
+    let messages;
+    try {
+      messages = buildTestMessages(body.kind, {
+        guildSettings,
+        guild: { id: guildId, name: guild.name, memberCount: guild.approximate_member_count ?? null, preferredLocale: guild.preferred_locale },
+        member: await testerOf(guildId, session),
+        language: pickLanguage(guild.preferred_locale, config.forcedLanguage),
+        forcedLanguage: config.forcedLanguage,
+        feed: feed?.guildId === guildId ? feed : null,
+        scheduled,
+      });
+    } catch (error) {
+      if (error instanceof TestUnavailable) {
+        return reply.code(400).send({ error: "test-unavailable", reason: error.reason });
+      }
+      throw error;
+    }
+    // Only tests that would send count toward the cooldown.
+    const waitMs = testLimiter.take(guildId, session.userId);
+    if (waitMs > 0) {
+      return reply.code(429).send({ error: "test-cooldown", retryAfterMs: waitMs });
+    }
+
+    const sent = [];
+    const failures = [];
+    for (const message of messages) {
+      // The REST API takes allowed_mentions (postMessage and dm set it: nobody).
+      const { allowedMentions, ...payload } = message.payload;
+      const where = message.dm ? { dm: true } : { channelId: message.channelId };
+      try {
+        if (message.dm) {
+          await discord.dm(session.userId, payload);
+        } else {
+          await discord.postMessage(message.channelId, payload);
+        }
+        sent.push(where);
+      } catch (error) {
+        const reason =
+          error.code === CANNOT_DM ? "dmClosed" : error.code === UNKNOWN_CHANNEL ? "channelGone" : CANNOT_POST.has(error.code) ? "cannotPost" : "failed";
+        if (reason === "failed") {
+          logger.warn("Couldn't send a test message", { guildId, kind: body.kind, error });
+        }
+        failures.push({ ...where, reason });
+      }
+    }
+    const extra = {};
+    if (body.kind === TestKind.LOGS) {
+      const plan = planLogTest(guildSettings, guildId);
+      extra.nowhere = plan.nowhere.map(routeName);
+      extra.skipped = Math.max(0, plan.channels.length - MAX_LOG_TEST_CHANNELS);
+    }
+    return { sent, failures, ...extra };
+  });
+
+  // Which automod rules a message would break. Nothing is posted. `config` is
+  // the Automod page's unsaved settings (else the saved ones).
+  app.post("/api/guilds/:id/automod/test", { config: { rateLimit: { max: 60, timeWindow: "1 minute" } } }, async (request, reply) => {
+    const access = await requireGuild(request, reply, { manage: true });
+    if (!access) {
+      return reply;
+    }
+    const { text, config: draft } = request.body ?? {};
+    if (typeof text !== "string" || !text.trim() || text.length > MAX_AUTOMOD_TEST_LENGTH) {
+      return reply.code(400).send({ error: "bad-text", message: `Type a message of 1 to ${MAX_AUTOMOD_TEST_LENGTH} characters.` });
+    }
+    const usable = draft && typeof draft === "object" && !Array.isArray(draft);
+    return checkAutomodText(usable ? draft : guildSettings.get(access.guildId, Setting.AUTOMOD), text);
   });
 
   // --- Ban appeals ------------------------------------------------------------

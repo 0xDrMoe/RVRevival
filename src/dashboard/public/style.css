@@ -6653,6 +6653,45 @@ input.has-variable-problem {
   }
 }
 
+/* Test messages: "Send test" rows at the bottom of cards, and the automod tester. */
+.test-row {
+  margin-top: 4px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--border);
+}
+.test-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.automod-test-results {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.automod-test-results:empty {
+  display: none;
+}
+.automod-test-line {
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  overflow-wrap: anywhere;
+}
+.automod-test-line.ok {
+  color: var(--ok);
+}
+.automod-test-line.danger {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+}
+.automod-test-line.muted {
+  color: var(--muted);
+}
+
 /* --- Rumble style ------------------------------------------------------------------
    An optional game-style look (Appearance > Style): chunky Lilita One headings,
    bold outlines, hard comic shadows and full-color page headers. Everything here
