@@ -16,6 +16,9 @@
 // {user} (a mention), {username}, {server} and {members} (the member count;
 // the old {count} still works). Unset messages use a default in the server's
 // language.
+//
+// Each of the three can also carry an embed (community/welcomeEmbeds.js). With
+// an embed, only text the server wrote goes with it, not the default line.
 
 import { escapeMarkdown, PermissionFlagsBits } from "discord.js";
 import { pickLanguage, translate } from "../i18n/i18n.js";
@@ -24,6 +27,7 @@ import { Setting } from "../settings/guildSettings.js";
 import { fillVariables } from "../dashboard/public/variables.js";
 import { sendDm } from "../utils/dms.js";
 import { canPost, createBatchSender, createRateLimiter } from "../utils/rateLimits.js";
+import { defaultEmbedColor, renderWelcomeEmbed, savedEmbed, TEXT_SETTING } from "./welcomeEmbeds.js";
 
 export const MAX_MESSAGE_LENGTH = 1000;
 export const MAX_AUTOROLES = 10;
@@ -50,6 +54,21 @@ export function welcomeText(guildSettings, guild, member, kind, forcedLanguage) 
   return renderTemplate(template, { member, guild });
 }
 
+// What to send for a kind ("welcome", "leave" or "dm"): { content, embeds },
+// or null when there's nothing (no welcome DM set up).
+export function welcomePayload(guildSettings, guild, member, kind, forcedLanguage) {
+  const saved = savedEmbed(guildSettings, guild.id, kind);
+  const ownText = guildSettings.get(guild.id, TEXT_SETTING[kind]);
+  let content = "";
+  if (ownText) {
+    content = renderTemplate(ownText, { member, guild });
+  } else if (!saved && kind !== "dm") {
+    content = welcomeText(guildSettings, guild, member, kind, forcedLanguage);
+  }
+  const embeds = saved ? [renderWelcomeEmbed(saved, { member, guild, color: defaultEmbedColor(guildSettings, guild.id) })] : [];
+  return content || embeds.length > 0 ? { content, embeds } : null;
+}
+
 // Options:
 //   guildSettings, logger
 //   forcedLanguage   the default messages' language (BOT_LANGUAGE); otherwise the server's
@@ -67,7 +86,7 @@ export function createWelcomer({ guildSettings, logger, forcedLanguage, skipAuto
     }
   };
 
-  async function post(guild, setting, content, userId, what) {
+  async function post(guild, setting, payload, userId, what) {
     const channelId = guildSettings.get(guild.id, setting);
     const channel = channelId && guild.channels.cache.get(channelId);
     if (!channel?.isTextBased?.()) {
@@ -79,7 +98,7 @@ export function createWelcomer({ guildSettings, logger, forcedLanguage, skipAuto
       return;
     }
     try {
-      await sender.send(channel, { content, allowedMentions: { users: [userId] } });
+      await sender.send(channel, { ...payload, allowedMentions: { users: [userId] } });
       warned.delete(`${guild.id}:${what}`);
     } catch (error) {
       warnOnce(guild, what, `Couldn't post the ${what} message. Give the bot View Channel and Send Messages there.`, error);
@@ -118,10 +137,13 @@ export function createWelcomer({ guildSettings, logger, forcedLanguage, skipAuto
         return;
       }
       const guild = member.guild;
-      await post(guild, Setting.WELCOME_CHANNEL, welcomeText(guildSettings, guild, member, "welcome", forcedLanguage), member.id, "welcome");
-      const dm = guildSettings.get(guild.id, Setting.WELCOME_DM);
+      if (guildSettings.get(guild.id, Setting.WELCOME_CHANNEL)) {
+        await post(guild, Setting.WELCOME_CHANNEL, welcomePayload(guildSettings, guild, member, "welcome", forcedLanguage), member.id, "welcome");
+      }
+      const dm = welcomePayload(guildSettings, guild, member, "dm", forcedLanguage);
       if (dm && dmLimit.take(guild.id)) {
-        await sendDm(member, { content: renderTemplate(dm, { member, guild }), allowedMentions: { parse: [] } }).catch(() =>
+        const { content, embeds } = dm;
+        await sendDm(member, { ...(content ? { content } : {}), ...(embeds.length > 0 ? { embeds } : {}), allowedMentions: { parse: [] } }).catch(() =>
           logger.debug("Couldn't DM a new member; their DMs are closed", { guildId: guild.id }),
         );
       } else if (dm) {
@@ -144,7 +166,9 @@ export function createWelcomer({ guildSettings, logger, forcedLanguage, skipAuto
         return;
       }
       const guild = member.guild;
-      await post(guild, Setting.LEAVE_CHANNEL, welcomeText(guildSettings, guild, member, "leave", forcedLanguage), member.id, "leave");
+      if (guildSettings.get(guild.id, Setting.LEAVE_CHANNEL)) {
+        await post(guild, Setting.LEAVE_CHANNEL, welcomePayload(guildSettings, guild, member, "leave", forcedLanguage), member.id, "leave");
+      }
     },
   };
 }

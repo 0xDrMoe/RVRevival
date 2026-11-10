@@ -143,14 +143,27 @@ export class LatestOnly {
 // Discord's limits for one message.
 const MAX_CONTENT = 2000;
 const MAX_MENTIONED_USERS = 100;
+const MAX_EMBEDS = 10;
+const MAX_EMBED_CHARS = 6000;
 
-// Sends plain-text messages ({ content, allowedMentions: { users } }) to
+// All the text in some embeds, the way Discord counts it toward its 6,000.
+const embedChars = (embeds) =>
+  embeds.reduce(
+    (sum, embed) =>
+      sum +
+      [embed.title, embed.description, embed.author?.name, embed.footer?.text, ...(embed.fields ?? []).flatMap((field) => [field.name, field.value])]
+        .filter(Boolean)
+        .reduce((total, part) => total + part.length, 0),
+    0,
+  );
+
+// Sends messages ({ content, embeds, allowedMentions: { users } }) to
 // channels. The first message goes out at once; messages for the same
 // channel that come in while it's on its way wait, then go out together, one
-// per line, in as few messages as fit. A burst of 200 joins becomes a handful
-// of welcome messages instead of 200.
+// per line (and their embeds one after another), in as few messages as fit.
+// A burst of 200 joins becomes a handful of welcome messages instead of 200.
 export function createBatchSender() {
-  // channel ID -> [{ content, users, resolve, reject }]
+  // channel ID -> [{ content, embeds, users, resolve, reject }]
   const waiting = new Map();
   const busy = new Set();
 
@@ -158,16 +171,20 @@ export function createBatchSender() {
     const batches = [];
     let current = null;
     for (const entry of entries) {
+      const joined = [current?.content, entry.content].filter(Boolean).join("\n");
       const fits =
         current &&
-        current.content.length + 1 + entry.content.length <= MAX_CONTENT &&
-        new Set([...current.users, ...entry.users]).size <= MAX_MENTIONED_USERS;
+        joined.length <= MAX_CONTENT &&
+        new Set([...current.users, ...entry.users]).size <= MAX_MENTIONED_USERS &&
+        current.embeds.length + entry.embeds.length <= MAX_EMBEDS &&
+        embedChars(current.embeds) + embedChars(entry.embeds) <= MAX_EMBED_CHARS;
       if (fits) {
-        current.content += `\n${entry.content}`;
+        current.content = joined;
+        current.embeds.push(...entry.embeds);
         entry.users.forEach((id) => current.users.add(id));
         current.entries.push(entry);
       } else {
-        current = { content: entry.content, users: new Set(entry.users), entries: [entry] };
+        current = { content: entry.content, embeds: [...entry.embeds], users: new Set(entry.users), entries: [entry] };
         batches.push(current);
       }
     }
@@ -182,7 +199,11 @@ export function createBatchSender() {
         waiting.delete(channel.id);
         for (const batch of combine(entries)) {
           try {
-            const sent = await channel.send({ content: batch.content, allowedMentions: { users: [...batch.users] } });
+            const sent = await channel.send({
+              ...(batch.content ? { content: batch.content } : {}),
+              ...(batch.embeds.length > 0 ? { embeds: batch.embeds } : {}),
+              allowedMentions: { users: [...batch.users] },
+            });
             batch.entries.forEach((entry) => entry.resolve(sent));
           } catch (error) {
             batch.entries.forEach((entry) => entry.reject(error));
@@ -195,9 +216,15 @@ export function createBatchSender() {
   }
 
   return {
-    send(channel, { content, allowedMentions }) {
+    send(channel, { content, embeds = [], allowedMentions }) {
       return new Promise((resolve, reject) => {
-        const entry = { content: String(content).slice(0, MAX_CONTENT), users: allowedMentions?.users ?? [], resolve, reject };
+        const entry = {
+          content: String(content ?? "").slice(0, MAX_CONTENT),
+          embeds: embeds.slice(0, MAX_EMBEDS),
+          users: allowedMentions?.users ?? [],
+          resolve,
+          reject,
+        };
         waiting.set(channel.id, [...(waiting.get(channel.id) ?? []), entry]);
         if (!busy.has(channel.id)) {
           flush(channel);

@@ -1,7 +1,10 @@
 import { MessageFlags, PermissionFlagsBits } from "discord.js";
 import { describe, expect, it, vi } from "vitest";
 import { buildWelcomeCommandData, createWelcomeCommand } from "../src/commands/welcome.js";
-import { createWelcomer, renderTemplate, welcomeText } from "../src/community/welcome.js";
+import { createWelcomer, renderTemplate, welcomePayload, welcomeText } from "../src/community/welcome.js";
+import { checkWelcomeEmbed, renderWelcomeEmbed } from "../src/community/welcomeEmbeds.js";
+import { BRAND_COLOR } from "../src/guilds/guildJoin.js";
+import { InvalidMessage } from "../src/messages/embedMessage.js";
 import { translate } from "../src/i18n/i18n.js";
 import { Status } from "../src/logs/actionLog.js";
 import { GuildSettings, Setting } from "../src/settings/guildSettings.js";
@@ -227,6 +230,7 @@ describe("/welcome", () => {
       "leave-channel",
       "leave-message",
       "dm",
+      "embed",
       "autorole",
       "persist",
       "off",
@@ -304,5 +308,135 @@ describe("/welcome", () => {
     const { content } = await run(guildSettings, "show");
     expect(content).toContain(translate("en", "welcomeShowNoChannel"));
     expect(content).toContain(`<@&${MEMBER_ROLE_ID}>`);
+  });
+});
+
+describe("welcome embeds", () => {
+  const AVATAR = "https://cdn.discordapp.com/avatars/1/a.png";
+  const withAvatar = (member) => ({ ...member, displayAvatarURL: () => AVATAR });
+
+  it("checks embeds: drops empty parts, refuses bad variables and links, keeps the avatar switch", () => {
+    expect(checkWelcomeEmbed({ title: " Hi {user} ", description: "", image: { url: "" }, color: null })).toEqual({ title: "Hi {user}" });
+    expect(checkWelcomeEmbed({ title: "", color: 0xff0000 })).toBeNull();
+    expect(checkWelcomeEmbed({ memberAvatar: true, thumbnail: { url: "https://example.com/a.png" } })).toEqual({ memberAvatar: true });
+    expect(() => checkWelcomeEmbed({ title: "Level {level}" })).toThrow(InvalidMessage);
+    expect(() => checkWelcomeEmbed({ fields: [{ name: "a", value: "{usr}" }] })).toThrow(/field 1 value/);
+    expect(() => checkWelcomeEmbed({ title: "x", image: { url: "javascript:alert(1)" } })).toThrow(InvalidMessage);
+    expect(() => checkWelcomeEmbed("nope")).toThrow(InvalidMessage);
+  });
+
+  it("fills in the member, uses the Branding colour and the avatar, and stays under Discord's limits", () => {
+    const guild = fakeGuild();
+    const member = withAvatar(fakeMember(guild));
+    const saved = checkWelcomeEmbed({
+      title: "Welcome {username}",
+      description: "Hi {user}, you're #{members} in {server}",
+      footer: { text: "{username} · {server}" },
+      fields: [{ name: "Server", value: "{server}", inline: true }],
+      memberAvatar: true,
+    });
+    expect(renderWelcomeEmbed(saved, { member, guild, color: 0x123456 })).toEqual({
+      color: 0x123456,
+      title: "Welcome Big\\_Rumbler",
+      description: `Hi <@${USER_ID}>, you're #1,234 in Rumbleverse \\*Revival\\*`,
+      footer: { text: "Big_Rumbler · Rumbleverse *Revival*" },
+      fields: [{ name: "Server", value: "Rumbleverse \\*Revival\\*", inline: true }],
+      thumbnail: { url: AVATAR },
+    });
+    expect(renderWelcomeEmbed({ description: "x", color: 0xabcdef }, { member, guild }).color).toBe(0xabcdef);
+    expect(renderWelcomeEmbed({ description: "x" }, { member, guild }).color).toBe(BRAND_COLOR);
+    const long = renderWelcomeEmbed({ title: "t".repeat(256), description: "{server}".repeat(500), footer: { text: "f".repeat(2048) } }, { member, guild });
+    expect(long.title.length + long.description.length + long.footer.text.length).toBeLessThanOrEqual(6000);
+  });
+
+  it("sends only the server's own text with an embed, never the default line", async () => {
+    const guild = fakeGuild();
+    const member = fakeMember(guild);
+    const guildSettings = await settingsWith({ [Setting.WELCOME_EMBED]: { title: "Hi {username}" } });
+    expect(welcomePayload(guildSettings, guild, member, "welcome")).toEqual({ content: "", embeds: [expect.objectContaining({ title: "Hi Big\\_Rumbler" })] });
+    await guildSettings.set(GUILD_ID, Setting.WELCOME_MESSAGE, "Hey {user}");
+    expect(welcomePayload(guildSettings, guild, member, "welcome").content).toBe(`Hey <@${USER_ID}>`);
+    expect(welcomePayload(guildSettings, guild, member, "leave").content).toBe(welcomeText(guildSettings, guild, member, "leave"));
+    expect(welcomePayload(guildSettings, guild, member, "dm")).toBeNull();
+  });
+
+  it("posts the welcome embed and DMs an embed-only welcome DM", async () => {
+    const guild = fakeGuild();
+    const guildSettings = await settingsWith({
+      [Setting.WELCOME_CHANNEL]: WELCOME_CHANNEL_ID,
+      [Setting.WELCOME_MESSAGE]: "Welcome {user}!",
+      [Setting.WELCOME_EMBED]: { title: "Welcome to {server}" },
+      [Setting.WELCOME_DM_EMBED]: { description: "Read the rules" },
+      [Setting.BRANDING]: { color: 0x00ff00 },
+    });
+    const member = fakeMember(guild);
+    await createWelcomer({ guildSettings, logger: fakeLogger() }).memberJoined(member);
+    expect(guild.channels.cache.get(WELCOME_CHANNEL_ID).send).toHaveBeenCalledWith({
+      content: `Welcome <@${USER_ID}>!`,
+      embeds: [{ color: 0x00ff00, title: "Welcome to Rumbleverse \\*Revival\\*" }],
+      allowedMentions: { users: [USER_ID] },
+    });
+    expect(member.send).toHaveBeenCalledWith({ embeds: [{ color: 0x00ff00, description: "Read the rules" }], allowedMentions: { parse: [] } });
+  });
+
+  it("posts a leave embed", async () => {
+    const guild = fakeGuild();
+    const guildSettings = await settingsWith({ [Setting.LEAVE_CHANNEL]: LEAVE_CHANNEL_ID, [Setting.LEAVE_EMBED]: { title: "Bye {username}", color: 1 } });
+    await createWelcomer({ guildSettings, logger: fakeLogger() }).memberLeft(fakeMember(guild));
+    expect(guild.channels.cache.get(LEAVE_CHANNEL_ID).send).toHaveBeenCalledWith({
+      embeds: [{ color: 1, title: "Bye Big\\_Rumbler" }],
+      allowedMentions: { users: [USER_ID] },
+    });
+  });
+
+  describe("/welcome embed", () => {
+    function embedInteraction(strings = {}, booleans = {}) {
+      const guild = fakeGuild();
+      return {
+        locale: "en-US",
+        guildId: GUILD_ID,
+        guild,
+        member: withAvatar(fakeMember(guild)),
+        inCachedGuild: () => true,
+        memberPermissions: { has: (bit) => bit === PermissionFlagsBits.ManageGuild },
+        options: {
+          getSubcommand: () => "embed",
+          getString: (name) => strings[name] ?? null,
+          getBoolean: (name) => booleans[name] ?? null,
+        },
+        reply: vi.fn(async () => {}),
+      };
+    }
+    const run = async (guildSettings, strings, booleans) => {
+      const interaction = embedInteraction(strings, booleans);
+      const outcome = await createWelcomeCommand({ guildSettings }).execute(interaction);
+      return { outcome, reply: interaction.reply.mock.calls[0]?.[0] };
+    };
+
+    it("saves the parts given, keeps the rest, and previews the embed", async () => {
+      const guildSettings = new GuildSettings();
+      const first = await run(guildSettings, { message: "welcome", title: "Hi {username}", colour: "#ff0000" }, { avatar: true });
+      expect(first.outcome.status).toBe(Status.SUCCESS);
+      expect(guildSettings.get(GUILD_ID, Setting.WELCOME_EMBED)).toEqual({ title: "Hi {username}", color: 0xff0000, memberAvatar: true });
+      expect(first.reply.embeds).toEqual([{ color: 0xff0000, title: "Hi Big\\_Rumbler", thumbnail: { url: AVATAR } }]);
+      expect(first.reply.content).toContain(translate("en", "welcomeEmbedTextNote"));
+      expect(first.reply.flags).toBe(MessageFlags.Ephemeral);
+
+      await run(guildSettings, { message: "welcome", description: "Line 1\\nLine 2", colour: "-" });
+      expect(guildSettings.get(GUILD_ID, Setting.WELCOME_EMBED)).toEqual({ title: "Hi {username}", description: "Line 1\nLine 2", memberAvatar: true });
+    });
+
+    it("removes an embed, refuses an empty command, bad colours and bad variables", async () => {
+      const guildSettings = await settingsWith({ [Setting.LEAVE_EMBED]: { title: "Bye" } });
+      expect((await run(guildSettings, { message: "leave" })).outcome.key).toBe("welcomeEmbedNothing");
+      expect((await run(guildSettings, { message: "leave", colour: "pink" })).outcome.key).toBe("embedBadColor");
+      expect((await run(guildSettings, { message: "leave", title: "{level}" })).outcome.key).toBe("welcomeEmbedInvalid");
+      expect(guildSettings.get(GUILD_ID, Setting.LEAVE_EMBED)).toEqual({ title: "Bye" });
+      await run(guildSettings, { message: "leave", title: "-" });
+      expect(guildSettings.get(GUILD_ID, Setting.LEAVE_EMBED)).toBeUndefined();
+      await guildSettings.set(GUILD_ID, Setting.WELCOME_DM_EMBED, { title: "DM" });
+      expect((await run(guildSettings, { message: "dm" }, { remove: true })).outcome.key).toBe("welcomeEmbedRemoved");
+      expect(guildSettings.get(GUILD_ID, Setting.WELCOME_DM_EMBED)).toBeUndefined();
+    });
   });
 });

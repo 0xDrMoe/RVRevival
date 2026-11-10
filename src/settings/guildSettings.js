@@ -42,7 +42,10 @@ export const Setting = Object.freeze({
   WELCOME_MESSAGE: "welcomeMessage", // text with {user}, {username}, {server} and {count}; unset = the default
   LEAVE_CHANNEL: "leaveChannelId",
   LEAVE_MESSAGE: "leaveMessage", // like WELCOME_MESSAGE
-  WELCOME_DM: "welcomeDm", // text DMed to new members; unset = no DM
+  WELCOME_DM: "welcomeDm", // text DMed to new members; unset = no DM (unless there's a DM embed)
+  WELCOME_EMBED: "welcomeEmbed", // an embed sent with the welcome message, an object (see community/welcomeEmbeds.js)
+  LEAVE_EMBED: "leaveEmbed", // like WELCOME_EMBED, for the leave message
+  WELCOME_DM_EMBED: "welcomeDmEmbed", // like WELCOME_EMBED, for the welcome DM
   AUTOROLES: "autoroleIds", // roles given to every new member, a list of IDs
   ROLE_PANELS: "rolePanels", // button role panels, a list of objects (see community/rolePanels.js)
   ROLE_CONFIRM: "roleConfirmations", // false: role panels and the country picker don't ask members to confirm by default (see roles/roleConfirmations.js)

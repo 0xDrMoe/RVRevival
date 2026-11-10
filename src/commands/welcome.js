@@ -6,6 +6,8 @@
 //   /welcome leave-channel channel:#goodbye  post a leave message there when someone leaves
 //   /welcome leave-message text:<…>          the leave message
 //   /welcome dm text:<…>                     DM new members this
+//   /welcome embed message:<welcome|leave|dm> [title] [description] [colour] [image] [thumbnail] [avatar] [footer] [remove]
+//                                            send that message as an embed (only the parts given change; - removes one)
 //   /welcome autorole role:@Member           give new members a role, or stop giving it
 //   /welcome persist enabled:<true|false>    give members their roles back when they rejoin
 //   /welcome off what:<…>                    switch one of these off, or reset a message to the default
@@ -15,7 +17,10 @@
 // Only members with the Manage Server permission can see or use it.
 
 import { ChannelType, InteractionContextType, MessageFlags, PermissionFlagsBits, SlashCommandBuilder } from "discord.js";
-import { MAX_AUTOROLES, MAX_MESSAGE_LENGTH, renderTemplate, welcomeText } from "../community/welcome.js";
+import { MAX_AUTOROLES, MAX_MESSAGE_LENGTH, renderTemplate, welcomePayload } from "../community/welcome.js";
+import { checkWelcomeEmbed, defaultEmbedColor, describeWelcomeEmbed, EMBED_SETTING, renderWelcomeEmbed, savedEmbed, TEXT_SETTING, WELCOME_EMBED_KINDS } from "../community/welcomeEmbeds.js";
+import { InvalidMessage, LIMITS } from "../messages/embedMessage.js";
+import { parseColor } from "./embed.js";
 import { discordLocalizations, pickLanguage, translate } from "../i18n/i18n.js";
 import { result, Status } from "../logs/actionLog.js";
 import { variableRefusal } from "./commandHelpers.js";
@@ -29,7 +34,7 @@ const COMMAND_NAME = "welcome";
 const OFF_CHOICES = [
   { value: "welcome", nameKey: "welcomeOffWelcome", settings: [Setting.WELCOME_CHANNEL], doneKey: "welcomeOffWelcomeDone" },
   { value: "leave", nameKey: "welcomeOffLeave", settings: [Setting.LEAVE_CHANNEL], doneKey: "welcomeOffLeaveDone" },
-  { value: "dm", nameKey: "welcomeOffDm", settings: [Setting.WELCOME_DM], doneKey: "welcomeOffDmDone" },
+  { value: "dm", nameKey: "welcomeOffDm", settings: [Setting.WELCOME_DM, Setting.WELCOME_DM_EMBED], doneKey: "welcomeOffDmDone" },
   { value: "autoroles", nameKey: "welcomeOffAutoroles", settings: [Setting.AUTOROLES], doneKey: "welcomeOffAutorolesDone" },
   {
     value: "messages",
@@ -38,6 +43,11 @@ const OFF_CHOICES = [
     doneKey: "welcomeOffMessagesDone",
   },
 ];
+
+// The messages /welcome embed can add an embed to, with their names.
+const EMBED_CHOICES = { welcome: "welcomeTestWelcome", leave: "welcomeTestLeave", dm: "welcomeTestDm" };
+// Typed in a text option of /welcome embed, removes that part.
+const REMOVE = "-";
 
 const POSTING_CHANNELS = [ChannelType.GuildText, ChannelType.GuildAnnouncement];
 // Community servers have Discord's own Onboarding, which we recommend over autoroles.
@@ -83,6 +93,28 @@ export function buildWelcomeCommandData() {
       withDescription(sub.setName("dm"), "welcomeDmDescription").addStringOption((option) =>
         textOption(option, "welcomeTextOptionDescription"),
       ),
+    )
+    .addSubcommand((sub) =>
+      withDescription(sub.setName("embed"), "welcomeEmbedDescription")
+        .addStringOption((option) =>
+          withDescription(option.setName("message"), "welcomeEmbedMessageOption")
+            .setRequired(true)
+            .addChoices(
+              ...WELCOME_EMBED_KINDS.map((value) => ({
+                name: translate("en", EMBED_CHOICES[value]),
+                name_localizations: discordLocalizations(EMBED_CHOICES[value]),
+                value,
+              })),
+            ),
+        )
+        .addStringOption((option) => withDescription(option.setName("title"), "welcomeEmbedTitleOption").setMaxLength(LIMITS.title))
+        .addStringOption((option) => withDescription(option.setName("description"), "welcomeEmbedDescriptionOption").setMaxLength(LIMITS.description))
+        .addStringOption((option) => withDescription(option.setName("colour"), "welcomeEmbedColorOption").setMaxLength(20))
+        .addStringOption((option) => withDescription(option.setName("image"), "welcomeEmbedImageOption").setMaxLength(LIMITS.url))
+        .addStringOption((option) => withDescription(option.setName("thumbnail"), "welcomeEmbedThumbnailOption").setMaxLength(LIMITS.url))
+        .addBooleanOption((option) => withDescription(option.setName("avatar"), "welcomeEmbedAvatarOption"))
+        .addStringOption((option) => withDescription(option.setName("footer"), "welcomeEmbedFooterOption").setMaxLength(LIMITS.footerText))
+        .addBooleanOption((option) => withDescription(option.setName("remove"), "welcomeEmbedRemoveOption")),
     )
     .addSubcommand((sub) =>
       withDescription(sub.setName("autorole"), "welcomeAutoroleDescription").addRoleOption((option) =>
@@ -168,6 +200,85 @@ export function createWelcomeCommand({ guildSettings, forcedLanguage }) {
       return reply(Status.SUCCESS, doneKey, { preview }, missing);
     };
 
+    // /welcome embed: changes only the parts given, then shows the result.
+    const setEmbed = async () => {
+      const kind = interaction.options.getString("message", true);
+      const setting = EMBED_SETTING[kind];
+      if (!setting) {
+        return reply(Status.FAILED, "unexpected");
+      }
+      const which = text(EMBED_CHOICES[kind]);
+      if (interaction.options.getBoolean("remove")) {
+        await guildSettings.clear(guildId, setting);
+        return reply(Status.SUCCESS, "welcomeEmbedRemoved", { which });
+      }
+      const option = (name) => {
+        const value = interaction.options.getString(name);
+        return value === null ? undefined : withNewLines(value);
+      };
+      const parts = Object.fromEntries(["title", "description", "colour", "image", "thumbnail", "footer"].map((name) => [name, option(name)]));
+      const avatar = interaction.options.getBoolean("avatar");
+      if (Object.values(parts).every((value) => value === undefined) && avatar === null) {
+        return reply(Status.REFUSED, "welcomeEmbedNothing");
+      }
+      const embed = structuredClone(savedEmbed(guildSettings, guildId, kind) ?? {});
+      const put = (value, apply) => value !== undefined && apply(value === REMOVE ? "" : value);
+      put(parts.title, (value) => {
+        embed.title = value;
+        if (!value) {
+          delete embed.url;
+        }
+      });
+      put(parts.description, (value) => (embed.description = value));
+      put(parts.footer, (value) => (embed.footer = { text: value }));
+      put(parts.image, (value) => (embed.image = { url: value }));
+      put(parts.thumbnail, (value) => {
+        embed.thumbnail = { url: value };
+        if (value) {
+          delete embed.memberAvatar;
+        }
+      });
+      if (avatar !== null) {
+        embed.memberAvatar = avatar;
+      }
+      if (parts.colour !== undefined) {
+        const color = parts.colour === REMOVE ? null : parseColor(parts.colour);
+        if (color === undefined) {
+          return reply(Status.REFUSED, "embedBadColor", { color: parts.colour.slice(0, 20) });
+        }
+        embed.color = color;
+      }
+      let checked;
+      try {
+        checked = checkWelcomeEmbed(embed);
+      } catch (error) {
+        if (error instanceof InvalidMessage) {
+          return reply(Status.REFUSED, "welcomeEmbedInvalid", { reason: error.message });
+        }
+        throw error;
+      }
+      if (!checked) {
+        await guildSettings.clear(guildId, setting);
+        return reply(Status.SUCCESS, "welcomeEmbedRemoved", { which });
+      }
+      await guildSettings.set(guildId, setting, checked);
+      const notes = [];
+      if (kind !== "dm" && !guildSettings.get(guildId, TEXT_SETTING[kind])) {
+        notes.push("welcomeEmbedTextNote");
+      }
+      if (kind !== "dm" && !guildSettings.get(guildId, kind === "leave" ? Setting.LEAVE_CHANNEL : Setting.WELCOME_CHANNEL)) {
+        notes.push("welcomeNoChannelYet");
+      }
+      const preview = renderWelcomeEmbed(checked, { member: interaction.member, guild, color: defaultEmbedColor(guildSettings, guildId) });
+      await interaction.reply({
+        content: [text("welcomeEmbedSaved", { which }), ...notes.map((key) => text(key))].join("\n"),
+        embeds: [preview],
+        flags: MessageFlags.Ephemeral,
+        allowedMentions: { parse: [] },
+      });
+      return { status: Status.SUCCESS, note: `${translate("en", EMBED_CHOICES[kind])} embed: ${describeWelcomeEmbed(checked)}` };
+    };
+
     switch (interaction.options.getSubcommand()) {
       case "channel":
         return setChannel(Setting.WELCOME_CHANNEL, "welcomeChannelSet");
@@ -179,6 +290,8 @@ export function createWelcomeCommand({ guildSettings, forcedLanguage }) {
         return setText(Setting.LEAVE_MESSAGE, "welcomeLeaveMessageSet", Setting.LEAVE_CHANNEL);
       case "dm":
         return setText(Setting.WELCOME_DM, "welcomeDmSet");
+      case "embed":
+        return setEmbed();
       case "autorole": {
         const role = interaction.options.getRole("role", true);
         const values = { role: `<@&${role.id}>` };
@@ -219,16 +332,26 @@ export function createWelcomeCommand({ guildSettings, forcedLanguage }) {
       }
       case "test": {
         const member = interaction.member;
-        const dm = guildSettings.get(guildId, Setting.WELCOME_DM);
-        return replyLines([
-          text("welcomeTestTitle"),
-          `**${text("welcomeTestWelcome")}** ${guildSettings.get(guildId, Setting.WELCOME_CHANNEL) ? "" : text("welcomeTestOff")}`,
-          `> ${welcomeText(guildSettings, guild, member, "welcome", forcedLanguage).replace(/\n/g, "\n> ")}`,
-          `**${text("welcomeTestLeave")}** ${guildSettings.get(guildId, Setting.LEAVE_CHANNEL) ? "" : text("welcomeTestOff")}`,
-          `> ${welcomeText(guildSettings, guild, member, "leave", forcedLanguage).replace(/\n/g, "\n> ")}`,
-          `**${text("welcomeTestDm")}** ${dm ? "" : text("welcomeTestOff")}`,
-          dm ? `> ${renderTemplate(dm, { member, guild }).replace(/\n/g, "\n> ")}` : "",
-        ].filter(Boolean));
+        const lines = [text("welcomeTestTitle")];
+        const embeds = [];
+        const sections = [
+          ["welcome", "welcomeTestWelcome", guildSettings.get(guildId, Setting.WELCOME_CHANNEL)],
+          ["leave", "welcomeTestLeave", guildSettings.get(guildId, Setting.LEAVE_CHANNEL)],
+          ["dm", "welcomeTestDm", true],
+        ];
+        for (const [kind, labelKey, on] of sections) {
+          const payload = welcomePayload(guildSettings, guild, member, kind, forcedLanguage);
+          lines.push(`**${text(labelKey)}** ${on && payload ? "" : text("welcomeTestOff")}`);
+          if (payload?.content) {
+            lines.push(`> ${payload.content.replace(/\n/g, "\n> ")}`);
+          }
+          if (payload?.embeds.length) {
+            embeds.push(...payload.embeds);
+            lines.push(`> ${text("welcomeTestEmbedBelow", { number: embeds.length })}`);
+          }
+        }
+        await interaction.reply({ content: lines.join("\n").slice(0, 2000), embeds, flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] } });
+        return result(Status.SUCCESS);
       }
       case "show": {
         const channelLine = (setting, onKey, offKey) => {
@@ -240,7 +363,11 @@ export function createWelcomeCommand({ guildSettings, forcedLanguage }) {
           channelLine(Setting.WELCOME_CHANNEL, "welcomeShowChannel", "welcomeShowNoChannel"),
           text(guildSettings.get(guildId, Setting.WELCOME_MESSAGE) ? "welcomeShowCustomMessage" : "welcomeShowDefaultMessage"),
           channelLine(Setting.LEAVE_CHANNEL, "welcomeShowLeaveChannel", "welcomeShowNoLeaveChannel"),
-          text(guildSettings.get(guildId, Setting.WELCOME_DM) ? "welcomeShowDm" : "welcomeShowNoDm"),
+          text(guildSettings.get(guildId, Setting.WELCOME_DM) || savedEmbed(guildSettings, guildId, "dm") ? "welcomeShowDm" : "welcomeShowNoDm"),
+          (() => {
+            const withEmbeds = WELCOME_EMBED_KINDS.filter((kind) => savedEmbed(guildSettings, guildId, kind)).map((kind) => text(EMBED_CHOICES[kind]));
+            return withEmbeds.length > 0 ? text("welcomeShowEmbeds", { list: withEmbeds.join(", ") }) : text("welcomeShowNoEmbeds");
+          })(),
           roles.length > 0
             ? text("welcomeShowAutoroles", { roles: roles.map((id) => `<@&${id}>`).join(", ") })
             : text("welcomeShowNoAutoroles"),
