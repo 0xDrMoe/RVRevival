@@ -42,6 +42,7 @@ import { createTempRoleScheduler } from "./tempRoles/tempRoleScheduler.js";
 import { createRaidGuard } from "./raid/raid.js";
 import { createTempVoice } from "./voice/tempVoice.js";
 import { createMusic } from "./music/player.js";
+import { PlaylistStore } from "./music/playlistStore.js";
 import { createAutoResponder } from "./community/autoResponders.js";
 import { TempVoiceStore } from "./voice/tempVoiceStore.js";
 import { createLeveling } from "./leveling/leveling.js";
@@ -284,6 +285,8 @@ async function start() {
   const leveling = createLeveling({ guildSettings, store: levels, logger, forcedLanguage });
   // The music player (/play, /radio, /music). Nothing is saved; a restart ends every session.
   const music = createMusic({ guildSettings, logger, forcedLanguage });
+  // Members' saved playlists (/playlist).
+  const musicPlaylists = new PlaylistStore(db);
   const commands = createCommands({
     logger,
     guildSettings,
@@ -314,6 +317,7 @@ async function start() {
     sentMessages: new SentMessageStore(db),
     reports: new ReportStore(db),
     music,
+    musicPlaylists,
     dashboardUrl: config.dashboardUrl,
     memberLoader,
   });

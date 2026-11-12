@@ -150,6 +150,12 @@ export function createSoundCloud({ clientId: fixedClientId = null, fetchJson = d
       return (found?.collection ?? []).filter(isPlayable).slice(0, limit);
     },
 
+    // Free tracks SoundCloud lists as related to a track ID (for autoplay).
+    async related(id, { limit = 10 } = {}) {
+      const found = await api(`/tracks/${encodeURIComponent(id)}/related`, { limit: Math.min(limit * 2, 50) });
+      return (found?.collection ?? []).filter(isPlayable).slice(0, limit).map(toTrack);
+    },
+
     // The audio for a track ID, fetched just before it plays (the addresses
     // expire): { url, protocol: "progressive" | "hls" }.
     async streamFor(id) {

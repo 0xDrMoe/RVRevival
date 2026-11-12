@@ -516,6 +516,19 @@ const MIGRATIONS = [
     PRIMARY KEY (guild_id, day, command)
   ) WITHOUT ROWID;
   `,
+  // 34: members' saved music playlists (/playlist, music/playlistStore.js).
+  // They belong to the member, not a server. `tracks` is a JSON array.
+  `
+  CREATE TABLE music_playlists (
+    user_id    TEXT    NOT NULL,
+    name_key   TEXT    NOT NULL,
+    name       TEXT    NOT NULL,
+    tracks     TEXT    NOT NULL,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    PRIMARY KEY (user_id, name_key)
+  ) WITHOUT ROWID;
+  `,
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS.length;

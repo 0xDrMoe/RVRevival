@@ -4451,16 +4451,22 @@ async function showBirthdays(guildId) {
 // --- Music ---------------------------------------------------------------------
 
 // As in music/config.js.
-const MUSIC_DEFAULTS = { djRoleId: null, defaultVolume: 80, maxQueue: 200, announce: true, leaveAfterMinutes: 3 };
-const MUSIC_LIMITS = { volume: [1, 150], queue: [10, 500], leave: [0, 60] };
+const MUSIC_DEFAULTS = { djRoleId: null, djOnly: false, voteSkipPercent: 50, maxSongMinutes: 0, stay247: false, defaultVolume: 80, maxQueue: 200, announce: true, leaveAfterMinutes: 3 };
+const MUSIC_LIMITS = { volume: [1, 150], queue: [10, 500], leave: [0, 60], voteSkip: [0, 100], maxLength: [0, 720] };
 
 function readMusic(form) {
   const whole = (id, fallback) => {
     const value = Number(form.querySelector(id).value);
     return Number.isFinite(value) && form.querySelector(id).value !== "" ? Math.round(value) : fallback;
   };
+  const djRoleId = form.querySelector("#musicDjRole").value || null;
   return {
-    djRoleId: form.querySelector("#musicDjRole").value || null,
+    djRoleId,
+    // DJ-only mode needs a DJ role; without one the switch is ignored.
+    djOnly: Boolean(djRoleId) && form.querySelector("#musicDjOnly").checked,
+    voteSkipPercent: whole("#musicVoteSkip", MUSIC_DEFAULTS.voteSkipPercent),
+    maxSongMinutes: whole("#musicMaxLength", MUSIC_DEFAULTS.maxSongMinutes),
+    stay247: form.querySelector("#musicStay").checked,
     defaultVolume: whole("#musicVolume", MUSIC_DEFAULTS.defaultVolume),
     maxQueue: whole("#musicQueue", MUSIC_DEFAULTS.maxQueue),
     announce: form.querySelector("#musicAnnounce").checked,
@@ -4476,6 +4482,13 @@ async function showMusic(guildId) {
   const music = { ...MUSIC_DEFAULTS, ...(data.settings.music ?? {}) };
   const roles = data.roles.filter((role) => role.id !== data.guild.id && !role.managed).map((role) => roleItem(role));
   const number = (id, value, [min, max]) => h("input", { id, type: "number", min, max, step: 1, value, required: true });
+  const toggle = (id, label, help, checked) =>
+    h(
+      "label",
+      { class: "switch-card" },
+      h("span", { class: "switch-text" }, h("strong", {}, t(label)), h("span", { class: "help" }, t(help))),
+      h("span", { class: "switch" }, h("input", { id, type: "checkbox", role: "switch", checked, "aria-label": t(label) })),
+    );
   settingsPage({
     data,
     pageId: "music",
@@ -4486,12 +4499,9 @@ async function showMusic(guildId) {
         "music",
         "pink",
         field("musicDjRole", "musicDjRoleHelp", picker({ id: "musicDjRole", options: roles, value: music.djRoleId, emptyLabel: t("musicNoDj") })),
-        h(
-          "label",
-          { class: "switch-card" },
-          h("span", { class: "switch-text" }, h("strong", {}, t("musicAnnounce")), h("span", { class: "help" }, t("musicAnnounceHelp"))),
-          h("span", { class: "switch" }, h("input", { id: "musicAnnounce", type: "checkbox", role: "switch", checked: music.announce, "aria-label": t("musicAnnounce") })),
-        ),
+        toggle("musicDjOnly", "musicDjOnly", "musicDjOnlyHelp", music.djOnly),
+        h("div", { class: "rule-body" }, field("musicVoteSkip", "musicVoteSkipHelp", number("musicVoteSkip", music.voteSkipPercent, MUSIC_LIMITS.voteSkip))),
+        toggle("musicAnnounce", "musicAnnounce", "musicAnnounceHelp", music.announce),
       ),
       card(
         t("musicSectionPlayback"),
@@ -4502,8 +4512,10 @@ async function showMusic(guildId) {
           { class: "rule-body" },
           field("musicVolume", "musicVolumeHelp", number("musicVolume", music.defaultVolume, MUSIC_LIMITS.volume)),
           field("musicQueue", "musicQueueHelp", number("musicQueue", music.maxQueue, MUSIC_LIMITS.queue)),
+          field("musicMaxLength", "musicMaxLengthHelp", number("musicMaxLength", music.maxSongMinutes, MUSIC_LIMITS.maxLength)),
           field("musicLeave", "musicLeaveHelp", number("musicLeave", music.leaveAfterMinutes, MUSIC_LIMITS.leave)),
         ),
+        toggle("musicStay", "musicStay", "musicStayHelp", music.stay247),
       ),
       card(
         t("musicSectionSources"),

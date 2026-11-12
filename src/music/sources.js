@@ -163,6 +163,22 @@ export function createResolver({
       return { tracks: [toTrack(first)], skipped: 0, name: null };
     },
 
+    // Up to `limit` SoundCloud tracks for words, best match first (/search).
+    async search(query, { limit = 5 } = {}) {
+      const text = String(query ?? "").trim().slice(0, 200);
+      if (!text) {
+        throw new MusicError("not-found", "Type something to search for.");
+      }
+      const found = await soundcloud.search(text, { limit });
+      if (found.length === 0) {
+        throw new MusicError("not-found", `No free songs found for "${text}".`);
+      }
+      return found.map(toTrack);
+    },
+
+    // SoundCloud tracks related to a SoundCloud track ID (autoplay).
+    related: (id) => soundcloud.related(id),
+
     // An uploaded file (a discord.js Attachment) → a track.
     fileTrack(attachment) {
       const type = String(attachment?.contentType ?? "").toLowerCase();

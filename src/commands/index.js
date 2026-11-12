@@ -103,6 +103,7 @@ export function createCommands({
   sentMessages,
   reports,
   music,
+  musicPlaylists,
   roleConfirmations = createRoleConfirmations({ guildSettings, store: new RoleConfirmStore(), forcedLanguage }),
   dashboardUrl,
   memberLoader = createMemberLoader(),
@@ -155,7 +156,7 @@ export function createCommands({
     createMediaOnlyCommand({ guildSettings, forcedLanguage }),
     createBirthdayCommand({ guildSettings, store: birthdays, forcedLanguage }),
     ...createLevelCommands({ levels, leveling, guildSettings, forcedLanguage }),
-    ...createMusicCommands({ guildSettings, forcedLanguage, logger, music }),
+    ...createMusicCommands({ guildSettings, forcedLanguage, logger, music, playlists: musicPlaylists }),
     // Right-click apps: Report message, User info, Moderation history.
     ...createContextMenus({ guildSettings, reports, moderation, forcedLanguage, logger }),
   ];

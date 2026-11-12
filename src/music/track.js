@@ -1,6 +1,6 @@
 // A song (or radio station) in a queue. Tracks are plain objects:
 //
-//   id          random, so buttons and /music remove can name one
+//   id          random, so each queued copy of a song is told apart
 //   title, artist, url (the page to link to), artworkUrl, durationMs (null when unknown)
 //   source      where the audio comes from (Source); null until a Spotify,
 //               Apple Music or Deezer song is matched to a free copy

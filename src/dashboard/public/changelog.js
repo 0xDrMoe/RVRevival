@@ -4,6 +4,17 @@
 export const CHANGELOG = [
   {
     date: "2026-11-12",
+    title: "Music: search, queue tools, DJ controls and playlists",
+    items: [
+      "/search shows the 5 best matches for what you type; pick one from the menu or a number button.",
+      "/queue manages what's next: view, remove, move, skip to a song, shuffle, clear, remove duplicates and remove songs from people who left.",
+      "/music gains back, seek, forward, rewind, replay, autoplay (related songs when the queue runs out), audio effects like bass boost and nightcore, lyrics, and grab to DM yourself the song. Now playing shows a progress bar and Back and Shuffle buttons.",
+      "DJ controls: DJ-only mode, vote skip for members who aren't DJs, a longest-song limit and 24/7 mode, on the Music page or with /music settings.",
+      "/playlist saves your own playlists (up to 25, 200 songs each) and plays them on any server.",
+    ],
+  },
+  {
+    date: "2026-11-12",
     title: "Music player",
     items: [
       "/play plays songs, playlists and audio files in your voice channel: search by name, or paste a SoundCloud, Bandcamp, Spotify, Apple Music or Deezer link, or a link to any audio file or stream.",
