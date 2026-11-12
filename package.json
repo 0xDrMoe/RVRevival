@@ -17,13 +17,16 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@discordjs/voice": "0.19.2",
     "@fastify/compress": "9.2.2",
     "@fastify/cookie": "11.1.2",
     "@fastify/rate-limit": "11.2.0",
     "@fastify/static": "10.1.5",
     "discord.js": "14.27.0",
     "fastify": "5.12.5",
-    "i18n-iso-countries": "7.14.0"
+    "ffmpeg-static": "5.2.0",
+    "i18n-iso-countries": "7.14.0",
+    "opusscript": "0.1.1"
   },
   "devDependencies": {
     "vitest": "4.1.11"

@@ -3,6 +3,17 @@
 
 export const CHANGELOG = [
   {
+    date: "2026-11-12",
+    title: "Music player",
+    items: [
+      "/play plays songs, playlists and audio files in your voice channel: search by name, or paste a SoundCloud, Bandcamp, Spotify, Apple Music or Deezer link, or a link to any audio file or stream.",
+      "/radio plays internet radio from about 50,000 stations, suggested as you type.",
+      "/music controls the queue: skip, pause, loop, shuffle, volume, remove and move. The Now playing message has buttons for the common ones.",
+      "Set a DJ role, the starting volume, the queue size and when the bot leaves on the new Music page or with /music settings.",
+      "Only sources that allow it are played. Spotify, Apple Music and Deezer songs are matched to free copies on SoundCloud, and YouTube isn't supported because YouTube doesn't allow it.",
+    ],
+  },
+  {
     date: "2026-11-10",
     title: "Send test buttons",
     items: [

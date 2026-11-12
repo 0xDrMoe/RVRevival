@@ -41,6 +41,7 @@ import { createMediaOnly } from "./community/mediaOnly.js";
 import { createTempRoleScheduler } from "./tempRoles/tempRoleScheduler.js";
 import { createRaidGuard } from "./raid/raid.js";
 import { createTempVoice } from "./voice/tempVoice.js";
+import { createMusic } from "./music/player.js";
 import { createAutoResponder } from "./community/autoResponders.js";
 import { TempVoiceStore } from "./voice/tempVoiceStore.js";
 import { createLeveling } from "./leveling/leveling.js";
@@ -281,6 +282,8 @@ async function start() {
   const starboard = createStarboard({ guildSettings, store: new StarboardStore(db), logger, forcedLanguage, botDeletions });
 
   const leveling = createLeveling({ guildSettings, store: levels, logger, forcedLanguage });
+  // The music player (/play, /radio, /music). Nothing is saved; a restart ends every session.
+  const music = createMusic({ guildSettings, logger, forcedLanguage });
   const commands = createCommands({
     logger,
     guildSettings,
@@ -310,6 +313,7 @@ async function start() {
     tempVoice: tempVoiceChannels,
     sentMessages: new SentMessageStore(db),
     reports: new ReportStore(db),
+    music,
     dashboardUrl: config.dashboardUrl,
     memberLoader,
   });
@@ -526,6 +530,8 @@ async function start() {
       safely("people joining or leaving a thread", (added, removed, thread) => commands.get("tickets").threadMembersUpdated(added, removed, thread)),
     );
     client.on(Events.VoiceStateUpdate, safely("join-to-create voice", (before, after) => tempVoice.voiceStateUpdate(before, after)));
+    client.on(Events.VoiceStateUpdate, safely("music listeners", (before, after) => music.voiceStateUpdate(before, after)));
+    client.on(Events.GuildDelete, (guild) => music.guildDeleted(guild.id));
 
     client.on(Events.WebhooksUpdate, (channel) => poster.webhooksChanged(channel.id));
     client.on(Events.ChannelDelete, (channel) => {
@@ -640,6 +646,7 @@ async function start() {
       statsUpdater.stop();
       leveling.stopVoiceXp();
       automod.stop();
+      music.stopAll();
       clearInterval(heartbeat);
       clearInterval(dbHousekeeping);
       await client?.destroy().catch(() => {});

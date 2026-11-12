@@ -82,6 +82,7 @@ export const Setting = Object.freeze({
   COUNTRY_ROLES: "countryRoles", // what members pick (countries or regions), hidden places and self-removal, an object (see countries/options.js)
   COUNTRY_GUIDE_POST: "countryGuidePost", // the last guide posted, { channelId, messageId }, so the dashboard can update it
   BRANDING: "branding", // the bot's look in this server, { color } (see branding/branding.js)
+  MUSIC: "music", // the music player, { djRoleId, defaultVolume, maxQueue, announce, leaveAfterMinutes } (see music/config.js)
 });
 
 const KNOWN_SETTINGS = new Set(Object.values(Setting));

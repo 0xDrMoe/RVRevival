@@ -66,6 +66,7 @@ import { FEED_KINDS } from "../feeds/fetchFeed.js";
 import { FeedStore, MAX_FEEDS } from "../feeds/feedStore.js";
 import { createLiveApis } from "../feeds/liveApis.js";
 import { normalizeMediaOnly } from "../community/mediaOnly.js";
+import { normalizeMusic } from "../music/config.js";
 import { checkPanelInput, InvalidPanel, MAX_PANELS, panelMessage, panelsOf } from "../community/rolePanels.js";
 import { KeyedLock } from "../utils/keyedLock.js";
 import { BACKUP_LIMITS, buildBackup, InvalidBackup, planRestore, readBackupFile, settingLabel } from "./backup.js";
@@ -628,6 +629,7 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     [Setting.ANTI_NUKE]: normalizeAntiNuke(guildSettings.get(guildId, Setting.ANTI_NUKE)),
     [Setting.APPEALS]: normalizeAppeals(guildSettings.get(guildId, Setting.APPEALS)),
     [Setting.MEDIA_ONLY]: normalizeMediaOnly(guildSettings.get(guildId, Setting.MEDIA_ONLY)),
+    [Setting.MUSIC]: normalizeMusic(guildSettings.get(guildId, Setting.MUSIC)),
     // With the title and text of panels set up before the look was saved on its own.
     [Setting.TICKET_PANEL]: panelLook(guildSettings, guildId),
     [Setting.TICKET_SUPPORT]: normalizeTicketSupport(guildSettings.get(guildId, Setting.TICKET_SUPPORT)),
@@ -645,6 +647,7 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     [Setting.ANTI_NUKE]: normalizeAntiNuke,
     [Setting.APPEALS]: normalizeAppeals,
     [Setting.MEDIA_ONLY]: normalizeMediaOnly,
+    [Setting.MUSIC]: normalizeMusic,
     [Setting.COMMAND_RULES]: rulesOrNull,
     [Setting.TICKET_PANEL]: (saved) => (saved ? normalizeLook(saved) : null),
     [Setting.TICKET_SUPPORT]: (saved) => checkTicketSupport(normalizeTicketSupport(saved)),
