@@ -6,8 +6,11 @@ import { createBandcamp, readTralbum } from "../src/music/bandcamp.js";
 import { createCatalogs, parseCatalogLink, readSpotifyEmbed } from "../src/music/catalogs.js";
 import { checkMusic, DEFAULT_MUSIC, describeMusic, InvalidMusic, normalizeMusic } from "../src/music/config.js";
 import { findMatch, matchQuery, matchScore, words } from "../src/music/match.js";
+import { audioFilter, filterSpeed, FILTER_NAMES } from "../src/music/filters.js";
+import { cleanTitle, createLyrics, splitArtist } from "../src/music/lyrics.js";
 import { MusicError } from "../src/music/net.js";
-import { queueMessage, sourceLabel } from "../src/music/nowPlaying.js";
+import { nowPlayingMessage, progressBar, queueMessage, sourceLabel } from "../src/music/nowPlaying.js";
+import { cleanPlaylistName, MAX_PLAYLISTS, PlaylistStore, savedTrack } from "../src/music/playlistStore.js";
 import { createMusic } from "../src/music/player.js";
 import { createRadio, isStationId, stationLabel, stationTrack, toStation } from "../src/music/radio.js";
 import { createSoundCloud, isPlayable, pickTranscoding } from "../src/music/soundcloud.js";
@@ -64,8 +67,13 @@ describe("music settings", () => {
   });
 
   it("describes them for the logs", () => {
-    expect(describeMusic(null)).toBe("no DJ role · volume 80% · queue 200 · now playing on · leaves after 3 min");
-    expect(describeMusic({ djRoleId: "123456789012345678", announce: false, leaveAfterMinutes: 0 })).toBe("DJ <@&123456789012345678> · volume 80% · queue 200 · now playing off · leaves right away");
+    expect(describeMusic(null)).toBe("no DJ role · vote skip 50% · any length · volume 80% · queue 200 · now playing on · leaves after 3 min");
+    expect(describeMusic({ djRoleId: "123456789012345678", announce: false, leaveAfterMinutes: 0 })).toBe(
+      "DJ <@&123456789012345678> · vote skip 50% · any length · volume 80% · queue 200 · now playing off · leaves right away",
+    );
+    expect(describeMusic({ djRoleId: "123456789012345678", djOnly: true, voteSkipPercent: 0, maxSongMinutes: 10, stay247: true })).toBe(
+      "DJ <@&123456789012345678> · DJ only · vote skip off · songs up to 10 min · volume 80% · queue 200 · now playing on · 24/7",
+    );
   });
 });
 
@@ -575,4 +583,191 @@ describe("music player", () => {
     const page = queueMessage(player.state(), { language: "en", guildSettings: settings() });
     expect(page.embeds[0].data.description).toContain("Nothing is waiting");
   });
+
+  it("goes back, seeks, skips ahead and cleans the queue", async () => {
+    const openAudio = vi.fn(async () => ({ stream: new PassThrough(), stop: vi.fn(), errors: [] }));
+    const { voice, manager, guild, voiceChannel, textChannel } = setup({ openAudio, humans: 2 });
+    const player = await manager.join({ guild, channel: voiceChannel, textChannel });
+    player.add(songs("A", "B", "C", "B", "D"), { requestedBy: "u0" });
+    await flush();
+    expect(player.back()).toBeNull();
+    player.skip();
+    await flush();
+    expect(player.current.title).toBe("B");
+    expect(player.history.map((track) => track.title)).toEqual(["A"]);
+
+    expect(player.back().title).toBe("A");
+    await flush();
+    expect(player.current.title).toBe("A");
+    expect(player.queue.map((track) => track.title)).toEqual(["B", "C", "B", "D"]);
+
+    expect(player.seek(90_000)).toBe(true);
+    await flush();
+    expect(player.current.title).toBe("A");
+    expect(openAudio.mock.calls.at(-1)[1]).toMatchObject({ startMs: 90_000 });
+    expect(player.positionMs).toBe(150_000);
+    expect(textChannel.sent.at(-1).edit).toHaveBeenCalled();
+
+    expect(player.removeDuplicates()).toBe(1);
+    expect(player.queue.map((track) => track.title)).toEqual(["B", "C", "D"]);
+    player.queue[1].requestedBy = "gone";
+    expect(player.removeAbsent()).toBe(1);
+    expect(player.skipTo(2).title).toBe("D");
+    await flush();
+    expect(player.current.title).toBe("D");
+    expect(player.queue).toEqual([]);
+    expect(voice.players).toHaveLength(1);
+  });
+
+  it("refuses to seek in live streams", async () => {
+    const { manager, guild, voiceChannel, textChannel } = setup();
+    const player = await manager.join({ guild, channel: voiceChannel, textChannel });
+    player.add([makeTrack({ title: "Radio", source: Source.RADIO, live: true, stream: { url: "https://radio.test/" } })], { requestedBy: "u0" });
+    await flush();
+    expect(player.seek(1000)).toBe(false);
+    expect(player.forward(10_000)).toBeNull();
+  });
+
+  it("keeps the place when the filter changes", async () => {
+    const openAudio = vi.fn(async () => ({ stream: new PassThrough(), stop: vi.fn(), errors: [] }));
+    const { manager, guild, voiceChannel, textChannel } = setup({ openAudio });
+    const player = await manager.join({ guild, channel: voiceChannel, textChannel });
+    player.add(songs("A"), { requestedBy: "u0" });
+    await flush();
+    player.setFilter("nightcore");
+    await flush();
+    expect(openAudio.mock.calls.at(-1)[1]).toMatchObject({ startMs: 60_000, filter: "nightcore" });
+    expect(player.current.title).toBe("A");
+    // 60 s in, then 60 s more at 1.25×.
+    expect(player.positionMs).toBe(135_000);
+    expect(player.state().filter).toBe("nightcore");
+    expect(player.forward(-200_000)).toBe(0);
+  });
+
+  it("skips when enough listeners vote", async () => {
+    const { manager, guild, voiceChannel, textChannel } = setup({ humans: 3 });
+    const player = await manager.join({ guild, channel: voiceChannel, textChannel });
+    player.add(songs("A", "B"), { requestedBy: "u0" });
+    await flush();
+    expect(player.voteSkip("u1", 50)).toEqual({ votes: 1, needed: 2, skipped: false });
+    expect(player.voteSkip("u1", 50)).toEqual({ votes: 1, needed: 2, skipped: false });
+    expect(player.voteSkip("u2", 50)).toEqual({ votes: 2, needed: 2, skipped: true });
+    await flush();
+    expect(player.current.title).toBe("B");
+    expect(player.votes.size).toBe(0);
+  });
+
+  it("adds a related song when autoplay is on and the queue runs out", async () => {
+    const { voice, manager, guild, voiceChannel, textChannel } = setup();
+    const player = await manager.join({ guild, channel: voiceChannel, textChannel });
+    manager.resolver.related = vi.fn(async () => [...songs("A"), ...songs("Related")]);
+    player.add(songs("A"), { requestedBy: "u0" });
+    await flush();
+    player.setAutoplay(true);
+    voice.players[0].finish();
+    await flush();
+    expect(manager.resolver.related).toHaveBeenCalledWith("A");
+    expect(player.current).toMatchObject({ title: "Related", autoplay: true, requestedBy: null });
+  });
+
+  it("stays in the channel 24/7", async () => {
+    const { voice, manager, guild, voiceChannel, textChannel, timers } = setup({ music: { stay247: true, leaveAfterMinutes: 0 } });
+    const player = await manager.join({ guild, channel: voiceChannel, textChannel });
+    player.add(songs("A"), { requestedBy: "u0" });
+    await flush();
+    voice.players[0].finish();
+    await flush();
+    voiceChannel.members.delete("u0");
+    manager.voiceStateUpdate({ id: "u0", channelId: "vc", guild }, { id: "u0", channelId: null, guild });
+    expect(player.destroyed).toBe(false);
+    expect(timers).toHaveLength(0);
+  });
 });
+
+describe("filters", () => {
+  it("builds ffmpeg's -af value with the seek first", () => {
+    expect(audioFilter("off")).toBeNull();
+    expect(audioFilter("off", 1500)).toBe("atrim=start=1.500,asetpts=PTS-STARTPTS");
+    expect(audioFilter("bassboost", 0)).toBe("bass=g=10:f=110:w=0.6");
+    expect(audioFilter("nope")).toBeNull();
+    expect(filterSpeed("nightcore")).toBe(1.25);
+    expect(filterSpeed("nope")).toBe(1);
+    expect(FILTER_NAMES).toContain("8d");
+    const args = ffmpegArgs("pipe:0", { startMs: 2000, filter: "vaporwave" });
+    expect(args[args.indexOf("-af") + 1]).toBe("atrim=start=2.000,asetpts=PTS-STARTPTS,aresample=48000,asetrate=48000*0.8,aresample=48000");
+    expect(ffmpegArgs("pipe:0", { live: true, startMs: 2000 })).not.toContain("-af");
+  });
+
+  it("shows how far the song is", () => {
+    expect(progressBar(0, 100_000, 4)).toBe("🔘▬▬▬");
+    expect(progressBar(99_000, 100_000, 4)).toBe("▬▬▬🔘");
+    expect(progressBar(5, null)).toBeNull();
+    const track = makeTrack({ title: "A", artist: "Band", durationMs: 100_000, source: Source.SOUNDCLOUD });
+    const message = nowPlayingMessage({ guildId: "g", current: track, queue: [], loop: "off", paused: false, volume: 80, positionMs: 50_000, filter: "nightcore" }, { language: "en", guildSettings: settings() });
+    expect(message.embeds[0].data.description).toContain("🔘");
+    expect(message.embeds[0].data.footer.text).toContain("Nightcore");
+  });
+});
+
+describe("lyrics", () => {
+  it("tidies titles before looking them up", () => {
+    expect(cleanTitle("Song (Official Video) [HD]")).toBe("Song");
+    expect(cleanTitle("Song (feat. Someone)")).toBe("Song");
+    expect(splitArtist("Band - Song", "uploader")).toEqual({ artist: "Band", title: "Song" });
+    expect(splitArtist("Song", "Band")).toEqual({ artist: "Band", title: "Song" });
+  });
+
+  it("tries the exact song, then a search close in length", async () => {
+    const fetchJson = vi.fn(async (url) => {
+      if (url.includes("/api/get")) {
+        throw new MusicError("not-found");
+      }
+      return [
+        { trackName: "Song", artistName: "Band", duration: 300, plainLyrics: "wrong one" },
+        { trackName: "Song", artistName: "Band", duration: 181, plainLyrics: "right one" },
+      ];
+    });
+    const found = await createLyrics({ fetchJson }).find({ title: "Band - Song (Official Audio)", artist: "uploader", durationMs: 180_000 });
+    expect(fetchJson.mock.calls[0][0]).toBe("https://lrclib.net/api/get?track_name=Song&artist_name=Band&duration=180");
+    expect(fetchJson.mock.calls[1][0]).toBe("https://lrclib.net/api/search?q=Band+Song");
+    expect(found).toEqual({ title: "Song", artist: "Band", lyrics: "right one", instrumental: false });
+    await expect(createLyrics({ fetchJson: async () => [] }).find({ title: "Nothing" })).resolves.toBeNull();
+  });
+});
+
+describe("playlists", () => {
+  it("tidies names", () => {
+    expect(cleanPlaylistName("  Road   trip ")).toBe("Road trip");
+    expect(cleanPlaylistName("")).toBeNull();
+    expect(cleanPlaylistName("x".repeat(51))).toBeNull();
+  });
+
+  it("saves what's needed to play songs again, but not uploads", () => {
+    const store = new PlaylistStore();
+    store.create("u1", "Mix");
+    const sc = makeTrack({ title: "A", source: Source.SOUNDCLOUD, stream: { id: 5, extra: { nested: true } }, durationMs: 1000 });
+    const spotify = makeTrack({ title: "B", via: Via.SPOTIFY, lookup: { title: "B", artist: "Band", durationMs: 2000 } });
+    const upload = makeTrack({ title: "C", source: Source.FILE, stream: { url: "https://cdn.discordapp.com/x.mp3" } });
+    expect(savedTrack(upload)).toBeNull();
+    expect(store.add("u1", "mix", [{ ...sc, requestedBy: "u1" }, spotify, upload])).toEqual({ added: 2, skipped: 1 });
+    const [first, second] = store.get("u1", "MIX").tracks;
+    expect(first).toMatchObject({ title: "A", source: Source.SOUNDCLOUD, stream: { id: 5 }, durationMs: 1000 });
+    expect(first.requestedBy ?? null).toBeNull();
+    expect(first.id).not.toBe(sc.id);
+    expect(second).toMatchObject({ title: "B", source: null, via: Via.SPOTIFY, lookup: { artist: "Band" } });
+    expect(store.list("u1")).toEqual([{ name: "Mix", size: 2, updatedAt: expect.any(Number) }]);
+    expect(store.list("u2")).toEqual([]);
+  });
+
+  it("limits how many playlists a member has", () => {
+    const store = new PlaylistStore();
+    for (let index = 0; index < MAX_PLAYLISTS; index += 1) {
+      store.create("u1", `List ${index}`);
+    }
+    expect(() => store.create("u1", "One more")).toThrow(expect.objectContaining({ reason: "too-many" }));
+    expect(() => store.create("u1", "list 0")).toThrow(expect.objectContaining({ reason: "exists" }));
+    expect(store.delete("u1", "LIST 0")).toBe("List 0");
+    expect(store.deleteUser("u1")).toBe(MAX_PLAYLISTS - 1);
+  });
+});
+

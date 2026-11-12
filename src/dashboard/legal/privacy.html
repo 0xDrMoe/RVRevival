@@ -101,7 +101,8 @@
           <li><strong>Highlights</strong>: the words you asked to be notified about.</li>
           <li><strong>Role pick confirmations</strong>: whether you turned them on or off for yourself in a server. Forgotten when you leave that server.</li>
           <li><strong>Giveaways</strong>: who entered and who won.</li>
-          <li><strong>Music</strong>: only the server’s music settings (DJ role, volume, queue size, when to leave). The queue isn’t saved.</li>
+          <li><strong>Music</strong>: the server’s music settings (DJ role, DJ-only mode, vote skip, longest song, 24/7, volume, queue size, when to leave). The queue and skip votes aren’t saved.</li>
+          <li><strong>Music playlists</strong> (if you make one with <code>/playlist</code>): its name and, for each song, the title, artist, length, link and what’s needed to play it again. They belong to you and work on every server; delete them with <code>/playlist delete</code>.</li>
           <li>
             <strong>Other features</strong> keep only IDs: starboard posts, join-to-create voice channels and their owners,
             and messages posted from the dashboard or with <code>/embed</code> (with a short summary and who posted them).
@@ -171,7 +172,8 @@
           the site that has it: SoundCloud for searches, and the site of the link (Spotify, Apple Music, Deezer,
           Bandcamp, radio-browser.info or wherever the audio is) to read song names and play the audio. Songs from
           Spotify, Apple Music and Deezer are searched on SoundCloud by name and artist. The queue and who added each song
-          are kept in memory only while the music plays and are never saved. No member information is sent to those sites.
+          are kept in memory only while the music plays and are never saved. For <code>/music lyrics</code>, the song’s
+          title, artist and length are sent to LRCLIB (lrclib.net). No member information is sent to those sites.
         </p>
         <p>
           Followed feeds (YouTube, Bluesky, Mastodon, Reddit, GitHub, RSS) are fetched by our server from public addresses.

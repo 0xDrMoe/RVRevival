@@ -13,6 +13,7 @@ import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
 import { Readable } from "node:stream";
+import { audioFilter } from "./filters.js";
 import { MusicError, openUrl as defaultOpenUrl } from "./net.js";
 import { Source } from "./track.js";
 
@@ -35,7 +36,11 @@ export function ffmpegPath() {
 
 // ffmpeg's arguments. `input` is "pipe:0" for audio the bot feeds it, or an
 // HTTPS address for HLS.
-export function ffmpegArgs(input, { live = false } = {}) {
+// `startMs` skips the start of the song (a seek): ffmpeg decodes and drops
+// it, which works on any input, including a piped download. `filter` names
+// an audio filter (music/filters.js).
+export function ffmpegArgs(input, { live = false, startMs = 0, filter = "off" } = {}) {
+  const af = audioFilter(filter, live ? 0 : startMs);
   const network = input === "pipe:0" ? [] : ["-protocol_whitelist", "https,tls,tcp,hls,crypto", "-reconnect", "1", "-reconnect_streamed", "1", "-reconnect_delay_max", "5"];
   return [
     "-hide_banner",
@@ -46,6 +51,7 @@ export function ffmpegArgs(input, { live = false } = {}) {
     ...network,
     "-i",
     input,
+    ...(af ? ["-af", af] : []),
     "-vn",
     "-sn",
     "-dn",
@@ -81,8 +87,8 @@ export async function audioAddress(track, { soundcloud, bandcamp }) {
 // Starts a track. Returns { stream, stop, errors }: the PCM stream for
 // createAudioResource, a function that stops the download and ffmpeg, and
 // ffmpeg's last error lines (for the log). Options: soundcloud, bandcamp,
-// spawnImpl and openUrl (tests).
-export async function openAudio(track, { soundcloud, bandcamp, spawnImpl = spawn, openUrl = defaultOpenUrl, logger }) {
+// startMs, filter, spawnImpl and openUrl (tests).
+export async function openAudio(track, { soundcloud, bandcamp, spawnImpl = spawn, openUrl = defaultOpenUrl, logger, startMs = 0, filter = "off" }) {
   const address = await audioAddress(track, { soundcloud, bandcamp });
   let download = null;
   if (address.url) {
@@ -95,7 +101,7 @@ export async function openAudio(track, { soundcloud, bandcamp, spawnImpl = spawn
     throw new MusicError("unreachable", "That stream isn't on HTTPS.");
   }
 
-  const ffmpeg = spawnImpl(ffmpegPath(), ffmpegArgs(address.url ? "pipe:0" : address.hls, { live: track.live }), { stdio: ["pipe", "pipe", "pipe"], windowsHide: true });
+  const ffmpeg = spawnImpl(ffmpegPath(), ffmpegArgs(address.url ? "pipe:0" : address.hls, { live: track.live, startMs, filter }), { stdio: ["pipe", "pipe", "pipe"], windowsHide: true });
   const errors = [];
   ffmpeg.stderr?.on("data", (chunk) => {
     errors.push(String(chunk).trim());

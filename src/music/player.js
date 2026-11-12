@@ -27,6 +27,7 @@ import { pickLanguage, translate } from "../i18n/i18n.js";
 import { derivedSetting, Setting } from "../settings/guildSettings.js";
 import { canPost, deleteMessage } from "../utils/rateLimits.js";
 import { normalizeMusic } from "./config.js";
+import { filterSpeed } from "./filters.js";
 import { MusicError } from "./net.js";
 import { nowPlayingMessage } from "./nowPlaying.js";
 import { createRadio } from "./radio.js";
@@ -38,6 +39,8 @@ const RECONNECT_MS = 5_000;
 // A song that ends this soon after starting failed (a broken link, say).
 const FAILED_WITHIN_MS = 1_500;
 const MAX_FAILURES_IN_A_ROW = 5;
+// Songs kept for /music back.
+const MAX_HISTORY = 20;
 export const DEFAULT_MAX_PLAYERS = 25;
 
 // The voice functions, swappable in tests.
@@ -67,6 +70,14 @@ export function createMusic({
     current = null;
     loop = "off";
     paused = false;
+    // Songs already played, oldest first (for /music back and autoplay).
+    history = [];
+    // When the queue runs out, add a related SoundCloud song (/music autoplay).
+    autoplay = false;
+    // The audio filter (music/filters.js).
+    filter = "off";
+    // Who voted to skip the song playing.
+    votes = new Set();
     // Paused because nobody was listening (resumes when someone comes back).
     autoPaused = false;
     failures = 0;
@@ -78,6 +89,11 @@ export function createMusic({
     #skipping = false;
     #destroyed = false;
     #startedAt = 0;
+    // Where the song playing started (after a seek), in ms.
+    #offsetMs = 0;
+    // The next song chosen by back, seek or replay instead of the queue:
+    // { track, startMs, backward, refresh }.
+    #forced = null;
 
     constructor({ guild, channel, textChannel }) {
       this.guild = guild;
@@ -120,8 +136,21 @@ export function createMusic({
         loop: this.loop,
         paused: this.paused,
         volume: this.volume,
-        positionMs: this.#resource?.playbackDuration ?? 0,
+        positionMs: this.positionMs,
+        history: this.history,
+        autoplay: this.autoplay,
+        filter: this.filter,
       };
+    }
+
+    // Where the song playing is, in ms of the song (a filter can play it faster).
+    get positionMs() {
+      return Math.round(this.#offsetMs + (this.#resource?.playbackDuration ?? 0) * filterSpeed(this.filter));
+    }
+
+    // People in the channel, not counting bots.
+    get listeners() {
+      return humansIn(this.voiceChannel);
     }
 
     // Runs player changes one at a time, so a skip and a song ending can't both start the next song.
@@ -181,8 +210,12 @@ export function createMusic({
         return;
       }
       const previous = this.current;
+      const forced = this.#forced;
+      this.#forced = null;
       let next;
-      if (previous && this.loop === "track" && !this.#skipping) {
+      if (forced) {
+        next = forced.track;
+      } else if (previous && this.loop === "track" && !this.#skipping) {
         next = previous;
       } else {
         if (previous && this.loop === "queue") {
@@ -190,9 +223,19 @@ export function createMusic({
         }
         next = this.queue.shift() ?? null;
       }
+      if (previous && next !== previous && !forced?.backward) {
+        this.#remember(previous);
+      }
+      if (!next && previous && this.autoplay) {
+        next = await this.#related(previous);
+      }
       this.#skipping = false;
+      if (next !== previous || !forced) {
+        this.votes.clear();
+      }
       this.current = next;
       this.paused = false;
+      this.#offsetMs = forced?.startMs ?? 0;
       if (!next) {
         await this.#clearNowPlaying();
         this.#scheduleLeave("done");
@@ -209,7 +252,7 @@ export function createMusic({
           return;
         }
         this.current = { ...ready, id: next.id, requestedBy: next.requestedBy };
-        this.#audio = await openAudio(this.current, { soundcloud: resolver.soundcloud, bandcamp: resolver.bandcamp, logger });
+        this.#audio = await openAudio(this.current, { soundcloud: resolver.soundcloud, bandcamp: resolver.bandcamp, logger, startMs: this.#offsetMs, filter: this.filter });
         if (this.#destroyed) {
           this.#audio.stop();
           return;
@@ -218,7 +261,11 @@ export function createMusic({
         this.#resource.volume?.setVolume(this.volume / 100);
         this.audioPlayer.play(this.#resource);
         this.#startedAt = Date.now();
-        await this.#announce();
+        if (forced?.refresh && this.#nowPlaying) {
+          this.#refreshNowPlaying();
+        } else {
+          await this.#announce();
+        }
       } catch (error) {
         await this.#failed(next, error);
       }
@@ -233,7 +280,7 @@ export function createMusic({
       this.#resource = null;
       audio?.stop();
       const playedMs = resource?.playbackDuration ?? 0;
-      if (!this.#skipping && this.current && playedMs < FAILED_WITHIN_MS && Date.now() - this.#startedAt < 30_000) {
+      if (!this.#skipping && this.current && this.#offsetMs === 0 && playedMs < FAILED_WITHIN_MS && Date.now() - this.#startedAt < 30_000) {
         logger.warn("A song failed to play", { guildId: this.guildId, source: this.current.source, ffmpeg: audio?.errors?.join(" | ") });
         const failed = this.current;
         // Don't loop a song that can't play.
@@ -308,6 +355,151 @@ export function createMusic({
       if (message) {
         await deleteMessage(message).catch(() => message.edit({ components: [] }).catch(() => {}));
       }
+    }
+
+    #remember(track) {
+      this.history.push(track);
+      this.history.splice(0, Math.max(0, this.history.length - MAX_HISTORY));
+    }
+
+    // A SoundCloud song related to the last one, not played lately, or null.
+    async #related(previous) {
+      if (previous.source !== "soundcloud" || typeof resolver.related !== "function") {
+        return null;
+      }
+      try {
+        const key = (track) => track.url ?? `${track.artist}|${track.title}`;
+        const played = new Set([...this.history, previous].map(key));
+        const found = await resolver.related(previous.stream.id);
+        const pick = found.find((track) => !played.has(key(track)));
+        return pick ? { ...pick, requestedBy: null, autoplay: true } : null;
+      } catch (error) {
+        logger.warn("Couldn't find a song for autoplay", { guildId: this.guildId, error: error?.message });
+        return null;
+      }
+    }
+
+    // Starts `track` now (back, seek, replay), stopping the song playing.
+    #jump(forced) {
+      this.#forced = forced;
+      this.#skipping = true;
+      if (this.#resource) {
+        this.audioPlayer.stop(true);
+      } else {
+        this.#serial(() => this.#playNext());
+      }
+    }
+
+    // Plays the song before this one again. The one playing goes back to the
+    // front of the queue. Returns the song, or null when there's none.
+    back() {
+      const previous = this.history.pop();
+      if (!previous) {
+        return null;
+      }
+      if (this.current) {
+        this.queue.unshift(this.current);
+      }
+      this.#jump({ track: previous, backward: true });
+      return previous;
+    }
+
+    // Jumps to a time in the song playing. Returns false for radio and live streams.
+    seek(ms) {
+      if (!Number.isFinite(ms)) {
+        return false;
+      }
+      if (!this.current || this.current.live || !this.current.source) {
+        return false;
+      }
+      const start = Math.max(0, Math.min(ms, Math.max(0, (this.current.durationMs ?? Infinity) - 5000)));
+      this.#jump({ track: this.current, startMs: start, backward: true, refresh: true });
+      return true;
+    }
+
+    // Skips to a queue position, dropping the songs before it. Returns the song, or null.
+    skipTo(position) {
+      if (position < 1 || position > this.queue.length) {
+        return null;
+      }
+      const skipped = this.queue.splice(0, position - 1);
+      if (this.loop === "queue") {
+        this.queue.push(...skipped);
+      }
+      const target = this.queue[0];
+      this.skip();
+      return target;
+    }
+
+    // Removes songs added twice (same link, or same title without one). Returns how many.
+    removeDuplicates() {
+      const seen = new Set(this.current ? [this.current.url ?? this.current.title] : []);
+      const before = this.queue.length;
+      this.queue = this.queue.filter((track) => {
+        const key = track.url ?? `${track.artist}|${track.title}`;
+        if (seen.has(key)) {
+          return false;
+        }
+        seen.add(key);
+        return true;
+      });
+      this.#refreshNowPlaying();
+      return before - this.queue.length;
+    }
+
+    // Removes songs added by people no longer in the voice channel. Returns how many.
+    removeAbsent() {
+      const here = new Set([...(this.voiceChannel?.members?.keys() ?? [])]);
+      const before = this.queue.length;
+      this.queue = this.queue.filter((track) => !track.requestedBy || here.has(track.requestedBy));
+      this.#refreshNowPlaying();
+      return before - this.queue.length;
+    }
+
+    // Moves `ms` forward (or back, when negative) in the song playing.
+    // Returns where it went, or null for radio and live streams.
+    forward(ms) {
+      if (!this.current || this.current.live) {
+        return null;
+      }
+      const target = Math.max(0, this.positionMs + ms);
+      return this.seek(target) ? Math.min(target, Math.max(0, (this.current.durationMs ?? Infinity) - 5000)) : null;
+    }
+
+    // Changes the audio filter; the song playing carries on from where it was.
+    setFilter(name) {
+      if (name === this.filter) {
+        return;
+      }
+      const at = this.current && !this.current.live ? this.positionMs : 0;
+      this.filter = name;
+      if (this.current) {
+        this.#jump({ track: this.current, startMs: at, backward: true, refresh: true });
+      }
+    }
+
+    // Counts a vote to skip the song playing. `needed` is how many votes
+    // skip it (`percent` of the listeners). Returns { votes, needed, skipped }.
+    voteSkip(userId, percent) {
+      if (!this.current) {
+        return { votes: 0, needed: 0, skipped: false };
+      }
+      this.votes.add(userId);
+      const here = new Set([...(this.voiceChannel?.members?.keys() ?? [])]);
+      for (const voter of this.votes) {
+        if (here.size > 0 && !here.has(voter)) {
+          this.votes.delete(voter);
+        }
+      }
+      const needed = Math.max(1, Math.ceil((this.listeners * percent) / 100));
+      const votes = this.votes.size;
+      const skipped = votes >= needed && this.skip();
+      return { votes, needed, skipped };
+    }
+
+    setAutoplay(on) {
+      this.autoplay = on;
+      this.#refreshNowPlaying();
     }
 
     skip() {
@@ -410,6 +602,10 @@ export function createMusic({
 
     #scheduleLeave(reason) {
       this.#cancelLeave();
+      // 24/7: the bot stays (it still pauses while nobody is listening).
+      if (this.settings.stay247) {
+        return;
+      }
       const minutes = this.settings.leaveAfterMinutes;
       const leave = () => {
         if (this.settings.announce) {
