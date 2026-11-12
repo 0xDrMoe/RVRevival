@@ -31,6 +31,7 @@ import { botCommandCatalog } from "../permissions/catalog.js";
 import { checkCommandRules, describeCommandRules, InvalidCommandRules } from "../permissions/commandRules.js";
 import { isModeratorRole } from "../permissions/moderatorPermissions.js";
 import { CUSTOM, PRESETS } from "../permissions/presets.js";
+import { checkMusic, describeMusic, InvalidMusic } from "../music/config.js";
 import { Setting } from "../settings/guildSettings.js";
 import { variableError } from "./public/variables.js";
 
@@ -108,6 +109,7 @@ export const SETTING_RULES = Object.freeze({
   [Setting.BIRTHDAYS]: { kind: "birthdays", types: POSTING_CHANNELS, label: "Birthdays" },
   [Setting.AUTO_RESPONDERS]: { kind: "autoResponders", types: RESPONDER_CHANNELS, label: "Auto-responders" },
   [Setting.MEDIA_ONLY]: { kind: "mediaOnly", types: [ChannelType.GuildText, ChannelType.GuildAnnouncement], label: "Media-only channels" },
+  [Setting.MUSIC]: { kind: "music", label: "Music" },
   [Setting.SETUP_SKIPPED]: { kind: "setupSteps", label: "Skipped setup steps" },
   [Setting.LOG_ROUTES]: { kind: "logRoutes", types: POSTING_CHANNELS, label: "Log channels per log type" },
   // Only the owner or whoever added the bot may change these (checked by the dashboard route).
@@ -330,6 +332,15 @@ function checkValue(setting, value, { guildId, channels, roles }) {
         }
         throw error;
       }
+    case "music":
+      try {
+        return checkMusic(value, { isRole: roleOk });
+      } catch (error) {
+        if (error instanceof InvalidMusic) {
+          throw new InvalidSetting(setting, error.message);
+        }
+        throw error;
+      }
     case "rolePersist":
       try {
         return checkRolePersist(value, { isRole: roleOk });
@@ -497,6 +508,9 @@ export function describeValue(setting, value) {
   }
   if (SETTING_RULES[setting]?.kind === "onByDefault") {
     return value === false ? "off" : "on";
+  }
+  if (SETTING_RULES[setting]?.kind === "music") {
+    return describeMusic(value);
   }
   if (value === null || value === undefined || (Array.isArray(value) && value.length === 0)) {
     return "*none*";

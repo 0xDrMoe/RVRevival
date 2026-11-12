@@ -45,6 +45,7 @@ import { createEmbedCommand } from "./embed.js";
 import { createMassRoleCommand } from "./massRole.js";
 import { createMemberLoader } from "../guilds/memberCache.js";
 import { createContextMenus } from "./contextMenus.js";
+import { createMusicCommands } from "./music.js";
 
 // Each command is { name, data, execute(interaction), autocomplete?(interaction),
 // components?, componentPrefixes? }. `components` maps a button, form or menu
@@ -71,7 +72,8 @@ import { createContextMenus } from "./contextMenus.js";
 // makes role panels and the country picker ask before changing roles.
 // `sentMessages` (messages/sentMessageStore.js) lists /embed posts on the
 // dashboard's Embed builder page. `reports` (moderation/reports.js) keeps
-// messages reported with the Report message app.
+// messages reported with the Report message app. `music` (music/player.js)
+// plays music for /play, /radio and /music (made on first use when left out).
 export function createCommands({
   logger,
   guildSettings,
@@ -100,6 +102,7 @@ export function createCommands({
   highlights,
   sentMessages,
   reports,
+  music,
   roleConfirmations = createRoleConfirmations({ guildSettings, store: new RoleConfirmStore(), forcedLanguage }),
   dashboardUrl,
   memberLoader = createMemberLoader(),
@@ -152,6 +155,7 @@ export function createCommands({
     createMediaOnlyCommand({ guildSettings, forcedLanguage }),
     createBirthdayCommand({ guildSettings, store: birthdays, forcedLanguage }),
     ...createLevelCommands({ levels, leveling, guildSettings, forcedLanguage }),
+    ...createMusicCommands({ guildSettings, forcedLanguage, logger, music }),
     // Right-click apps: Report message, User info, Moderation history.
     ...createContextMenus({ guildSettings, reports, moderation, forcedLanguage, logger }),
   ];

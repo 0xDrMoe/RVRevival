@@ -155,6 +155,7 @@ const NAV = [
       { id: "starboard", icon: "star", tone: "amber", manage: true, on: (s) => Boolean(s.starboard?.channelId) },
       { id: "birthdays", icon: "cake", tone: "pink", manage: true, on: (s) => Boolean(s.birthdays) },
       { id: "levels", icon: "trophy", tone: "green", manage: true, on: (s) => Boolean(s.leveling?.enabled) },
+      { id: "music", icon: "music", tone: "pink", manage: true },
       { id: "country", icon: "globe", tone: "cyan", manage: true, on: (s) => Boolean(s.countryChannelId) },
       { id: "counters", icon: "chart", tone: "blue", manage: true },
     ],
@@ -249,6 +250,7 @@ const ICONS = {
   userX: '<circle cx="9" cy="8" r="4"/><path d="M2 21a7 7 0 0 1 14 0"/><path d="m17 8 5 5M22 8l-5 5"/>',
   inbox: '<path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>',
   volume: '<path d="M11 5 6 9H2v6h4l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14"/>',
+  music: '<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>',
   smile: '<circle cx="12" cy="12" r="9"/><path d="M8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01"/>',
   send: '<path d="m22 2-7 20-4-9-9-4z"/><path d="M22 2 11 13"/>',
 };
@@ -1145,7 +1147,7 @@ const LANDING_PERMISSIONS = [
   ["list", "amber", "landingPermLogs", ["ViewAuditLog", "ManageWebhooks"]],
   ["message", "accent", "landingPermMessages", ["ViewChannel", "SendMessages", "EmbedLinks", "AttachFiles", "ReadMessageHistory"]],
   ["ticket", "cyan", "landingPermThreads", ["ManageThreads", "CreatePrivateThreads", "SendMessagesInThreads"]],
-  ["volume", "green", "landingPermVoice", ["Connect", "MoveMembers"]],
+  ["volume", "green", "landingPermVoice", ["Connect", "MoveMembers", "Speak"]],
 ];
 
 // Big numbers shortened (12.4K), small ones in full.
@@ -4443,6 +4445,79 @@ async function showBirthdays(guildId) {
     intro: t("birthdaysHelp"),
     cards: [birthdayCard(data, postableChannels(data), data.communityDefaults ?? {}, testRow(guildId, data, "birthday", "testBirthdayHelp"))],
     fields: { birthdays: readBirthdays },
+  });
+}
+
+// --- Music ---------------------------------------------------------------------
+
+// As in music/config.js.
+const MUSIC_DEFAULTS = { djRoleId: null, defaultVolume: 80, maxQueue: 200, announce: true, leaveAfterMinutes: 3 };
+const MUSIC_LIMITS = { volume: [1, 150], queue: [10, 500], leave: [0, 60] };
+
+function readMusic(form) {
+  const whole = (id, fallback) => {
+    const value = Number(form.querySelector(id).value);
+    return Number.isFinite(value) && form.querySelector(id).value !== "" ? Math.round(value) : fallback;
+  };
+  return {
+    djRoleId: form.querySelector("#musicDjRole").value || null,
+    defaultVolume: whole("#musicVolume", MUSIC_DEFAULTS.defaultVolume),
+    maxQueue: whole("#musicQueue", MUSIC_DEFAULTS.maxQueue),
+    announce: form.querySelector("#musicAnnounce").checked,
+    leaveAfterMinutes: whole("#musicLeave", MUSIC_DEFAULTS.leaveAfterMinutes),
+  };
+}
+
+async function showMusic(guildId) {
+  const data = await loadManagedGuild(guildId);
+  if (!data) {
+    return;
+  }
+  const music = { ...MUSIC_DEFAULTS, ...(data.settings.music ?? {}) };
+  const roles = data.roles.filter((role) => role.id !== data.guild.id && !role.managed).map((role) => roleItem(role));
+  const number = (id, value, [min, max]) => h("input", { id, type: "number", min, max, step: 1, value, required: true });
+  settingsPage({
+    data,
+    pageId: "music",
+    intro: t("musicHelp"),
+    cards: [
+      card(
+        t("musicSectionControl"),
+        "music",
+        "pink",
+        field("musicDjRole", "musicDjRoleHelp", picker({ id: "musicDjRole", options: roles, value: music.djRoleId, emptyLabel: t("musicNoDj") })),
+        h(
+          "label",
+          { class: "switch-card" },
+          h("span", { class: "switch-text" }, h("strong", {}, t("musicAnnounce")), h("span", { class: "help" }, t("musicAnnounceHelp"))),
+          h("span", { class: "switch" }, h("input", { id: "musicAnnounce", type: "checkbox", role: "switch", checked: music.announce, "aria-label": t("musicAnnounce") })),
+        ),
+      ),
+      card(
+        t("musicSectionPlayback"),
+        "volume",
+        "purple",
+        h(
+          "div",
+          { class: "rule-body" },
+          field("musicVolume", "musicVolumeHelp", number("musicVolume", music.defaultVolume, MUSIC_LIMITS.volume)),
+          field("musicQueue", "musicQueueHelp", number("musicQueue", music.maxQueue, MUSIC_LIMITS.queue)),
+          field("musicLeave", "musicLeaveHelp", number("musicLeave", music.leaveAfterMinutes, MUSIC_LIMITS.leave)),
+        ),
+      ),
+      card(
+        t("musicSectionSources"),
+        "globe",
+        "blue",
+        h("p", { class: "help" }, t("musicSourcesHelp")),
+        h(
+          "ul",
+          { class: "help" },
+          ["musicSourceSearch", "musicSourceSoundcloud", "musicSourceBandcamp", "musicSourceCatalogs", "musicSourceRadio", "musicSourceLinks", "musicSourceYoutube"].map((key) => h("li", {}, t(key))),
+        ),
+      ),
+    ],
+    fields: { music: readMusic },
   });
 }
 
@@ -11012,6 +11087,7 @@ const SHOW_PAGE = {
   roles: showRoles,
   starboard: showStarboard,
   birthdays: showBirthdays,
+  music: showMusic,
   levels: showLevels,
   country: showCountry,
   tags: showTags,

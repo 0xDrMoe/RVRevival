@@ -369,6 +369,22 @@ Discord has no built-in way to give each group its own voice channel, so the bot
 
 The bot needs **View Channel**, **Manage Channels**, **Manage Roles**, **Move Members** and **Connect** in the category. It uses the Guild Voice States intent, which isn't privileged.
 
+### Music
+
+Members play music in a voice channel. Only sources that allow it are used, so a public bot isn't shut down for breaking a platform's terms.
+
+- `/play [query] [file] [next]` joins your voice channel and plays, or adds to the queue: words (the best free match on SoundCloud), a SoundCloud track or playlist, a Bandcamp track or album, a Spotify, Apple Music or Deezer song, album or playlist, a link to an audio file or stream (MP3, OGG, AAC, FLAC, `.m3u`, `.pls`), or an attached audio or video file. `next:True` puts it at the front.
+- Spotify, Apple Music and Deezer don't let other apps play their audio, so their links are read for the song names (Spotify's embed page, Apple's iTunes lookup API, Deezer's public API) and each song is matched to a free copy on SoundCloud just before it plays. No copy: the bot says so and skips it.
+- YouTube links are refused: YouTube's terms don't allow other apps to play its videos (that's what shut down Groovy and Rythm).
+- `/radio station` plays an internet radio station from [radio-browser.info](https://www.radio-browser.info), suggested as you type.
+- `/music queue|now|skip|stop|pause|resume|loop|shuffle|volume|remove|move|clear` control it; the **Now playing** message has Pause, Skip, Stop, Loop and Queue buttons.
+- `/music settings` (or the dashboard's **Music** page): a DJ role (only DJs and Manage Server can skip, stop or change the queue while others listen; anyone can add songs and skip or remove their own), the starting volume (80%), the queue size (200), Now playing messages (on), and how long the bot stays when the queue is done or nobody is listening (3 minutes). While nobody is listening the song pauses.
+- Nothing is saved; a restart ends every session. SoundCloud tracks only Go+ subscribers can hear are left out, and playlists add up to 100 songs at a time.
+
+How it works: [@discordjs/voice](https://www.npmjs.com/package/@discordjs/voice) handles voice, including Discord's end-to-end encryption (DAVE), which voice channels require. ffmpeg (from the `ffmpeg-static` package, or `FFMPEG_PATH`) decodes the audio, and `opusscript` encodes it, with the volume applied live. The bot downloads every stream itself through the same private-network checks as feeds; only SoundCloud's HLS streams are fetched by ffmpeg, limited to HTTPS. Each server playing uses about 30 to 50 MB of memory and around 1 to 2% of a CPU core. `MUSIC_MAX_PLAYERS` caps how many servers play at once (25 by default). SoundCloud needs a client ID: the bot finds the public one soundcloud.com uses, or takes `SOUNDCLOUD_CLIENT_ID`.
+
+The bot needs **View Channel**, **Connect** and **Speak** in the voice channel (and **Mute Members** to speak on a Stage). It uses the Guild Voice States intent, which isn't privileged.
+
 ### Temporary roles
 
 Gives a role that's taken away again by itself: a muted role for a day, an event role for a week, a VIP role for a month.
@@ -746,10 +762,10 @@ After that, updates are the usual `git pull && npm ci`, then `pm2 restart rv-bot
 2. **Invite it.** Replace `YOUR_CLIENT_ID` and open:
 
    ```
-   https://discord.com/oauth2/authorize?client_id=YOUR_CLIENT_ID&scope=bot+applications.commands&permissions=1461246356630
+   https://discord.com/oauth2/authorize?client_id=YOUR_CLIENT_ID&scope=bot+applications.commands&permissions=1461248453782
    ```
 
-   `permissions=1461246356630` is **Kick Members**, **Ban Members**, **Timeout Members**, **View Audit Log**, **Manage Roles**, **Manage Channels**, **Manage Nicknames**, **Manage Messages**, **Manage Webhooks**, **Read Message History**, **View Channels**, **Send Messages**, **Send Messages in Threads**, **Create Private Threads**, **Manage Threads**, **Move Members**, **Connect**, **Embed Links** and **Attach Files**, which is what the current features need. If the bot was invited with fewer, either re-invite it with this link or give its role the missing permissions (for moderation: Kick Members, Ban Members, Timeout Members and View Audit Log server-wide, Read Message History for `/purge`, Create Private Threads and Manage Threads for tickets, Move Members and Connect for join-to-create voice, Manage Webhooks for posting logs through webhooks). If a new feature needs more, update this number and re-invite the bot.
+   `permissions=1461248453782` is **Kick Members**, **Ban Members**, **Timeout Members**, **View Audit Log**, **Manage Roles**, **Manage Channels**, **Manage Nicknames**, **Manage Messages**, **Manage Webhooks**, **Read Message History**, **View Channels**, **Send Messages**, **Send Messages in Threads**, **Create Private Threads**, **Manage Threads**, **Move Members**, **Connect**, **Speak**, **Embed Links** and **Attach Files**, which is what the current features need. If the bot was invited with fewer, either re-invite it with this link or give its role the missing permissions (for moderation: Kick Members, Ban Members, Timeout Members and View Audit Log server-wide, Read Message History for `/purge`, Create Private Threads and Manage Threads for tickets, Move Members and Connect for join-to-create voice, Connect and Speak for music, Manage Webhooks for posting logs through webhooks). If a new feature needs more, update this number and re-invite the bot.
 
 3. **Fix the role hierarchy.** In *Server Settings > Roles*, drag the bot's role above any roles it manages (existing country roles; new ones are created below it automatically) and above every member it should be able to ban, kick or time out. Keep it below your admin roles so moderators can't use it on admins.
 
@@ -864,6 +880,7 @@ src/
   highlights/            Highlights: saved in SQLite (highlightStore.js), matching and DMs (highlights.js)
   afk/                   AFK: saved in SQLite (afkStore.js), notices and welcome-backs (afk.js)
   appeals/               Ban appeals: settings (config.js), saved in SQLite (appealStore.js); the form and decisions live in the dashboard
+  music/                 Music: settings (config.js), links and search (sources.js, soundcloud.js, bandcamp.js, catalogs.js for Spotify, Apple Music and Deezer, match.js, radio.js), safe downloads (net.js), ffmpeg (stream.js), players and queues (player.js), the Now playing message (nowPlaying.js)
   voice/                 Join-to-create voice: making and deleting channels (tempVoice.js), saved in SQLite (tempVoiceStore.js)
   leveling/              Leveling: settings and level math (config.js), XP in SQLite (levelStore.js), earning XP and rewards (leveling.js)
   members/               Member history (memberEventStore.js), saved roles for quarantine and role persistence (savedRoleStore.js, rolePersistence.js)
