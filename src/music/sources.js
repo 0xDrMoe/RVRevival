@@ -242,10 +242,11 @@ export function createResolver({
         [Source.AUDIUS, audius],
         [Source.JAMENDO, jamendo?.enabled ? jamendo : null],
         [Source.BANDCAMP, bandcamp],
-        [Source.SOUNDCLOUD, soundcloud],
+        // SoundCloud's search answers with its own API tracks.
+        [Source.SOUNDCLOUD, soundcloud && typeof soundcloud.search === "function" ? { search: async (query, options) => (await soundcloud.search(query, options)).map(toTrack) } : null],
       ]
         .filter(([source, library]) => library && typeof library.search === "function" && source !== track.source)
-        .map(([, library]) => ({ search: async (query, options) => (await library.search(query, options)).filter((found) => found.url !== track.url) }));
+        .map(([, library]) => ({ search: async (query, options) => (await library.search(query, options)).filter((found) => found?.url !== track.url) }));
       const copy = await findOtherMatch(others, lookup).catch(() => null);
       if (!copy) {
         return null;
