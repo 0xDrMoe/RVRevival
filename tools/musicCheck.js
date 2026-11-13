@@ -16,11 +16,10 @@ import { createLibrary } from "../src/music/library.js";
 import { createLyrics } from "../src/music/lyrics.js";
 import { cleanQuery } from "../src/music/match.js";
 import { fetchText, openUrl } from "../src/music/net.js";
-import { createSoundCloud } from "../src/music/soundcloud.js";
+import { createSoundCloud, toTrack } from "../src/music/soundcloud.js";
 import { createResolver } from "../src/music/sources.js";
-import { checkFfmpeg, ffmpegArgs, ffmpegPath } from "../src/music/stream.js";
+import { checkFfmpeg, openAudio } from "../src/music/stream.js";
 import { trackLabel } from "../src/music/track.js";
-import { spawn } from "node:child_process";
 
 const query = process.argv.slice(2).join(" ").trim() || "daft punk one more time";
 const line = (name, text) => console.log(`${name.padEnd(12)} ${text}`);
@@ -51,6 +50,8 @@ await check("soundcloud", async () => {
 });
 
 const soundcloud = createSoundCloud({ clientId: process.env.SOUNDCLOUD_CLIENT_ID || null });
+const audius = createAudius();
+const bandcamp = createBandcamp();
 await check("soundcloud", async () => {
   const found = await soundcloud.find(cleanQuery(query), { limit: 5 });
   const names = found.tracks.map((track) => `${track.title} [${track.policy}]`).join(" | ");
@@ -64,18 +65,25 @@ async function probe(address) {
   return status;
 }
 
-// Decodes 3 seconds of an HLS stream with ffmpeg, as the bot would.
-function decode(address) {
+// Plays a track the way the bot does (download, then ffmpeg) until 3
+// seconds of audio come out, then stops: "decoded 3.0 s" or what failed.
+async function decode(track) {
+  const audio = await openAudio(track, { soundcloud, audius, bandcamp });
   return new Promise((resolve) => {
-    const args = ffmpegArgs(address);
-    args.splice(args.length - 1, 0, "-t", "3");
-    const ffmpeg = spawn(ffmpegPath(), args, { stdio: ["ignore", "pipe", "pipe"] });
     let bytes = 0;
-    let errors = "";
-    ffmpeg.stdout.on("data", (chunk) => (bytes += chunk.length));
-    ffmpeg.stderr.on("data", (chunk) => (errors += chunk));
-    ffmpeg.on("error", (error) => resolve(`ffmpeg didn't start: ${error.message}`));
-    ffmpeg.on("close", (code) => resolve(bytes > 0 ? `decoded ${(bytes / 192_000).toFixed(1)} s` : `ffmpeg exit ${code}: ${errors.trim().split("\n").slice(-2).join(" | ")}`));
+    const finish = (text) => {
+      clearTimeout(timer);
+      audio.stop();
+      resolve(text);
+    };
+    const timer = setTimeout(() => finish(`only ${(bytes / 192_000).toFixed(1)} s in 20 s. ffmpeg: ${audio.errors.join(" | ") || "nothing"}`), 20_000);
+    audio.stream.on("data", (chunk) => {
+      bytes += chunk.length;
+      if (bytes >= 3 * 192_000) {
+        finish("decoded 3.0 s");
+      }
+    });
+    audio.stream.on("close", () => finish(bytes >= 3 * 192_000 ? "decoded 3.0 s" : `stopped after ${(bytes / 192_000).toFixed(1)} s. ffmpeg: ${audio.errors.join(" | ") || "nothing"}`));
   });
 }
 
@@ -91,16 +99,10 @@ await check("sc stream", async () => {
     const opened = item.address ? await probe(item.address).catch((error) => failed(error)) : `FAILED: ${item.error}`;
     lines.push(`  ${item.protocol} ${item.mime || "?"}: ${opened}`);
   }
-  const chosen = await soundcloud.streamFor(first.id, { check: async (stream) => (await probe(stream.url), stream.protocol) }).catch((error) => ({ error }));
-  if (chosen.error) {
-    lines.push(`  bot would use: nothing (${failed(chosen.error)})`);
-  } else {
-    lines.push(`  bot would use: ${chosen.protocol}${chosen.protocol === "hls" ? `, ${await decode(chosen.url)}` : ""}`);
-  }
+  lines.push(`  bot plays it: ${await decode(toTrack(first)).catch((error) => failed(error))}`);
   return lines.join("\n");
 });
 
-const audius = createAudius();
 await check("audius", async () => {
   const found = await audius.search(cleanQuery(query), { limit: 5 });
   return `${found.length} found. ${found.map(trackLabel).join(" | ")}`;
@@ -111,10 +113,9 @@ await check("audius", async () => {
     return "no track to stream";
   }
   const address = await audius.streamFor(first.stream.id);
-  return `stream of "${first.title}": ${await probe(address)}`;
+  return `stream of "${first.title}": ${await probe(address)}, bot plays it: ${await decode(first).catch((error) => failed(error))}`;
 });
 
-const bandcamp = createBandcamp();
 await check("bandcamp", async () => {
   const found = await bandcamp.search(cleanQuery(query), { limit: 5 });
   return `${found.length} found. ${found.map(trackLabel).join(" | ")}`;

@@ -18,6 +18,7 @@ import { createRadio, isStationId, stationLabel, stationTrack, toStation } from 
 import { createSoundCloud, isPlayable, pickTranscoding, rankTranscodings } from "../src/music/soundcloud.js";
 import { asUrl, createResolver, firstPlaylistEntry } from "../src/music/sources.js";
 import { checkFfmpeg, ffmpegArgs, openAudio } from "../src/music/stream.js";
+import { openHls, parsePlaylist } from "../src/music/hls.js";
 import { formatTime, makeTrack, Source, trackLabel, Via } from "../src/music/track.js";
 import { fakeLogger } from "./helpers/fakes.js";
 
@@ -454,19 +455,29 @@ describe("audio", () => {
     expect(abort).toHaveBeenCalled();
   });
 
-  it("checks a SoundCloud stream opens and calls a broken library stream no-stream", async () => {
+  it("reads SoundCloud's HLS itself and pipes the segments to ffmpeg", async () => {
     const child = Object.assign(new EventEmitter(), { stdin: new PassThrough(), stdout: new PassThrough(), stderr: new PassThrough(), exitCode: null, kill: vi.fn() });
     const spawnImpl = vi.fn(() => child);
-    const abort = vi.fn();
-    const openUrl = vi.fn(async () => ({ url: new URL("https://cf-hls-media.sndcdn.com/p.m3u8"), response: new Response("#EXTM3U"), abort }));
+    const files = {
+      "/p.m3u8": '#EXTM3U\n#EXT-X-TARGETDURATION:10\n#EXT-X-MAP:URI="init.mp4"\n#EXTINF:10,\nseg/1.m4s\n#EXTINF:10,\nseg/2.m4s\n#EXT-X-ENDLIST\n',
+      "/init.mp4": "I",
+      "/seg/1.m4s": "A",
+      "/seg/2.m4s": "B",
+    };
+    const openUrl = vi.fn(async (link) => ({ url: new URL(link), response: new Response(files[new URL(link).pathname]), abort: vi.fn() }));
     const soundcloud = { streamFor: vi.fn(async (id, { check }) => {
       const stream = { url: "https://cf-hls-media.sndcdn.com/p.m3u8", protocol: "hls" };
       return { ...stream, checked: await check(stream) };
     }) };
+    let fed = "";
+    child.stdin.on("data", (chunk) => (fed += chunk));
     await openAudio({ source: Source.SOUNDCLOUD, stream: { id: 1 } }, { soundcloud, openUrl, spawnImpl });
-    expect(openUrl).toHaveBeenCalledWith("https://cf-hls-media.sndcdn.com/p.m3u8");
-    expect(abort).toHaveBeenCalled();
-    expect(spawnImpl.mock.calls[0][1]).toContain("https://cf-hls-media.sndcdn.com/p.m3u8");
+    // ffmpeg reads only what the bot gives it.
+    expect(spawnImpl.mock.calls[0][1]).toContain("pipe:0");
+    expect(spawnImpl.mock.calls[0][1]).not.toContain("-protocol_whitelist");
+    await new Promise((resolve) => child.stdin.on("finish", resolve));
+    expect(fed).toBe("IAB");
+    expect(openUrl.mock.calls.map(([link]) => link)).toEqual(["https://cf-hls-media.sndcdn.com/p.m3u8", "https://cf-hls-media.sndcdn.com/init.mp4", "https://cf-hls-media.sndcdn.com/seg/1.m4s", "https://cf-hls-media.sndcdn.com/seg/2.m4s"]);
 
     const audius = { streamFor: async () => "https://audius.test/stream" };
     const gone = vi.fn(async () => {
@@ -498,6 +509,27 @@ describe("audio", () => {
   it("refuses HLS that isn't HTTPS", async () => {
     const soundcloud = { streamFor: async () => ({ url: "http://cdn.test/a.m3u8", protocol: "hls" }) };
     await expect(openAudio({ source: Source.SOUNDCLOUD, stream: { id: 1 } }, { soundcloud, spawnImpl: vi.fn() })).rejects.toMatchObject({ reason: "unreachable" });
+  });
+
+  it("reads HLS playlists", () => {
+    const master = parsePlaylist("#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=64000\nlow.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=160000\nhigh.m3u8\n", "https://a.test/x/master.m3u8");
+    expect(master.variants).toEqual(["https://a.test/x/high.m3u8", "https://a.test/x/low.m3u8"]);
+    const media = parsePlaylist("#EXTM3U\n#EXT-X-MEDIA-SEQUENCE:5\n#EXT-X-TARGETDURATION:4\n#EXT-X-KEY:METHOD=AES-128,URI=\"k\"\n#EXTINF:4,\n/s.ts\n", "https://a.test/x/p.m3u8");
+    expect(media).toMatchObject({ segments: [{ url: "https://a.test/s.ts", sequence: 5 }], encrypted: true, ended: false, targetMs: 4000, map: null });
+    expect(() => parsePlaylist("<html>", "https://a.test/")).toThrow(MusicError);
+  });
+
+  it("refuses encrypted HLS and stops a live one that stops growing", async () => {
+    const respond = (text) => async (link) => ({ url: new URL(link), response: new Response(text), abort: vi.fn() });
+    await expect(openHls("https://a.test/p.m3u8", { openUrl: respond("#EXTM3U\n#EXT-X-KEY:METHOD=AES-128,URI=\"k\"\n#EXTINF:4,\ns.ts\n#EXT-X-ENDLIST\n") })).rejects.toMatchObject({ reason: "no-stream" });
+    const live = vi.fn(async (link) => ({ url: new URL(link), response: new Response(link.endsWith(".m3u8") ? "#EXTM3U\n#EXTINF:4,\ns.ts\n" : "x"), abort: vi.fn() }));
+    const opened = await openHls("https://a.test/p.m3u8", { openUrl: live, wait: async () => {} });
+    let read = "";
+    for await (const chunk of opened.stream) {
+      read += chunk;
+    }
+    expect(read).toBe("x");
+    expect(live.mock.calls.filter(([link]) => link.endsWith(".m3u8")).length).toBe(7);
   });
 });
 

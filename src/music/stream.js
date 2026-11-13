@@ -4,8 +4,9 @@
 // applied on the fly.
 //
 // The bot downloads the audio itself (through net.js, so nothing on the
-// VPS's own network is reachable) and feeds it to ffmpeg. Only SoundCloud's
-// HLS streams are fetched by ffmpeg directly, limited to HTTPS.
+// VPS's own network is reachable) and feeds it to ffmpeg, HLS included
+// (music/hls.js). ffmpeg never goes online: the static build crashes when
+// it looks up a host name.
 //
 // ffmpeg comes from the ffmpeg-static package; FFMPEG_PATH picks another one.
 
@@ -14,6 +15,7 @@ import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
 import { Readable } from "node:stream";
 import { audioFilter } from "./filters.js";
+import { openHls } from "./hls.js";
 import { MusicError, openUrl as defaultOpenUrl } from "./net.js";
 import { Source } from "./track.js";
 
@@ -103,25 +105,31 @@ export function ffmpegArgs(input, { live = false, startMs = 0, filter = "off" } 
 // stream broke, not that the song is missing.
 const LIBRARY_SOURCES = new Set([Source.SOUNDCLOUD, Source.BANDCAMP, Source.AUDIUS, Source.JAMENDO]);
 
-// Opens a SoundCloud stream to be sure it loads before it's chosen: a file
-// stays open to be played; for HLS only the playlist is asked for.
+// Opens a SoundCloud stream to be sure it loads before it's chosen, and
+// keeps it open to be played: a file download, or an HLS playlist read by
+// the bot (music/hls.js).
 async function checkSoundCloudStream(stream, openUrl) {
-  const opened = await openUrl(stream.url);
   if (stream.protocol === "hls") {
-    opened.abort();
-    return null;
+    return openHls(stream.url, { openUrl });
   }
-  return opened;
+  const opened = await openUrl(stream.url);
+  return { stream: opened.response.body ? Readable.fromWeb(opened.response.body) : null, abort: opened.abort };
 }
 
-// Where to read a ready track's audio: { url } for the bot to download
-// (with `download` when it's already open), or { hls } for ffmpeg.
-// `soundcloud`, `bandcamp` and `audius` come from the resolver.
+// Where to read a ready track's audio: { url } for the bot to download, or
+// { opened } when it's already open ({ stream, abort }). `soundcloud`,
+// `bandcamp` and `audius` come from the resolver.
 export async function audioAddress(track, { soundcloud, bandcamp, audius, openUrl = defaultOpenUrl }) {
   switch (track.source) {
     case Source.SOUNDCLOUD: {
       const stream = await soundcloud.streamFor(track.stream.id, { check: (found) => checkSoundCloudStream(found, openUrl) });
-      return stream.protocol === "hls" ? { hls: stream.url } : { url: stream.url, download: stream.checked ?? null };
+      if (stream.checked) {
+        return { opened: stream.checked };
+      }
+      if (!/^https:\/\//.test(stream.url)) {
+        throw new MusicError("unreachable", "That stream isn't on HTTPS.");
+      }
+      return stream.protocol === "hls" ? { opened: await openHls(stream.url, { openUrl }) } : { url: stream.url };
     }
     case Source.BANDCAMP:
       return { url: await bandcamp.streamFor(track.stream) };
@@ -137,12 +145,15 @@ export async function audioAddress(track, { soundcloud, bandcamp, audius, openUr
   }
 }
 
-// The address and, for a download, the open response.
+// The audio as { stream, abort }: a Node stream for ffmpeg's input.
 async function openSource(track, { soundcloud, bandcamp, audius, openUrl }) {
   try {
     const address = await audioAddress(track, { soundcloud, bandcamp, audius, openUrl });
-    const download = address.url ? (address.download ?? (await openUrl(address.url))) : null;
-    return { address, download };
+    if (address.opened) {
+      return address.opened;
+    }
+    const download = await openUrl(address.url);
+    return { stream: download.response.body ? Readable.fromWeb(download.response.body) : null, abort: download.abort };
   } catch (error) {
     if (LIBRARY_SOURCES.has(track.source) && error instanceof MusicError && error.reason === "not-found") {
       throw new MusicError("no-stream", error.message);
@@ -153,24 +164,21 @@ async function openSource(track, { soundcloud, bandcamp, audius, openUrl }) {
 
 // Starts a track. Returns { stream, stop, errors }: the PCM stream for
 // createAudioResource, a function that stops the download and ffmpeg, and
-// ffmpeg's last error lines (for the log). Options: soundcloud, bandcamp,
-// audius, startMs, filter, spawnImpl and openUrl (tests).
+// ffmpeg's last error lines (for the log). The bot reads all audio itself
+// and pipes it to ffmpeg, which never goes online. Options: soundcloud,
+// bandcamp, audius, startMs, filter, spawnImpl and openUrl (tests).
 export async function openAudio(track, { soundcloud, bandcamp, audius, spawnImpl = spawn, openUrl = defaultOpenUrl, logger, startMs = 0, filter = "off" }) {
   // Without ffmpeg nothing can play; say so instead of a vague failure.
   if (spawnImpl === spawn) {
     await requireFfmpeg();
   }
-  const { address, download } = await openSource(track, { soundcloud, bandcamp, audius, openUrl });
-  if (download) {
-    if (!download.response.body) {
-      download.abort();
-      throw new MusicError("not-audio", "That link sent nothing to play.");
-    }
-  } else if (!/^https:\/\//.test(address.hls)) {
-    throw new MusicError("unreachable", "That stream isn't on HTTPS.");
+  const input = await openSource(track, { soundcloud, bandcamp, audius, openUrl });
+  if (!input.stream) {
+    input.abort();
+    throw new MusicError("not-audio", "That link sent nothing to play.");
   }
 
-  const ffmpeg = spawnImpl(ffmpegPath(), ffmpegArgs(address.url ? "pipe:0" : address.hls, { live: track.live, startMs, filter }), { stdio: ["pipe", "pipe", "pipe"], windowsHide: true });
+  const ffmpeg = spawnImpl(ffmpegPath(), ffmpegArgs("pipe:0", { live: track.live, startMs, filter }), { stdio: ["pipe", "pipe", "pipe"], windowsHide: true });
   const errors = [];
   ffmpeg.stderr?.on("data", (chunk) => {
     errors.push(String(chunk).trim());
@@ -179,12 +187,12 @@ export async function openAudio(track, { soundcloud, bandcamp, audius, spawnImpl
   ffmpeg.on("error", (error) => logger?.warn("ffmpeg didn't start; is it installed?", { error }));
   ffmpeg.stdin?.on("error", () => {});
 
-  let source = null;
-  if (download) {
-    source = Readable.fromWeb(download.response.body);
-    source.on("error", () => ffmpeg.stdin?.end());
-    source.pipe(ffmpeg.stdin);
-  }
+  const source = input.stream;
+  source.on("error", (error) => {
+    logger?.warn?.("The audio download broke off", { error: error?.message });
+    ffmpeg.stdin?.end();
+  });
+  source.pipe(ffmpeg.stdin);
 
   let stopped = false;
   const stop = () => {
@@ -192,17 +200,17 @@ export async function openAudio(track, { soundcloud, bandcamp, audius, spawnImpl
       return;
     }
     stopped = true;
-    source?.unpipe();
-    source?.destroy();
-    download?.abort();
+    source.unpipe();
+    source.destroy();
+    input.abort();
     ffmpeg.stdin?.destroy();
     if (ffmpeg.exitCode === null) {
       ffmpeg.kill("SIGKILL");
     }
   };
   ffmpeg.on("close", () => {
-    source?.destroy();
-    download?.abort();
+    source.destroy();
+    input.abort();
   });
   return { stream: ffmpeg.stdout, stop, errors };
 }
