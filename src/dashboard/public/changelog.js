@@ -3,6 +3,17 @@
 
 export const CHANGELOG = [
   {
+    date: "2026-11-13",
+    title: "A far more detailed server log",
+    items: [
+      "21 new kinds of event: pins, name and avatar changes, boosts, voice joins, leaves, moves and server mutes, and server changes (channels and permissions, roles, server settings, emojis and stickers, invites, webhooks, threads, events, bots and apps, and Discord AutoMod rules).",
+      "Entries say who did it: who deleted a message, changed someone's roles, muted or moved them, or changed a channel or role, from the audit log.",
+      "Edits highlight exactly what changed, joins show the invite used and who made it, leaves show how long the member stayed, and voice leaves show time spent.",
+      "New log options: compact entries, show or hide IDs, log bots too, highlight edits, say who did it, and show the invite used. Members with ignored roles can be left out.",
+      "Events come in four groups (messages, members, voice, server changes), each with its own on/off switches and its own channel if you want. In Discord: /settings log-event, log-ignore-role and log-option.",
+    ],
+  },
+  {
     date: "2026-11-12",
     title: "Music: search, queue tools, DJ controls and playlists",
     items: [

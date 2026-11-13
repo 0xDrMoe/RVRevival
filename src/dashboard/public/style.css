@@ -7646,3 +7646,21 @@ input.has-variable-problem {
   letter-spacing: 1px;
   white-space: nowrap;
 }
+
+/* Logging page: the server-log events, one block per group. */
+.log-event-group {
+  display: grid;
+  gap: 8px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.log-event-group h3 {
+  margin: 0;
+  font-size: 1rem;
+  overflow-wrap: anywhere;
+}
+
+.log-event-group .toolbar {
+  flex-wrap: wrap;
+}

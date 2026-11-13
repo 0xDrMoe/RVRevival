@@ -1,3 +1,4 @@
+import { LOG_EVENTS } from "../src/logs/logEvents.js";
 import { describe, expect, it, vi } from "vitest";
 import { buildTestCommandData, createTestCommand } from "../src/commands/test.js";
 import { GuildSettings, Setting } from "../src/settings/guildSettings.js";
@@ -128,7 +129,7 @@ describe("test messages", () => {
     // Without a ticket log channel, ticket events follow "Other moderation actions".
     expect(routesIn(OTHER_ID)).toEqual(expect.arrayContaining(["purge", "ticketOpened"]));
     expect(plan.off).toEqual(["ticketRated"]);
-    expect(plan.nowhere).toEqual(["messageEdit", "messageDelete", "bulkDelete", "memberJoin", "memberLeave", "memberUpdate"]);
+    expect(plan.nowhere).toEqual(LOG_EVENTS);
 
     const messages = build(TestKind.LOGS, settings);
     expect(messages.map((message) => message.channelId).sort()).toEqual([CHANNEL_ID, OTHER_ID].sort());

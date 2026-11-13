@@ -7,6 +7,7 @@
 // changed here: what is logged and how it's posted stay in the logs themselves.
 
 import { Setting } from "../settings/guildSettings.js";
+import { LOG_EVENT_GROUPS, LogEvent } from "./logEvents.js";
 
 // The values are stored in the settings, so never rename one.
 export const LogRoute = Object.freeze({
@@ -41,13 +42,13 @@ export const LogRoute = Object.freeze({
   RAID_LOCKDOWN: "raidLockdown",
   ANTI_NUKE: "antiNuke",
 
-  // Server-log channel, named like serverLog.js's LogEvent.
-  MESSAGE_EDIT: "messageEdit",
-  MESSAGE_DELETE: "messageDelete",
-  BULK_DELETE: "bulkDelete",
-  MEMBER_JOIN: "memberJoin",
-  MEMBER_LEAVE: "memberLeave",
-  MEMBER_UPDATE: "memberUpdate",
+  // Server-log channel: a group for each kind of event, and each event named
+  // like logEvents.js's LogEvent.
+  SERVER_MESSAGES: "serverMessages",
+  SERVER_MEMBERS: "serverMembers",
+  SERVER_VOICE: "serverVoice",
+  SERVER_CHANGES: "serverChanges",
+  ...Object.fromEntries(Object.entries(LogEvent)),
 
   // Ticket log channel, named "ticket" + tickets/ticketLog.js's TicketEvent.
   TICKET_OPENED: "ticketOpened",
@@ -75,13 +76,14 @@ export const ROUTE_PARENTS = Object.freeze({
     ]),
   ),
   ...Object.fromEntries(["raidAlert", "raidLockdown", "antiNuke"].map((route) => [route, LogRoute.PROTECTION])),
+  ...Object.fromEntries(LOG_EVENT_GROUPS.flatMap((group) => group.events.map((event) => [event, group.id]))),
 });
 
 // Which part of the logs each route belongs to, and so where it goes without
 // a route: "logs", "modLog", "serverLog" or "ticketLog".
 const SECTION_OF = {
   logs: ["commands", "botDeletions", "dashboard"],
-  serverLog: ["messageEdit", "messageDelete", "bulkDelete", "memberJoin", "memberLeave", "memberUpdate"],
+  serverLog: [...LOG_EVENT_GROUPS.map((group) => group.id), ...LOG_EVENT_GROUPS.flatMap((group) => group.events)],
 };
 export const ROUTE_DEFAULTS = Object.freeze(
   Object.fromEntries(

@@ -36,6 +36,8 @@ export const Setting = Object.freeze({
   SERVER_LOG_CHANNEL: "serverLogChannelId",
   DISABLED_LOG_EVENTS: "disabledLogEvents", // server-log events switched off, a list of names
   LOG_IGNORED_CHANNELS: "logIgnoredChannels", // channels the server log skips, a list of IDs
+  LOG_IGNORED_ROLES: "logIgnoredRoles", // members with any of these roles aren't in the server log, a list of IDs
+  LOG_OPTIONS: "logOptions", // how server-log entries look and what they include, an object (see logs/logEvents.js)
   DASHBOARD_ROLES: "dashboardRoleIds", // roles that may see the dashboard and manage cases, a list of IDs
   AUTOMOD: "automod", // the automod configuration, an object (see automod/config.js)
   WELCOME_CHANNEL: "welcomeChannelId",

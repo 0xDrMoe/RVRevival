@@ -24,7 +24,7 @@ import { checkWarnThresholds, describeWarnThresholds, InvalidWarnThresholds } fr
 import { checkJoinGate, InvalidJoinGate } from "../raid/raid.js";
 import { checkGuide, describeGuide, InvalidGuide } from "../countries/guide.js";
 import { checkCountryOptions, describeCountryOptions, InvalidCountryOptions } from "../countries/options.js";
-import { LogEvent } from "../logs/serverLog.js";
+import { checkLogOptions, describeLogOptions, InvalidLogOptions, LOG_EVENTS } from "../logs/logEvents.js";
 import { TICKET_EVENTS } from "../tickets/ticketLog.js";
 import { checkLogRoutes, describeLogRoutes, InvalidLogRoutes } from "../logs/logRoutes.js";
 import { botCommandCatalog } from "../permissions/catalog.js";
@@ -61,7 +61,6 @@ const IGNORABLE_CHANNELS = [
 const RESPONDER_CHANNELS = [ChannelType.GuildText, ChannelType.GuildAnnouncement, ChannelType.GuildForum, ChannelType.GuildCategory];
 const MAX_IGNORED_CHANNELS = 100;
 const MAX_DASHBOARD_ROLES = 25;
-const LOG_EVENTS = Object.values(LogEvent);
 // The steps on the dashboard's Setup card, in the order it shows them.
 export const SETUP_STEPS = Object.freeze(["logs", "serverLog", "modLog", "modRole", "country", "dashboard", "automod", "welcome"]);
 
@@ -78,6 +77,8 @@ export const SETTING_RULES = Object.freeze({
   [Setting.SERVER_LOG_CHANNEL]: { kind: "channel", types: POSTING_CHANNELS, label: "Server-log channel" },
   [Setting.DISABLED_LOG_EVENTS]: { kind: "events", label: "Switched-off log events" },
   [Setting.LOG_IGNORED_CHANNELS]: { kind: "channels", types: IGNORABLE_CHANNELS, label: "Ignored log channels" },
+  [Setting.LOG_IGNORED_ROLES]: { kind: "roles", label: "Ignored log roles" },
+  [Setting.LOG_OPTIONS]: { kind: "logOptions", label: "Log options" },
   [Setting.DASHBOARD_ROLES]: { kind: "roles", label: "Dashboard access roles" },
   [Setting.AUTOMOD]: { kind: "automod", label: "Automod" },
   [Setting.WELCOME_CHANNEL]: { kind: "channel", types: POSTING_CHANNELS, label: "Welcome channel" },
@@ -392,6 +393,15 @@ function checkValue(setting, value, { guildId, channels, roles }) {
         throw error;
       }
     }
+    case "logOptions":
+      try {
+        return checkLogOptions(value);
+      } catch (error) {
+        if (error instanceof InvalidLogOptions) {
+          throw new InvalidSetting(setting, error.message);
+        }
+        throw error;
+      }
     case "logRoutes":
       try {
         return checkLogRoutes(value, { isChannel: (id) => channelOk(id, rule.types) });
@@ -508,6 +518,9 @@ export function describeValue(setting, value) {
   }
   if (SETTING_RULES[setting]?.kind === "onByDefault") {
     return value === false ? "off" : "on";
+  }
+  if (SETTING_RULES[setting]?.kind === "logOptions") {
+    return describeLogOptions(value);
   }
   if (SETTING_RULES[setting]?.kind === "music") {
     return describeMusic(value);
