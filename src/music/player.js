@@ -38,7 +38,12 @@ const JOIN_TIMEOUT_MS = 20_000;
 const RECONNECT_MS = 5_000;
 // A song that ends this soon after starting failed (a broken link, say).
 const FAILED_WITHIN_MS = 1_500;
-const MAX_FAILURES_IN_A_ROW = 5;
+// Songs that can't play are skipped; the music stops only after this many in
+// a row (a long Spotify playlist can have several with no free copy).
+const MAX_FAILURES_IN_A_ROW = 12;
+// Skipped songs within this long are listed in one message, not one each.
+const SKIP_NOTE_MS = 2 * 60_000;
+const SKIP_NOTE_LINES = 10;
 // Songs kept for /music back.
 const MAX_HISTORY = 20;
 export const DEFAULT_MAX_PLAYERS = 25;
@@ -54,7 +59,7 @@ export function createMusic({
   guildSettings,
   logger,
   forcedLanguage,
-  resolver = createResolver(),
+  resolver = null,
   radio = createRadio(),
   voice = discordVoice,
   openAudio = defaultOpenAudio,
@@ -62,6 +67,7 @@ export function createMusic({
   setTimer = setTimeout,
   clearTimer = clearTimeout,
 }) {
+  resolver ??= createResolver({ logger });
   const players = new Map();
   const settingsFor = (guildId) => derivedSetting(guildSettings, guildId, Setting.MUSIC, normalizeMusic);
 
@@ -94,6 +100,8 @@ export function createMusic({
     // The next song chosen by back, seek or replay instead of the queue:
     // { track, startMs, backward, refresh }.
     #forced = null;
+    // The last "Couldn't play" message, added to while songs keep failing.
+    #skipNote = null;
 
     constructor({ guild, channel, textChannel }) {
       this.guild = guild;
@@ -252,7 +260,7 @@ export function createMusic({
           return;
         }
         this.current = { ...ready, id: next.id, requestedBy: next.requestedBy };
-        this.#audio = await openAudio(this.current, { soundcloud: resolver.soundcloud, bandcamp: resolver.bandcamp, logger, startMs: this.#offsetMs, filter: this.filter });
+        this.#audio = await openAudio(this.current, { soundcloud: resolver.soundcloud, bandcamp: resolver.bandcamp, audius: resolver.audius, logger, startMs: this.#offsetMs, filter: this.filter });
         if (this.#destroyed) {
           this.#audio.stop();
           return;
@@ -296,11 +304,10 @@ export function createMusic({
 
     async #failed(track, error, { alreadyCurrent = false } = {}) {
       const reason = error instanceof MusicError ? error.reason : "unreachable";
-      if (!(error instanceof MusicError)) {
-        logger.warn("Couldn't start a song", { guildId: this.guildId, source: track.source, error });
-      }
+      // The exact cause (like "api-v2.soundcloud.com answered 404.") goes in the log.
+      logger.warn("Couldn't start a song", { guildId: this.guildId, source: track.source ?? track.via, reason, error: error instanceof MusicError ? error.message : error });
       this.failures += 1;
-      await this.#say(translate(this.language, "musicSkippedBroken", { title: track.title, reason: translate(this.language, `musicError_${reason}`) }));
+      await this.#noteSkipped(translate(this.language, "musicSkippedBroken", { title: track.title, reason: translate(this.language, `musicError_${reason}`) }));
       if (this.failures >= MAX_FAILURES_IN_A_ROW) {
         await this.#say(translate(this.language, "musicTooManyFailures"));
         this.destroy();
@@ -310,6 +317,23 @@ export function createMusic({
         this.#skipping = true;
         await this.#playNext();
       }
+    }
+
+    // Lists a skipped song: in the last skip message while it's recent and
+    // not too long, else in a new one, so a playlist with many songs that
+    // can't play doesn't flood the channel.
+    async #noteSkipped(line) {
+      const note = this.#skipNote;
+      if (note?.message && Date.now() - note.at < SKIP_NOTE_MS && note.lines.length < SKIP_NOTE_LINES) {
+        note.lines.push(line);
+        note.at = Date.now();
+        await note.message.edit({ content: note.lines.join("\n").slice(0, 2000), allowedMentions: { parse: [] } }).catch(() => {
+          this.#skipNote = null;
+        });
+        return;
+      }
+      const message = await this.#say(line);
+      this.#skipNote = message ? { message, lines: [line], at: Date.now() } : null;
     }
 
     // Posts a note in the channel /play was used in (when the bot may).

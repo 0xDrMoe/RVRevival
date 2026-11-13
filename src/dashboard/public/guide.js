@@ -903,7 +903,7 @@ const FEATURE_PARTS = [
         commands: [
           ["/play [query] [file] [next]", "Plays a song name (searched on SoundCloud), a link, or an audio file you attach. `next` puts it at the front of the queue."],
           ["/radio station", "Plays an internet radio station. Start typing a name and pick one from the list."],
-          ["/search query [next]", "Shows the 5 best SoundCloud matches; pick one with the menu or a number button."],
+          ["/search query [next]", "Shows the 5 best matches from every library; pick one with the menu or a number button."],
           ["/queue view [page]", "What's playing and what's next."],
           ["/queue remove position", "Takes a song out of the queue (its number in `/queue view`)."],
           ["/queue move from to", "Moves a song in the queue."],
@@ -941,10 +941,11 @@ const FEATURE_PARTS = [
         table: {
           head: ["You give /play", "What plays"],
           rows: [
-            ["Words, like `lofi beats`", "The best free match on SoundCloud."],
+            ["Words, like `lofi beats`", "The best free match on SoundCloud, Audius or Bandcamp. Tags like \"(Official Video)\" and \"ft.\" are ignored."],
+            ["An Audius track or playlist link", "That track or playlist, from Audius."],
             ["A SoundCloud track or playlist link", "That track or playlist, from SoundCloud."],
             ["A Bandcamp track or album link", "Its tracks the artist lets anyone stream."],
-            ["A Spotify, Apple Music or Deezer link (song, album or playlist)", "The same songs, matched to free copies on SoundCloud. Spotify and the others don't let other apps play their audio."],
+            ["A Spotify, Apple Music or Deezer link (song, album or playlist)", "The same songs, matched to free copies on SoundCloud (or Audius). Spotify and the others don't let other apps play their audio."],
             ["A link to an audio file or stream (MP3, OGG, AAC, FLAC, .m3u, .pls)", "That file or stream."],
             ["An attached audio or video file", "That file."],
             ["A YouTube link", "Nothing: YouTube doesn't allow other apps to play its videos. Search by name instead."],

@@ -1666,7 +1666,7 @@ export const COMMAND_PARTS = [
             usage: "/play [query] [file] [next]",
             what: "Joins your voice channel and plays it, or adds it to the queue. Give a query or a file.",
             options: [
-              ["query", "Words to search SoundCloud for, or a SoundCloud, Bandcamp, Spotify, Apple Music, Deezer or audio link."],
+              ["query", "Words to search for (SoundCloud, Audius and Bandcamp), or a SoundCloud, Bandcamp, Audius, Spotify, Apple Music, Deezer or audio link."],
               ["file", "An audio or video file to play instead."],
               ["next", "`True` puts it at the front of the queue instead of the end."],
             ],
@@ -1675,7 +1675,8 @@ export const COMMAND_PARTS = [
         example: ["/play query:daft punk one more time", "/play query:https://soundcloud.com/artist/track next:True"],
         tips: [
           "YouTube links aren't played: YouTube doesn't allow other apps to play its videos.",
-          "Spotify, Apple Music and Deezer links are read for the song names, then matched to free copies on SoundCloud.",
+          "Spotify, Apple Music and Deezer links are read for the song names, then matched to free copies on SoundCloud, or Audius when SoundCloud has none.",
+          "A song that can't be played is skipped and listed in one message; the music only stops after 12 in a row.",
           "To pick from the top 5 matches instead of playing the first, use `/search`.",
         ],
       },
@@ -1687,7 +1688,7 @@ export const COMMAND_PARTS = [
         tone: "pink",
         page: "music",
         related: "music",
-        summary: "Searches SoundCloud and shows the 5 best matches, so you pick the right song before it plays.",
+        summary: "Searches SoundCloud, Audius and Bandcamp and shows the 5 best matches, so you pick the right song before it plays.",
         who: "Everyone in a voice channel (DJs only in DJ-only mode).",
         usages: [
           {

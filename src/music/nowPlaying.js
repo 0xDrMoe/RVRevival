@@ -127,7 +127,7 @@ export function searchMessage(tracks, { language, guildSettings, guildId, query,
   const embed = new EmbedBuilder()
     .setColor(accentColor(guildSettings, guildId, MUSIC_COLOR))
     .setTitle(text("musicSearchTitle", { query: query.slice(0, 200) }))
-    .setDescription(tracks.map((track, index) => `**${index + 1}.** ${linked(track)} · ${length(track)}`).join("\n").slice(0, 4000))
+    .setDescription(tracks.map((track, index) => `**${index + 1}.** ${linked(track)} · ${length(track)} · ${SOURCE_NAMES[track.source] ?? "?"}`).join("\n").slice(0, 4000))
     .setFooter({ text: text("musicSearchFooter") });
   const menu = new StringSelectMenuBuilder()
     .setCustomId(`${SEARCH_PREFIX}${session}:menu`)
@@ -135,7 +135,7 @@ export function searchMessage(tracks, { language, guildSettings, guildId, query,
     .addOptions(
       tracks.map((track, index) => ({
         label: `${index + 1}. ${track.title}`.slice(0, 100),
-        description: `${track.artist || SOURCE_NAMES[track.source]} · ${length(track)}`.slice(0, 100),
+        description: `${track.artist ? `${track.artist} · ` : ""}${length(track)} · ${SOURCE_NAMES[track.source] ?? "?"}`.slice(0, 100),
         value: String(index),
       })),
     );

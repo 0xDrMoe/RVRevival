@@ -10,11 +10,13 @@ import { makeTrack, Source } from "./track.js";
 import { fetchJson as defaultFetchJson, fetchText as defaultFetchText, MusicError } from "./net.js";
 
 const API = "https://api-v2.soundcloud.com";
-const HOME = "https://soundcloud.com/";
+const PAGES = ["https://soundcloud.com/", "https://soundcloud.com/discover", "https://m.soundcloud.com/"];
 const CLIENT_ID = /client_id\s*[:=]\s*["']?([A-Za-z0-9]{32})\b/;
-const SCRIPT = /<script[^>]+src="(https:\/\/a-v2\.sndcdn\.com\/assets\/[^"]+\.js)"/g;
+const SCRIPT = /<script[^>]+src=["'](https:\/\/[a-z0-9-]+\.sndcdn\.com\/assets\/[^"']+\.js)["']/g;
 const CLIENT_ID_HOURS = 6;
 const IDS_PER_REQUEST = 50;
+// How many results a search asks for (SoundCloud's most).
+const SEARCH_SIZE = 50;
 export const SOUNDCLOUD_HOSTS = ["soundcloud.com", "www.soundcloud.com", "m.soundcloud.com", "on.soundcloud.com"];
 
 export const isSoundCloudUrl = (url) => SOUNDCLOUD_HOSTS.includes(url.hostname.toLowerCase());
@@ -55,10 +57,25 @@ export function createSoundCloud({ clientId: fixedClientId = null, fetchJson = d
   let found = null;
   let finding = null;
 
+  // soundcloud.com's pages carry the public client ID in their scripts. If
+  // the home page is refused (some servers' addresses are), other pages are tried.
   async function findClientId() {
-    const home = await fetchText(HOME);
+    let home = null;
+    let lastError = null;
+    for (const page of PAGES) {
+      home = await fetchText(page).catch((error) => {
+        lastError = error;
+        return null;
+      });
+      if (home && new RegExp(SCRIPT.source).test(home)) {
+        break;
+      }
+    }
+    if (!home) {
+      throw new MusicError("unreachable", `soundcloud.com refused this server: ${lastError?.message ?? "no answer"}`);
+    }
     const scripts = [...home.matchAll(SCRIPT)].map((match) => match[1]).reverse();
-    for (const script of scripts.slice(0, 8)) {
+    for (const script of scripts.slice(0, 15)) {
       const id = (await fetchText(script, { maxBytes: 6 * 1024 * 1024 }).catch(() => ""))?.match(CLIENT_ID)?.[1];
       if (id) {
         return id;
@@ -85,7 +102,9 @@ export function createSoundCloud({ clientId: fixedClientId = null, fetchJson = d
     return finding;
   }
 
-  // GETs an API address with the client ID; a refused ID is looked up again once.
+  // GETs an API address with the client ID; a refused ID is looked up again
+  // once. SoundCloud can answer 404 instead of 401 for a stale ID, so a 404
+  // is retried with a fresh ID too.
   async function api(address, params = {}) {
     for (const refresh of [false, true]) {
       const url = new URL(address.startsWith("http") ? address : `${API}${address}`);
@@ -96,7 +115,7 @@ export function createSoundCloud({ clientId: fixedClientId = null, fetchJson = d
       try {
         return await fetchJson(url.href);
       } catch (error) {
-        const refused = error instanceof MusicError && / answered (401|403)\.$/.test(error.message);
+        const refused = error instanceof MusicError && / answered (401|403|404)\.$/.test(error.message);
         if (!refused || refresh || fixedClientId) {
           throw error;
         }
@@ -144,10 +163,20 @@ export function createSoundCloud({ clientId: fixedClientId = null, fetchJson = d
       throw new MusicError("not-found", "Nothing at that SoundCloud link.");
     },
 
-    // Up to `limit` tracks that are free to play, best match first.
+    // Up to `limit` tracks that are free to play, best match first. Asks for
+    // 50 whatever `limit` is: many top results are Go+ previews, so asking for
+    // only a few often left nothing.
     async search(query, { limit = 10 } = {}) {
-      const found = await api("/search/tracks", { q: query, limit: Math.min(limit * 2, 50) });
-      return (found?.collection ?? []).filter(isPlayable).slice(0, limit);
+      return (await this.find(query, { limit })).tracks;
+    },
+
+    // Like search, also counting results that are only Go+ previews:
+    // { tracks, previews }.
+    async find(query, { limit = 10 } = {}) {
+      const found = await api("/search/tracks", { q: query, limit: SEARCH_SIZE });
+      const all = (found?.collection ?? []).filter((track) => track?.kind === "track");
+      const tracks = all.filter(isPlayable);
+      return { tracks: tracks.slice(0, limit), previews: all.length - tracks.length };
     },
 
     // Free tracks SoundCloud lists as related to a track ID (for autoplay).

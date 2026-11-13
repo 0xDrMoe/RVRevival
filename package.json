@@ -13,6 +13,7 @@
     "start": "node --env-file-if-exists=.env src/index.js",
     "register": "node --env-file-if-exists=.env src/register-commands.js",
     "dashboard": "node --env-file-if-exists=.env src/dashboard/server.js",
+    "music:check": "node --env-file-if-exists=.env tools/musicCheck.js",
     "test": "vitest run",
     "test:watch": "vitest"
   },

@@ -2,10 +2,12 @@ import { EventEmitter } from "node:events";
 import { PassThrough } from "node:stream";
 import { describe, expect, it, vi } from "vitest";
 import { AudioPlayerStatus, VoiceConnectionStatus } from "@discordjs/voice";
-import { createBandcamp, readTralbum } from "../src/music/bandcamp.js";
+import { createBandcamp, readSearchResults, readTralbum } from "../src/music/bandcamp.js";
 import { createCatalogs, parseCatalogLink, readSpotifyEmbed } from "../src/music/catalogs.js";
 import { checkMusic, DEFAULT_MUSIC, describeMusic, InvalidMusic, normalizeMusic } from "../src/music/config.js";
-import { findMatch, matchQuery, matchScore, words } from "../src/music/match.js";
+import { audiusTrack, createAudius, isAudiusUrl } from "../src/music/audius.js";
+import { createJamendo } from "../src/music/jamendo.js";
+import { cleanQuery, findMatch, matchQuery, matchScore, queryScore, words } from "../src/music/match.js";
 import { audioFilter, filterSpeed, FILTER_NAMES } from "../src/music/filters.js";
 import { cleanTitle, createLyrics, splitArtist } from "../src/music/lyrics.js";
 import { MusicError } from "../src/music/net.js";
@@ -116,7 +118,7 @@ describe("matching songs to SoundCloud", () => {
     const lookup = { title: "One More Time", artist: "Daft Punk", durationMs: 320_000 };
     const soundcloud = { search: vi.fn(async () => [{ title: "One More Time (cover)", user: { username: "X" }, full_duration: 1 }, { id: 7, title: "Daft Punk - One More Time", user: { username: "fan" }, full_duration: 322_000 }]) };
     expect((await findMatch(soundcloud, lookup)).id).toBe(7);
-    expect(soundcloud.search).toHaveBeenCalledWith("Daft Punk one more time", { limit: 10 });
+    expect(soundcloud.search).toHaveBeenCalledWith("Daft Punk one more time", { limit: 20 });
     expect(await findMatch({ search: async () => [] }, lookup)).toBeNull();
   });
 });
@@ -320,11 +322,43 @@ describe("what /play takes", () => {
     expect(found.tracks[0].stream.url).toBe("https://radio.test/stream");
   });
 
-  it("searches SoundCloud for words", async () => {
-    const soundcloud = { search: vi.fn(async () => [scTrack()]) };
-    const found = await createResolver({ soundcloud }).resolve("song artist");
-    expect(found.tracks[0].title).toBe("Song");
-    await expect(createResolver({ soundcloud: { search: async () => [] } }).resolve("nothing")).rejects.toMatchObject({ reason: "not-found" });
+  it("searches every library for words and ranks the results together", async () => {
+    const soundcloud = { find: vi.fn(async () => ({ tracks: [scTrack({ title: "Song (sped up)" })], previews: 0 })) };
+    const audius = { search: vi.fn(async () => [makeTrack({ title: "Song", artist: "Artist", source: Source.AUDIUS, stream: { id: "a1" }, url: "https://audius.co/artist/song" })]) };
+    const resolver = createResolver({ soundcloud, audius, bandcamp: {}, jamendo: null });
+    const found = await resolver.resolve("Artist - Song (Official Video)");
+    expect(soundcloud.find).toHaveBeenCalledWith("Artist Song", { limit: 10 });
+    expect(soundcloud.find).toHaveBeenCalledWith("Artist - Song (Official Video)", { limit: 10 });
+    expect(audius.search).toHaveBeenCalledWith("Artist Song", { limit: 10 });
+    expect(found.tracks[0]).toMatchObject({ title: "Song", source: Source.AUDIUS });
+    expect((await resolver.search("Artist Song")).map((track) => track.source)).toEqual([Source.AUDIUS, Source.SOUNDCLOUD]);
+
+    const none = createResolver({ soundcloud: { find: async () => ({ tracks: [], previews: 0 }) }, audius: { search: async () => [] }, bandcamp: {} });
+    await expect(none.resolve("nothing")).rejects.toMatchObject({ reason: "no-results" });
+    const previews = createResolver({ soundcloud: { find: async () => ({ tracks: [], previews: 4 }) }, audius: null, bandcamp: {} });
+    await expect(previews.resolve("hit song")).rejects.toMatchObject({ reason: "not-free" });
+  });
+
+  it("carries on when a library fails, and says so when they all do", async () => {
+    const broken = { find: async () => Promise.reject(new MusicError("not-found", "api-v2.soundcloud.com answered 404.")) };
+    const audius = { search: async () => [makeTrack({ title: "Song", artist: "Band", source: Source.AUDIUS, stream: { id: "a1" } })] };
+    const logger = fakeLogger();
+    expect((await createResolver({ soundcloud: broken, audius, bandcamp: {}, logger }).resolve("band song")).tracks[0].source).toBe(Source.AUDIUS);
+    expect(logger.warn).toHaveBeenCalled();
+    await expect(createResolver({ soundcloud: broken, audius: null, bandcamp: {} }).resolve("band song")).rejects.toMatchObject({ reason: "unreachable" });
+  });
+
+  it("checks a Bandcamp pick can stream before playing it", async () => {
+    const soundcloud = { find: async () => ({ tracks: [], previews: 0 }) };
+    const result = (name) => makeTrack({ title: "Song", artist: "Band", source: Source.BANDCAMP, url: `https://${name}.bandcamp.com/track/song`, stream: { page: `https://${name}.bandcamp.com/track/song`, trackId: null } });
+    const playable = makeTrack({ title: "Song", artist: "Band", source: Source.BANDCAMP, durationMs: 1000, stream: { page: "https://b.bandcamp.com/track/song", trackId: 2 } });
+    const bandcamp = {
+      search: async () => [result("a"), result("b")],
+      resolve: vi.fn(async (url) => (url.startsWith("https://a.") ? Promise.reject(new MusicError("not-free")) : { tracks: [playable], skipped: 0, name: null })),
+    };
+    const found = await createResolver({ soundcloud, audius: null, bandcamp }).resolve("band song");
+    expect(bandcamp.resolve).toHaveBeenCalledTimes(2);
+    expect(found.tracks[0].stream).toEqual({ page: "https://b.bandcamp.com/track/song", trackId: 2 });
   });
 
   it("plays uploaded audio files only", () => {
@@ -335,10 +369,16 @@ describe("what /play takes", () => {
 
   it("matches Spotify songs just before they play", async () => {
     const soundcloud = { search: vi.fn(async () => [scTrack({ id: 9, title: "Song", user: { username: "Band" }, full_duration: 180_000 })]) };
-    const resolver = createResolver({ soundcloud });
+    const resolver = createResolver({ soundcloud, audius: null });
     const track = { ...makeTrack({ title: "Song", artist: "Band", via: Via.SPOTIFY, lookup: { title: "Song", artist: "Band", durationMs: 181_000 } }), requestedBy: "1" };
     expect(await resolver.ready(track)).toMatchObject({ id: track.id, source: Source.SOUNDCLOUD, via: Via.SPOTIFY, stream: { id: 9 }, requestedBy: "1", url: "https://soundcloud.com/artist/song" });
-    await expect(createResolver({ soundcloud: { search: async () => [] } }).ready(track)).rejects.toMatchObject({ reason: "no-match" });
+    await expect(createResolver({ soundcloud: { search: async () => [] }, audius: null }).ready(track)).rejects.toMatchObject({ reason: "no-match" });
+
+    // No copy on SoundCloud (or SoundCloud failing): Audius is tried.
+    const audius = { search: vi.fn(async () => [makeTrack({ title: "Song", artist: "Band", durationMs: 180_000, source: Source.AUDIUS, stream: { id: "x" }, url: "https://audius.co/band/song" })]) };
+    const failing = { search: async () => Promise.reject(new MusicError("not-found", "api-v2.soundcloud.com answered 404.")) };
+    expect(await createResolver({ soundcloud: failing, audius }).ready(track)).toMatchObject({ source: Source.AUDIUS, stream: { id: "x" }, via: Via.SPOTIFY });
+    await expect(createResolver({ soundcloud: failing, audius: { search: async () => [] } }).ready(track)).rejects.toMatchObject({ reason: "unreachable" });
   });
 });
 
@@ -509,17 +549,19 @@ describe("music player", () => {
     expect(player.queue.map((track) => track.title)).toEqual(["B"]);
   });
 
-  it("skips songs that can't play and gives up after five in a row", async () => {
+  it("skips songs that can't play in one message and gives up after twelve in a row", async () => {
     const ready = async (track) => {
       throw new MusicError("no-match");
     };
     const { manager, guild, voiceChannel, textChannel } = setup({ ready });
     const player = await manager.join({ guild, channel: voiceChannel, textChannel });
-    player.add(songs("A", "B", "C", "D", "E", "F"), { requestedBy: "u0" });
+    player.add(songs(...Array.from({ length: 14 }, (_, index) => `S${index}`)), { requestedBy: "u0" });
     await flush();
     await flush();
     const notes = textChannel.send.mock.calls.map(([payload]) => payload.content);
-    expect(notes.filter((note) => note?.includes("Couldn't play"))).toHaveLength(5);
+    // The first 10 go in one message, edited as they fail; then a new one.
+    expect(notes.filter((note) => note?.includes("Couldn't play"))).toHaveLength(2);
+    expect(textChannel.sent[0].edit.mock.calls.at(-1)[0].content.split("\n")).toHaveLength(10);
     expect(notes.at(-1)).toContain("Several songs in a row");
     expect(player.destroyed).toBe(true);
     expect(manager.get("g1")).toBeNull();
@@ -771,3 +813,111 @@ describe("playlists", () => {
   });
 });
 
+describe("finding songs", () => {
+  it("tidies what people type", () => {
+    expect(cleanQuery("Drake - Hotline Bling (Official Video)")).toBe("Drake Hotline Bling");
+    expect(cleanQuery("Blinding Lights ft. Someone [Lyrics]")).toBe("Blinding Lights");
+    expect(cleanQuery('"Shape of You" | Ed Sheeran')).toBe("Shape of You Ed Sheeran");
+    expect(cleanQuery("eminem lose yourself lyrics")).toBe("eminem lose yourself");
+    expect(cleanQuery("Video Killed the Radio Star")).toBe("Video Killed the Radio Star");
+    expect(cleanQuery("lyrics")).toBe("lyrics");
+  });
+
+  it("scores results on the words typed, and remixes nobody asked for lower", () => {
+    expect(queryScore("daft punk one more time", { title: "One More Time", artist: "Daft Punk" })).toBe(1);
+    expect(queryScore("daft punk one more time", { title: "One More Time (Remix)", artist: "Daft Punk" })).toBeCloseTo(0.7);
+    expect(queryScore("one more time remix", { title: "One More Time (Remix)", artist: "DJ" })).toBe(1);
+    expect(queryScore("", { title: "x" })).toBe(0);
+  });
+
+  it("asks SoundCloud for 50 results and counts the previews", async () => {
+    const fetchJson = vi.fn(async () => ({ collection: [scTrack({ id: 1 }), scTrack({ id: 2, policy: "SNIP" }), scTrack({ id: 3 })] }));
+    const soundcloud = createSoundCloud({ clientId: CLIENT, fetchJson });
+    expect(await soundcloud.find("song", { limit: 1 })).toEqual({ tracks: [expect.objectContaining({ id: 1 })], previews: 1 });
+    expect(new URL(fetchJson.mock.calls[0][0]).searchParams.get("limit")).toBe("50");
+  });
+
+  it("looks the client ID up again when SoundCloud answers 404, and tries other pages", async () => {
+    const fetchText = vi.fn(async (url) => {
+      if (url === "https://soundcloud.com/") {
+        throw new MusicError("not-found", "soundcloud.com answered 404.");
+      }
+      if (url.endsWith("/discover")) {
+        return '<script crossorigin src="https://a-v2.sndcdn.com/assets/1-abc.js"></script>';
+      }
+      return `client_id:"${CLIENT}"`;
+    });
+    let calls = 0;
+    const fetchJson = vi.fn(async () => {
+      calls += 1;
+      if (calls === 1) {
+        throw new MusicError("not-found", "api-v2.soundcloud.com answered 404.");
+      }
+      return { collection: [scTrack()] };
+    });
+    const soundcloud = createSoundCloud({ fetchText, fetchJson });
+    expect(await soundcloud.search("song")).toHaveLength(1);
+    expect(fetchJson).toHaveBeenCalledTimes(2);
+    expect(fetchText.mock.calls.some(([url]) => url === "https://soundcloud.com/discover")).toBe(true);
+  });
+
+  it("reads Audius tracks and playlists", async () => {
+    expect(isAudiusUrl(new URL("https://audius.co/artist/song-123"))).toBe(true);
+    expect(isAudiusUrl(new URL("https://audius.co/artist"))).toBe(false);
+    const api = { id: "D7KyD", title: "Song", user: { name: "Band" }, duration: 200, permalink: "/band/song", artwork: { "480x480": "https://img.audius.test/a.jpg" } };
+    expect(audiusTrack(api)).toMatchObject({ title: "Song", artist: "Band", durationMs: 200_000, source: Source.AUDIUS, stream: { id: "D7KyD" }, url: "https://audius.co/band/song" });
+    expect(audiusTrack({ ...api, is_streamable: false })).toBeNull();
+    expect(audiusTrack({ ...api, is_stream_gated: true })).toBeNull();
+
+    const fetchJson = vi.fn(async (url) => {
+      if (url === "https://api.audius.co") {
+        return { data: ["https://node.audius.test"] };
+      }
+      if (url.includes("/tracks/search")) {
+        return { data: [api, { ...api, id: "x", is_streamable: false }] };
+      }
+      if (url.includes("/resolve")) {
+        return { data: { id: "P1", playlist_name: "Mix" } };
+      }
+      return { data: [api] };
+    });
+    const audius = createAudius({ fetchJson });
+    expect(await audius.search("song")).toHaveLength(1);
+    expect(fetchJson.mock.calls[1][0]).toBe("https://node.audius.test/v1/tracks/search?query=song&limit=20&app_name=Rabble");
+    expect(await audius.resolve("https://audius.co/band/playlist/mix-1")).toMatchObject({ name: "Mix", tracks: [expect.objectContaining({ title: "Song" })] });
+    expect(await audius.streamFor("D7KyD")).toBe("https://node.audius.test/v1/tracks/D7KyD/stream?app_name=Rabble");
+    await expect(audius.streamFor("../x")).rejects.toMatchObject({ reason: "not-found" });
+
+    const down = createAudius({ fetchJson: async () => Promise.reject(new MusicError("unreachable")) });
+    await expect(down.search("x")).rejects.toMatchObject({ reason: "unreachable" });
+  });
+
+  it("reads Bandcamp search results", () => {
+    const html = `<ul>
+      <li class="searchresult data-search">
+        <img src="https://f4.bcbits.com/img/a1_7.jpg">
+        <div class="itemtype"> TRACK </div>
+        <div class="heading"><a href="https://band.bandcamp.com/track/song?from=search">Song &amp; More</a></div>
+        <div class="subhead"> from Album by The Band </div>
+        <div class="itemurl"><a href="x">https://band.bandcamp.com/track/song</a></div>
+      </li>
+      <li class="searchresult data-search">
+        <div class="itemtype">ALBUM</div>
+        <div class="itemurl"><a href="x">https://band.bandcamp.com/album/a</a></div>
+      </li>
+      <li class="searchresult data-search">
+        <div class="itemtype">TRACK</div>
+        <div class="itemurl"><a href="x">https://evil.test/track/x</a></div>
+      </li>
+    </ul>`;
+    expect(readSearchResults(html)).toEqual([{ title: "Song & More", artist: "The Band", url: "https://band.bandcamp.com/track/song", artworkUrl: "https://f4.bcbits.com/img/a1_7.jpg" }]);
+  });
+
+  it("searches Jamendo only with a client ID", async () => {
+    expect(await createJamendo().search("x")).toEqual([]);
+    const fetchJson = vi.fn(async () => ({ results: [{ id: "1", name: "Song", artist_name: "Band", duration: 100, audio: "https://prod.jamendo.test/a.mp3", shareurl: "https://www.jamendo.com/track/1" }, { id: "2", name: "No audio" }] }));
+    const found = await createJamendo({ clientId: "abc", fetchJson }).search("song");
+    expect(found).toEqual([expect.objectContaining({ title: "Song", source: Source.JAMENDO, stream: { url: "https://prod.jamendo.test/a.mp3" } })]);
+    expect(new URL(fetchJson.mock.calls[0][0]).searchParams.get("client_id")).toBe("abc");
+  });
+});

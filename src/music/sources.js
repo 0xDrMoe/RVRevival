@@ -2,17 +2,24 @@
 //
 //   SoundCloud track or playlist link     plays from SoundCloud
 //   Bandcamp track or album link          plays from Bandcamp
-//   Spotify, Apple Music or Deezer link   read for names, matched on SoundCloud
+//   Audius track or playlist link         plays from Audius
+//   Spotify, Apple Music or Deezer link   read for names, matched to a free copy
+//                                         (SoundCloud, then Audius and Jamendo)
 //   any other link to audio or a stream   played as is (MP3, OGG, AAC, radio
 //                                         streams, .m3u and .pls playlists)
 //   an uploaded audio or video file       played as is
-//   words                                 the top SoundCloud search result
+//   words                                 the best match across SoundCloud,
+//                                         Audius, Bandcamp and Jamendo
+//                                         (music/library.js)
 //
 // YouTube links are refused: YouTube doesn't allow other apps to play it.
 
+import { createAudius, isAudiusUrl } from "./audius.js";
 import { createBandcamp, isBandcampUrl } from "./bandcamp.js";
 import { createCatalogs, isShortCatalogLink, parseCatalogLink } from "./catalogs.js";
-import { findMatch } from "./match.js";
+import { createJamendo } from "./jamendo.js";
+import { createLibrary } from "./library.js";
+import { findMatch, findOtherMatch } from "./match.js";
 import { expandLink as defaultExpandLink, MusicError, openUrl as defaultOpenUrl } from "./net.js";
 import { createSoundCloud, isSoundCloudUrl, toTrack } from "./soundcloud.js";
 import { makeTrack, Source } from "./track.js";
@@ -78,15 +85,21 @@ function fileTitle(url) {
   return name.replace(/\.[a-z0-9]{2,5}$/i, "").replace(/[_+]/g, " ").trim() || url.hostname;
 }
 
-// Options: soundcloud, bandcamp, catalogs (built from SOUNDCLOUD_CLIENT_ID when
-// left out), openUrl and expandLink (tests).
+// Options: soundcloud, bandcamp, audius, jamendo, catalogs (built from
+// SOUNDCLOUD_CLIENT_ID and JAMENDO_CLIENT_ID when left out), logger,
+// openUrl and expandLink (tests).
 export function createResolver({
   soundcloud = createSoundCloud({ clientId: process.env.SOUNDCLOUD_CLIENT_ID || null }),
   bandcamp = createBandcamp(),
+  audius = createAudius(),
+  jamendo = createJamendo({ clientId: process.env.JAMENDO_CLIENT_ID || null }),
   catalogs = createCatalogs(),
+  logger = null,
   openUrl = defaultOpenUrl,
   expandLink = defaultExpandLink,
 } = {}) {
+  const library = createLibrary({ soundcloud, audius, bandcamp, jamendo, logger });
+
   // A link to audio: checks it really is audio (following .m3u and .pls
   // playlists), then lets it go until the song starts.
   async function probeLink(link, depth = 0) {
@@ -134,6 +147,9 @@ export function createResolver({
     if (isBandcampUrl(url)) {
       return bandcamp.resolve(url.href, { limit });
     }
+    if (audius && isAudiusUrl(url)) {
+      return audius.resolve(url.href, { limit });
+    }
     const catalog = parseCatalogLink(url);
     if (catalog) {
       return catalogs.resolve(catalog, { limit });
@@ -144,6 +160,8 @@ export function createResolver({
   return {
     soundcloud,
     bandcamp,
+    audius,
+    jamendo,
 
     // What was typed in /play → { tracks, skipped, name }. `limit` caps
     // playlists. Throws MusicError.
@@ -156,24 +174,16 @@ export function createResolver({
       if (url) {
         return resolveUrl(url, limit);
       }
-      const [first] = await soundcloud.search(text, { limit: 1 });
-      if (!first) {
-        throw new MusicError("not-found", `No free songs found for "${text}".`);
-      }
-      return { tracks: [toTrack(first)], skipped: 0, name: null };
+      return { tracks: [await library.best(text)], skipped: 0, name: null };
     },
 
-    // Up to `limit` SoundCloud tracks for words, best match first (/search).
+    // Up to `limit` tracks for words from every library, best match first (/search).
     async search(query, { limit = 5 } = {}) {
       const text = String(query ?? "").trim().slice(0, 200);
       if (!text) {
         throw new MusicError("not-found", "Type something to search for.");
       }
-      const found = await soundcloud.search(text, { limit });
-      if (found.length === 0) {
-        throw new MusicError("not-found", `No free songs found for "${text}".`);
-      }
-      return found.map(toTrack);
+      return library.search(text, { limit });
     },
 
     // SoundCloud tracks related to a SoundCloud track ID (autoplay).
@@ -195,18 +205,29 @@ export function createResolver({
       });
     },
 
-    // A Spotify, Apple Music or Deezer song, matched to a SoundCloud copy;
-    // other tracks as they are. Throws MusicError("no-match").
+    // A Spotify, Apple Music or Deezer song, matched to a free copy
+    // (SoundCloud, then Audius and Jamendo); other tracks as they are.
+    // Throws MusicError("no-match"), or SoundCloud's error when it failed
+    // and nothing else had the song.
     async ready(track) {
       if (track.source) {
         return track;
       }
-      const match = await findMatch(soundcloud, track.lookup);
-      if (!match) {
-        throw new MusicError("no-match", `No free copy of ${track.title} found.`);
+      let soundcloudError = null;
+      const match = await findMatch(soundcloud, track.lookup).catch((error) => {
+        soundcloudError = error;
+        logger?.warn?.("SoundCloud couldn't be searched for a match", { error: error?.message });
+        return null;
+      });
+      const copy = match ? toTrack(match) : await findOtherMatch([audius, jamendo?.enabled ? jamendo : null].filter(Boolean), track.lookup);
+      if (!copy) {
+        // A SoundCloud 404 here means SoundCloud itself failed, not that the song is missing.
+        if (soundcloudError instanceof MusicError && soundcloudError.reason === "not-found") {
+          throw new MusicError("unreachable", soundcloudError.message);
+        }
+        throw soundcloudError ?? new MusicError("no-match", `No free copy of ${track.title} found.`);
       }
-      const copy = toTrack(match);
-      return { ...track, source: Source.SOUNDCLOUD, stream: copy.stream, url: copy.url, durationMs: copy.durationMs ?? track.durationMs, artworkUrl: track.artworkUrl ?? copy.artworkUrl };
+      return { ...track, source: copy.source, stream: copy.stream, url: copy.url, durationMs: copy.durationMs ?? track.durationMs, artworkUrl: track.artworkUrl ?? copy.artworkUrl };
     },
   };
 }

@@ -4,6 +4,16 @@
 export const CHANGELOG = [
   {
     date: "2026-11-13",
+    title: "Music: many more songs found",
+    items: [
+      "Searches now look in SoundCloud, Audius and Bandcamp at once and rank the results together, so far more songs are found.",
+      "Tags like (Official Video), lyrics and ft. are ignored when searching, and SoundCloud is asked for many more results, since its top hits are often previews only.",
+      "Spotify, Apple Music and Deezer songs with no free copy on SoundCloud are looked for on Audius too. Audius links play as well.",
+      "A playlist with songs that can't play keeps going: they're skipped and listed in one message.",
+    ],
+  },
+  {
+    date: "2026-11-13",
     title: "Cleaner logs and ticket transcripts that look like Discord",
     items: [
       "Dashboard changes in the logs now show only what changed, a few lines per setting (like \"Bans: none → #bans\"), instead of the whole setting twice. Each setting gets its own section and the title links to the Activity page.",
