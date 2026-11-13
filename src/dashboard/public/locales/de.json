@@ -1862,5 +1862,25 @@
   "automationMinutes": "Löschen nach (Minuten)",
   "automationMessages": "Voll ab (Nachrichten in 10 s)",
   "automationSeconds": "Slowmode (Sekunden)",
-  "automationEmojis": "Emojis (bis zu 5)"
+  "automationEmojis": "Emojis (bis zu 5)",
+
+  "testReason_milestonesOff": "Mitglieder-Meilensteine sind aus. Wähle zuerst einen Kanal und speichere.",
+
+  "sectionMilestones": "Mitglieder-Meilensteine",
+  "milestonesHelp": "Wenn der Server jedes 100. Mitglied erreicht (oder was du wählst), feiert der Bot in einem Kanal und dankt dem, der es geschafft hat. Jeder Meilenstein kommt einmal.",
+  "milestoneChannel": "Meilenstein-Kanal",
+  "milestoneChannelHelp": "Aus, bis du einen Kanal wählst.",
+  "milestoneEvery": "Feiern alle",
+  "milestoneEveryHelp": "Mitglieder Abstand, 10 bis 1.000.000.",
+  "milestoneMessage": "Meilenstein-Nachricht",
+  "milestoneMessageHelp": "Leer lassen für den Standard. {members} ist der Meilenstein, {user} das Mitglied, das ihn erreicht hat.",
+  "testMilestoneHelp": "Postet den nächsten Meilenstein im Kanal, mit dir als Mitglied, ohne Ping.",
+  "sectionInviteTracking": "Einladungs-Tracking",
+  "inviteTrackingOn": "Speichern, wer jedes neue Mitglied eingeladen hat",
+  "inviteTrackingHelp": "Für /invites member und /invites top. Der Bot braucht Server verwalten, um Einladungen zu lesen; ohne das werden Beitritte ohne Einladenden gespeichert.",
+  "sectionBotAutoroles": "Automatische Bot-Rollen",
+  "botAutorolesHelp": "Rollen, die jeder neue Bot statt der Mitglieder-Rollen bekommt (bis zu {max}), etwa eine Bots-Rolle. Onboarding gilt nicht für Bots.",
+  "sectionDehoist": "Namen entschärfen (Dehoist)",
+  "dehoistOn": "Namen mit Symbolen am Anfang korrigieren",
+  "dehoistHelp": "Namen wie !!!aaa stehen ganz oben. Neue Mitglieder und Umbenennungen verlieren die Symbole am Anfang. /dehoist run korrigiert alle, die schon da sind. Braucht Spitznamen verwalten."
 }

@@ -35,6 +35,7 @@ import { SERVER_LOG_SETTINGS } from "../logs/serverLog.js";
 import { MOD_LOG_SETTINGS } from "../moderation/modLog.js";
 import { Setting } from "../settings/guildSettings.js";
 import { bumpReminderPayload, normalizeAutomation } from "../channels/automation.js";
+import { milestoneFor, milestonePayload, normalizeMilestones } from "../community/milestones.js";
 import { TICKET_LOG_SETTINGS } from "../tickets/ticketLog.js";
 import { createRateLimiter } from "../utils/rateLimits.js";
 
@@ -50,6 +51,7 @@ export const TestKind = Object.freeze({
   FEED: "feed",
   SCHEDULED: "scheduled",
   BUMP: "bump",
+  MILESTONE: "milestone",
 });
 export const TEST_KINDS = Object.values(TestKind);
 
@@ -73,6 +75,7 @@ export const TestReason = Object.freeze({
   NO_LOGS: "noLogs", // no log channel at all
   NOT_FOUND: "notFound", // the feed or scheduled message is gone
   BUMP_OFF: "bumpOff", // bump reminders are off
+  MILESTONES_OFF: "milestonesOff", // member milestones are off
 });
 
 export class TestUnavailable extends Error {
@@ -247,6 +250,18 @@ function bumpTest({ guildSettings, guild, language, hereChannelId }) {
   return [{ channelId, payload: { content: bumpReminderPayload(bump, language).content } }];
 }
 
+// --- Member milestone -------------------------------------------------------------
+
+// The next milestone's post, with the tester as the member who reached it.
+function milestoneTest({ guildSettings, guild, member, language }) {
+  const config = normalizeMilestones(guildSettings.get(guild.id, Setting.MILESTONES));
+  if (!config) {
+    throw new TestUnavailable(TestReason.MILESTONES_OFF);
+  }
+  const milestone = milestoneFor(guild.memberCount ?? 0, config.every) + config.every;
+  return [{ channelId: config.channelId, payload: milestonePayload(config, { member, guild, milestone, language }) }];
+}
+
 // --- Logs -----------------------------------------------------------------------
 
 // The groups only gather the routes under them; nothing is logged as a group.
@@ -338,6 +353,7 @@ const BUILDERS = {
   [TestKind.FEED]: feedTest,
   [TestKind.SCHEDULED]: scheduledTest,
   [TestKind.BUMP]: bumpTest,
+  [TestKind.MILESTONE]: milestoneTest,
 };
 
 // The messages one test sends, each with the test line on top, as

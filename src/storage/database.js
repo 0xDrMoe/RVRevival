@@ -548,6 +548,31 @@ const MIGRATIONS = [
   ) WITHOUT ROWID;
   CREATE INDEX bump_reminders_by_due ON bump_reminders (due_at);
   `,
+  // 36: members and community extras. Reminders stay a day after they're
+  // sent so their Snooze buttons work (delivered_at); giveaway requirements
+  // and bonus entries; who invited whom (members/inviteStats.js); the last
+  // member-count milestone posted (community/milestones.js).
+  `
+  ALTER TABLE reminders ADD COLUMN delivered_at INTEGER;
+  ALTER TABLE giveaways ADD COLUMN min_account_days INTEGER;
+  ALTER TABLE giveaways ADD COLUMN min_member_days INTEGER;
+  ALTER TABLE giveaways ADD COLUMN bonus_role_id TEXT;
+  ALTER TABLE giveaway_entries ADD COLUMN weight INTEGER NOT NULL DEFAULT 1;
+  CREATE TABLE invite_joins (
+    guild_id   TEXT    NOT NULL,
+    user_id    TEXT    NOT NULL,
+    inviter_id TEXT,
+    code       TEXT,
+    joined_at  INTEGER NOT NULL,
+    left_at    INTEGER,
+    PRIMARY KEY (guild_id, user_id)
+  ) WITHOUT ROWID;
+  CREATE INDEX invite_joins_by_inviter ON invite_joins (guild_id, inviter_id);
+  CREATE TABLE milestone_posts (
+    guild_id TEXT    PRIMARY KEY,
+    count    INTEGER NOT NULL
+  ) WITHOUT ROWID;
+  `,
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS.length;

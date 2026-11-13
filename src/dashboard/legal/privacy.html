@@ -96,11 +96,13 @@
         <ul>
           <li><strong>Leveling</strong> (if a server turns it on): your XP, message count and username, and XP per day for the weekly and monthly boards. If the server posts a weekly leaderboard, which week was last posted and who holds the top member role.</li>
           <li><strong>Birthdays</strong>: month and day only, never the year.</li>
-          <li><strong>Reminders</strong>: the text you asked to be reminded of, and when.</li>
+          <li><strong>Reminders</strong>: the text you asked to be reminded of, and when. A reminder made with the <em>Remind me</em> app holds a link to the message, not its text. Sent reminders are kept for one more day so their Snooze buttons work.</li>
           <li><strong>AFK</strong>: your away message and since when.</li>
           <li><strong>Highlights</strong>: the words you asked to be notified about.</li>
           <li><strong>Role pick confirmations</strong>: whether you turned them on or off for yourself in a server. Forgotten when you leave that server.</li>
-          <li><strong>Giveaways</strong>: who entered and who won.</li>
+          <li><strong>Giveaways</strong>: who entered, how many entries each person had (a bonus role gives 2), and who won. Account and server age are checked when you enter, not saved.</li>
+          <li><strong>Invite tracking</strong> (if a server turns it on): who invited each new member, the invite code, when they joined and, if they did, when they left.</li>
+          <li><strong>Member milestones</strong> (if a server turns them on): the last member count celebrated. Nothing about who reached it.</li>
           <li><strong>Counting game</strong> (if a server has one): the current number, the best run and who counted last (so nobody counts twice in a row).</li>
           <li><strong>Bump reminders</strong> (if a server turns them on): which channel the last DISBOARD bump was in and when the next reminder is due. Nothing about who bumped.</li>
           <li><strong>Music</strong>: the server’s music settings (DJ role, DJ-only mode, vote skip, longest song, 24/7, volume, queue size, when to leave). The queue and skip votes aren’t saved.</li>
@@ -207,7 +209,7 @@
               <tr><td>Daily XP (weekly and monthly boards)</td><td>35 days</td></tr>
               <tr><td>Daily command counts</td><td>35 days</td></tr>
               <tr><td>Ended giveaways and their entries</td><td>30 days, so they can be rerolled</td></tr>
-              <tr><td>Reminders</td><td>Until they are sent or cancelled</td></tr>
+              <tr><td>Reminders</td><td>Until they are cancelled, or one day after they are sent</td></tr>
               <tr><td>Dashboard activity</td><td>The newest 500 changes per server</td></tr>
               <tr><td>Banned accounts' look</td><td>Until the ban is lifted, and only the newest 1,000 bans per server</td></tr>
               <tr><td>Everything else</td><td>Until staff or you remove it, or until you ask us to delete it</td></tr>
@@ -221,7 +223,7 @@
 
         <h2 id="choices">7. Your choices</h2>
         <ul>
-          <li>Remove your own data with <code>/birthday remove</code>, <code>/highlight clear</code> and <code>/remind cancel</code>. Sending a message ends your AFK status.</li>
+          <li>See and delete what the bot keeps about you, in every server at once, with <code>/mydata</code>: reminders, highlight words, AFK messages, birthdays, playlists, role pick choices, invite records and counting turns. You can also remove things one at a time with <code>/birthday remove</code>, <code>/highlight clear</code> and <code>/remind cancel</code>. Sending a message ends your AFK status.</li>
           <li>Log out of the dashboard at any time; this deletes your login.</li>
           <li>Server staff can delete cases, reset levels and clear settings for their server.</li>
           <li>

@@ -5,7 +5,8 @@
 // DMs them the welcome DM and gives them the autoroles. If the server uses
 // membership screening (rules to accept first), the roles wait until they've
 // accepted, since Discord doesn't let pending members have roles. When someone
-// leaves, the leave message goes in the leave channel. Bots get none of this.
+// leaves, the leave message goes in the leave channel. Bots get none of this,
+// only the bot autoroles (a separate list, so a "Bots" role can be automatic).
 //
 // Rate limits: when many people join or leave at once, the messages that pile
 // up while one is being posted go out together, one per line. Welcome DMs stop
@@ -105,14 +106,15 @@ export function createWelcomer({ guildSettings, logger, forcedLanguage, skipAuto
     }
   }
 
-  // Gives the autoroles the bot is allowed to give.
+  // Gives the autoroles (or, to a bot, the bot autoroles) the bot is allowed to give.
   async function giveAutoroles(member) {
     if (skipAutoroles(member)) {
       return;
     }
     const guild = member.guild;
     const me = guild.members.me;
-    const ids = guildSettings.getList(guild.id, Setting.AUTOROLES).filter((id) => {
+    const setting = member.user?.bot ? Setting.BOT_AUTOROLES : Setting.AUTOROLES;
+    const ids = guildSettings.getList(guild.id, setting).filter((id) => {
       const role = guild.roles.cache.get(id);
       return role && !role.managed && !isModeratorRole(role) && me && role.position < me.roles.highest.position && !member.roles.cache.has(id);
     });
@@ -134,6 +136,7 @@ export function createWelcomer({ guildSettings, logger, forcedLanguage, skipAuto
   return {
     async memberJoined(member) {
       if (member.user?.bot) {
+        await giveAutoroles(member);
         return;
       }
       const guild = member.guild;

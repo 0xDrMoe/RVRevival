@@ -22,6 +22,9 @@ function toGiveaway(row) {
         prize: row.prize,
         winnerCount: row.winner_count,
         requiredRoleId: row.required_role_id ?? null,
+        minAccountDays: row.min_account_days ?? null,
+        minMemberDays: row.min_member_days ?? null,
+        bonusRoleId: row.bonus_role_id ?? null,
         createdAt: row.created_at,
         endsAt: row.ends_at,
         endedAt: row.ended_at ?? null,
@@ -40,8 +43,8 @@ export class GiveawayStore {
     this.#db = db;
     this.#statements = {
       insert: db.prepare(`
-        INSERT INTO giveaways (guild_id, channel_id, host_id, prize, winner_count, required_role_id, created_at, ends_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING *`),
+        INSERT INTO giveaways (guild_id, channel_id, host_id, prize, winner_count, required_role_id, min_account_days, min_member_days, bonus_role_id, created_at, ends_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *`),
       setMessage: db.prepare("UPDATE giveaways SET message_id = ? WHERE id = ?"),
       get: db.prepare("SELECT * FROM giveaways WHERE id = ?"),
       running: db.prepare("SELECT * FROM giveaways WHERE guild_id = ? AND ended_at IS NULL ORDER BY ends_at"),
@@ -52,16 +55,17 @@ export class GiveawayStore {
       delete: db.prepare("DELETE FROM giveaways WHERE id = ?"),
       deleteEntries: db.prepare("DELETE FROM giveaway_entries WHERE giveaway_id = ?"),
       oldEnded: db.prepare("SELECT id FROM giveaways WHERE ended_at IS NOT NULL AND ended_at < ?"),
-      addEntry: db.prepare("INSERT OR IGNORE INTO giveaway_entries (giveaway_id, user_id) VALUES (?, ?)"),
+      addEntry: db.prepare("INSERT OR IGNORE INTO giveaway_entries (giveaway_id, user_id, weight) VALUES (?, ?, ?)"),
       removeEntry: db.prepare("DELETE FROM giveaway_entries WHERE giveaway_id = ? AND user_id = ?"),
       entries: db.prepare("SELECT user_id FROM giveaway_entries WHERE giveaway_id = ?"),
+      weightedEntries: db.prepare("SELECT user_id, weight FROM giveaway_entries WHERE giveaway_id = ?"),
       countEntries: db.prepare("SELECT COUNT(*) AS total FROM giveaway_entries WHERE giveaway_id = ?"),
     };
   }
 
-  create({ guildId, channelId, hostId, prize, winnerCount, requiredRoleId = null, createdAt, endsAt }) {
+  create({ guildId, channelId, hostId, prize, winnerCount, requiredRoleId = null, minAccountDays = null, minMemberDays = null, bonusRoleId = null, createdAt, endsAt }) {
     return toGiveaway(
-      this.#statements.insert.get(guildId, channelId, hostId, prize, winnerCount, requiredRoleId, createdAt, endsAt),
+      this.#statements.insert.get(guildId, channelId, hostId, prize, winnerCount, requiredRoleId, minAccountDays, minMemberDays, bonusRoleId, createdAt, endsAt),
     );
   }
 
@@ -114,10 +118,10 @@ export class GiveawayStore {
     return ids.length;
   }
 
-  // Enters the member, or takes them out if they'd entered. Returns whether
-  // they're in now.
-  toggleEntry(id, userId) {
-    if (this.#statements.addEntry.run(id, userId).changes > 0) {
+  // Enters the member (with `weight` entries: 2 with the bonus role), or takes
+  // them out if they'd entered. Returns whether they're in now.
+  toggleEntry(id, userId, weight = 1) {
+    if (this.#statements.addEntry.run(id, userId, weight).changes > 0) {
       return true;
     }
     this.#statements.removeEntry.run(id, userId);
@@ -126,6 +130,11 @@ export class GiveawayStore {
 
   entries(id) {
     return this.#statements.entries.all(id).map((row) => row.user_id);
+  }
+
+  // [{ userId, weight }] for the draw.
+  weightedEntries(id) {
+    return this.#statements.weightedEntries.all(id).map((row) => ({ userId: row.user_id, weight: Math.max(1, Number(row.weight) || 1) }));
   }
 
   countEntries(id) {

@@ -4,6 +4,19 @@
 export const CHANGELOG = [
   {
     date: "2026-11-13",
+    title: "Snooze, milestones, invite tracking and more",
+    items: [
+      "Reminders now come with Snooze 10 min, Snooze 1 hour and Tomorrow buttons, and right-click any message > Apps > Remind me to get a DM about it later.",
+      "Member milestones: the bot celebrates every 100th member (or whatever you pick) in a channel. Set it up with /welcome milestones or on the Welcome & leave page.",
+      "Invite tracking: /invites shows who invited whom and the top inviters. Off until you switch it on.",
+      "/dehoist drops the symbols from names like !!!aaa that sort above everyone, and can do it automatically.",
+      "Bot autoroles: new bots get their own roles with /welcome autorole bots:True or on the Roles & panels page.",
+      "Giveaways can ask for a minimum account age and time in the server, and give a bonus role 2 entries.",
+      "/timestamp turns a date or time into Discord timestamps everyone sees in their own time zone, and /mydata lets anyone see and delete what the bot keeps about them.",
+    ],
+  },
+  {
+    date: "2026-11-13",
     title: "Channel automation",
     items: [
       "A new Channel automation page and /automate: auto-publish announcement posts, auto-threads under every post, threads that never auto-archive, and auto-delete after 1 minute to 7 days (pinned messages stay).",

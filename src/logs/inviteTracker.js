@@ -13,6 +13,10 @@
 
 import { PermissionFlagsBits } from "discord.js";
 
+// One join's answer is kept this long, so the server log and /invites
+// (members/inviteStats.js) share a single lookup.
+const ANSWER_TTL_MS = 30_000;
+
 // Servers are looked at one at a time at startup, this far apart, so a bot
 // in many servers doesn't send a burst of requests.
 const PRIME_GAP_MS = 1500;
@@ -25,6 +29,8 @@ export function createInviteTracker({ logger, wants = () => true, sleep = (ms) =
   const counts = new Map();
   // guild ID -> promise of the previous lookup, so joins are looked at in order
   const chains = new Map();
+  // "<guild>:<member>" -> { promise, at } of a recent answer
+  const answers = new Map();
 
   const canList = (guild) => Boolean(guild?.members?.me?.permissions?.has?.(PermissionFlagsBits.ManageGuild));
 
@@ -111,31 +117,53 @@ export function createInviteTracker({ logger, wants = () => true, sleep = (ms) =
     },
 
     // The invite `member` most likely joined with, as { code, inviterId, uses,
-    // maxUses }, or undefined. Never throws.
-    async inviteUsed(member) {
-      const guild = member.guild;
-      if (!canList(guild)) {
-        return undefined;
+    // maxUses }, or undefined. Never throws. Asking again for the same join
+    // within ANSWER_TTL_MS gets the same answer without another lookup.
+    inviteUsed(member) {
+      if (!member.id) {
+        return findInvite(member);
       }
-      const previous = chains.get(guild.id) ?? Promise.resolve();
-      const next = previous.then(
-        () => lookUp(guild),
-        () => lookUp(guild),
-      );
-      const settled = next.catch(() => undefined);
-      chains.set(guild.id, settled);
-      try {
-        return await next;
-      } catch (error) {
-        logger?.debug?.("Couldn't work out which invite a member used", { guildId: guild.id, error });
-        return undefined;
-      } finally {
-        if (chains.get(guild.id) === settled) {
-          chains.delete(guild.id);
+      const key = `${member.guild?.id}:${member.id}`;
+      const at = Date.now();
+      for (const [entry, answer] of answers) {
+        if (at - answer.at > ANSWER_TTL_MS) {
+          answers.delete(entry);
         }
       }
+      const known = answers.get(key);
+      if (known) {
+        return known.promise;
+      }
+      const promise = findInvite(member);
+      answers.set(key, { promise, at });
+      return promise;
     },
   };
+
+  // inviteUsed without the shared answers.
+  async function findInvite(member) {
+    const guild = member.guild;
+    if (!canList(guild)) {
+      return undefined;
+    }
+    const previous = chains.get(guild.id) ?? Promise.resolve();
+    const next = previous.then(
+      () => lookUp(guild),
+      () => lookUp(guild),
+    );
+    const settled = next.catch(() => undefined);
+    chains.set(guild.id, settled);
+    try {
+      return await next;
+    } catch (error) {
+      logger?.debug?.("Couldn't work out which invite a member used", { guildId: guild.id, error });
+      return undefined;
+    } finally {
+      if (chains.get(guild.id) === settled) {
+        chains.delete(guild.id);
+      }
+    }
+  }
 }
 
 export const noInviteTracker = Object.freeze({

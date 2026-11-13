@@ -3,6 +3,8 @@ import { describe, expect, it, vi } from "vitest";
 import { buildWelcomeCommandData, createWelcomeCommand } from "../src/commands/welcome.js";
 import { createWelcomer, renderTemplate, welcomePayload, welcomeText } from "../src/community/welcome.js";
 import { checkWelcomeEmbed, renderWelcomeEmbed } from "../src/community/welcomeEmbeds.js";
+import { checkMilestones, createMilestones, InvalidMilestones, milestoneFor, reachedMilestone } from "../src/community/milestones.js";
+import { GrowthStore } from "../src/members/growthStore.js";
 import { BRAND_COLOR } from "../src/guilds/guildJoin.js";
 import { InvalidMessage } from "../src/messages/embedMessage.js";
 import { translate } from "../src/i18n/i18n.js";
@@ -149,6 +151,15 @@ describe("welcomer", () => {
     expect(member.roles.add).not.toHaveBeenCalled();
   });
 
+  it("gives bots only the bot autoroles", async () => {
+    const guild = fakeGuild();
+    const guildSettings = await settingsWith({ [Setting.AUTOROLES]: [MEMBER_ROLE_ID], [Setting.BOT_AUTOROLES]: [HIGH_ROLE_ID.replace(/2$/, "3")] });
+    guild.roles.cache.set(HIGH_ROLE_ID.replace(/2$/, "3"), { id: HIGH_ROLE_ID.replace(/2$/, "3"), position: 4, managed: false, permissions: { has: () => false } });
+    const bot = fakeMember(guild, { bot: true });
+    await createWelcomer({ guildSettings, logger: fakeLogger() }).memberJoined(bot);
+    expect(bot.roles.add).toHaveBeenCalledWith([HIGH_ROLE_ID.replace(/2$/, "3")], "Autorole");
+  });
+
   it("waits until pending members accept the rules before giving autoroles", async () => {
     const guild = fakeGuild();
     const guildSettings = await settingsWith({ [Setting.AUTOROLES]: [MEMBER_ROLE_ID] });
@@ -196,7 +207,7 @@ describe("welcomer", () => {
 });
 
 describe("/welcome", () => {
-  function fakeInteraction(subcommand, { text, role, what, canPost = true, manageGuild = true, features } = {}) {
+  function fakeInteraction(subcommand, { text, role, what, bots = null, every = null, canPost = true, manageGuild = true, features } = {}) {
     const guild = fakeGuild({ features });
     const member = fakeMember(guild);
     return {
@@ -211,6 +222,8 @@ describe("/welcome", () => {
         getChannel: () => ({ id: WELCOME_CHANNEL_ID, permissionsFor: () => ({ has: () => canPost }) }),
         getString: (name) => (name === "what" ? what : text),
         getRole: () => role,
+        getBoolean: (name) => (name === "bots" ? bots : null),
+        getInteger: (name) => (name === "every" ? every : null),
       },
       reply: vi.fn(async () => {}),
     };
@@ -232,11 +245,31 @@ describe("/welcome", () => {
       "dm",
       "embed",
       "autorole",
+      "milestones",
       "persist",
       "off",
       "test",
       "show",
     ]);
+  });
+
+  it("/welcome milestones saves it and previews the next one", async () => {
+    const guildSettings = new GuildSettings();
+    const { outcome, content } = await run(guildSettings, "milestones", { every: 500, text: "We hit {members}!" });
+    expect(outcome.status).toBe(Status.SUCCESS);
+    expect(guildSettings.get(GUILD_ID, Setting.MILESTONES)).toEqual({ channelId: WELCOME_CHANNEL_ID, every: 500, message: "We hit {members}!" });
+    expect(content).toContain("We hit 1,500!");
+    await run(guildSettings, "off", { what: "milestones" });
+    expect(guildSettings.get(GUILD_ID, Setting.MILESTONES)).toBeUndefined();
+  });
+
+  it("/welcome autorole bots:True manages the bot list", async () => {
+    const guildSettings = new GuildSettings();
+    const role = { id: MEMBER_ROLE_ID, position: 5, managed: false, permissions: { has: () => false } };
+    const { outcome } = await run(guildSettings, "autorole", { role, bots: true });
+    expect(outcome.key).toBe("welcomeBotAutoroleAdded");
+    expect(guildSettings.getList(GUILD_ID, Setting.BOT_AUTOROLES)).toEqual([MEMBER_ROLE_ID]);
+    expect(guildSettings.getList(GUILD_ID, Setting.AUTOROLES)).toEqual([]);
   });
 
   it("refuses members without Manage Server", async () => {
@@ -439,4 +472,64 @@ describe("welcome embeds", () => {
       expect(guildSettings.get(GUILD_ID, Setting.WELCOME_DM_EMBED)).toBeUndefined();
     });
   });
+});
+
+describe("member milestones", () => {
+  const CELEBRATE = { channelId: WELCOME_CHANNEL_ID, every: 100, message: null };
+
+  async function setup(count, saved = CELEBRATE) {
+    const guild = fakeGuild();
+    guild.memberCount = count;
+    const guildSettings = await settingsWith(saved ? { [Setting.MILESTONES]: saved } : {});
+    const store = new GrowthStore();
+    const milestones = createMilestones({ guildSettings, store, logger: fakeLogger() });
+    const join = async (memberCount, options) => {
+      guild.memberCount = memberCount;
+      await milestones.memberJoined(fakeMember(guild, options));
+    };
+    return { guild, store, join, send: guild.channels.cache.get(WELCOME_CHANNEL_ID).send };
+  }
+
+  it("works out when a count reaches a milestone", () => {
+    expect(milestoneFor(1234, 100)).toBe(1200);
+    expect(reachedMilestone(1200, 100, undefined)).toBe(true);
+    expect(reachedMilestone(1234, 100, undefined)).toBe(false);
+    expect(reachedMilestone(1300, 100, 1200)).toBe(true);
+    expect(reachedMilestone(1250, 100, 1200)).toBe(false);
+    expect(reachedMilestone(50, 100, undefined)).toBe(false);
+  });
+
+  it("posts each milestone once, thanking the member who reached it", async () => {
+    const { store, join, send } = await setup(1234);
+    await join(1250);
+    expect(send).not.toHaveBeenCalled();
+    expect(store.milestone(GUILD_ID)).toBe(1200);
+    await join(1300);
+    expect(send).toHaveBeenCalledTimes(1);
+    const message = send.mock.calls[0][0];
+    expect(message.content).toContain("1,300");
+    expect(message.content).toContain(`<@${USER_ID}>`);
+    expect(message.allowedMentions).toEqual({ users: [USER_ID] });
+    // Leaving and rejoining around it doesn't post it again; bots don't count.
+    await join(1299);
+    await join(1300);
+    await join(1400, { bot: true });
+    expect(send).toHaveBeenCalledTimes(1);
+  });
+
+  it("does nothing when switched off", async () => {
+    const { join, send, store } = await setup(99, null);
+    await join(100);
+    expect(send).not.toHaveBeenCalled();
+    expect(store.milestone(GUILD_ID)).toBeUndefined();
+  });
+
+  it("checks what the dashboard sends", () => {
+    expect(checkMilestones({ channelId: WELCOME_CHANNEL_ID, every: 500, message: "  Hi {user}  " })).toEqual({ channelId: WELCOME_CHANNEL_ID, every: 500, message: "Hi {user}" });
+    expect(checkMilestones(null)).toBeNull();
+    expect(() => checkMilestones({ channelId: WELCOME_CHANNEL_ID, every: 5 })).toThrow(InvalidMilestones);
+    expect(() => checkMilestones({ channelId: "nope", every: 100 })).toThrow(InvalidMilestones);
+    expect(() => checkMilestones({ channelId: WELCOME_CHANNEL_ID, every: 100 }, { channelOk: () => false })).toThrow(InvalidMilestones);
+  });
+
 });

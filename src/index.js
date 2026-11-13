@@ -56,6 +56,11 @@ import { RecentIds } from "./logs/recentIds.js";
 import { createServerLog } from "./logs/serverLog.js";
 import { createAuditTrail } from "./logs/auditTrail.js";
 import { createInviteTracker } from "./logs/inviteTracker.js";
+import { GrowthStore } from "./members/growthStore.js";
+import { createInviteStats, inviteTrackingOn } from "./members/inviteStats.js";
+import { createPersonalData } from "./members/personalData.js";
+import { createMilestones } from "./community/milestones.js";
+import { createDehoist } from "./moderation/dehoist.js";
 import { SentMessageStore } from "./messages/sentMessageStore.js";
 import { MemberEvent, MemberEventStore } from "./members/memberEventStore.js";
 import { CaseStore } from "./moderation/caseStore.js";
@@ -221,7 +226,7 @@ async function start() {
   const auditTrail = createAuditTrail();
   // Which invite each new member used, for the server log's join entries.
   let serverLog;
-  const inviteTracker = createInviteTracker({ logger, wants: (guild) => serverLog.tracksInvites(guild) });
+  const inviteTracker = createInviteTracker({ logger, wants: (guild) => serverLog.tracksInvites(guild) || inviteTrackingOn(guildSettings, guild.id) });
   serverLog = createServerLog({ poster, botDeletions, guildSettings, altHints, auditTrail, inviteTracker });
   // Saves and posts everything that happens to tickets (/tickets log).
   const ticketLog = createTicketLog({ tickets, poster, guildSettings, logger });
@@ -294,6 +299,13 @@ async function start() {
     skipAutoroles: (member) => quarantine.isQuarantined(member.guild.id, member.id),
   });
 
+  // Member growth: invite tracking (/invites) and member-count milestones.
+  const growth = new GrowthStore(db);
+  const inviteStats = createInviteStats({ guildSettings, store: growth, inviteTracker, logger });
+  const milestones = createMilestones({ guildSettings, store: growth, logger, forcedLanguage });
+  // Auto-dehoist (/dehoist): names starting with symbols lose them.
+  const dehoist = createDehoist({ guildSettings, logger });
+
   // The starboard (/starboard): messages with enough stars are reposted.
   const starboard = createStarboard({ guildSettings, store: new StarboardStore(db), logger, forcedLanguage, botDeletions });
 
@@ -334,6 +346,13 @@ async function start() {
     music,
     musicPlaylists,
     automation,
+    growth,
+    inviteTracker,
+    dehoist,
+    personalData: createPersonalData({
+      database: db,
+      onDeleted: ({ highlightGuildIds }) => highlightGuildIds.forEach((guildId) => highlights.changed(guildId)),
+    }),
     dashboardUrl: config.dashboardUrl,
     memberLoader,
   });
@@ -514,16 +533,21 @@ async function start() {
     client.on(Events.GuildCreate, safely("being added to a server", (guild) => guildJoin.guildJoined(guild)));
     client.on(Events.GuildMemberAdd, safely("a member joining", (member) => serverLog.memberJoined(member)));
     client.on(Events.GuildMemberAdd, safely("welcoming a member", (member) => welcomer.memberJoined(member)));
+    client.on(Events.GuildMemberAdd, safely("a member milestone", (member) => milestones.memberJoined(member)));
+    client.on(Events.GuildMemberAdd, safely("saving who invited a member", (member) => inviteStats.memberJoined(member)));
+    client.on(Events.GuildMemberAdd, safely("dehoisting a member", (member) => dehoist.memberJoined(member)));
     client.on(Events.GuildMemberAdd, safely("the join gate", (member) => raidGuard.memberJoined(member)));
     client.on(Events.GuildMemberAdd, safely("a quarantined member rejoining", (member) => quarantine.memberJoined(member)));
     client.on(Events.GuildMemberAdd, safely("giving roles back", (member) => rolePersistence.memberJoined(member)));
     client.on(Events.GuildMemberRemove, safely("saving roles", (member) => rolePersistence.memberLeft(member)));
     client.on(Events.GuildMemberRemove, safely("a leave message", (member) => welcomer.memberLeft(member)));
+    client.on(Events.GuildMemberRemove, safely("an invited member leaving", (member) => inviteStats.memberLeft(member)));
     client.on(Events.GuildMemberRemove, safely("forgetting a birthday", (member) => birthdayStore.remove(member.guild.id, member.id)));
     client.on(Events.GuildMemberRemove, safely("forgetting an AFK", (member) => afk.memberLeft(member)));
     client.on(Events.GuildMemberRemove, safely("forgetting highlights", (member) => highlights.memberLeft(member)));
     client.on(Events.GuildMemberRemove, safely("forgetting role confirmations", (member) => roleConfirmations.memberLeft(member)));
     client.on(Events.GuildMemberUpdate, safely("autoroles after screening", (before, after) => welcomer.memberUpdated(before, after)));
+    client.on(Events.GuildMemberUpdate, safely("dehoisting a rename", (before, after) => dehoist.memberUpdated(before, after)));
     client.on(
       Events.GuildMemberRemove,
       safely("a member leaving", async (member) => {

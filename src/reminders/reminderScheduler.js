@@ -6,8 +6,31 @@
 // DMed if they asked for a private one. If the channel is gone or the bot
 // can't post there any more, it falls back to a DM.
 
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from "discord.js";
 import { pickLanguage, translate } from "../i18n/i18n.js";
+import { SNOOZE_WINDOW_MS } from "./reminderStore.js";
 import { sendDm as sendUserDm } from "../utils/dms.js";
+
+// Snooze buttons under a sent reminder: rsz:<reminder id>:<minutes>.
+export const SNOOZE_PREFIX = "rsz:";
+export const SNOOZE_MINUTES = [10, 60, 1440];
+
+export function snoozeRow(reminderId, language) {
+  return new ActionRowBuilder().addComponents(
+    SNOOZE_MINUTES.map((minutes) =>
+      new ButtonBuilder()
+        .setCustomId(`${SNOOZE_PREFIX}${reminderId}:${minutes}`)
+        .setStyle(ButtonStyle.Secondary)
+        .setEmoji("⏰")
+        .setLabel(translate(language, `reminderSnooze_${minutes}`)),
+    ),
+  );
+}
+
+export function parseSnoozeId(customId) {
+  const match = /^rsz:(\d+):(\d+)$/.exec(customId ?? "");
+  return match && SNOOZE_MINUTES.includes(Number(match[2])) ? { id: Number(match[1]), minutes: Number(match[2]) } : undefined;
+}
 
 // Options:
 //   client, store (ReminderStore), logger
@@ -16,9 +39,9 @@ export function createReminderScheduler({ client, store, logger, forcedLanguage,
   let timer;
   let running = false;
 
-  async function sendDm(reminder, content) {
+  async function sendDm(reminder, content, components) {
     const user = await client.users.fetch(reminder.userId);
-    await sendUserDm(user, { content, allowedMentions: { parse: [] } });
+    await sendUserDm(user, { content, components, allowedMentions: { parse: [] } });
   }
 
   async function deliver(reminder) {
@@ -26,12 +49,13 @@ export function createReminderScheduler({ client, store, logger, forcedLanguage,
     const language = pickLanguage(guild?.preferredLocale, forcedLanguage);
     const values = { user: `<@${reminder.userId}>`, when: `<t:${Math.floor(reminder.createdAt / 1000)}:R>`, text: reminder.text };
     const content = translate(language, "reminderDue", values).slice(0, 2000);
+    const components = [snoozeRow(reminder.id, language)];
 
     if (!reminder.private && guild) {
       const channel = guild.channels.cache.get(reminder.channelId);
       if (channel?.isTextBased?.()) {
         try {
-          await channel.send({ content, allowedMentions: { users: [reminder.userId] } });
+          await channel.send({ content, components, allowedMentions: { users: [reminder.userId] } });
           return;
         } catch (error) {
           logger.debug("Couldn't post a reminder in its channel; sending it by DM", { guildId: guild.id, error });
@@ -39,7 +63,7 @@ export function createReminderScheduler({ client, store, logger, forcedLanguage,
       }
     }
     const dmContent = guild ? `${content}\n-# ${translate(language, "reminderFrom", { server: guild.name })}` : content;
-    await sendDm(reminder, dmContent.slice(0, 2000)).catch((error) =>
+    await sendDm(reminder, dmContent.slice(0, 2000), components).catch((error) =>
       logger.debug("Couldn't DM a reminder; their DMs are closed", { guildId: reminder.guildId, error }),
     );
   }
@@ -52,13 +76,14 @@ export function createReminderScheduler({ client, store, logger, forcedLanguage,
     running = true;
     try {
       for (const reminder of store.due(now())) {
-        // Deleted first, so a crash can't send it twice; a reminder that can't
-        // be delivered anywhere is dropped rather than retried forever.
-        store.delete(reminder.id);
+        // Marked sent first, so a crash can't send it twice; a reminder that
+        // can't be delivered anywhere is dropped rather than retried forever.
+        store.markDelivered(reminder.id, now());
         await deliver(reminder).catch((error) =>
           logger.error("Sending a reminder crashed", { guildId: reminder.guildId, error }),
         );
       }
+      store.forgetDeliveredBefore(now() - SNOOZE_WINDOW_MS);
     } finally {
       running = false;
     }

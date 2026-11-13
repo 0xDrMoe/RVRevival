@@ -820,6 +820,7 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
       [Setting.LEAVE_MESSAGE]: translate(language, "welcomeDefaultLeave"),
       levelUpMessage: translate(language, "levelUpDefault"),
       birthdayMessage: translate(language, "birthdayDefaultMessage"),
+      milestoneMessage: translate(language, "milestoneDefault"),
       // The colour welcome, leave and DM embeds get when they have none of their own.
       embedColor: defaultEmbedColor(guildSettings, guild.id),
       // Per feed kind, what a feed with no message of its own posts.

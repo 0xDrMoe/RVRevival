@@ -1862,5 +1862,25 @@
   "automationMinutes": "Elimina dopo (minuti)",
   "automationMessages": "Affollato a (messaggi in 10 s)",
   "automationSeconds": "Slowmode (secondi)",
-  "automationEmojis": "Emoji (fino a 5)"
+  "automationEmojis": "Emoji (fino a 5)",
+
+  "testReason_milestonesOff": "I traguardi di membri sono disattivati. Scegli un canale e salva prima.",
+
+  "sectionMilestones": "Traguardi di membri",
+  "milestonesHelp": "Quando il server raggiunge ogni 100° membro (o quello che scegli), il bot festeggia in un canale e ringrazia chi l'ha raggiunto. Ogni traguardo esce una volta.",
+  "milestoneChannel": "Canale dei traguardi",
+  "milestoneChannelHelp": "Disattivato finché non scegli un canale.",
+  "milestoneEvery": "Festeggia ogni",
+  "milestoneEveryHelp": "Membri di distanza, da 10 a 1.000.000.",
+  "milestoneMessage": "Messaggio del traguardo",
+  "milestoneMessageHelp": "Lascia vuoto per il predefinito. {members} è il traguardo e {user} chi l'ha raggiunto.",
+  "testMilestoneHelp": "Pubblica il prossimo traguardo nel suo canale, con te come membro, senza menzioni.",
+  "sectionInviteTracking": "Tracciamento inviti",
+  "inviteTrackingOn": "Ricorda chi ha invitato ogni nuovo membro",
+  "inviteTrackingHelp": "Per /invites member e /invites top. Il bot ha bisogno di Gestire server per leggere gli inviti; senza, gli ingressi sono salvati senza chi ha invitato.",
+  "sectionBotAutoroles": "Ruoli automatici dei bot",
+  "botAutorolesHelp": "Ruoli che ogni nuovo bot riceve al posto di quelli dei membri (fino a {max}), come un ruolo Bot. L'onboarding non copre i bot.",
+  "sectionDehoist": "Nomi senza simboli (dehoist)",
+  "dehoistOn": "Correggi i nomi che iniziano con simboli",
+  "dehoistHelp": "Nomi come !!!aaa stanno sopra a tutti. Nuovi membri e cambi di nome perdono i simboli iniziali. /dehoist run corregge chi c'è già. Serve Gestire nickname."
 }

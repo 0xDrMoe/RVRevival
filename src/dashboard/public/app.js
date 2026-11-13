@@ -2402,6 +2402,17 @@ async function showModeration(guildId) {
       ),
       card(t("sectionQuarantine"), "lock", "amber", field("quarantineRole", "quarantineRoleHelp", rolePicker("quarantineRoleId"))),
       card(
+        t("sectionDehoist"),
+        "edit",
+        "cyan",
+        h(
+          "label",
+          { class: "switch-card" },
+          h("span", { class: "switch-text" }, h("strong", {}, t("dehoistOn")), h("span", { class: "help" }, t("dehoistHelp"))),
+          h("span", { class: "switch" }, h("input", { id: "dehoist", type: "checkbox", role: "switch", checked: data.settings.dehoist === true, "aria-label": t("dehoistOn") })),
+        ),
+      ),
+      card(
         t("thresholdsTitle"),
         "alert",
         "red",
@@ -2432,6 +2443,7 @@ async function showModeration(guildId) {
       quarantineRoleId: selectValue("quarantineRoleId"),
       modLogChannelId: selectValue("modLogChannelId"),
       warnThresholds: readWarnThresholds,
+      dehoist: (form) => form.querySelector("#dehoist").checked || null,
     },
   });
 }
@@ -4349,6 +4361,8 @@ async function showWelcome(guildId) {
   const welcomeEmbed = editor("welcomeEmbed", welcomeBox);
   const dmEmbed = editor("welcomeDmEmbed", dmBox);
   const leaveEmbed = editor("leaveEmbed", leaveBox);
+  const milestones = settings.memberMilestones ?? null;
+  const milestoneBox = messageBox("milestoneMessage", milestones?.message ?? "", defaults.milestoneMessage ?? "", MAX_MESSAGE_LENGTH, "welcome", serverExample);
   settingsPage({
     data,
     pageId: "welcome",
@@ -4373,6 +4387,31 @@ async function showWelcome(guildId) {
         leaveEmbed.element,
         testRow(guildId, data, "leave", "testLeaveHelp"),
       ),
+      card(
+        t("sectionMilestones"),
+        "trophy",
+        "amber",
+        h("p", { class: "help" }, t("milestonesHelp")),
+        field("milestoneChannel", "milestoneChannelHelp", offPicker(data, "milestoneChannel", milestones?.channelId ?? null)),
+        field(
+          "milestoneEvery",
+          "milestoneEveryHelp",
+          h("input", { id: "milestoneEvery", type: "number", min: MILESTONE_EVERY.min, max: MILESTONE_EVERY.max, step: 1, value: milestones?.every ?? MILESTONE_EVERY.default }),
+        ),
+        field("milestoneMessage", "milestoneMessageHelp", milestoneBox),
+        testRow(guildId, data, "milestone", "testMilestoneHelp"),
+      ),
+      card(
+        t("sectionInviteTracking"),
+        "users",
+        "green",
+        h(
+          "label",
+          { class: "switch-card" },
+          h("span", { class: "switch-text" }, h("strong", {}, t("inviteTrackingOn")), h("span", { class: "help" }, t("inviteTrackingHelp"))),
+          h("span", { class: "switch" }, h("input", { id: "inviteTracking", type: "checkbox", role: "switch", checked: settings.inviteTracking === true, "aria-label": t("inviteTrackingOn") })),
+        ),
+      ),
     ],
     fields: {
       welcomeChannelId: selectValue("welcomeChannelId"),
@@ -4383,8 +4422,23 @@ async function showWelcome(guildId) {
       leaveChannelId: selectValue("leaveChannelId"),
       leaveMessage: textValue("leaveMessage"),
       leaveEmbed: leaveEmbed.read,
+      memberMilestones: readMilestones,
+      inviteTracking: (form) => form.querySelector("#inviteTracking").checked || null,
     },
   });
+}
+
+const MILESTONE_EVERY = { min: 10, max: 1_000_000, default: 100 };
+
+// Member milestones on the Welcome page, or null without a channel.
+function readMilestones(form) {
+  const channelId = form.querySelector("#milestoneChannel").value || null;
+  if (!channelId) {
+    return null;
+  }
+  const every = Number(form.querySelector("#milestoneEvery").value);
+  const message = form.querySelector("#milestoneMessage").value.trim() || null;
+  return { channelId, every: Number.isInteger(every) ? every : MILESTONE_EVERY.default, message };
 }
 
 // Role persistence on the Roles & panels page, or null when it's off with nothing ignored.
@@ -4415,6 +4469,13 @@ async function showRoles(guildId) {
         "green",
         h("p", { class: "help" }, t("autorolesHelp", { max: MAX_AUTOROLES })),
         checkList({ name: "autorole", items: givable, checked: data.settings.autoroleIds ?? [], filterKey: "filterRoles" }),
+      ),
+      card(
+        t("sectionBotAutoroles"),
+        "bot",
+        "blue",
+        h("p", { class: "help" }, t("botAutorolesHelp", { max: MAX_AUTOROLES })),
+        checkList({ name: "botAutorole", items: givable, checked: data.settings.botAutoroleIds ?? [], filterKey: "filterRoles" }),
       ),
       card(
         t("sectionPersist"),
@@ -4452,6 +4513,7 @@ async function showRoles(guildId) {
     ],
     fields: {
       autoroleIds: checkedList("autorole"),
+      botAutoroleIds: checkedList("botAutorole"),
       rolePersist: readRolePersist,
       // On is the default, saved as no value.
       roleConfirmations: (form) => (form.querySelector("#roleConfirmDefault").checked ? null : false),

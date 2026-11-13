@@ -1862,5 +1862,25 @@
   "automationMinutes": "Apagar após (minutos)",
   "automationMessages": "Movimentado com (mensagens em 10 s)",
   "automationSeconds": "Modo lento (segundos)",
-  "automationEmojis": "Emojis (até 5)"
+  "automationEmojis": "Emojis (até 5)",
+
+  "testReason_milestonesOff": "Os marcos de membros estão desligados. Escolha um canal e salve primeiro.",
+
+  "sectionMilestones": "Marcos de membros",
+  "milestonesHelp": "Quando o servidor chega a cada 100º membro (ou o que você escolher), o bot comemora em um canal e agradece a quem chegou lá. Cada marco é publicado uma vez.",
+  "milestoneChannel": "Canal dos marcos",
+  "milestoneChannelHelp": "Desligado até você escolher um canal.",
+  "milestoneEvery": "Comemorar a cada",
+  "milestoneEveryHelp": "Membros de diferença, de 10 a 1.000.000.",
+  "milestoneMessage": "Mensagem do marco",
+  "milestoneMessageHelp": "Deixe vazio para o padrão. {members} é o marco e {user} o membro que chegou lá.",
+  "testMilestoneHelp": "Publica o próximo marco no canal, com você como membro, sem marcar.",
+  "sectionInviteTracking": "Rastreio de convites",
+  "inviteTrackingOn": "Lembrar quem convidou cada membro novo",
+  "inviteTrackingHelp": "Para /invites member e /invites top. O bot precisa de Gerenciar servidor para ler os convites; sem isso, as entradas são salvas sem quem convidou.",
+  "sectionBotAutoroles": "Cargos automáticos de bots",
+  "botAutorolesHelp": "Cargos que cada bot novo recebe em vez dos de membros (até {max}), como um cargo Bots. A integração não cobre bots.",
+  "sectionDehoist": "Remover símbolos de nomes",
+  "dehoistOn": "Corrigir nomes que começam com símbolos",
+  "dehoistHelp": "Nomes como !!!aaa ficam acima de todos. Novos membros e mudanças de nome perdem os símbolos do início. /dehoist run corrige quem já está aqui. Precisa de Gerenciar apelidos."
 }

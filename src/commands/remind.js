@@ -7,7 +7,19 @@
 // Anyone can use it. Reminders are saved in data/bot.db, so they survive
 // restarts, and are sent by reminders/reminderScheduler.js.
 
-import { InteractionContextType, MessageFlags, PermissionFlagsBits, SlashCommandBuilder } from "discord.js";
+import {
+  ApplicationCommandType,
+  ContextMenuCommandBuilder,
+  InteractionContextType,
+  LabelBuilder,
+  MessageFlags,
+  ModalBuilder,
+  PermissionFlagsBits,
+  SlashCommandBuilder,
+  TextInputBuilder,
+  TextInputStyle,
+} from "discord.js";
+import { parseSnoozeId, SNOOZE_PREFIX } from "../reminders/reminderScheduler.js";
 import { discordLocalizations, pickLanguage, translate } from "../i18n/i18n.js";
 import { result, Status } from "../logs/actionLog.js";
 import { parseDuration } from "../utils/duration.js";
@@ -143,5 +155,112 @@ export function createRemindCommand({ reminders, forcedLanguage, now = Date.now 
     await interaction.respond(choices);
   }
 
-  return { name: "remind", data: buildRemindCommandData(), execute, autocomplete };
+  // A Snooze button under a sent reminder: sets it again, for its owner only.
+  async function snooze(interaction) {
+    const language = pickLanguage(interaction.locale, forcedLanguage);
+    const reply = async (key, values = {}, status = Status.SUCCESS) => {
+      await interaction.reply({ content: translate(language, key, values), flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] } });
+      return result(status, key, values);
+    };
+    const parsed = parseSnoozeId(interaction.customId);
+    if (!parsed) {
+      return reply("remindSnoozeGone", {}, Status.REFUSED);
+    }
+    const dueAt = now() + parsed.minutes * 60_000;
+    const reminder = reminders.snooze(parsed.id, interaction.user.id, dueAt, now());
+    if (!reminder) {
+      return reply("remindSnoozeGone", {}, Status.REFUSED);
+    }
+    return reply("remindSnoozed", { when: timestamp(dueAt, "R"), date: timestamp(dueAt, "f") });
+  }
+
+  return {
+    name: "remind",
+    data: buildRemindCommandData(),
+    execute,
+    autocomplete,
+    componentPrefixes: { [SNOOZE_PREFIX]: { label: "Reminder snooze button", handle: snooze } },
+  };
+}
+
+export const REMIND_ME_COMMAND = "Remind me";
+const REMIND_ME_FORM_PREFIX = "remindme:";
+const REMIND_ME_WHEN = "when";
+
+// Right-click a message > Apps > Remind me: asks when, then DMs a reminder
+// with a link back to the message.
+export function createRemindMeMenu({ reminders, forcedLanguage, now = Date.now }) {
+  const data = new ContextMenuCommandBuilder()
+    .setName(REMIND_ME_COMMAND)
+    .setNameLocalizations(discordLocalizations("contextRemindMe"))
+    .setType(ApplicationCommandType.Message)
+    .setContexts(InteractionContextType.Guild)
+    .toJSON();
+
+  const answer = async (interaction, key, values = {}, status = Status.SUCCESS) => {
+    const language = pickLanguage(interaction.locale, forcedLanguage);
+    await interaction.reply({ content: translate(language, key, values), flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] } });
+    return result(status, key, values);
+  };
+
+  async function execute(interaction) {
+    if (!interaction.inCachedGuild()) {
+      return answer(interaction, "guildOnly", {}, Status.REFUSED);
+    }
+    const language = pickLanguage(interaction.locale, forcedLanguage);
+    const message = interaction.targetMessage;
+    const input = new TextInputBuilder()
+      .setCustomId(REMIND_ME_WHEN)
+      .setStyle(TextInputStyle.Short)
+      .setRequired(true)
+      .setMaxLength(20)
+      .setPlaceholder(translate(language, "remindMeWhenPlaceholder"));
+    const form = new ModalBuilder()
+      .setCustomId(`${REMIND_ME_FORM_PREFIX}${message.channelId}:${message.id}`)
+      .setTitle(translate(language, "remindMeTitle").slice(0, 45))
+      .addLabelComponents(new LabelBuilder().setLabel(translate(language, "remindMeWhenLabel")).setTextInputComponent(input));
+    await interaction.showModal(form);
+    return undefined;
+  }
+
+  async function submitted(interaction) {
+    if (!interaction.inCachedGuild()) {
+      return answer(interaction, "guildOnly", {}, Status.REFUSED);
+    }
+    const match = /^remindme:(\d{17,20}):(\d{17,20})$/.exec(interaction.customId);
+    const delay = parseDuration(interaction.fields.getTextInputValue(REMIND_ME_WHEN) ?? "");
+    if (!match) {
+      return answer(interaction, "unexpected", {}, Status.FAILED);
+    }
+    if (!delay) {
+      return answer(interaction, "remindBadDuration", {}, Status.REFUSED);
+    }
+    if (delay < MIN_REMINDER_MS || delay > MAX_REMINDER_MS) {
+      return answer(interaction, "remindOutOfRange", {}, Status.REFUSED);
+    }
+    if (reminders.countForUser(interaction.guildId, interaction.user.id) >= MAX_REMINDERS_PER_MEMBER) {
+      return answer(interaction, "remindFull", { max: MAX_REMINDERS_PER_MEMBER }, Status.REFUSED);
+    }
+    const [, channelId, messageId] = match;
+    const language = pickLanguage(interaction.locale, forcedLanguage);
+    const link = `https://discord.com/channels/${interaction.guildId}/${channelId}/${messageId}`;
+    const createdAt = now();
+    const reminder = reminders.add({
+      guildId: interaction.guildId,
+      channelId,
+      userId: interaction.user.id,
+      text: translate(language, "remindMeText", { link }).slice(0, MAX_REMINDER_LENGTH),
+      private: true,
+      createdAt,
+      dueAt: createdAt + delay,
+    });
+    return answer(interaction, "remindSetPrivate", { id: reminder.id, when: timestamp(reminder.dueAt, "R"), date: timestamp(reminder.dueAt, "f") });
+  }
+
+  return {
+    name: REMIND_ME_COMMAND,
+    data,
+    execute,
+    componentPrefixes: { [REMIND_ME_FORM_PREFIX]: { label: "Remind me form", handle: submitted } },
+  };
 }

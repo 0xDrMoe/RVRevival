@@ -517,6 +517,22 @@ Other messages are deleted, with a note that deletes itself after a few seconds 
 
 Up to 10 channels per job (25 kept-open threads). The counting channel can't also have auto-threads, auto-reactions or auto-delete. Needs **Manage Channels**; the reply lists any permission the bot is missing in that channel.
 
+### Members and community extras
+
+Migration 36 adds the tables these need (`invite_joins`, `milestone_posts`, reminders' `delivered_at`, giveaway requirements and entry weights).
+
+| Feature | Command | What it does |
+| --- | --- | --- |
+| Reminder snooze | buttons on each reminder | **Snooze 10 min**, **Snooze 1 hour** and **Tomorrow**, for the reminder's owner, up to a day after it's sent (sent reminders are kept that long). |
+| Remind me app | right-click a message > Apps > **Remind me** | Asks when, then DMs a link back to the message. Counts toward the 25 reminders. |
+| Member milestones | `/welcome milestones channel [every] [message]` | Celebrates every 100th (or `every`th) member in a channel, once per milestone (`src/community/milestones.js`). `/test milestone` posts a sample. Also on the **Welcome & leave** page. |
+| Bot autoroles | `/welcome autorole role bots:True` | A separate autorole list for new bots (setting `botAutoroleIds`). On the **Roles & panels** page. |
+| Invite tracking | `/invites tracking`, `/invites member [member]`, `/invites top` | Off by default. Saves who invited each new member (needs **Manage Server** to read invite counts; `src/members/inviteStats.js`). Shares one lookup per join with the server log. |
+| Dehoist | `/dehoist run`, `/dehoist auto enabled` | Drops leading symbols like `!` from names that sort above everyone; auto mode fixes joins and renames. Needs **Manage Nicknames**. On the **Moderation** page. |
+| Giveaway requirements | `/giveaway start … [account-age] [server-age] [bonus-role]` | Minimum account and server age to enter, and a bonus role with 2 entries (weighted draw, nobody wins twice). |
+| Timestamps | `/timestamp when [timezone]` | Turns `2h`, `in 3 days`, `18:30`, `6pm` or `2026-12-24 18:00` into all seven `<t:…>` styles with codes to copy. |
+| Your data | `/mydata` | Lists what the bot keeps about you in every server and deletes it after a second confirmation (`src/members/personalData.js`). |
+
 ### Branding
 
 The dashboard's **Branding** page gives the bot its own look in one server, using Discord's per-server bot profile.

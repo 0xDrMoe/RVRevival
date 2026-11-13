@@ -1862,5 +1862,25 @@
   "automationMinutes": "الحذف بعد (دقائق)",
   "automationMessages": "مزدحم عند (رسائل في 10 ث)",
   "automationSeconds": "الوضع البطيء (ثوانٍ)",
-  "automationEmojis": "الرموز (حتى 5)"
+  "automationEmojis": "الرموز (حتى 5)",
+
+  "testReason_milestonesOff": "الاحتفال بأعداد الأعضاء متوقف. اختر قناة واحفظ أولًا.",
+
+  "sectionMilestones": "أعداد الأعضاء",
+  "milestonesHelp": "عندما يصل الخادم إلى كل 100 عضو (أو ما تختاره)، يحتفل البوت في قناة ويشكر من أوصله. يُنشر كل رقم مرة واحدة.",
+  "milestoneChannel": "قناة الأعداد",
+  "milestoneChannelHelp": "متوقف حتى تختار قناة.",
+  "milestoneEvery": "الاحتفال كل",
+  "milestoneEveryHelp": "عدد الأعضاء بين كل احتفال، من 10 إلى 1,000,000.",
+  "milestoneMessage": "رسالة الاحتفال",
+  "milestoneMessageHelp": "اتركه فارغًا للنص الافتراضي. {members} هو الرقم و{user} هو العضو الذي وصل إليه.",
+  "testMilestoneHelp": "ينشر الرقم التالي في قناته معك كعضو، دون إشارة.",
+  "sectionInviteTracking": "تتبع الدعوات",
+  "inviteTrackingOn": "تذكّر من دعا كل عضو جديد",
+  "inviteTrackingHelp": "لـ /invites member و/invites top. يحتاج البوت صلاحية إدارة الخادم لقراءة الدعوات؛ بدونها تُحفظ الانضمامات بلا داعٍ.",
+  "sectionBotAutoroles": "أدوار البوتات التلقائية",
+  "botAutorolesHelp": "أدوار يحصل عليها كل بوت جديد بدل أدوار الأعضاء (حتى {max})، مثل دور Bots. لا يشمل الترحيب البوتات.",
+  "sectionDehoist": "إزالة الرموز من الأسماء",
+  "dehoistOn": "إصلاح الأسماء التي تبدأ برموز",
+  "dehoistHelp": "تظهر أسماء مثل !!!aaa أعلى الجميع. يفقد الأعضاء الجدد والأسماء المعدلة الرموز في بدايتها. /dehoist run يصلح الموجودين. يحتاج إدارة الألقاب."
 }

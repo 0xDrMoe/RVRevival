@@ -1862,5 +1862,25 @@
   "automationMinutes": "Supprimer après (minutes)",
   "automationMessages": "Animé à (messages en 10 s)",
   "automationSeconds": "Mode lent (secondes)",
-  "automationEmojis": "Emojis (jusqu'à 5)"
+  "automationEmojis": "Emojis (jusqu'à 5)",
+
+  "testReason_milestonesOff": "Les paliers de membres sont désactivés. Choisis un salon et enregistre d'abord.",
+
+  "sectionMilestones": "Paliers de membres",
+  "milestonesHelp": "Quand le serveur atteint chaque 100e membre (ou ce que tu choisis), le bot fête ça dans un salon et remercie la personne. Chaque palier n'est publié qu'une fois.",
+  "milestoneChannel": "Salon des paliers",
+  "milestoneChannelHelp": "Désactivé tant qu'aucun salon n'est choisi.",
+  "milestoneEvery": "Fêter tous les",
+  "milestoneEveryHelp": "Membres d'écart, de 10 à 1 000 000.",
+  "milestoneMessage": "Message de palier",
+  "milestoneMessageHelp": "Laisse vide pour le texte par défaut. {members} est le palier et {user} le membre qui l'a atteint.",
+  "testMilestoneHelp": "Publie le prochain palier dans son salon, avec toi comme membre, sans mention.",
+  "sectionInviteTracking": "Suivi des invitations",
+  "inviteTrackingOn": "Retenir qui a invité chaque nouveau membre",
+  "inviteTrackingHelp": "Pour /invites member et /invites top. Le bot a besoin de Gérer le serveur pour lire les invitations ; sinon, les arrivées sont enregistrées sans inviteur.",
+  "sectionBotAutoroles": "Rôles automatiques des bots",
+  "botAutorolesHelp": "Rôles que chaque nouveau bot reçoit au lieu de ceux des membres (jusqu'à {max}), comme un rôle Bots. L'accueil ne couvre pas les bots.",
+  "sectionDehoist": "Noms sans symboles (dehoist)",
+  "dehoistOn": "Corriger les noms commençant par des symboles",
+  "dehoistHelp": "Les noms comme !!!aaa passent devant tout le monde. Les nouveaux et les renommages perdent les symboles du début. /dehoist run corrige ceux déjà là. Il faut Gérer les pseudos."
 }

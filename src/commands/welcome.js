@@ -8,7 +8,8 @@
 //   /welcome dm text:<…>                     DM new members this
 //   /welcome embed message:<welcome|leave|dm> [title] [description] [colour] [image] [thumbnail] [avatar] [footer] [remove]
 //                                            send that message as an embed (only the parts given change; - removes one)
-//   /welcome autorole role:@Member           give new members a role, or stop giving it
+//   /welcome autorole role:@Member [bots]    give new members (or, with bots:True, new bots) a role, or stop giving it
+//   /welcome milestones channel [every] [message]  celebrate every Nth member there
 //   /welcome persist enabled:<true|false>    give members their roles back when they rejoin
 //   /welcome off what:<…>                    switch one of these off, or reset a message to the default
 //   /welcome test                            preview everything privately, with yourself as the new member
@@ -18,6 +19,7 @@
 
 import { ChannelType, InteractionContextType, MessageFlags, PermissionFlagsBits, SlashCommandBuilder } from "discord.js";
 import { MAX_AUTOROLES, MAX_MESSAGE_LENGTH, renderTemplate, welcomePayload } from "../community/welcome.js";
+import { DEFAULT_MILESTONE_EVERY, MAX_MILESTONE_EVERY, milestoneFor, milestonePayload, MIN_MILESTONE_EVERY, normalizeMilestones } from "../community/milestones.js";
 import { checkWelcomeEmbed, defaultEmbedColor, describeWelcomeEmbed, EMBED_SETTING, renderWelcomeEmbed, savedEmbed, TEXT_SETTING, WELCOME_EMBED_KINDS } from "../community/welcomeEmbeds.js";
 import { InvalidMessage, LIMITS } from "../messages/embedMessage.js";
 import { parseColor } from "./embed.js";
@@ -35,7 +37,8 @@ const OFF_CHOICES = [
   { value: "welcome", nameKey: "welcomeOffWelcome", settings: [Setting.WELCOME_CHANNEL], doneKey: "welcomeOffWelcomeDone" },
   { value: "leave", nameKey: "welcomeOffLeave", settings: [Setting.LEAVE_CHANNEL], doneKey: "welcomeOffLeaveDone" },
   { value: "dm", nameKey: "welcomeOffDm", settings: [Setting.WELCOME_DM, Setting.WELCOME_DM_EMBED], doneKey: "welcomeOffDmDone" },
-  { value: "autoroles", nameKey: "welcomeOffAutoroles", settings: [Setting.AUTOROLES], doneKey: "welcomeOffAutorolesDone" },
+  { value: "autoroles", nameKey: "welcomeOffAutoroles", settings: [Setting.AUTOROLES, Setting.BOT_AUTOROLES], doneKey: "welcomeOffAutorolesDone" },
+  { value: "milestones", nameKey: "welcomeOffMilestones", settings: [Setting.MILESTONES], doneKey: "welcomeOffMilestonesDone" },
   {
     value: "messages",
     nameKey: "welcomeOffMessages",
@@ -117,9 +120,17 @@ export function buildWelcomeCommandData() {
         .addBooleanOption((option) => withDescription(option.setName("remove"), "welcomeEmbedRemoveOption")),
     )
     .addSubcommand((sub) =>
-      withDescription(sub.setName("autorole"), "welcomeAutoroleDescription").addRoleOption((option) =>
-        withDescription(option.setName("role"), "welcomeAutoroleOptionDescription").setRequired(true),
-      ),
+      withDescription(sub.setName("autorole"), "welcomeAutoroleDescription")
+        .addRoleOption((option) => withDescription(option.setName("role"), "welcomeAutoroleOptionDescription").setRequired(true))
+        .addBooleanOption((option) => withDescription(option.setName("bots"), "welcomeAutoroleBotsOption")),
+    )
+    .addSubcommand((sub) =>
+      withDescription(sub.setName("milestones"), "welcomeMilestonesDescription")
+        .addChannelOption((option) => channelOption(option, "welcomeMilestonesChannelOption"))
+        .addIntegerOption((option) =>
+          withDescription(option.setName("every"), "welcomeMilestonesEveryOption").setMinValue(MIN_MILESTONE_EVERY).setMaxValue(MAX_MILESTONE_EVERY),
+        )
+        .addStringOption((option) => withDescription(option.setName("message"), "welcomeMilestonesMessageOption").setMaxLength(MAX_MESSAGE_LENGTH)),
     )
     .addSubcommand((sub) =>
       withDescription(sub.setName("persist"), "welcomePersistDescription").addBooleanOption((option) =>
@@ -294,11 +305,13 @@ export function createWelcomeCommand({ guildSettings, forcedLanguage }) {
         return setEmbed();
       case "autorole": {
         const role = interaction.options.getRole("role", true);
+        const forBots = interaction.options.getBoolean("bots") === true;
+        const setting = forBots ? Setting.BOT_AUTOROLES : Setting.AUTOROLES;
         const values = { role: `<@&${role.id}>` };
-        const roles = guildSettings.getList(guildId, Setting.AUTOROLES);
+        const roles = guildSettings.getList(guildId, setting);
         if (roles.includes(role.id)) {
-          await guildSettings.toggleInList(guildId, Setting.AUTOROLES, role.id);
-          return reply(Status.SUCCESS, "welcomeAutoroleRemoved", values);
+          await guildSettings.toggleInList(guildId, setting, role.id);
+          return reply(Status.SUCCESS, forBots ? "welcomeBotAutoroleRemoved" : "welcomeAutoroleRemoved", values);
         }
         if (role.id === guildId || role.managed) {
           return reply(Status.REFUSED, "welcomeAutoroleInvalid", values);
@@ -309,10 +322,35 @@ export function createWelcomeCommand({ guildSettings, forcedLanguage }) {
         if (roles.length >= MAX_AUTOROLES) {
           return reply(Status.REFUSED, "welcomeAutoroleFull", { max: MAX_AUTOROLES });
         }
-        await guildSettings.toggleInList(guildId, Setting.AUTOROLES, role.id);
+        await guildSettings.toggleInList(guildId, setting, role.id);
         const botCanGive = Boolean(me && role.position < me.roles.highest.position && me.permissions.has(PermissionFlagsBits.ManageRoles));
-        const notes = [...(botCanGive ? [] : ["welcomeAutoroleAboveBot"]), ...(hasOnboarding(guild) ? ["welcomeOnboardingTip"] : [])];
-        return reply(Status.SUCCESS, "welcomeAutoroleAdded", values, notes);
+        const notes = [...(botCanGive ? [] : ["welcomeAutoroleAboveBot"]), ...(hasOnboarding(guild) && !forBots ? ["welcomeOnboardingTip"] : [])];
+        return reply(Status.SUCCESS, forBots ? "welcomeBotAutoroleAdded" : "welcomeAutoroleAdded", values, notes);
+      }
+      case "milestones": {
+        const channel = interaction.options.getChannel("channel", true);
+        const every = interaction.options.getInteger("every") ?? DEFAULT_MILESTONE_EVERY;
+        const typed = interaction.options.getString("message");
+        const message = typed === null ? normalizeMilestones(guildSettings.get(guildId, Setting.MILESTONES))?.message ?? null : withNewLines(typed) || null;
+        if (message) {
+          const refusal = variableRefusal(message, "welcome");
+          if (refusal) {
+            return reply(Status.REFUSED, "variablesRefused", refusal);
+          }
+        }
+        const config = { channelId: channel.id, every, message };
+        await guildSettings.set(guildId, Setting.MILESTONES, config);
+        const canPost = Boolean(me && channel.permissionsFor?.(me)?.has(POST_PERMISSIONS));
+        const count = guild.memberCount ?? 0;
+        const next = milestoneFor(count, every) + every;
+        const language = pickLanguage(guild.preferredLocale, forcedLanguage);
+        const preview = milestonePayload(config, { member: interaction.member, guild, milestone: next, language }).content;
+        return reply(
+          Status.SUCCESS,
+          "welcomeMilestonesSet",
+          { channel: `<#${channel.id}>`, every: every.toLocaleString("en-US"), next: next.toLocaleString("en-US"), preview },
+          canPost ? [] : ["welcomeCannotPost"],
+        );
       }
       case "persist": {
         const enabled = interaction.options.getBoolean("enabled", true);
@@ -372,6 +410,16 @@ export function createWelcomeCommand({ guildSettings, forcedLanguage }) {
             ? text("welcomeShowAutoroles", { roles: roles.map((id) => `<@&${id}>`).join(", ") })
             : text("welcomeShowNoAutoroles"),
           roles.length > 0 && hasOnboarding(guild) ? text("welcomeOnboardingTip") : "",
+          (() => {
+            const botRoles = guildSettings.getList(guildId, Setting.BOT_AUTOROLES);
+            return botRoles.length > 0 ? text("welcomeShowBotAutoroles", { roles: botRoles.map((id) => `<@&${id}>`).join(", ") }) : "";
+          })(),
+          (() => {
+            const milestones = normalizeMilestones(guildSettings.get(guildId, Setting.MILESTONES));
+            return milestones
+              ? text("welcomeShowMilestones", { every: milestones.every.toLocaleString("en-US"), channel: `<#${milestones.channelId}>` })
+              : text("welcomeShowNoMilestones");
+          })(),
           text(normalizeRolePersist(guildSettings.get(guildId, Setting.ROLE_PERSIST)).enabled ? "welcomeShowPersistOn" : "welcomeShowPersistOff"),
           text("welcomeShowTestHint"),
         ].filter(Boolean));
