@@ -17,6 +17,8 @@ import { randomBytes } from "node:crypto";
 export const Source = Object.freeze({
   SOUNDCLOUD: "soundcloud",
   BANDCAMP: "bandcamp",
+  AUDIUS: "audius",
+  JAMENDO: "jamendo",
   RADIO: "radio",
   LINK: "link",
   FILE: "file",
@@ -32,6 +34,8 @@ export const Via = Object.freeze({
 export const SOURCE_NAMES = Object.freeze({
   soundcloud: "SoundCloud",
   bandcamp: "Bandcamp",
+  audius: "Audius",
+  jamendo: "Jamendo",
   radio: "Radio",
   link: "Link",
   file: "File",

@@ -66,8 +66,8 @@ export function ffmpegArgs(input, { live = false, startMs = 0, filter = "off" } 
 }
 
 // Where to read a ready track's audio: { url } for the bot to download, or
-// { hls } for ffmpeg. `soundcloud` and `bandcamp` come from the resolver.
-export async function audioAddress(track, { soundcloud, bandcamp }) {
+// { hls } for ffmpeg. `soundcloud`, `bandcamp` and `audius` come from the resolver.
+export async function audioAddress(track, { soundcloud, bandcamp, audius }) {
   switch (track.source) {
     case Source.SOUNDCLOUD: {
       const stream = await soundcloud.streamFor(track.stream.id);
@@ -75,6 +75,9 @@ export async function audioAddress(track, { soundcloud, bandcamp }) {
     }
     case Source.BANDCAMP:
       return { url: await bandcamp.streamFor(track.stream) };
+    case Source.AUDIUS:
+      return { url: await audius.streamFor(track.stream.id) };
+    case Source.JAMENDO:
     case Source.RADIO:
     case Source.LINK:
     case Source.FILE:
@@ -88,8 +91,8 @@ export async function audioAddress(track, { soundcloud, bandcamp }) {
 // createAudioResource, a function that stops the download and ffmpeg, and
 // ffmpeg's last error lines (for the log). Options: soundcloud, bandcamp,
 // startMs, filter, spawnImpl and openUrl (tests).
-export async function openAudio(track, { soundcloud, bandcamp, spawnImpl = spawn, openUrl = defaultOpenUrl, logger, startMs = 0, filter = "off" }) {
-  const address = await audioAddress(track, { soundcloud, bandcamp });
+export async function openAudio(track, { soundcloud, bandcamp, audius, spawnImpl = spawn, openUrl = defaultOpenUrl, logger, startMs = 0, filter = "off" }) {
+  const address = await audioAddress(track, { soundcloud, bandcamp, audius });
   let download = null;
   if (address.url) {
     download = await openUrl(address.url);

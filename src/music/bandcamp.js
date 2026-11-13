@@ -34,6 +34,36 @@ const streamOf = (info) => {
   return typeof url === "string" && url.startsWith("https://") ? url : null;
 };
 
+const stripTags = (html) => unescapeHtml(html.replace(/<[^>]*>/g, " ")).replace(/\s+/g, " ").trim();
+
+// Tracks on a bandcamp.com/search results page: [{ title, artist, url, artworkUrl }].
+// They aren't checked yet: whether the artist lets anyone stream a track is only
+// on its own page.
+export function readSearchResults(html) {
+  const results = [];
+  for (const [block] of String(html ?? "").matchAll(/<li class="searchresult[\s\S]*?<\/li>/g)) {
+    const type = stripTags(block.match(/<div class="itemtype">([\s\S]*?)<\/div>/)?.[1] ?? "").toLowerCase();
+    if (type && type !== "track") {
+      continue;
+    }
+    const link = stripTags(block.match(/<div class="itemurl">([\s\S]*?)<\/div>/)?.[1] ?? "");
+    let url;
+    try {
+      url = new URL(link);
+    } catch {
+      continue;
+    }
+    if (!isBandcampUrl(url) || !url.pathname.startsWith("/track/")) {
+      continue;
+    }
+    const title = stripTags(block.match(/<div class="heading">([\s\S]*?)<\/div>/)?.[1] ?? "");
+    const subhead = stripTags(block.match(/<div class="subhead">([\s\S]*?)<\/div>/)?.[1] ?? "");
+    const artwork = block.match(/<img[^>]+src="(https:\/\/f4\.bcbits\.com\/[^"]+)"/)?.[1] ?? null;
+    results.push({ title, artist: subhead.match(/\bby (.+)$/)?.[1]?.trim() ?? "", url: `${url.origin}${url.pathname}`, artworkUrl: artwork });
+  }
+  return results;
+}
+
 // Options: fetchText (tests).
 export function createBandcamp({ fetchText = defaultFetchText } = {}) {
   async function load(page) {
@@ -45,6 +75,18 @@ export function createBandcamp({ fetchText = defaultFetchText } = {}) {
   }
 
   return {
+    // Up to `limit` Bandcamp tracks for words, as queue tracks. They're checked
+    // when they start: one the artist doesn't let anyone stream is skipped then.
+    async search(query, { limit = 10 } = {}) {
+      const page = new URL("https://bandcamp.com/search");
+      page.searchParams.set("q", query);
+      page.searchParams.set("item_type", "t");
+      const html = await fetchText(page.href, { maxBytes: 3 * 1024 * 1024 });
+      return readSearchResults(html)
+        .slice(0, limit)
+        .map((result) => makeTrack({ title: result.title, artist: result.artist, url: result.url, artworkUrl: result.artworkUrl, source: Source.BANDCAMP, stream: { page: result.url, trackId: null } }));
+    },
+
     // A track or album page → { tracks, skipped, name }. Throws MusicError.
     async resolve(page, { limit = 100 } = {}) {
       const album = await load(page);
@@ -71,7 +113,8 @@ export function createBandcamp({ fetchText = defaultFetchText } = {}) {
     // The MP3 address for a track, read fresh from its page.
     async streamFor({ page, trackId }) {
       const album = await load(page);
-      const info = album.trackinfo.find((entry) => (entry.track_id ?? entry.id) === trackId);
+      // trackId is null for search results: a track page has one track.
+      const info = trackId === null || trackId === undefined ? (album.trackinfo.length === 1 ? album.trackinfo[0] : null) : album.trackinfo.find((entry) => (entry.track_id ?? entry.id) === trackId);
       const url = streamOf(info);
       if (!url) {
         throw new MusicError("not-free", "That Bandcamp track can't be streamed any more.");
