@@ -17,7 +17,7 @@ import { createMusic } from "../src/music/player.js";
 import { createRadio, isStationId, stationLabel, stationTrack, toStation } from "../src/music/radio.js";
 import { createSoundCloud, isPlayable, pickTranscoding, rankTranscodings } from "../src/music/soundcloud.js";
 import { asUrl, createResolver, firstPlaylistEntry } from "../src/music/sources.js";
-import { ffmpegArgs, openAudio } from "../src/music/stream.js";
+import { checkFfmpeg, ffmpegArgs, openAudio } from "../src/music/stream.js";
 import { formatTime, makeTrack, Source, trackLabel, Via } from "../src/music/track.js";
 import { fakeLogger } from "./helpers/fakes.js";
 
@@ -475,6 +475,24 @@ describe("audio", () => {
     await expect(openAudio({ source: Source.AUDIUS, stream: { id: "a" } }, { audius, openUrl: gone, spawnImpl })).rejects.toMatchObject({ reason: "no-stream" });
     // A plain link that's gone is still "nothing there".
     await expect(openAudio({ source: Source.LINK, stream: { url: "https://x.test/a.mp3" } }, { openUrl: gone, spawnImpl })).rejects.toMatchObject({ reason: "not-found" });
+  });
+
+  it("says when ffmpeg isn't installed", async () => {
+    const missing = vi.fn(() => {
+      const child = new EventEmitter();
+      setTimeout(() => child.emit("error", Object.assign(new Error("spawn ffmpeg ENOENT"), { code: "ENOENT" })), 0);
+      return child;
+    });
+    expect(await checkFfmpeg({ spawnImpl: missing, path: "ffmpeg" })).toEqual({ ok: false, path: "ffmpeg", error: "not installed" });
+    const present = vi.fn(() => {
+      const child = Object.assign(new EventEmitter(), { stdout: new PassThrough() });
+      setTimeout(() => {
+        child.stdout.emit("data", "ffmpeg version 6.0\nbuilt with gcc");
+        child.emit("close", 0);
+      }, 0);
+      return child;
+    });
+    expect(await checkFfmpeg({ spawnImpl: present, path: "/x/ffmpeg" })).toEqual({ ok: true, path: "/x/ffmpeg", version: "ffmpeg version 6.0" });
   });
 
   it("refuses HLS that isn't HTTPS", async () => {

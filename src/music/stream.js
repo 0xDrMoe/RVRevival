@@ -34,6 +34,38 @@ export function ffmpegPath() {
   return "ffmpeg";
 }
 
+// Whether ffmpeg runs: { ok, path, version } or { ok: false, path, error }.
+export function checkFfmpeg({ spawnImpl = spawn, path = ffmpegPath() } = {}) {
+  return new Promise((resolve) => {
+    let output = "";
+    let child;
+    try {
+      child = spawnImpl(path, ["-hide_banner", "-version"], { stdio: ["ignore", "pipe", "ignore"], windowsHide: true });
+    } catch (error) {
+      resolve({ ok: false, path, error: error.message });
+      return;
+    }
+    child.stdout?.on("data", (chunk) => (output += chunk));
+    child.on("error", (error) => resolve({ ok: false, path, error: error.code === "ENOENT" ? "not installed" : error.message }));
+    child.on("close", (code) => resolve(code === 0 ? { ok: true, path, version: output.split("\n")[0].trim() } : { ok: false, path, error: `exit ${code}` }));
+  });
+}
+
+// The last check, redone a minute after a failure (ffmpeg may have been
+// installed since).
+let ffmpegCheck = null;
+async function requireFfmpeg() {
+  if (!ffmpegCheck || (ffmpegCheck.result && !ffmpegCheck.result.ok && Date.now() - ffmpegCheck.at > 60_000)) {
+    const entry = { at: Date.now(), result: null };
+    entry.promise = checkFfmpeg().then((result) => (entry.result = result));
+    ffmpegCheck = entry;
+  }
+  const result = await ffmpegCheck.promise;
+  if (!result.ok) {
+    throw new MusicError("no-ffmpeg", `ffmpeg (${result.path}) didn't run: ${result.error}.`);
+  }
+}
+
 // ffmpeg's arguments. `input` is "pipe:0" for audio the bot feeds it, or an
 // HTTPS address for HLS.
 // `startMs` skips the start of the song (a seek): ffmpeg decodes and drops
@@ -124,6 +156,10 @@ async function openSource(track, { soundcloud, bandcamp, audius, openUrl }) {
 // ffmpeg's last error lines (for the log). Options: soundcloud, bandcamp,
 // audius, startMs, filter, spawnImpl and openUrl (tests).
 export async function openAudio(track, { soundcloud, bandcamp, audius, spawnImpl = spawn, openUrl = defaultOpenUrl, logger, startMs = 0, filter = "off" }) {
+  // Without ffmpeg nothing can play; say so instead of a vague failure.
+  if (spawnImpl === spawn) {
+    await requireFfmpeg();
+  }
   const { address, download } = await openSource(track, { soundcloud, bandcamp, audius, openUrl });
   if (download) {
     if (!download.response.body) {

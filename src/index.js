@@ -44,6 +44,7 @@ import { createTempRoleScheduler } from "./tempRoles/tempRoleScheduler.js";
 import { createRaidGuard } from "./raid/raid.js";
 import { createTempVoice } from "./voice/tempVoice.js";
 import { createMusic } from "./music/player.js";
+import { checkFfmpeg } from "./music/stream.js";
 import { PlaylistStore } from "./music/playlistStore.js";
 import { createAutoResponder } from "./community/autoResponders.js";
 import { TempVoiceStore } from "./voice/tempVoiceStore.js";
@@ -312,6 +313,13 @@ async function start() {
   const leveling = createLeveling({ guildSettings, store: levels, logger, forcedLanguage });
   // The music player (/play, /radio, /music). Nothing is saved; a restart ends every session.
   const music = createMusic({ guildSettings, logger, forcedLanguage });
+  checkFfmpeg().then((ffmpeg) => {
+    if (ffmpeg.ok) {
+      logger.info("ffmpeg found for music", { path: ffmpeg.path, version: ffmpeg.version });
+    } else {
+      logger.warn("ffmpeg isn't available, so music can't play. Install it with: sudo apt install -y ffmpeg", { path: ffmpeg.path, error: ffmpeg.error });
+    }
+  });
   // Members' saved playlists (/playlist).
   const musicPlaylists = new PlaylistStore(db);
   const commands = createCommands({

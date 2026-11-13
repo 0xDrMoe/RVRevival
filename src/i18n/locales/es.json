@@ -1667,6 +1667,7 @@
   "musicError_not-free": "Eso no se puede escuchar gratis (SoundCloud Go+ o una pista de pago).",
   "musicError_no-match": "No hay una copia gratuita de esa canción en SoundCloud, Audius ni Bandcamp.",
   "musicError_no-stream": "Se encontró la canción, pero su audio no cargó y no se pudo reproducir otra copia.",
+  "musicError_no-ffmpeg": "La música no puede sonar ahora: al servidor del bot le falta ffmpeg. Avisa al dueño del bot.",
   "musicError_unsupported": "Ese tipo de enlace no está soportado. Enlaza una canción, un álbum o una lista.",
   "musicError_cant-join": "No pude conectar al canal de voz. Inténtalo otra vez.",
   "musicError_busy": "Demasiados servidores están reproduciendo música ahora. Inténtalo en unos minutos.",

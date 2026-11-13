@@ -18,7 +18,7 @@ import { cleanQuery } from "../src/music/match.js";
 import { fetchText, openUrl } from "../src/music/net.js";
 import { createSoundCloud } from "../src/music/soundcloud.js";
 import { createResolver } from "../src/music/sources.js";
-import { ffmpegArgs, ffmpegPath } from "../src/music/stream.js";
+import { checkFfmpeg, ffmpegArgs, ffmpegPath } from "../src/music/stream.js";
 import { trackLabel } from "../src/music/track.js";
 import { spawn } from "node:child_process";
 
@@ -36,6 +36,14 @@ async function check(name, work) {
 }
 
 console.log(`Music check for "${query}" (tidied: "${cleanQuery(query)}")\n`);
+
+await check("ffmpeg", async () => {
+  const ffmpeg = await checkFfmpeg();
+  if (!ffmpeg.ok) {
+    throw new Error(`${ffmpeg.path}: ${ffmpeg.error}. Nothing can play without it: sudo apt install -y ffmpeg`);
+  }
+  return `${ffmpeg.path}: ${ffmpeg.version}`;
+});
 
 await check("soundcloud", async () => {
   const home = await fetchText("https://soundcloud.com/");

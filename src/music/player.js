@@ -312,7 +312,7 @@ export function createMusic({
       const isCurrent = () => alreadyCurrent || this.current === track || this.current?.id === track.id;
       // A library song whose audio wouldn't load: play the same song from
       // another library instead (once), before skipping it.
-      if (!track.fallback && LIBRARY_SOURCES.has(track.source) && typeof resolver.alternative === "function" && isCurrent()) {
+      if (!track.fallback && reason !== "no-ffmpeg" && LIBRARY_SOURCES.has(track.source) && typeof resolver.alternative === "function" && isCurrent()) {
         const other = await resolver.alternative(track).catch(() => null);
         if (this.#destroyed) {
           return;
