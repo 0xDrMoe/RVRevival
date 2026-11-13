@@ -64,6 +64,7 @@ describe("command list", () => {
       "sticky",
       "highlight",
       "mediaonly",
+      "automate",
       "birthday",
       "rank",
       "leaderboard",

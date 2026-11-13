@@ -209,7 +209,7 @@ describe("/botinfo and /ping", () => {
     const [row] = botInfoButtons({ clientId: "123456789012345678", dashboardUrl: "https://rabble.example", language: "en" });
     expect(row.components.map((button) => button.data.url)).toEqual([
       "https://rabble.example",
-      "https://discord.com/oauth2/authorize?client_id=123456789012345678&scope=bot+applications.commands&permissions=1461248453782",
+      "https://discord.com/oauth2/authorize?client_id=123456789012345678&scope=bot+applications.commands&permissions=1495608192214",
       "https://rabble.example/privacy",
     ]);
     expect(botInfoButtons({ clientId: "1", dashboardUrl: undefined, language: "en" })[0].components).toHaveLength(1);

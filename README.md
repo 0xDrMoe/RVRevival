@@ -500,6 +500,23 @@ When people talk, the bot waits a few seconds, deletes its last copy and posts t
 
 Other messages are deleted, with a note that deletes itself after a few seconds (at most one note per member every 30 seconds). Members with **Manage Messages** in the channel are exempt, and threads in the channel stay open for comments. Community servers can also use Discord's own **media channels** (Create Channel → Media), which are built for galleries; this is for normal text channels. Needs **Manage Channels**. The bot needs **Manage Messages** in the channel.
 
+### Channel automation
+
+`/automate` (or the dashboard's **Channel automation** page) runs small jobs in chosen channels. Settings are one value, `channelAutomation` (`src/channels/automation.js`); counting scores and bump timers are in `data/bot.db` (tables `counting_state` and `bump_reminders`, migration 35).
+
+| Job | Command | What it does |
+| --- | --- | --- |
+| Auto-publish | `/automate publish channel enabled` | Crossposts every post in an announcement channel (Discord allows 10 an hour per channel). |
+| Auto-threads | `/automate threads channel enabled` | Starts a thread under every new member post, named after its first line. |
+| Keep threads open | `/automate keep-alive channel enabled` | Unarchives threads Discord auto-archives in a channel or forum (or one thread). Locked threads stay closed. |
+| Auto-delete | `/automate auto-delete channel minutes` | Deletes messages older than 1 minute to 7 days, checked every minute (long timers less often), up to 100 per sweep. Pinned messages stay. |
+| Auto-slowmode | `/automate slowmode channel messages [seconds]` | N messages in 10 seconds switch slowmode on; it goes back to the old value after 5 calm minutes (unless someone changed it). |
+| Auto-reactions | `/automate reactions channel [emojis]` | Reacts to every member post with up to 5 emoji. |
+| Counting | `/automate counting [channel]` | Count up from 1, one person at a time. Wrong numbers or counting twice reset to 1; the best run is kept. |
+| Bump reminders | `/automate bump enabled [channel] [role] [message]` | When DISBOARD says "Bump done", reacts ⏰ and reminds 2 hours later. `/test bump` posts a sample. |
+
+Up to 10 channels per job (25 kept-open threads). The counting channel can't also have auto-threads, auto-reactions or auto-delete. Needs **Manage Channels**; the reply lists any permission the bot is missing in that channel.
+
 ### Branding
 
 The dashboard's **Branding** page gives the bot its own look in one server, using Discord's per-server bot profile.
@@ -769,10 +786,10 @@ After that, updates are the usual `git pull && npm ci`, then `pm2 restart rv-bot
 2. **Invite it.** Replace `YOUR_CLIENT_ID` and open:
 
    ```
-   https://discord.com/oauth2/authorize?client_id=YOUR_CLIENT_ID&scope=bot+applications.commands&permissions=1461248453782
+   https://discord.com/oauth2/authorize?client_id=YOUR_CLIENT_ID&scope=bot+applications.commands&permissions=1495608192214
    ```
 
-   `permissions=1461248453782` is **Kick Members**, **Ban Members**, **Timeout Members**, **View Audit Log**, **Manage Roles**, **Manage Channels**, **Manage Nicknames**, **Manage Messages**, **Manage Webhooks**, **Read Message History**, **View Channels**, **Send Messages**, **Send Messages in Threads**, **Create Private Threads**, **Manage Threads**, **Move Members**, **Connect**, **Speak**, **Embed Links** and **Attach Files**, which is what the current features need. If the bot was invited with fewer, either re-invite it with this link or give its role the missing permissions (for moderation: Kick Members, Ban Members, Timeout Members and View Audit Log server-wide, Read Message History for `/purge`, Create Private Threads and Manage Threads for tickets, Move Members and Connect for join-to-create voice, Connect and Speak for music, Manage Webhooks for posting logs through webhooks). If a new feature needs more, update this number and re-invite the bot.
+   `permissions=1495608192214` is **Kick Members**, **Ban Members**, **Timeout Members**, **View Audit Log**, **Manage Roles**, **Manage Channels**, **Manage Nicknames**, **Manage Messages**, **Manage Webhooks**, **Read Message History**, **View Channels**, **Send Messages**, **Send Messages in Threads**, **Create Public Threads**, **Create Private Threads**, **Manage Threads**, **Add Reactions**, **Move Members**, **Connect**, **Speak**, **Embed Links** and **Attach Files**, which is what the current features need. If the bot was invited with fewer, either re-invite it with this link or give its role the missing permissions (for moderation: Kick Members, Ban Members, Timeout Members and View Audit Log server-wide, Read Message History for `/purge`, Create Private Threads and Manage Threads for tickets, Move Members and Connect for join-to-create voice, Connect and Speak for music, Manage Webhooks for posting logs through webhooks, Create Public Threads and Add Reactions for channel automation). If a new feature needs more, update this number and re-invite the bot.
 
 3. **Fix the role hierarchy.** In *Server Settings > Roles*, drag the bot's role above any roles it manages (existing country roles; new ones are created below it automatically) and above every member it should be able to ban, kick or time out. Keep it below your admin roles so moderators can't use it on admins.
 

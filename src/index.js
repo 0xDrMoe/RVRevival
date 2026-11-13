@@ -38,6 +38,8 @@ import { createHighlights } from "./highlights/highlights.js";
 import { HighlightStore } from "./highlights/highlightStore.js";
 import { createRoleConfirmations, RoleConfirmStore } from "./roles/roleConfirmations.js";
 import { createMediaOnly } from "./community/mediaOnly.js";
+import { createChannelAutomation } from "./channels/automation.js";
+import { AutomationStore } from "./channels/automationStore.js";
 import { createTempRoleScheduler } from "./tempRoles/tempRoleScheduler.js";
 import { createRaidGuard } from "./raid/raid.js";
 import { createTempVoice } from "./voice/tempVoice.js";
@@ -277,6 +279,10 @@ async function start() {
   const automod = createAutomod({ guildSettings, moderation, modLog, logger, forcedLanguage, botDeletions });
   // Media-only channels (/mediaonly): text-only messages are deleted.
   const mediaOnly = createMediaOnly({ guildSettings, logger, forcedLanguage, botDeletions });
+  // Channel automation (/automate): auto-publish, auto-threads, keep-alive,
+  // auto-delete, auto-slowmode, auto-reactions, counting and bump reminders.
+  const automationStore = new AutomationStore(db);
+  const automation = createChannelAutomation({ guildSettings, store: automationStore, logger, forcedLanguage, botDeletions });
   // Raid protection (/raid): the new-account gate and join alerts.
   const raidGuard = createRaidGuard({ guildSettings, moderation, modLog, logger });
 
@@ -327,6 +333,7 @@ async function start() {
     reports: new ReportStore(db),
     music,
     musicPlaylists,
+    automation,
     dashboardUrl: config.dashboardUrl,
     memberLoader,
   });
@@ -426,6 +433,7 @@ async function start() {
         livePoller.start();
       }
       statsUpdater.start(readyClient);
+      automation.start(readyClient);
       clearInterval(ticketSweep);
       ticketSweep = setInterval(() => {
         commands
@@ -467,6 +475,7 @@ async function start() {
     client.on(Events.MessageCreate, safely("leveling", (message) => leveling.handleMessage(message)));
     client.on(Events.MessageCreate, safely("AFK", (message) => afk.messageCreated(message)));
     client.on(Events.MessageCreate, safely("sticky messages", (message) => stickies.messageCreated(message)));
+    client.on(Events.MessageCreate, safely("channel automation", (message) => automation.messageCreated(message)));
     client.on(Events.MessageCreate, safely("highlights", (message) => highlights.messageCreated(message)));
     client.on(Events.MessageCreate, safely("ticket activity", (message) => commands.get("tickets").messageCreated(message)));
 
@@ -556,6 +565,7 @@ async function start() {
 
     client.on(Events.ThreadDelete, safely("a deleted thread", (thread) => commands.get("tickets").threadDeleted(thread)));
     client.on(Events.ThreadUpdate, safely("a changed thread", (before, after) => commands.get("tickets").threadUpdated(before, after)));
+    client.on(Events.ThreadUpdate, safely("keeping a thread open", (before, after) => automation.threadUpdated(before, after)));
     client.on(
       Events.ThreadMembersUpdate,
       safely("people joining or leaving a thread", (added, removed, thread) => commands.get("tickets").threadMembersUpdated(added, removed, thread)),
@@ -677,6 +687,7 @@ async function start() {
       statsUpdater.stop();
       leveling.stopVoiceXp();
       automod.stop();
+      automation.stop();
       music.stopAll();
       clearInterval(heartbeat);
       clearInterval(dbHousekeeping);

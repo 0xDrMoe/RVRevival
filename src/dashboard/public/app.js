@@ -198,6 +198,7 @@ const NAV = [
       { id: "embeds", icon: "edit", tone: "purple", manage: true },
       { id: "feeds", icon: "rss", tone: "amber", manage: true },
       { id: "sticky", icon: "pin", tone: "pink", manage: true },
+      { id: "automation", icon: "zap", tone: "amber", manage: true, on: (s) => automationOn(s.channelAutomation) },
     ],
   },
   {
@@ -1174,8 +1175,8 @@ const LANDING_PERMISSIONS = [
   ["users", "pink", "landingPermRoles", ["ManageRoles"]],
   ["hash", "blue", "landingPermChannels", ["ManageChannels"]],
   ["list", "amber", "landingPermLogs", ["ViewAuditLog", "ManageWebhooks"]],
-  ["message", "accent", "landingPermMessages", ["ViewChannel", "SendMessages", "EmbedLinks", "AttachFiles", "ReadMessageHistory"]],
-  ["ticket", "cyan", "landingPermThreads", ["ManageThreads", "CreatePrivateThreads", "SendMessagesInThreads"]],
+  ["message", "accent", "landingPermMessages", ["ViewChannel", "SendMessages", "EmbedLinks", "AttachFiles", "ReadMessageHistory", "AddReactions"]],
+  ["ticket", "cyan", "landingPermThreads", ["ManageThreads", "CreatePublicThreads", "CreatePrivateThreads", "SendMessagesInThreads"]],
   ["volume", "green", "landingPermVoice", ["Connect", "MoveMembers", "Speak"]],
 ];
 
@@ -10049,6 +10050,191 @@ async function showFeeds(guildId) {
   await load();
 }
 
+// --- Channel automation ------------------------------------------------------------
+
+// As in channels/automation.js.
+const AUTOMATION = { channels: 10, keepAlive: 25, emojis: 5, maxMinutes: 10080, minBurst: 5, maxBurst: 100, maxSlowmode: 300, bumpMessage: 500 };
+const AUTOMATION_LISTS = ["publish", "threads", "keepAlive", "autoDelete", "slowmode", "reactions"];
+const automationOn = (value) => Boolean(value) && (AUTOMATION_LISTS.some((key) => (value[key] ?? []).length > 0) || Boolean(value.countingChannelId) || Boolean(value.bump));
+
+// Rows of one channel plus its own numbers or emoji, with Add and Remove.
+// `columns` are [{ key, labelKey, control(value) -> element, read(element) }].
+function channelRows({ name, entries, channels, columns, max }) {
+  const list = h("div", { class: "automation-rows" });
+  const empty = h("p", { class: "muted empty" }, t("automationNone"));
+  const add = h("button", { class: "ghost small", type: "button" }, icon("plus", "icon small"), t("automationAdd"));
+  const sync = () => {
+    empty.hidden = list.children.length > 0;
+    add.disabled = list.children.length >= max;
+  };
+  const row = (entry = {}) => {
+    const channel = picker({ id: "", options: channels, value: entry.channelId ?? null, emptyLabel: t("embedPickChannel") });
+    channel.removeAttribute("id");
+    channel.dataset.part = "channelId";
+    channel.setAttribute("aria-label", t("automationChannel"));
+    const parts = columns.map((column) => {
+      const control = column.control(entry[column.key]);
+      control.dataset.part = column.key;
+      return h("label", { class: "field compact" }, h("span", { class: "field-label" }, t(column.labelKey)), control);
+    });
+    const remove = h("button", { class: "ghost small danger", type: "button", "aria-label": t("automationRemove") }, icon("x", "icon small"), t("automationRemove"));
+    const element = h("div", { class: "automation-row", "data-rows": name }, h("label", { class: "field compact" }, h("span", { class: "field-label" }, t("automationChannel")), channel), ...parts, remove);
+    remove.addEventListener("click", () => {
+      element.remove();
+      sync();
+      list.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    return element;
+  };
+  entries.forEach((entry) => list.append(row(entry)));
+  add.addEventListener("click", () => {
+    list.append(row());
+    sync();
+    list.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  sync();
+  return h("div", { class: "automation-editor" }, list, empty, h("div", { class: "toolbar" }, add, h("span", { class: "muted small-text" }, t("automationMax", { max }))));
+}
+
+// The rows of one channelRows() editor, as saved: rows without a channel are skipped.
+const readChannelRows = (form, name, columns) =>
+  [...form.querySelectorAll(`[data-rows="${name}"]`)]
+    .map((element) => {
+      const channelId = element.querySelector('[data-part="channelId"]').value;
+      return channelId ? { channelId, ...Object.fromEntries(columns.map((column) => [column.key, column.read(element.querySelector(`[data-part="${column.key}"]`))])) } : null;
+    })
+    .filter(Boolean);
+
+const numberControl = (min, max, fallback) => (value) => h("input", { type: "number", min, max, step: 1, value: value ?? fallback, required: true });
+const readNumber = (element) => Number(element.value);
+const AUTO_DELETE_COLUMNS = [{ key: "minutes", labelKey: "automationMinutes", control: numberControl(1, AUTOMATION.maxMinutes, 60), read: readNumber }];
+const SLOWMODE_COLUMNS = [
+  { key: "messages", labelKey: "automationMessages", control: numberControl(AUTOMATION.minBurst, AUTOMATION.maxBurst, 15), read: readNumber },
+  { key: "seconds", labelKey: "automationSeconds", control: numberControl(1, AUTOMATION.maxSlowmode, 10), read: readNumber },
+];
+// Emoji typed into one box: custom emoji whole, everything else split into characters.
+const splitEmojiText = (text) => {
+  const custom = text.match(/<a?:\w{2,32}:\d{17,20}>/g) ?? [];
+  const rest = text.replace(/<a?:\w{2,32}:\d{17,20}>/g, " ");
+  const characters = typeof Intl.Segmenter === "function" ? [...new Intl.Segmenter("en", { granularity: "grapheme" }).segment(rest)].map((part) => part.segment) : [...rest];
+  return [...custom, ...characters.filter((part) => !/^[\s,;]+$/.test(part))];
+};
+const REACTION_COLUMNS = [
+  {
+    key: "emojis",
+    labelKey: "automationEmojis",
+    control: (value) => h("input", { type: "text", maxLength: 300, value: (value ?? []).join(" "), placeholder: "👍 👎", required: true, autocomplete: "off" }),
+    read: (element) => splitEmojiText(element.value),
+  },
+];
+
+// Null when everything is off, like the server saves it.
+function readAutomation(form) {
+  const ticked = (name) => [...form.querySelectorAll(`input[name="${name}"]:checked`)].map((box) => box.value);
+  const bumpOn = form.querySelector("#bumpOn").checked;
+  const value = {
+    publish: ticked("autoPublish"),
+    threads: ticked("autoThreads"),
+    keepAlive: [...ticked("keepAlive"), ...(form.querySelector("#keepAliveThreads")?.dataset.ids?.split(",").filter(Boolean) ?? [])],
+    autoDelete: readChannelRows(form, "autoDelete", AUTO_DELETE_COLUMNS),
+    slowmode: readChannelRows(form, "slowmode", SLOWMODE_COLUMNS),
+    reactions: readChannelRows(form, "reactions", REACTION_COLUMNS),
+    countingChannelId: form.querySelector("#countingChannel").value || null,
+    bump: bumpOn
+      ? {
+          channelId: form.querySelector("#bumpChannel").value || null,
+          roleId: form.querySelector("#bumpRole").value || null,
+          message: form.querySelector("#bumpMessage").value.trim() || null,
+        }
+      : null,
+  };
+  return automationOn(value) ? value : null;
+}
+
+async function showAutomation(guildId) {
+  const data = await loadManagedGuild(guildId);
+  if (!data) {
+    return;
+  }
+  const saved = data.settings.channelAutomation ?? {};
+  const list = (key) => saved[key] ?? [];
+  const textChannels = postableChannels(data);
+  const announcements = data.channels.filter((channel) => channel.type === CHANNEL.ANNOUNCEMENT).map((channel) => channelItem(channel, data.channels));
+  const keepAliveChannels = data.channels.filter((channel) => [CHANNEL.TEXT, CHANNEL.ANNOUNCEMENT, CHANNEL.FORUM].includes(channel.type)).map((channel) => channelItem(channel, data.channels));
+  // Threads kept open with /automate aren't in the channel list; they're kept as they are.
+  const knownIds = new Set(data.channels.map((channel) => channel.id));
+  const threadIds = list("keepAlive").filter((id) => !knownIds.has(id));
+  const bump = saved.bump ?? null;
+  const bumpOn = h("input", { id: "bumpOn", type: "checkbox", role: "switch", checked: Boolean(bump), "aria-label": t("bumpOn") });
+  const roles = data.roles.filter((role) => !role.managed).map((role) => roleItem(role));
+  settingsPage({
+    data,
+    pageId: "automation",
+    intro: t("automationIntro"),
+    cards: [
+      card(
+        t("autoPublishTitle"),
+        "send",
+        "amber",
+        h("p", { class: "help" }, t("autoPublishHelp")),
+        announcements.length > 0 ? checkList({ name: "autoPublish", items: announcements, checked: list("publish"), filterKey: "filterChannels" }) : h("p", { class: "muted empty" }, t("autoPublishNoChannels")),
+      ),
+      card(t("autoThreadsTitle"), "list", "blue", h("p", { class: "help" }, t("autoThreadsHelp")), checkList({ name: "autoThreads", items: textChannels, checked: list("threads"), filterKey: "filterChannels" })),
+      card(
+        t("keepAliveTitle"),
+        "pin",
+        "purple",
+        h("p", { class: "help" }, t("keepAliveHelp")),
+        checkList({ name: "keepAlive", items: keepAliveChannels, checked: list("keepAlive"), filterKey: "filterChannels" }),
+        threadIds.length > 0 ? h("p", { id: "keepAliveThreads", class: "muted small-text", "data-ids": threadIds.join(",") }, t("keepAliveThreads", { count: threadIds.length })) : null,
+      ),
+      card(
+        t("autoDeleteTitle"),
+        "archive",
+        "red",
+        h("p", { class: "help" }, t("autoDeleteHelp")),
+        channelRows({ name: "autoDelete", entries: list("autoDelete"), channels: textChannels, columns: AUTO_DELETE_COLUMNS, max: AUTOMATION.channels }),
+      ),
+      card(
+        t("autoSlowmodeTitle"),
+        "clock",
+        "cyan",
+        h("p", { class: "help" }, t("autoSlowmodeHelp")),
+        channelRows({ name: "slowmode", entries: list("slowmode"), channels: textChannels, columns: SLOWMODE_COLUMNS, max: AUTOMATION.channels }),
+      ),
+      card(
+        t("autoReactionsTitle"),
+        "star",
+        "pink",
+        h("p", { class: "help" }, t("autoReactionsHelp")),
+        channelRows({ name: "reactions", entries: list("reactions"), channels: textChannels, columns: REACTION_COLUMNS, max: AUTOMATION.channels }),
+      ),
+      card(t("countingTitle"), "hash", "green", h("p", { class: "help" }, t("countingHelp")), field("countingChannel", "countingChannelHelp", offPicker(data, "countingChannel", saved.countingChannelId ?? null))),
+      card(
+        t("bumpTitle"),
+        "bell",
+        "amber",
+        h("p", { class: "help" }, t("bumpHelp")),
+        h(
+          "label",
+          { class: "switch-card" },
+          h("span", { class: "switch-text" }, h("strong", {}, t("bumpOn")), h("span", { class: "help" }, t("bumpOnHelp"))),
+          h("span", { class: "switch" }, bumpOn),
+        ),
+        h(
+          "div",
+          { class: "rule-body" },
+          field("bumpChannel", "bumpChannelHelp", picker({ id: "bumpChannel", options: textChannels, value: bump?.channelId ?? null, emptyLabel: t("bumpSameChannel") })),
+          field("bumpRole", "bumpRoleHelp", picker({ id: "bumpRole", options: roles, value: bump?.roleId ?? null, emptyLabel: t("bumpNoRole") })),
+          field("bumpMessage", "bumpMessageHelp", messageBox("bumpMessage", bump?.message ?? "", t("bumpMessagePlaceholder"), AUTOMATION.bumpMessage)),
+        ),
+        testRow(guildId, data, "bump", "testBumpHelp"),
+      ),
+    ],
+    fields: { channelAutomation: readAutomation },
+  });
+}
+
 // --- Sticky messages ---------------------------------------------------------------
 
 function stickyRow(sticky, data, onEdit, onRemove) {
@@ -11178,6 +11364,7 @@ const SHOW_PAGE = {
   feeds: showFeeds,
   counters: showCounters,
   sticky: showStickies,
+  automation: showAutomation,
   backup: showBackup,
   branding: showBranding,
   moderation: showModeration,

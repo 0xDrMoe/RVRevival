@@ -4,6 +4,17 @@
 export const CHANGELOG = [
   {
     date: "2026-11-13",
+    title: "Channel automation",
+    items: [
+      "A new Channel automation page and /automate: auto-publish announcement posts, auto-threads under every post, threads that never auto-archive, and auto-delete after 1 minute to 7 days (pinned messages stay).",
+      "Auto-slowmode switches slowmode on when a channel gets busy and puts it back once things calm down.",
+      "Auto-reactions add up to 5 emoji to every new post, like 👍 👎 for feedback.",
+      "A counting game channel that keeps the best run, and DISBOARD bump reminders 2 hours after each bump, with a role ping and your own text.",
+      "Rabble's invite now asks for Add Reactions and Create Public Threads, which these need.",
+    ],
+  },
+  {
+    date: "2026-11-13",
     title: "Automod catches scams, emoji floods, walls of text and glitched text",
     items: [
       "New Scam links rule: fake Discord and Steam sites (like dlscord.gift), links whose text shows one website but open another, and \"free Nitro\" bait. It times out by default, since hacked accounts post these, and it's on in every preset.",
