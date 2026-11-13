@@ -46,6 +46,7 @@ import { createMassRoleCommand } from "./massRole.js";
 import { createMemberLoader } from "../guilds/memberCache.js";
 import { createContextMenus } from "./contextMenus.js";
 import { createMusicCommands } from "./music.js";
+import { createAutomateCommand } from "./automate.js";
 
 // Each command is { name, data, execute(interaction), autocomplete?(interaction),
 // components?, componentPrefixes? }. `components` maps a button, form or menu
@@ -74,6 +75,7 @@ import { createMusicCommands } from "./music.js";
 // dashboard's Embed builder page. `reports` (moderation/reports.js) keeps
 // messages reported with the Report message app. `music` (music/player.js)
 // plays music for /play, /radio and /music (made on first use when left out).
+// `automation` (channels/automation.js) gives /automate show the counting score.
 export function createCommands({
   logger,
   guildSettings,
@@ -104,6 +106,7 @@ export function createCommands({
   reports,
   music,
   musicPlaylists,
+  automation,
   roleConfirmations = createRoleConfirmations({ guildSettings, store: new RoleConfirmStore(), forcedLanguage }),
   dashboardUrl,
   memberLoader = createMemberLoader(),
@@ -154,6 +157,7 @@ export function createCommands({
     createStickyCommand({ store: stickyStore, stickies, forcedLanguage }),
     createHighlightCommand({ store: highlightStore, highlights, forcedLanguage }),
     createMediaOnlyCommand({ guildSettings, forcedLanguage }),
+    createAutomateCommand({ guildSettings, forcedLanguage, automation }),
     createBirthdayCommand({ guildSettings, store: birthdays, forcedLanguage }),
     ...createLevelCommands({ levels, leveling, guildSettings, forcedLanguage }),
     ...createMusicCommands({ guildSettings, forcedLanguage, logger, music, playlists: musicPlaylists }),

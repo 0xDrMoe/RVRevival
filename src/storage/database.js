@@ -529,6 +529,25 @@ const MIGRATIONS = [
     PRIMARY KEY (user_id, name_key)
   ) WITHOUT ROWID;
   `,
+  // 35: channel automation state (channels/automationStore.js): each
+  // counting channel's number, who said it and the best run, and when each
+  // server's next DISBOARD bump reminder is due.
+  `
+  CREATE TABLE counting_state (
+    channel_id   TEXT    PRIMARY KEY,
+    guild_id     TEXT    NOT NULL,
+    count        INTEGER NOT NULL,
+    last_user_id TEXT,
+    best         INTEGER NOT NULL,
+    updated_at   INTEGER NOT NULL
+  ) WITHOUT ROWID;
+  CREATE TABLE bump_reminders (
+    guild_id   TEXT    PRIMARY KEY,
+    channel_id TEXT    NOT NULL,
+    due_at     INTEGER NOT NULL
+  ) WITHOUT ROWID;
+  CREATE INDEX bump_reminders_by_due ON bump_reminders (due_at);
+  `,
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS.length;

@@ -206,7 +206,7 @@ describe("/test", () => {
   it("has a subcommand per test, for Manage Server only", () => {
     const data = buildTestCommandData();
     expect(data.default_member_permissions).toBe("32");
-    expect(data.options.map((option) => option.name)).toEqual(["welcome", "leave", "welcome-dm", "level-up", "birthday", "starboard", "logs", "automod"]);
+    expect(data.options.map((option) => option.name)).toEqual(["welcome", "leave", "welcome-dm", "level-up", "birthday", "starboard", "logs", "bump", "automod"]);
   });
 
   it("posts the test where the real message goes and waits between tests", async () => {

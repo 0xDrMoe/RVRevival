@@ -1039,6 +1039,7 @@ export const COMMAND_PARTS = [
           { usage: "/test birthday", what: "Posts the birthday message for you in the birthday channel. No role is given.", options: [] },
           { usage: "/test starboard", what: "Posts a starboard post of a made-up message by you, with as many stars as it takes.", options: [] },
           { usage: "/test logs", what: "Posts one entry in every log channel, listing which kinds of log go there, and lists the ones that go nowhere yet.", options: [] },
+          { usage: "/test bump", what: "Posts the DISBOARD bump reminder in its channel (or here, if it goes where /bump was used), without pinging.", options: [] },
           {
             usage: "/test automod text",
             what: "Says which automod rules the text would break and what automod would do. Nothing is posted or deleted.",
@@ -2224,6 +2225,90 @@ export const COMMAND_PARTS = [
         ],
         example: ["/sticky set channel:#lfg message:Post your platform and region.\\nNo DMs asking for accounts."],
         tips: ["It reposts at most every 15 seconds and never pings. Keep it short, so it doesn't push the chat up."],
+      },
+      {
+        id: "cmdautomate",
+        command: "/automate",
+        title: "/automate",
+        icon: "zap",
+        tone: "amber",
+        page: "automation",
+        related: "automation",
+        summary: "Sets up channel automation: auto-publish, auto-threads, threads kept open, auto-delete, auto-slowmode, auto-reactions, the counting game and DISBOARD bump reminders.",
+        who: "**Manage Channels**. The reply says which permission the bot still needs in that channel.",
+        usages: [
+          {
+            usage: "/automate publish channel enabled",
+            what: "Publishes every post in an announcement channel to the servers following it.",
+            options: [
+              ["channel", "An announcement channel."],
+              ["enabled", "`True` to switch it on, `False` to switch it off."],
+            ],
+          },
+          {
+            usage: "/automate threads channel enabled",
+            what: "Starts a thread under every new post, named after its first line.",
+            options: [
+              ["channel", "A text channel, like `#suggestions`."],
+              ["enabled", "`True` or `False`."],
+            ],
+          },
+          {
+            usage: "/automate keep-alive channel enabled",
+            what: "Opens threads again when Discord auto-archives them.",
+            options: [
+              ["channel", "A channel or forum (all its threads), or one thread."],
+              ["enabled", "`True` or `False`."],
+            ],
+          },
+          {
+            usage: "/automate auto-delete channel minutes",
+            what: "Deletes messages once they're that old. Pinned messages stay.",
+            options: [
+              ["channel", "A text channel."],
+              ["minutes", "1 to 10080 (a week). `0` switches it off."],
+            ],
+          },
+          {
+            usage: "/automate slowmode channel messages [seconds]",
+            what: "Switches slowmode on when the channel gets busy, and back once it calms down.",
+            options: [
+              ["channel", "A text channel."],
+              ["messages", "Messages in 10 seconds that count as busy, 5 to 100. `0` switches it off."],
+              ["seconds", "The slowmode, 1 to 300 seconds. Leave it out for 10."],
+            ],
+          },
+          {
+            usage: "/automate reactions channel [emojis]",
+            what: "Reacts to every new post with the same emoji.",
+            options: [
+              ["channel", "A text channel."],
+              ["emojis", "Up to 5, like `👍 👎` or the server's own emoji. Leave it out to switch it off."],
+            ],
+          },
+          {
+            usage: "/automate counting [channel]",
+            what: "Picks the counting game channel.",
+            options: [["channel", "A text channel. Leave it out to switch counting off."]],
+          },
+          {
+            usage: "/automate bump enabled [channel] [role] [message]",
+            what: "Reminds the server to bump with DISBOARD 2 hours after each bump.",
+            options: [
+              ["enabled", "`True` or `False`."],
+              ["channel", "Where reminders go. Leave it out for the channel where `/bump` was used."],
+              ["role", "A role to ping with the reminder."],
+              ["message", "Your own reminder text."],
+            ],
+          },
+          {
+            usage: "/automate show",
+            what: "Shows every job that's on, and the counting score.",
+            options: [],
+          },
+        ],
+        example: ["/automate publish channel:#news enabled:True", "/automate slowmode channel:#general messages:15 seconds:5", "/automate reactions channel:#art emojis:⭐ 💜"],
+        tips: ["Each job works in up to 10 channels.", "The counting channel can't also have auto-threads, auto-reactions or auto-delete."],
       },
     ],
   },

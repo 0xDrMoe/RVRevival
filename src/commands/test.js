@@ -45,6 +45,7 @@ const SUBCOMMANDS = [
   ["birthday", TestKind.BIRTHDAY, "testBirthdayDescription"],
   ["starboard", TestKind.STARBOARD, "testStarboardDescription"],
   ["logs", TestKind.LOGS, "testLogsDescription"],
+  ["bump", TestKind.BUMP, "testBumpDescription"],
 ];
 const KIND_OF = Object.fromEntries(SUBCOMMANDS.map(([name, kind]) => [name, kind]));
 

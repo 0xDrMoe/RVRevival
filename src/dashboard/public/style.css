@@ -7664,3 +7664,38 @@ input.has-variable-problem {
 .log-event-group .toolbar {
   flex-wrap: wrap;
 }
+
+/* Channel automation: rows of a channel plus its own numbers or emoji. They
+   wrap onto more lines on narrow screens instead of squeezing the fields. */
+.automation-rows {
+  display: grid;
+  gap: 10px;
+}
+.automation-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.automation-row .field.compact {
+  margin: 0;
+  flex: 1 1 140px;
+  min-width: 0;
+}
+.automation-row .field.compact:first-child {
+  flex: 2 1 200px;
+}
+.automation-row .field.compact select,
+.automation-row .field.compact input {
+  width: 100%;
+}
+.automation-row > button {
+  flex: 0 0 auto;
+}
+.automation-editor .toolbar {
+  margin-top: 10px;
+  flex-wrap: wrap;
+}

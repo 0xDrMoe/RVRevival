@@ -34,6 +34,7 @@ import { LOG_ROUTES, LogRoute, ROUTE_DEFAULTS, ROUTE_PARENTS, routedChannelId } 
 import { SERVER_LOG_SETTINGS } from "../logs/serverLog.js";
 import { MOD_LOG_SETTINGS } from "../moderation/modLog.js";
 import { Setting } from "../settings/guildSettings.js";
+import { bumpReminderPayload, normalizeAutomation } from "../channels/automation.js";
 import { TICKET_LOG_SETTINGS } from "../tickets/ticketLog.js";
 import { createRateLimiter } from "../utils/rateLimits.js";
 
@@ -48,6 +49,7 @@ export const TestKind = Object.freeze({
   LOGS: "logs",
   FEED: "feed",
   SCHEDULED: "scheduled",
+  BUMP: "bump",
 });
 export const TEST_KINDS = Object.values(TestKind);
 
@@ -70,6 +72,7 @@ export const TestReason = Object.freeze({
   LEVEL_UP_HERE: "levelUpHere", // they're announced where the member chats: use /test level-up there
   NO_LOGS: "noLogs", // no log channel at all
   NOT_FOUND: "notFound", // the feed or scheduled message is gone
+  BUMP_OFF: "bumpOff", // bump reminders are off
 });
 
 export class TestUnavailable extends Error {
@@ -229,6 +232,21 @@ function scheduledTest({ scheduled }) {
   return [{ channelId: scheduled.channelId, payload: { content: scheduled.content } }];
 }
 
+// --- Bump reminder ----------------------------------------------------------------
+
+// The reminder where it would go: its own channel, else where /test was used.
+function bumpTest({ guildSettings, guild, language, hereChannelId }) {
+  const { bump } = normalizeAutomation(guildSettings.get(guild.id, Setting.CHANNEL_AUTOMATION));
+  if (!bump) {
+    throw new TestUnavailable(TestReason.BUMP_OFF);
+  }
+  const channelId = bump.channelId ?? hereChannelId;
+  if (!channelId) {
+    throw new TestUnavailable(TestReason.NO_CHANNEL);
+  }
+  return [{ channelId, payload: { content: bumpReminderPayload(bump, language).content } }];
+}
+
 // --- Logs -----------------------------------------------------------------------
 
 // The groups only gather the routes under them; nothing is logged as a group.
@@ -319,6 +337,7 @@ const BUILDERS = {
   [TestKind.LOGS]: logsTest,
   [TestKind.FEED]: feedTest,
   [TestKind.SCHEDULED]: scheduledTest,
+  [TestKind.BUMP]: bumpTest,
 };
 
 // The messages one test sends, each with the test line on top, as

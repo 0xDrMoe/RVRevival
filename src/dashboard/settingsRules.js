@@ -32,6 +32,7 @@ import { checkCommandRules, describeCommandRules, InvalidCommandRules } from "..
 import { isModeratorRole } from "../permissions/moderatorPermissions.js";
 import { CUSTOM, PRESETS } from "../permissions/presets.js";
 import { checkMusic, describeMusic, InvalidMusic } from "../music/config.js";
+import { channelTypesFor, checkAutomation, describeAutomation, InvalidAutomation } from "../channels/automation.js";
 import { Setting } from "../settings/guildSettings.js";
 import { variableError } from "./public/variables.js";
 
@@ -111,6 +112,7 @@ export const SETTING_RULES = Object.freeze({
   [Setting.AUTO_RESPONDERS]: { kind: "autoResponders", types: RESPONDER_CHANNELS, label: "Auto-responders" },
   [Setting.MEDIA_ONLY]: { kind: "mediaOnly", types: [ChannelType.GuildText, ChannelType.GuildAnnouncement], label: "Media-only channels" },
   [Setting.MUSIC]: { kind: "music", label: "Music" },
+  [Setting.CHANNEL_AUTOMATION]: { kind: "channelAutomation", label: "Channel automation" },
   [Setting.SETUP_SKIPPED]: { kind: "setupSteps", label: "Skipped setup steps" },
   [Setting.LOG_ROUTES]: { kind: "logRoutes", types: POSTING_CHANNELS, label: "Log channels per log type" },
   // Only the owner or whoever added the bot may change these (checked by the dashboard route).
@@ -311,6 +313,21 @@ function checkValue(setting, value, { guildId, channels, roles }) {
         return checkAppeals(value, { isChannel: (id) => typeof id === "string" && channelOk(id, rule.types) });
       } catch (error) {
         if (error instanceof InvalidAppeals) {
+          throw new InvalidSetting(setting, error.message);
+        }
+        throw error;
+      }
+    case "channelAutomation":
+      try {
+        return checkAutomation(value, {
+          // Threads aren't in the dashboard's channel list, so an unknown ID kept
+          // open with /automate keep-alive is taken as one of the server's threads.
+          isChannel: (id, kind) =>
+            typeof id === "string" && (channelOk(id, channelTypesFor(kind)) || (kind === "keepAlive" && /^\d{17,20}$/.test(id) && !channels.some((channel) => channel.id === id))),
+          isRole: (id) => roleOk(id),
+        });
+      } catch (error) {
+        if (error instanceof InvalidAutomation) {
           throw new InvalidSetting(setting, error.message);
         }
         throw error;
@@ -561,6 +578,8 @@ export function describeValue(setting, value) {
       return `${value.enabled ? "open" : "closed"} · ${value.channelId ? `<#${value.channelId}>` : "mod-log channel"} · ${value.questions.length} question(s) · wait ${value.cooldownDays} days after a denial`;
     case "countryGuide":
       return describeGuide(value);
+    case "channelAutomation":
+      return describeAutomation(value);
     case "mediaOnly":
       return value.channelIds.length > 0 ? describeMediaOnly(value) : `none · links ${value.allowLinks ? "allowed" : "not allowed"}`;
     case "rolePersist":
