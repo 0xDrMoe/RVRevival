@@ -399,7 +399,8 @@ describe("what /play takes", () => {
   it("finds another library's copy of a song whose stream broke", async () => {
     const track = makeTrack({ title: "One More Time", artist: "Daft Punk", url: "https://soundcloud.com/dp/omt", durationMs: 320_000, source: Source.SOUNDCLOUD, stream: { id: 1 } });
     const audius = { search: vi.fn(async () => [makeTrack({ title: "One More Time", artist: "Daft Punk", url: "https://audius.co/dp/omt", durationMs: 321_000, source: Source.AUDIUS, stream: { id: "a1" } })]) };
-    const soundcloud = { search: vi.fn(async () => [track]) };
+    // SoundCloud's search answers with its own API tracks.
+    const soundcloud = { search: vi.fn(async () => [scTrack({ id: 1, title: "One More Time", user: { username: "Daft Punk" }, permalink_url: "https://soundcloud.com/dp/omt", full_duration: 320_000 })]) };
     const resolver = createResolver({ soundcloud, audius, bandcamp: { search: async () => [] }, jamendo: { enabled: false } });
     expect(await resolver.alternative(track)).toMatchObject({ title: "One More Time", source: Source.AUDIUS, stream: { id: "a1" }, url: "https://audius.co/dp/omt", fallback: true });
     expect(soundcloud.search).not.toHaveBeenCalled();
@@ -407,7 +408,7 @@ describe("what /play takes", () => {
     // The same upload doesn't count as another copy.
     const fromAudius = { ...track, source: Source.AUDIUS, url: "https://audius.co/dp/omt" };
     audius.search.mockClear();
-    expect(await resolver.alternative(fromAudius)).toMatchObject({ source: Source.SOUNDCLOUD, url: "https://soundcloud.com/dp/omt" });
+    expect(await resolver.alternative(fromAudius)).toMatchObject({ source: Source.SOUNDCLOUD, url: "https://soundcloud.com/dp/omt", stream: { id: 1 } });
     expect(audius.search).not.toHaveBeenCalled();
   });
 

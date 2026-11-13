@@ -76,13 +76,14 @@ await check("sc stream", async () => {
   if (!first) {
     return "no track to stream";
   }
-  const { policy, transcodings, report } = await soundcloud.streamReport(first.stream.id);
-  const lines = [`"${first.title}" (id ${first.stream.id}, ${policy}, ${transcodings} formats)`];
+  // find() answers with SoundCloud's own API tracks (id, not stream.id).
+  const { policy, transcodings, report } = await soundcloud.streamReport(first.id);
+  const lines = [`"${first.title}" (id ${first.id}, ${policy}, ${transcodings} formats)`];
   for (const item of report) {
     const opened = item.address ? await probe(item.address).catch((error) => failed(error)) : `FAILED: ${item.error}`;
     lines.push(`  ${item.protocol} ${item.mime || "?"}: ${opened}`);
   }
-  const chosen = await soundcloud.streamFor(first.stream.id, { check: async (stream) => (await probe(stream.url), stream.protocol) }).catch((error) => ({ error }));
+  const chosen = await soundcloud.streamFor(first.id, { check: async (stream) => (await probe(stream.url), stream.protocol) }).catch((error) => ({ error }));
   if (chosen.error) {
     lines.push(`  bot would use: nothing (${failed(chosen.error)})`);
   } else {
