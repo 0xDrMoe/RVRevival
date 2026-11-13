@@ -7028,7 +7028,7 @@ function checkupCard(checkup, guildId) {
     t("checkupTitle"),
     "alert",
     "amber",
-    h("p", { class: "help" }, t("checkupIntro", { count: problems.length })),
+    h("p", { class: "help" }, problems.length === 1 ? t("checkupIntroOne") : t("checkupIntro", { count: problems.length })),
     h(
       "ul",
       { class: "checkup-list" },
@@ -7465,29 +7465,29 @@ function person(id, tag, onPick) {
 }
 
 function caseRow(guildId, entry, filters, apply) {
-  const reasonCell = h("td", { class: "reason" }, entry.reason ?? h("em", { class: "muted" }, t("noReason")));
+  const reasonCell = h("td", { class: "reason", "data-label": t("caseReason") }, entry.reason ?? h("em", { class: "muted" }, t("noReason")));
   const duration = entry.durationMs ? h("span", { class: "duration" }, icon("clock", "icon tiny"), formatDuration(entry.durationMs)) : null;
   const row = h(
     "tr",
     { class: `act-row act-${entry.action}` },
-    h("td", { class: "number" }, `#${entry.number}`),
-    h("td", {}, h("div", { class: "action-cell" }, actionPill(entry), duration)),
+    h("td", { class: "number", "data-label": t("caseNumber") }, `#${entry.number}`),
+    h("td", { class: "action", "data-label": t("caseAction") }, h("div", { class: "action-cell" }, actionPill(entry), duration)),
     h(
       "td",
-      { class: "person" },
+      { class: "person", "data-label": t("caseUser") },
       person(entry.userId, entry.userTag, () => apply({ ...filters, user: entry.userId })),
       h("a", { class: "history-link", href: memberLink(guildId, entry.userId) }, t("memberHistory")),
     ),
     h(
       "td",
-      { class: "person" },
+      { class: "person", "data-label": t("caseModerator") },
       person(entry.moderatorId, entry.moderatorTag, () => apply({ ...filters, moderator: entry.moderatorId })),
     ),
     reasonCell,
-    h("td", { class: "date" }, formatDate(entry.createdAt)),
+    h("td", { class: "date", "data-label": t("caseDate") }, formatDate(entry.createdAt)),
     h(
       "td",
-      {},
+      { class: "actions-cell" },
       h(
         "div",
         { class: "row-actions" },
@@ -8420,7 +8420,7 @@ function ticketPanelEditor(guildId, data) {
   const stepButtons = TICKET_STEPS.map((step, index) =>
     h(
       "button",
-      { type: "button", class: "wizard-step", "aria-controls": `tk-step-${step.id}`, onclick: () => go(index) },
+      { type: "button", class: "wizard-step", "aria-controls": `tk-step-${step.id}`, "aria-label": t(step.titleKey), title: t(step.titleKey), onclick: () => go(index) },
       h("span", { class: "wizard-step-number", "aria-hidden": "true" }, String(index + 1)),
       h("span", { class: "wizard-step-label" }, t(step.titleKey)),
     ),

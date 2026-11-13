@@ -1634,6 +1634,7 @@
   "checkupTitle": "Verificação do servidor",
   "checkupOk": "O Rabble tem todas as permissões que pediu, pode dar todos os cargos configurados e todos os canais das configurações existem.",
   "checkupIntro": "{count} coisas precisam de atenção para tudo funcionar.",
+  "checkupIntroOne": "1 coisa precisa de atenção para tudo funcionar.",
   "checkupPermissions": "Faltam aos cargos do Rabble: {permissions}.",
   "checkupPermissionsHelp": "Dê-as ao cargo do Rabble em Configurações do servidor > Cargos, ou adicione o bot de novo pelo link de convite.",
   "checkupRole": "{role} está no nível ou acima do cargo mais alto do Rabble, então não pode ser dado ({use}).",

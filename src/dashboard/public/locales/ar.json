@@ -1634,6 +1634,7 @@
   "checkupTitle": "فحص الخادم",
   "checkupOk": "لدى Rabble كل الصلاحيات التي طلبها، ويمكنه منح كل الرتب المضبوطة، وكل القنوات في الإعدادات موجودة.",
   "checkupIntro": "{count} أمور تحتاج إلى مراجعة لتعمل كل الميزات.",
+  "checkupIntroOne": "أمر واحد يحتاج إلى مراجعة لتعمل كل الميزات.",
   "checkupPermissions": "تنقص رتب Rabble: {permissions}.",
   "checkupPermissionsHelp": "امنحها لرتبة Rabble من إعدادات الخادم > الرتب، أو أضف البوت مجددًا برابط الدعوة.",
   "checkupRole": "{role} في مستوى أعلى رتبة لـ Rabble أو فوقها، لذا لا يمكن منحها ({use}).",

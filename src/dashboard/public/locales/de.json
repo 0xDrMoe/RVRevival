@@ -1634,6 +1634,7 @@
   "checkupTitle": "Server-Check",
   "checkupOk": "Rabble hat alle angefragten Berechtigungen, kann alle eingestellten Rollen vergeben, und alle Kanäle in den Einstellungen gibt es.",
   "checkupIntro": "{count} Dinge brauchen einen Blick, damit alles funktioniert.",
+  "checkupIntroOne": "1 Sache braucht einen Blick, damit alles funktioniert.",
   "checkupPermissions": "Rabbles Rollen fehlt: {permissions}.",
   "checkupPermissionsHelp": "Gib sie Rabbles Rolle unter Servereinstellungen > Rollen, oder füge den Bot mit dem Einladungslink erneut hinzu.",
   "checkupRole": "{role} liegt auf oder über Rabbles höchster Rolle, daher kann sie nicht vergeben werden ({use}).",

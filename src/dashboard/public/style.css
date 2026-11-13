@@ -1452,7 +1452,7 @@ a.stat:hover {
 
 .stat-head {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 8px;
 }
@@ -1478,7 +1478,7 @@ a.stat:hover {
 
 .feature-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr));
   gap: 8px;
 }
 
@@ -2759,9 +2759,8 @@ dialog textarea {
 }
 
 .tz-city {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .tz-offset {
@@ -3226,25 +3225,18 @@ input.has-variable-problem {
 }
 
 .template-preview {
-  overflow: hidden;
   color: var(--muted);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.8rem;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
 }
 
 .template-body {
-  display: -webkit-box;
   margin: 0;
-  overflow: hidden;
   color: var(--muted);
   font-size: 0.84rem;
   white-space: pre-line;
   overflow-wrap: anywhere;
-  -webkit-line-clamp: 3;
-  line-clamp: 3;
-  -webkit-box-orient: vertical;
 }
 
 .tag-row.template-new {
@@ -4008,9 +4000,18 @@ input.has-variable-problem {
 
 /* On phones only the open step keeps its name. */
 @media (max-width: 640px) {
+  .wizard-steps {
+    flex-wrap: wrap;
+    overflow: visible;
+  }
+
   .wizard-steps li {
     flex: 0 0 auto;
     min-width: 0;
+  }
+
+  .wizard-steps li:has([aria-current="step"]) {
+    flex: 1 1 auto;
   }
 
   .wizard-step:not([aria-current="step"]) .wizard-step-label {
@@ -4157,9 +4158,7 @@ input.has-variable-problem {
 .category-title {
   flex: 1;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .category-row :is(input, select, textarea) {
@@ -4303,9 +4302,7 @@ input.has-variable-problem {
 
 .discord-select-options .muted {
   font-size: 0.8rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .discord-thread-name {
@@ -5336,7 +5333,8 @@ input.has-variable-problem {
 .guide-example pre {
   margin: 6px 0 0;
   padding: 10px 12px;
-  overflow-x: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--surface-2);
@@ -6692,6 +6690,191 @@ input.has-variable-problem {
   color: var(--muted);
 }
 
+/* --- Readability pass: every width from 320px phones to wide monitors ------------ */
+
+/* Long words, links and IDs wrap instead of being cut off or pushing the page wide. */
+.card,
+.help,
+.muted,
+.hero,
+.legal-page {
+  overflow-wrap: break-word;
+}
+
+/* Paragraphs keep a comfortable line length on wide screens. */
+.help,
+.card > p,
+.checkup-list li > .grow {
+  max-width: 120ch;
+}
+
+.stat {
+  align-content: start;
+}
+
+.stat-label {
+  padding-top: 2px;
+}
+
+/* Setup checklist: on wide screens the steps sit in columns so the buttons stay
+   next to the step they belong to; on phones the buttons drop under the text. */
+@media (min-width: 1400px) {
+  .setup .steps {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(520px, 1fr));
+    column-gap: 32px;
+  }
+}
+
+@media (max-width: 520px) {
+  .steps li {
+    flex-wrap: wrap;
+    row-gap: 6px;
+  }
+
+  .steps li > .grow {
+    flex: 1 1 calc(100% - 40px);
+  }
+
+  .step-actions {
+    flex-direction: row;
+    margin-inline-start: 32px;
+    justify-content: flex-start;
+  }
+}
+
+/* Short lists (latest cases, member history): on phones the badge and date share
+   the first line and the text gets the full width under them. */
+@media (max-width: 520px) {
+  .recent li {
+    flex-wrap: wrap;
+    align-items: center;
+    row-gap: 4px;
+  }
+
+  .recent-text {
+    order: 2;
+    flex-basis: 100%;
+  }
+
+  .recent-date {
+    order: 1;
+    margin-inline-start: auto;
+  }
+}
+
+/* Very narrow phones: the step wizard shows numbered circles only (the step's
+   name is the heading right under it), so all five fit on one line. */
+@media (max-width: 420px) {
+  .wizard-steps li,
+  .wizard-steps li:has([aria-current="step"]) {
+    flex: 1 1 0;
+  }
+
+  .wizard-step {
+    justify-content: center;
+    padding-inline: 4px;
+  }
+
+  .wizard-step .wizard-step-label {
+    display: none;
+  }
+}
+
+/* Smaller placeholder text on phones so hints fit inside their boxes. */
+@media (max-width: 640px) {
+  input::placeholder,
+  textarea::placeholder {
+    font-size: 0.88em;
+  }
+}
+
+/* Cases: on phones and small tablets each case becomes a card with labelled lines,
+   so no column is hidden off the side of the screen. */
+@media (max-width: 900px) {
+  .table.cases thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+
+  .table.cases,
+  .table.cases tbody,
+  .table.cases tr,
+  .table.cases td {
+    display: block;
+    width: auto;
+    min-width: 0;
+  }
+
+  .table.cases tr {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 6px 12px;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+    border-inline-start: 4px solid var(--act, var(--border));
+  }
+
+  .table.cases tbody tr:last-child {
+    border-bottom: none;
+  }
+
+  .table.cases td {
+    padding: 0;
+    border: none;
+  }
+
+  .cases .act-row td:first-child {
+    border-inline-start: none;
+  }
+
+  .table.cases td.number {
+    align-self: center;
+  }
+
+  .table.cases td.action {
+    align-self: center;
+  }
+
+  .table.cases td.action .action-cell {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .table.cases td.person,
+  .table.cases td.reason,
+  .table.cases td.date,
+  .table.cases td.actions-cell {
+    grid-column: 1 / -1;
+  }
+
+  .table.cases td[data-label]:not(.number):not(.action)::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 2px;
+    color: var(--muted);
+    font-size: 0.7rem;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+
+  .table.cases .row-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .table.cases tbody tr:hover td {
+    background: none;
+  }
+}
+
 /* --- Rumble style ------------------------------------------------------------------
    An optional game-style look (Appearance > Style): chunky Lilita One headings,
    bold outlines, hard comic shadows and full-color page headers. Everything here
@@ -7260,9 +7443,7 @@ input.has-variable-problem {
   border-top: 1px solid var(--border);
   color: var(--muted);
   font-size: 0.8rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .emoji-none {
