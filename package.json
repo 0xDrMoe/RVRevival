@@ -31,5 +31,8 @@
   },
   "devDependencies": {
     "vitest": "4.1.11"
+  },
+  "allowScripts": {
+    "ffmpeg-static@5.2.0": true
   }
 }

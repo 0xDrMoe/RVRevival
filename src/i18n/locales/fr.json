@@ -1667,6 +1667,7 @@
   "musicError_not-free": "Ce n'est pas écoutable gratuitement (SoundCloud Go+ ou un titre payant).",
   "musicError_no-match": "Aucune version gratuite de cette chanson sur SoundCloud, Audius ou Bandcamp.",
   "musicError_no-stream": "La chanson a été trouvée, mais son audio n'a pas pu être chargé et aucune autre version n'a pu être jouée.",
+  "musicError_no-ffmpeg": "La musique ne peut pas être jouée pour l'instant : ffmpeg manque sur le serveur du bot. Prévenez le propriétaire du bot.",
   "musicError_unsupported": "Ce type de lien n'est pas pris en charge. Mets le lien d'une chanson, d'un album ou d'une playlist.",
   "musicError_cant-join": "Impossible de me connecter au salon vocal. Réessaie.",
   "musicError_busy": "Trop de serveurs jouent de la musique en ce moment. Réessaie dans quelques minutes.",

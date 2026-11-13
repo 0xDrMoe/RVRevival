@@ -1667,6 +1667,7 @@
   "musicError_not-free": "That isn't free to stream (SoundCloud Go+ or a paid-only track).",
   "musicError_no-match": "There's no free copy of that song on SoundCloud, Audius or Bandcamp.",
   "musicError_no-stream": "The song was found, but its audio wouldn't load, and no other copy could be played.",
+  "musicError_no-ffmpeg": "Music can't play right now: the bot's server is missing ffmpeg. Let the bot's owner know.",
   "musicError_unsupported": "That kind of link isn't supported. Link a song, album or playlist.",
   "musicError_cant-join": "Couldn't connect to the voice channel. Try again.",
   "musicError_busy": "Too many servers are playing music right now. Try again in a few minutes.",
