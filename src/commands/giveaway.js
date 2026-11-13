@@ -1,6 +1,7 @@
 // The /giveaway command and its "Enter" button.
 //
 //   /giveaway start prize:<…> duration:1d [winners:3] [channel:#events] [role:@Members]
+//                   [account-age:30] [server-age:7] [bonus-role:@Booster]
 //   /giveaway end giveaway:<…>       end it now and pick the winners
 //   /giveaway reroll giveaway:<…>    pick new winners for an ended giveaway
 //   /giveaway cancel giveaway:<…>    stop it without winners
@@ -12,17 +13,20 @@
 
 import { ChannelType, InteractionContextType, MessageFlags, PermissionFlagsBits, SlashCommandBuilder } from "discord.js";
 import {
+  BONUS_ENTRIES,
   BUTTON_PREFIX,
   buildGiveawayMessage,
   endGiveaway,
   giveawayLanguage,
   MAX_GIVEAWAY_MS,
   MAX_PRIZE_LENGTH,
+  MAX_REQUIRED_DAYS,
   MAX_RUNNING_GIVEAWAYS,
   MAX_WINNERS,
   MIN_GIVEAWAY_MS,
   parseButtonId,
   refreshGiveawayMessage,
+  requirementProblem,
   rerollGiveaway,
   showCancelled,
 } from "../giveaways/giveaways.js";
@@ -66,7 +70,14 @@ export function buildGiveawayCommandData() {
             ChannelType.GuildAnnouncement,
           ),
         )
-        .addRoleOption((option) => withDescription(option.setName("role"), "giveawayRoleOptionDescription")),
+        .addRoleOption((option) => withDescription(option.setName("role"), "giveawayRoleOptionDescription"))
+        .addIntegerOption((option) =>
+          withDescription(option.setName("account-age"), "giveawayAccountAgeOption").setMinValue(1).setMaxValue(MAX_REQUIRED_DAYS),
+        )
+        .addIntegerOption((option) =>
+          withDescription(option.setName("server-age"), "giveawayServerAgeOption").setMinValue(1).setMaxValue(MAX_REQUIRED_DAYS),
+        )
+        .addRoleOption((option) => withDescription(option.setName("bonus-role"), "giveawayBonusRoleOption")),
     )
     .addSubcommand((sub) => withDescription(sub.setName("end"), "giveawayEndDescription").addIntegerOption(giveawayOption))
     .addSubcommand((sub) =>
@@ -172,6 +183,8 @@ export function createGiveawayCommand({ giveaways, guildSettings, logger, forced
       }
       const role = interaction.options.getRole("role");
       const requiredRoleId = role && role.id !== guildId ? role.id : null;
+      const bonusRole = interaction.options.getRole("bonus-role");
+      const bonusRoleId = bonusRole && bonusRole.id !== guildId ? bonusRole.id : null;
 
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       const createdAt = now();
@@ -182,6 +195,9 @@ export function createGiveawayCommand({ giveaways, guildSettings, logger, forced
         prize,
         winnerCount: interaction.options.getInteger("winners") ?? 1,
         requiredRoleId,
+        minAccountDays: interaction.options.getInteger("account-age") ?? null,
+        minMemberDays: interaction.options.getInteger("server-age") ?? null,
+        bonusRoleId,
         createdAt,
         endsAt: createdAt + delay,
       });
@@ -282,11 +298,16 @@ export function createGiveawayCommand({ giveaways, guildSettings, logger, forced
     if (giveaway.endedAt !== null || giveaway.endsAt <= now()) {
       return reply("giveawayClosed");
     }
-    if (giveaway.requiredRoleId && !interaction.member.roles.cache.has(giveaway.requiredRoleId)) {
-      return reply("giveawayNeedsRole", { role: `<@&${giveaway.requiredRoleId}>` });
+    const problem = requirementProblem(giveaway, interaction.member, now());
+    if (problem) {
+      return reply(problem, { role: `<@&${giveaway.requiredRoleId}>`, days: problem === "giveawayNeedsAccountAge" ? giveaway.minAccountDays : giveaway.minMemberDays });
     }
-    const entered = giveaways.toggleEntry(giveaway.id, interaction.user.id);
+    const bonus = Boolean(giveaway.bonusRoleId && interaction.member.roles.cache.has(giveaway.bonusRoleId));
+    const entered = giveaways.toggleEntry(giveaway.id, interaction.user.id, bonus ? BONUS_ENTRIES : 1);
     refreshSoon(giveaway, interaction.guild);
+    if (entered && bonus) {
+      return reply("giveawayJoinedBonus", { prize: giveaway.prize, count: BONUS_ENTRIES });
+    }
     return reply(entered ? "giveawayJoined" : "giveawayLeft", { prize: giveaway.prize });
   }
 

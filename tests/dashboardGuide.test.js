@@ -184,7 +184,7 @@ describe("dashboard guide", () => {
   it("explains every right-click app", () => {
     const commands = createCommands({ logger: fakeLogger(), guildSettings: new GuildSettings() });
     const apps = [...commands.values()].filter((command) => command.data.type === 2 || command.data.type === 3).map((command) => command.name);
-    expect(apps).toEqual(["Report message", "User info", "Moderation history"]);
+    expect(apps).toEqual(["Report message", "User info", "Moderation history", "Remind me"]);
     const text = topics.flatMap(texts).join("\n");
     for (const name of apps) {
       expect(text, name).toContain(`**${name}**`);

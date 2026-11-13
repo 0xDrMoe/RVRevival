@@ -1,6 +1,10 @@
-// Stores reminders (/remind) in the bot's SQLite database until they're sent.
+// Stores reminders (/remind) in the bot's SQLite database. A sent reminder is
+// kept for SNOOZE_WINDOW_MS (marked delivered) so its Snooze buttons can set it
+// again, then forgotten.
 
 import { openDatabase } from "../storage/database.js";
+
+export const SNOOZE_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 function toReminder(row) {
   return row
@@ -27,11 +31,15 @@ export class ReminderStore {
       insert: db.prepare(`
         INSERT INTO reminders (guild_id, channel_id, user_id, text, private, created_at, due_at)
         VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING *`),
-      due: db.prepare("SELECT * FROM reminders WHERE due_at <= ? ORDER BY due_at LIMIT ?"),
-      listForUser: db.prepare("SELECT * FROM reminders WHERE guild_id = ? AND user_id = ? ORDER BY due_at"),
-      countForUser: db.prepare("SELECT COUNT(*) AS total FROM reminders WHERE guild_id = ? AND user_id = ?"),
-      deleteForUser: db.prepare("DELETE FROM reminders WHERE id = ? AND guild_id = ? AND user_id = ?"),
+      due: db.prepare("SELECT * FROM reminders WHERE delivered_at IS NULL AND due_at <= ? ORDER BY due_at LIMIT ?"),
+      listForUser: db.prepare("SELECT * FROM reminders WHERE guild_id = ? AND user_id = ? AND delivered_at IS NULL ORDER BY due_at"),
+      countForUser: db.prepare("SELECT COUNT(*) AS total FROM reminders WHERE guild_id = ? AND user_id = ? AND delivered_at IS NULL"),
+      deleteForUser: db.prepare("DELETE FROM reminders WHERE id = ? AND guild_id = ? AND user_id = ? AND delivered_at IS NULL"),
       delete: db.prepare("DELETE FROM reminders WHERE id = ?"),
+      markDelivered: db.prepare("UPDATE reminders SET delivered_at = ? WHERE id = ?"),
+      snooze: db.prepare("UPDATE reminders SET due_at = ?, delivered_at = NULL WHERE id = ? AND user_id = ? AND delivered_at IS NOT NULL AND delivered_at >= ? RETURNING *"),
+      forgetDelivered: db.prepare("DELETE FROM reminders WHERE delivered_at IS NOT NULL AND delivered_at < ?"),
+      countAllForUser: db.prepare("SELECT COUNT(*) AS total FROM reminders WHERE user_id = ? AND delivered_at IS NULL"),
     };
   }
 
@@ -61,5 +69,26 @@ export class ReminderStore {
 
   delete(id) {
     this.#statements.delete.run(id);
+  }
+
+  // Marks a reminder sent; it stays a while so it can be snoozed.
+  markDelivered(id, at) {
+    this.#statements.markDelivered.run(at, id);
+  }
+
+  // Sets a sent reminder again for `dueAt`. Only its owner can, and only
+  // within SNOOZE_WINDOW_MS of it being sent. Returns the reminder, or undefined.
+  snooze(id, userId, dueAt, now) {
+    return toReminder(this.#statements.snooze.get(dueAt, id, userId, now - SNOOZE_WINDOW_MS));
+  }
+
+  // Forgets reminders sent before `before`. Returns how many.
+  forgetDeliveredBefore(before) {
+    return Number(this.#statements.forgetDelivered.run(before).changes);
+  }
+
+  // Every server's waiting reminders of one member.
+  countAllForUser(userId) {
+    return Number(this.#statements.countAllForUser.get(userId).total);
   }
 }

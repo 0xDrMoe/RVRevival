@@ -1,9 +1,9 @@
 import { MessageFlags } from "discord.js";
 import { describe, expect, it, vi } from "vitest";
-import { createRemindCommand, MAX_REMINDERS_PER_MEMBER } from "../src/commands/remind.js";
+import { createRemindCommand, createRemindMeMenu, MAX_REMINDERS_PER_MEMBER } from "../src/commands/remind.js";
 import { Status } from "../src/logs/actionLog.js";
-import { createReminderScheduler } from "../src/reminders/reminderScheduler.js";
-import { ReminderStore } from "../src/reminders/reminderStore.js";
+import { createReminderScheduler, parseSnoozeId, SNOOZE_PREFIX } from "../src/reminders/reminderScheduler.js";
+import { ReminderStore, SNOOZE_WINDOW_MS } from "../src/reminders/reminderStore.js";
 
 const GUILD_ID = "900000000000000001";
 const CHANNEL_ID = "800000000000000001";
@@ -217,5 +217,75 @@ describe("/remind", () => {
   it("says when there are no reminders", async () => {
     const { command } = setup();
     expect((await command.execute(fakeInteraction({ subcommand: "list" }))).key).toBe("remindListEmpty");
+  });
+});
+
+describe("reminder snooze", () => {
+  it("adds Snooze buttons and sets a sent reminder again for its owner only", async () => {
+    const store = new ReminderStore();
+    const channel = fakeChannel();
+    let time = 10 * MINUTE;
+    const { client } = fakeClient({ channel });
+    const scheduler = createReminderScheduler({ client, store, logger, now: () => time });
+    const reminder = store.add(reminderValues());
+    await scheduler.sweep();
+
+    const ids = channel.send.mock.calls[0][0].components[0].toJSON().components.map((button) => button.custom_id);
+    expect(ids).toEqual([`rsz:${reminder.id}:10`, `rsz:${reminder.id}:60`, `rsz:${reminder.id}:1440`]);
+    expect(store.listForUser(GUILD_ID, USER_ID)).toEqual([]);
+    expect(parseSnoozeId(`rsz:${reminder.id}:7`)).toBeUndefined();
+
+    const command = createRemindCommand({ reminders: store, now: () => time });
+    const handle = command.componentPrefixes[SNOOZE_PREFIX].handle;
+    const press = (userId, minutes = 60) => ({ locale: "en-US", customId: `rsz:${reminder.id}:${minutes}`, user: { id: userId }, reply: vi.fn(async () => {}) });
+
+    expect(await handle(press(OTHER_ID))).toMatchObject({ key: "remindSnoozeGone", status: Status.REFUSED });
+    expect(await handle(press(USER_ID))).toMatchObject({ key: "remindSnoozed", status: Status.SUCCESS });
+    expect(store.listForUser(GUILD_ID, USER_ID)).toEqual([expect.objectContaining({ id: reminder.id, dueAt: time + 60 * MINUTE })]);
+    // It's waiting again, so a second press does nothing until it's sent.
+    expect(await handle(press(USER_ID))).toMatchObject({ key: "remindSnoozeGone" });
+
+    time += 60 * MINUTE;
+    await scheduler.sweep();
+    expect(channel.send).toHaveBeenCalledTimes(2);
+
+    time += SNOOZE_WINDOW_MS + MINUTE;
+    expect(await handle(press(USER_ID))).toMatchObject({ key: "remindSnoozeGone" });
+    await scheduler.sweep();
+    expect(store.countAllForUser(USER_ID)).toBe(0);
+  });
+});
+
+describe("Remind me app", () => {
+  const MESSAGE_ID = "700000000000000001";
+  function setup() {
+    const reminders = new ReminderStore();
+    const app = createRemindMeMenu({ reminders, now: () => 1_000_000 });
+    const base = { locale: "en-US", guildId: GUILD_ID, user: { id: USER_ID }, inCachedGuild: () => true, reply: vi.fn(async () => {}) };
+    const submit = (when, customId = `remindme:${CHANNEL_ID}:${MESSAGE_ID}`) =>
+      app.componentPrefixes["remindme:"].handle({ ...base, customId, fields: { getTextInputValue: () => when } });
+    return { reminders, app, base, submit };
+  }
+
+  it("is a message app that opens a form for the message", async () => {
+    const { app, base } = setup();
+    expect(app.data).toMatchObject({ name: "Remind me", type: 3 });
+    const opened = { ...base, targetMessage: { id: MESSAGE_ID, channelId: CHANNEL_ID }, showModal: vi.fn(async () => {}) };
+    await app.execute(opened);
+    expect(opened.showModal.mock.calls[0][0].toJSON().custom_id).toBe(`remindme:${CHANNEL_ID}:${MESSAGE_ID}`);
+  });
+
+  it("sets a private reminder with a link back, and refuses bad times and a full list", async () => {
+    const { reminders, submit } = setup();
+    expect(await submit("2h")).toMatchObject({ key: "remindSetPrivate", status: Status.SUCCESS });
+    const [saved] = reminders.listForUser(GUILD_ID, USER_ID);
+    expect(saved).toMatchObject({ private: true, dueAt: 1_000_000 + 120 * MINUTE });
+    expect(saved.text).toContain(`https://discord.com/channels/${GUILD_ID}/${CHANNEL_ID}/${MESSAGE_ID}`);
+    expect(await submit("later")).toMatchObject({ key: "remindBadDuration" });
+    expect(await submit("1h", "remindme:bad")).toMatchObject({ status: Status.FAILED });
+    for (let index = 1; index < MAX_REMINDERS_PER_MEMBER; index++) {
+      reminders.add(reminderValues({ dueAt: 2_000_000 }));
+    }
+    expect(await submit("1h")).toMatchObject({ key: "remindFull" });
   });
 });

@@ -11,6 +11,7 @@ import { MAX_THRESHOLD, MIN_THRESHOLD } from "../community/starboard.js";
 import { cleanTagContent, cleanTagName, MAX_TAG_LENGTH, MAX_TAGS, sortTags } from "../community/tags.js";
 import { MAX_AUTOROLES, MAX_MESSAGE_LENGTH } from "../community/welcome.js";
 import { checkWelcomeEmbed, describeWelcomeEmbed } from "../community/welcomeEmbeds.js";
+import { checkMilestones, describeMilestones, InvalidMilestones } from "../community/milestones.js";
 import { InvalidMessage } from "../messages/embedMessage.js";
 import { checkLeveling, DEFAULT_LEVELING, InvalidLeveling, normalizeLeveling } from "../leveling/config.js";
 import { checkAntiNuke, describeAntiNuke, InvalidAntiNuke } from "../raid/antiNuke.js";
@@ -91,6 +92,10 @@ export const SETTING_RULES = Object.freeze({
   [Setting.LEAVE_EMBED]: { kind: "welcomeEmbed", label: "Leave embed" },
   [Setting.WELCOME_DM_EMBED]: { kind: "welcomeEmbed", label: "Welcome DM embed" },
   [Setting.AUTOROLES]: { kind: "autoroles", label: "Autoroles" },
+  [Setting.BOT_AUTOROLES]: { kind: "autoroles", label: "Bot autoroles" },
+  [Setting.MILESTONES]: { kind: "milestones", types: POSTING_CHANNELS, label: "Member milestones" },
+  [Setting.INVITE_TRACKING]: { kind: "flag", label: "Invite tracking" },
+  [Setting.DEHOIST]: { kind: "flag", label: "Dehoist names" },
   [Setting.ROLE_CONFIRM]: { kind: "onByDefault", label: "Role pick confirmations" },
   [Setting.ROLE_PERSIST]: { kind: "rolePersist", label: "Roles on rejoin" },
   [Setting.APPEALS]: { kind: "appeals", types: POSTING_CHANNELS, label: "Ban appeals" },
@@ -459,6 +464,26 @@ function checkValue(setting, value, { guildId, channels, roles }) {
         }
         throw error;
       }
+    case "flag":
+      if (typeof value !== "boolean") {
+        throw new InvalidSetting(setting, "Send true or false.");
+      }
+      // Off is the default, so it's saved as no value.
+      return value || null;
+    case "milestones":
+      try {
+        const checked = checkMilestones(value, { channelOk: (id) => channelOk(id, rule.types) });
+        const variableProblem = checked?.message && variableError(checked.message, "welcome");
+        if (variableProblem) {
+          throw new InvalidSetting(setting, variableProblem);
+        }
+        return checked;
+      } catch (error) {
+        if (error instanceof InvalidMilestones) {
+          throw new InvalidSetting(setting, error.message);
+        }
+        throw error;
+      }
     case "onByDefault":
       if (typeof value !== "boolean") {
         throw new InvalidSetting(setting, "Send true or false.");
@@ -535,6 +560,12 @@ export function describeValue(setting, value) {
   }
   if (SETTING_RULES[setting]?.kind === "onByDefault") {
     return value === false ? "off" : "on";
+  }
+  if (SETTING_RULES[setting]?.kind === "flag") {
+    return value ? "on" : "off";
+  }
+  if (SETTING_RULES[setting]?.kind === "milestones") {
+    return describeMilestones(value);
   }
   if (SETTING_RULES[setting]?.kind === "logOptions") {
     return describeLogOptions(value);

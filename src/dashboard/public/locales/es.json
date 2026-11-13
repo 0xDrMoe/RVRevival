@@ -1862,5 +1862,25 @@
   "automationMinutes": "Borrar tras (minutos)",
   "automationMessages": "Lleno con (mensajes en 10 s)",
   "automationSeconds": "Modo lento (segundos)",
-  "automationEmojis": "Emojis (hasta 5)"
+  "automationEmojis": "Emojis (hasta 5)",
+
+  "testReason_milestonesOff": "Los hitos de miembros están desactivados. Elige un canal y guarda primero.",
+
+  "sectionMilestones": "Hitos de miembros",
+  "milestonesHelp": "Cuando el servidor llega a cada 100 miembros (o lo que elijas), el bot lo celebra en un canal y agradece a quien lo logró. Cada hito se publica una vez.",
+  "milestoneChannel": "Canal de hitos",
+  "milestoneChannelHelp": "Desactivado hasta que elijas un canal.",
+  "milestoneEvery": "Celebrar cada",
+  "milestoneEveryHelp": "Miembros de diferencia, de 10 a 1.000.000.",
+  "milestoneMessage": "Mensaje de hito",
+  "milestoneMessageHelp": "Déjalo vacío para usar el predeterminado. {members} es el hito y {user} quien lo alcanzó.",
+  "testMilestoneHelp": "Publica el próximo hito en su canal, contigo como miembro, sin mencionar.",
+  "sectionInviteTracking": "Seguimiento de invitaciones",
+  "inviteTrackingOn": "Recordar quién invitó a cada miembro nuevo",
+  "inviteTrackingHelp": "Para /invites member y /invites top. El bot necesita Gestionar servidor para leer las invitaciones; sin él, las entradas se guardan sin invitador.",
+  "sectionBotAutoroles": "Roles automáticos de bots",
+  "botAutorolesHelp": "Roles que recibe cada bot nuevo en vez de los de miembros (hasta {max}), como un rol Bots. La incorporación no cubre bots.",
+  "sectionDehoist": "Quitar símbolos de nombres",
+  "dehoistOn": "Arreglar nombres que empiezan con símbolos",
+  "dehoistHelp": "Nombres como !!!aaa salen arriba de todos. Los nuevos y los cambios de nombre pierden los símbolos del inicio. /dehoist run arregla a los que ya están. Necesita Gestionar apodos."
 }

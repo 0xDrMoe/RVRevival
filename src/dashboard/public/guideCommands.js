@@ -465,6 +465,30 @@ export const COMMAND_PARTS = [
         tips: ["Handy for names that are offensive, impersonate staff, or can't be typed or mentioned."],
       },
       {
+        id: "cmddehoist",
+        command: "/dehoist",
+        title: "/dehoist",
+        icon: "edit",
+        tone: "cyan",
+        page: "moderation",
+        related: "tools",
+        summary: "Stops names like `!!!aaa` from sorting above everyone in the member list by dropping the symbols at the start.",
+        who: "**Manage Nicknames**.",
+        usages: [
+          { usage: "/dehoist run", what: "Fixes everyone here now, up to 100 at a time. Run it again for more.", options: [] },
+          {
+            usage: "/dehoist auto enabled",
+            what: "Fixes new members and renames automatically.",
+            options: [["enabled", "`True` for on, `False` for off."]],
+          },
+        ],
+        example: ["/dehoist run", "/dehoist auto enabled:True"],
+        tips: [
+          "A name that's nothing but symbols becomes *Dehoisted*. Bots, the owner and anyone above the bot's role are left alone.",
+          "The bot needs **Manage Nicknames** too.",
+        ],
+      },
+      {
         id: "cmdmassrole",
         command: "/massrole",
         title: "/massrole",
@@ -1040,6 +1064,7 @@ export const COMMAND_PARTS = [
           { usage: "/test starboard", what: "Posts a starboard post of a made-up message by you, with as many stars as it takes.", options: [] },
           { usage: "/test logs", what: "Posts one entry in every log channel, listing which kinds of log go there, and lists the ones that go nowhere yet.", options: [] },
           { usage: "/test bump", what: "Posts the DISBOARD bump reminder in its channel (or here, if it goes where /bump was used), without pinging.", options: [] },
+          { usage: "/test milestone", what: "Posts the next member milestone in its channel, with you as the member who reached it, without pinging.", options: [] },
           {
             usage: "/test automod text",
             what: "Says which automod rules the text would break and what automod would do. Nothing is posted or deleted.",
@@ -1191,9 +1216,21 @@ export const COMMAND_PARTS = [
             ],
           },
           {
-            usage: "/welcome autorole role",
+            usage: "/welcome autorole role [bots]",
             what: "Gives every new member that role, or stops giving it if it's already one. Up to 10.",
-            options: [["role", "A role below the bot's, without staff or admin permissions."]],
+            options: [
+              ["role", "A role below the bot's, without staff or admin permissions."],
+              ["bots", "`True` gives it to new bots instead of new members (a separate list)."],
+            ],
+          },
+          {
+            usage: "/welcome milestones channel [every] [message]",
+            what: "Celebrates member-count milestones: when the server reaches every 100th member (or `every`th), the bot posts there, thanking whoever got it there.",
+            options: [
+              ["channel", "Where the celebration goes."],
+              ["every", "How many members apart, 10 to 1,000,000. Default 100."],
+              ["message", "Your own message, up to 1000 characters, with the same variables. `{members}` is the milestone. Leave it out to keep the current one (or the default)."],
+            ],
           },
           {
             usage: "/welcome persist enabled",
@@ -1203,7 +1240,7 @@ export const COMMAND_PARTS = [
           {
             usage: "/welcome off what",
             what: "Switches one part off, or puts the messages back to the default.",
-            options: [["what", "Welcome messages, leave messages, the welcome DM (with its embed), autoroles, or custom messages (back to the default text)."]],
+            options: [["what", "Welcome messages, leave messages, the welcome DM (with its embed), autoroles (members and bots), member milestones, or custom messages (back to the default text)."]],
           },
           {
             usage: "/welcome test",
@@ -1221,6 +1258,7 @@ export const COMMAND_PARTS = [
           "/welcome message text:Welcome {user} to {server}! You're member #{members}.\\nRead #rules first.",
           "/welcome embed message:Welcome message title:Welcome to {server}! description:You're member #{members}. avatar:True",
           "/welcome autorole role:@Member",
+          "/welcome milestones channel:#general every:500",
         ],
         tips: [
           "Only `{user}` pings anyone, and only in the message text: mentions in an embed never ping.",
@@ -1836,7 +1874,7 @@ export const COMMAND_PARTS = [
         who: "The mod role, or **Manage Server**. Members enter with the button.",
         usages: [
           {
-            usage: "/giveaway start prize duration [winners] [channel] [role]",
+            usage: "/giveaway start prize duration [winners] [channel] [role] [account-age] [server-age] [bonus-role]",
             what: "Posts the giveaway. Up to 10 running at once.",
             options: [
               ["prize", "What the winners get, up to 200 characters. Say how to claim it."],
@@ -1844,6 +1882,9 @@ export const COMMAND_PARTS = [
               ["winners", "How many winners, 1 to 20. 1 by default."],
               ["channel", "Where to post it. The channel you're in by default."],
               ["role", "Only members with this role can enter."],
+              ["account-age", "Only Discord accounts at least this many days old can enter, 1 to 3650. Keeps fresh alts out."],
+              ["server-age", "Only members who joined this server at least this many days ago can enter, 1 to 3650."],
+              ["bonus-role", "Members with this role (boosters, say) get 2 entries, so twice the chance."],
             ],
           },
           {
@@ -1870,10 +1911,11 @@ export const COMMAND_PARTS = [
             options: [],
           },
         ],
-        example: ["/giveaway start prize:Discord Nitro duration:2d winners:2", "/giveaway start prize:Beta key duration:1d role:@Members channel:#events", "/giveaway reroll giveaway:Discord Nitro"],
+        example: ["/giveaway start prize:Discord Nitro duration:2d winners:2", "/giveaway start prize:Beta key duration:1d role:@Members channel:#events", "/giveaway start prize:Nitro duration:3d account-age:30 bonus-role:@Server Booster", "/giveaway reroll giveaway:Discord Nitro"],
         tips: [
           "Members click **Enter** again to leave.",
           "Winners must still be in the server (and have the role) when it ends.",
+          "The requirements show on the giveaway, and anyone who doesn't meet them is told why when they click **Enter**. Nobody can win twice in one draw.",
           "Giveaways end on time even after a restart.",
         ],
       },
@@ -1909,6 +1951,32 @@ export const COMMAND_PARTS = [
         ],
         example: ["/remind set in:2h about:Tournament check-in", "/remind set in:1d about:Renew the event role private:True"],
         tips: ["Posted in the same channel and pings only you. If the bot can't post there, it DMs you.", "Reminders survive restarts."],
+      },
+      {
+        id: "cmdinvites",
+        command: "/invites",
+        title: "/invites",
+        icon: "users",
+        tone: "green",
+        page: "welcome",
+        related: "invites",
+        summary: "Who invited whom, and who brought in the most people still here.",
+        who: "Everyone. `tracking`: **Manage Server**.",
+        usages: [
+          {
+            usage: "/invites tracking enabled",
+            what: "Switches invite tracking on or off. The bot needs **Manage Server** to read invite counts.",
+            options: [["enabled", "`True` for on, `False` for off. Turning it off keeps what was saved."]],
+          },
+          {
+            usage: "/invites member [member]",
+            what: "How many people someone invited (still here and left), and which invite they joined with.",
+            options: [["member", "Who to look up. Leave it out for yourself."]],
+          },
+          { usage: "/invites top", what: "The 10 members who brought in the most people still here.", options: [] },
+        ],
+        example: ["/invites tracking enabled:True", "/invites top"],
+        tips: ["Only joins after tracking is switched on are counted."],
       },
       {
         id: "cmdafk",
@@ -2512,6 +2580,41 @@ export const COMMAND_PARTS = [
         ],
         example: ["/8ball question:Will we win tonight?"],
         tips: ["Answers come in the member's Discord language."],
+      },
+      {
+        id: "cmdtimestamp",
+        command: "/timestamp",
+        title: "/timestamp",
+        icon: "clock",
+        tone: "blue",
+        related: "reminders",
+        summary: "Turns a date or time into Discord timestamps that everyone sees in their own time zone, with the code to copy for each style.",
+        who: "Everyone. Only you see the answer.",
+        usages: [
+          {
+            usage: "/timestamp when [timezone]",
+            what: "Lists all seven styles (time, date, full date, relative…) with their codes.",
+            options: [
+              ["when", "`2h`, `in 3 days`, `2 hours ago`, `18:30`, `6pm`, `2026-12-24 18:00` or a Unix time."],
+              ["timezone", "Your time zone, like `Europe/Berlin`, for dates and times. Pick from the list as you type. Default UTC."],
+            ],
+          },
+        ],
+        example: ["/timestamp when:in 3 days", "/timestamp when:2026-12-24 18:00 timezone:America/New_York"],
+        tips: ["Paste a code like `<t:1767225600:R>` in a message, event or embed and it shows as *in 2 months* for everyone."],
+      },
+      {
+        id: "cmdmydata",
+        command: "/mydata",
+        title: "/mydata",
+        icon: "key",
+        tone: "purple",
+        related: "mydata",
+        summary: "Shows what the bot keeps about you, in every server, and lets you delete it.",
+        who: "Everyone. Only you see it.",
+        usages: [{ usage: "/mydata", what: "Lists your data with a **Delete all of it** button, which asks once more first.", options: [] }],
+        example: ["/mydata"],
+        tips: ["Moderation cases, tickets, XP and logs belong to the server and aren't deleted here."],
       },
     ],
   },

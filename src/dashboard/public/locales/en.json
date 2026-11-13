@@ -1862,5 +1862,25 @@
   "automationMinutes": "Delete after (minutes)",
   "automationMessages": "Busy at (messages in 10 s)",
   "automationSeconds": "Slowmode (seconds)",
-  "automationEmojis": "Emoji (up to 5)"
+  "automationEmojis": "Emoji (up to 5)",
+
+  "testReason_milestonesOff": "Member milestones are off. Pick a channel and save first.",
+
+  "sectionMilestones": "Member milestones",
+  "milestonesHelp": "When the server reaches every 100th member (or whatever you pick), the bot celebrates in a channel and thanks whoever got it there. Each milestone posts once.",
+  "milestoneChannel": "Milestone channel",
+  "milestoneChannelHelp": "Off until you pick a channel.",
+  "milestoneEvery": "Celebrate every",
+  "milestoneEveryHelp": "Members apart, 10 to 1,000,000.",
+  "milestoneMessage": "Milestone message",
+  "milestoneMessageHelp": "Leave empty for the default. {members} is the milestone and {user} the member who reached it.",
+  "testMilestoneHelp": "Posts the next milestone in its channel, with you as the member, without pinging.",
+  "sectionInviteTracking": "Invite tracking",
+  "inviteTrackingOn": "Remember who invited each new member",
+  "inviteTrackingHelp": "For /invites member and /invites top. The bot needs Manage Server to read invite counts; without it, joins are saved with no inviter.",
+  "sectionBotAutoroles": "Bot autoroles",
+  "botAutorolesHelp": "Roles every new bot gets instead of the member autoroles (up to {max}), like a Bots role. Onboarding doesn't cover bots.",
+  "sectionDehoist": "Dehoist names",
+  "dehoistOn": "Fix names that start with symbols",
+  "dehoistHelp": "Names like !!!aaa sort above everyone. New members and renames lose the symbols at the start. /dehoist run fixes everyone already here. Needs Manage Nicknames."
 }

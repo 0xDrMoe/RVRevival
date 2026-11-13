@@ -14,6 +14,11 @@ export const MAX_GIVEAWAY_MS = 30 * 24 * 60 * 60 * 1000;
 export const MAX_WINNERS = 20;
 export const MAX_PRIZE_LENGTH = 200;
 export const MAX_RUNNING_GIVEAWAYS = 10;
+// Members with a giveaway's bonus role get this many entries.
+export const BONUS_ENTRIES = 2;
+// The longest account or server age a giveaway can ask for, in days.
+export const MAX_REQUIRED_DAYS = 3650;
+const DAY_MS = 24 * 60 * 60 * 1000;
 // Ended giveaways can be rerolled for this long, then they're forgotten.
 export const KEEP_ENDED_MS = 30 * 24 * 60 * 60 * 1000;
 // How many entrants are checked (still in the server, still have the role)
@@ -54,6 +59,15 @@ export function buildGiveawayMessage(giveaway, { language, entries, state = "run
     if (giveaway.requiredRoleId) {
       lines.push(text("giveawayEmbedRole", { role: `<@&${giveaway.requiredRoleId}>` }));
     }
+    if (giveaway.minAccountDays) {
+      lines.push(text("giveawayEmbedAccountAge", { days: giveaway.minAccountDays }));
+    }
+    if (giveaway.minMemberDays) {
+      lines.push(text("giveawayEmbedMemberAge", { days: giveaway.minMemberDays }));
+    }
+    if (giveaway.bonusRoleId) {
+      lines.push(text("giveawayEmbedBonus", { role: `<@&${giveaway.bonusRoleId}>`, count: BONUS_ENTRIES }));
+    }
   }
   lines.push(text("giveawayEmbedEntries", { count: entries }));
 
@@ -81,19 +95,54 @@ export function shuffle(items, random = randomInt) {
   return list;
 }
 
-// Picks up to `count` winners among `entrants`, skipping `exclude` and anyone
-// who left the server or no longer has the required role.
+// A random order of weighted entries [{ userId, weight }] where an entry with
+// weight 2 is twice as likely to come early (Efraimidis-Spirakis: each gets
+// the key u^(1/weight) and the highest keys go first). Equal weights are a
+// plain shuffle.
+export function weightedOrder(entries, random = randomInt) {
+  if (entries.every((entry) => (entry.weight ?? 1) === 1)) {
+    return shuffle(entries.map((entry) => entry.userId ?? entry), random);
+  }
+  const SCALE = 2 ** 40;
+  return entries
+    .map((entry) => ({ userId: entry.userId, key: Math.pow((random(SCALE - 1) + 1) / SCALE, 1 / Math.max(1, entry.weight)) }))
+    .sort((a, b) => b.key - a.key)
+    .map((entry) => entry.userId);
+}
+
+// Whether a member meets a giveaway's account-age and server-age asks.
+// Returns the refusal key, or null.
+export function requirementProblem(giveaway, member, now = Date.now()) {
+  if (giveaway.requiredRoleId && !member.roles?.cache?.has(giveaway.requiredRoleId)) {
+    return "giveawayNeedsRole";
+  }
+  const created = member.user?.createdTimestamp;
+  if (giveaway.minAccountDays && (!created || now - created < giveaway.minAccountDays * DAY_MS)) {
+    return "giveawayNeedsAccountAge";
+  }
+  const joined = member.joinedTimestamp;
+  if (giveaway.minMemberDays && (!joined || now - joined < giveaway.minMemberDays * DAY_MS)) {
+    return "giveawayNeedsMemberAge";
+  }
+  return null;
+}
+
+// Picks up to `count` different winners among `entrants` (user IDs, or
+// weighted entries { userId, weight }), skipping `exclude` and anyone who left
+// the server or no longer has the required role.
 export async function pickWinners(guild, giveaway, entrants, { count, exclude = [], random } = {}) {
   const skip = new Set(exclude);
   const winners = [];
   let checked = 0;
-  for (const userId of shuffle(entrants, random)) {
+  const order = entrants.some((entry) => typeof entry === "object") ? weightedOrder(entrants, random) : shuffle(entrants, random);
+  for (const userId of order) {
     if (winners.length >= count || checked >= MAX_CANDIDATES_CHECKED) {
       break;
     }
     if (skip.has(userId)) {
       continue;
     }
+    skip.add(userId);
     checked += 1;
     const member = guild.members.cache.get(userId) ?? (await guild.members.fetch(userId).catch(() => undefined));
     if (!member || member.user?.bot) {
@@ -128,7 +177,7 @@ async function announce(channel, message, content, winnerIds) {
 // Ends a giveaway: picks winners, updates its message and announces them.
 // Returns the ended giveaway, or undefined if it had already ended.
 export async function endGiveaway({ giveaway, guild, store, logger, forcedLanguage, now = Date.now, random }) {
-  const entrants = store.entries(giveaway.id);
+  const entrants = store.weightedEntries(giveaway.id);
   const winnerIds = guild ? await pickWinners(guild, giveaway, entrants, { count: giveaway.winnerCount, random }) : [];
   const endedAt = now();
   if (!store.markEnded(giveaway.id, endedAt, winnerIds)) {
@@ -158,7 +207,7 @@ export async function endGiveaway({ giveaway, guild, store, logger, forcedLangua
 // Picks `count` new winners for an ended giveaway, never someone who already
 // won it, and announces them. Returns the new winners (maybe none).
 export async function rerollGiveaway({ giveaway, guild, store, logger, forcedLanguage, count, random }) {
-  const winnerIds = await pickWinners(guild, giveaway, store.entries(giveaway.id), {
+  const winnerIds = await pickWinners(guild, giveaway, store.weightedEntries(giveaway.id), {
     count,
     exclude: giveaway.winnerIds,
     random,

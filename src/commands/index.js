@@ -14,7 +14,7 @@ import { createLevelCommands } from "./levels.js";
 import { createMemberToolCommands } from "./memberTools.js";
 import { createModerationCommands } from "./moderation.js";
 import { createPurgeCommand } from "./purge.js";
-import { createRemindCommand } from "./remind.js";
+import { createRemindCommand, createRemindMeMenu } from "./remind.js";
 import { createRolePanelCommand } from "./rolePanel.js";
 import { createRoleConfirmations, RoleConfirmStore } from "../roles/roleConfirmations.js";
 import { createSettingsCommand } from "./settings.js";
@@ -45,6 +45,10 @@ import { createEmbedCommand } from "./embed.js";
 import { createMassRoleCommand } from "./massRole.js";
 import { createMemberLoader } from "../guilds/memberCache.js";
 import { createContextMenus } from "./contextMenus.js";
+import { createInvitesCommand } from "./invites.js";
+import { createDehoistCommand } from "./dehoist.js";
+import { createTimestampCommand } from "./timestamp.js";
+import { createMyDataCommand } from "./myData.js";
 import { createMusicCommands } from "./music.js";
 import { createAutomateCommand } from "./automate.js";
 
@@ -76,6 +80,9 @@ import { createAutomateCommand } from "./automate.js";
 // messages reported with the Report message app. `music` (music/player.js)
 // plays music for /play, /radio and /music (made on first use when left out).
 // `automation` (channels/automation.js) gives /automate show the counting score.
+// `growth` (members/growthStore.js) with `inviteTracker` (logs/inviteTracker.js)
+// runs /invites, `dehoist` (moderation/dehoist.js) /dehoist run, and
+// `personalData` (members/personalData.js) /mydata.
 export function createCommands({
   logger,
   guildSettings,
@@ -107,6 +114,10 @@ export function createCommands({
   music,
   musicPlaylists,
   automation,
+  growth,
+  inviteTracker,
+  dehoist,
+  personalData,
   roleConfirmations = createRoleConfirmations({ guildSettings, store: new RoleConfirmStore(), forcedLanguage }),
   dashboardUrl,
   memberLoader = createMemberLoader(),
@@ -158,11 +169,16 @@ export function createCommands({
     createHighlightCommand({ store: highlightStore, highlights, forcedLanguage }),
     createMediaOnlyCommand({ guildSettings, forcedLanguage }),
     createAutomateCommand({ guildSettings, forcedLanguage, automation }),
+    createInvitesCommand({ guildSettings, growth, inviteTracker, forcedLanguage }),
+    createDehoistCommand({ guildSettings, logger, dehoist, forcedLanguage }),
+    createTimestampCommand({ forcedLanguage }),
+    createMyDataCommand({ personalData, forcedLanguage, privacyUrl: dashboardUrl ? `${dashboardUrl}/privacy` : undefined }),
     createBirthdayCommand({ guildSettings, store: birthdays, forcedLanguage }),
     ...createLevelCommands({ levels, leveling, guildSettings, forcedLanguage }),
     ...createMusicCommands({ guildSettings, forcedLanguage, logger, music, playlists: musicPlaylists }),
     // Right-click apps: Report message, User info, Moderation history.
     ...createContextMenus({ guildSettings, reports, moderation, forcedLanguage, logger }),
+    createRemindMeMenu({ reminders, forcedLanguage }),
   ];
   return new Map(commands.map((command) => [command.name, command]));
 }

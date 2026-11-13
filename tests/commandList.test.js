@@ -65,6 +65,10 @@ describe("command list", () => {
       "highlight",
       "mediaonly",
       "automate",
+      "invites",
+      "dehoist",
+      "timestamp",
+      "mydata",
       "birthday",
       "rank",
       "leaderboard",
@@ -78,6 +82,7 @@ describe("command list", () => {
       "Report message",
       "User info",
       "Moderation history",
+      "Remind me",
     ]);
     for (const command of commands.values()) {
       expect(command.data.name).toBe(command.name);
