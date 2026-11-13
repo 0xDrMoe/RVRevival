@@ -11,6 +11,7 @@ export const CHANGELOG = [
       "Spotify, Apple Music and Deezer songs with no free copy on SoundCloud are looked for on Audius too. Audius links play as well.",
       "A playlist with songs that can't play keeps going: they're skipped and listed in one message.",
       "Songs that were found but wouldn't load now play: SoundCloud is asked for each of its stream formats in turn (it's retiring the old one), and when a song's audio still won't load, the same song is played from another library instead of being skipped.",
+      "Fixed music on servers where it played nothing at all: the bot now reads SoundCloud's streams itself instead of leaving that to ffmpeg.",
     ],
   },
   {
