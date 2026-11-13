@@ -1634,6 +1634,7 @@
   "checkupTitle": "Controllo del server",
   "checkupOk": "Rabble ha tutti i permessi richiesti, può dare tutti i ruoli impostati, e tutti i canali delle impostazioni esistono.",
   "checkupIntro": "{count} cose da controllare perché tutto funzioni.",
+  "checkupIntroOne": "1 cosa da controllare perché tutto funzioni.",
   "checkupPermissions": "Ai ruoli di Rabble manca: {permissions}.",
   "checkupPermissionsHelp": "Dalli al ruolo di Rabble in Impostazioni server > Ruoli, o aggiungi di nuovo il bot con il link di invito.",
   "checkupRole": "{role} è allo stesso livello o sopra il ruolo più alto di Rabble, quindi non può essere dato ({use}).",

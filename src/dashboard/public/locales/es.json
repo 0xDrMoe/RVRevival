@@ -1634,6 +1634,7 @@
   "checkupTitle": "Revisión del servidor",
   "checkupOk": "Rabble tiene todos los permisos que pidió, puede dar todos los roles configurados y todos los canales de los ajustes existen.",
   "checkupIntro": "{count} cosas necesitan revisión para que todo funcione.",
+  "checkupIntroOne": "1 cosa necesita revisión para que todo funcione.",
   "checkupPermissions": "A los roles de Rabble les falta: {permissions}.",
   "checkupPermissionsHelp": "Dáselos al rol de Rabble en Ajustes del servidor > Roles, o vuelve a añadir el bot con el enlace de invitación.",
   "checkupRole": "{role} está igual o por encima del rol más alto de Rabble, así que no se puede dar ({use}).",
