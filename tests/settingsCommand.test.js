@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createSettingsCommand } from "../src/commands/settings.js";
 import { translate } from "../src/i18n/i18n.js";
 import { Status } from "../src/logs/actionLog.js";
+import { LOG_OPTIONS } from "../src/logs/logEvents.js";
 import { LogEvent } from "../src/logs/serverLog.js";
 import { GuildSettings, Setting } from "../src/settings/guildSettings.js";
 
@@ -69,6 +70,8 @@ describe("/settings definition", () => {
       "mod-role",
       "log-event",
       "log-ignore",
+      "log-ignore-role",
+      "log-option",
       "clear",
       "show",
       "automod",
@@ -85,11 +88,16 @@ describe("/settings definition", () => {
     expect(logsChannelOption).toMatchObject({ name: "channel", type: ApplicationCommandOptionType.Channel, required: true });
     expect(logsChannelOption.channel_types).toEqual([ChannelType.GuildText, ChannelType.GuildAnnouncement]);
 
+    // More events than Discord allows as choices, so they're suggested as you type.
     const [eventOption, enabledOption] = data.options[6].options;
-    expect(eventOption.choices.map((choice) => choice.value)).toEqual(Object.values(LogEvent));
+    expect(eventOption).toMatchObject({ name: "event", autocomplete: true, required: true });
     expect(enabledOption).toMatchObject({ name: "enabled", type: ApplicationCommandOptionType.Boolean, required: true });
 
-    const [settingOption] = data.options[8].options;
+    const [optionOption] = data.options[9].options;
+    expect(optionOption.choices.map((choice) => choice.value)).toEqual(LOG_OPTIONS);
+    expect(optionOption.choices[0].name).toBe("Compact entries");
+
+    const [settingOption] = data.options[10].options;
     expect(settingOption.choices.map((choice) => choice.value)).toEqual([
       Setting.STAFF_ROLE,
       Setting.COUNTRY_CHANNEL,
@@ -99,6 +107,8 @@ describe("/settings definition", () => {
       Setting.MOD_ROLE,
       Setting.DISABLED_LOG_EVENTS,
       Setting.LOG_IGNORED_CHANNELS,
+      Setting.LOG_IGNORED_ROLES,
+      Setting.LOG_OPTIONS,
       Setting.AUTOMOD,
     ]);
     expect(settingOption.choices[0].name_localizations.de).toBe(translate("de", "settingsStaffRoleName"));
@@ -224,6 +234,8 @@ describe("/settings", () => {
           "Staff role: not set\n/country channel: any channel\nLogs channel: not set\n" +
           "Mod-log channel: not set (cases go to the logs channel)\nServer-log channel: not set\n" +
           "Mod role: not set (the staff role is used)\nServer-log events: all on\nIgnored by the server log: none\n" +
+          "Roles ignored by the server log: none\n" +
+          "Server-log options: ❌ Compact entries · ✅ Show IDs · ❌ Log bots too · ✅ Highlight edits · ✅ Say who did it · ✅ Show the invite used\n" +
           "Automod: off (details: `/settings automod show`)",
       }),
     );
@@ -236,6 +248,8 @@ describe("/settings", () => {
     await guildSettings.set(GUILD_ID, Setting.MOD_ROLE, ROLE_ID);
     await guildSettings.set(GUILD_ID, Setting.DISABLED_LOG_EVENTS, [LogEvent.MEMBER_JOIN, LogEvent.MESSAGE_EDIT]);
     await guildSettings.set(GUILD_ID, Setting.LOG_IGNORED_CHANNELS, [CHANNEL_ID]);
+    await guildSettings.set(GUILD_ID, Setting.LOG_IGNORED_ROLES, [ROLE_ID]);
+    await guildSettings.set(GUILD_ID, Setting.LOG_OPTIONS, { compact: true, whoDidIt: false });
     await guildSettings.set(GUILD_ID, Setting.AUTOMOD, { enabled: true });
     const after = fakeInteraction("show");
     await command.execute(after);
@@ -244,6 +258,8 @@ describe("/settings", () => {
         `Staff role: <@&${ROLE_ID}>\n/country channel: <#${CHANNEL_ID}>\nLogs channel: <#${CHANNEL_ID}>\n` +
         `Mod-log channel: <#${CHANNEL_ID}>\nServer-log channel: <#${CHANNEL_ID}>\nMod role: <@&${ROLE_ID}>\n` +
         `Server-log events switched off: Edited messages, Members joining\nIgnored by the server log: <#${CHANNEL_ID}>\n` +
+        `Roles ignored by the server log: <@&${ROLE_ID}>\n` +
+        "Server-log options: ✅ Compact entries · ✅ Show IDs · ❌ Log bots too · ✅ Highlight edits · ❌ Say who did it · ✅ Show the invite used\n" +
         "Automod: on (details: `/settings automod show`)",
       flags: MessageFlags.Ephemeral,
       allowedMentions: { parse: [] },
@@ -279,8 +295,55 @@ describe("/settings", () => {
 
   it("rejects an unknown server-log event", async () => {
     const outcome = await command.execute(fakeInteraction("log-event", { setting: "nope", enabled: false }));
-    expect(outcome.status).toBe(Status.FAILED);
+    expect(outcome).toMatchObject({ status: Status.REFUSED, key: "settingsLogEventUnknown" });
     expect(guildSettings.getList(GUILD_ID, Setting.DISABLED_LOG_EVENTS)).toEqual([]);
+  });
+
+  it("switches one of the many newer server-log events, named in the member's language", async () => {
+    const off = fakeInteraction("log-event", { setting: LogEvent.VOICE_JOIN, enabled: false });
+    await command.execute(off);
+    expect(guildSettings.getList(GUILD_ID, Setting.DISABLED_LOG_EVENTS)).toEqual([LogEvent.VOICE_JOIN]);
+    expect(off.reply).toHaveBeenCalledWith(privateReply("Joining voice will no longer be logged in the server log."));
+  });
+
+  it("suggests server-log events as you type, by name or group, marking the ones switched off", async () => {
+    await guildSettings.set(GUILD_ID, Setting.DISABLED_LOG_EVENTS, [LogEvent.VOICE_LEAVE]);
+    const respond = vi.fn(async () => {});
+    const typing = (text, locale = "en-US") => ({ guildId: GUILD_ID, locale, options: { getFocused: () => text }, respond });
+    await command.autocomplete(typing("voice"));
+    const voice = respond.mock.calls[0][0];
+    expect(voice.map((choice) => choice.value)).toEqual([LogEvent.VOICE_JOIN, LogEvent.VOICE_LEAVE, LogEvent.VOICE_MOVE, LogEvent.VOICE_MODERATION]);
+    expect(voice[1].name).toBe("Voice: Leaving voice (off)");
+    await command.autocomplete(typing(""));
+    expect(respond.mock.calls[1][0]).toHaveLength(25);
+    await command.autocomplete(typing("erstellte", "de"));
+    expect(respond.mock.calls[2][0]).toEqual([
+      { name: "Server-Änderungen: Erstellte Kanäle", value: LogEvent.CHANNEL_CREATE },
+      { name: "Server-Änderungen: Erstellte Rollen", value: LogEvent.ROLE_CREATE },
+    ]);
+  });
+
+  it("ignores members with a role in the server log, but never @everyone", async () => {
+    const first = await command.execute(fakeInteraction("log-ignore-role"));
+    expect(first).toMatchObject({ status: Status.SUCCESS, key: "settingsLogIgnoreRoleAdded" });
+    expect(guildSettings.getList(GUILD_ID, Setting.LOG_IGNORED_ROLES)).toEqual([ROLE_ID]);
+    const second = await command.execute(fakeInteraction("log-ignore-role"));
+    expect(second).toMatchObject({ key: "settingsLogIgnoreRoleRemoved" });
+    expect(guildSettings.get(GUILD_ID, Setting.LOG_IGNORED_ROLES)).toBeUndefined();
+    const everyone = await command.execute(fakeInteraction("log-ignore-role", { roleId: GUILD_ID }));
+    expect(everyone).toMatchObject({ status: Status.REFUSED, key: "settingsLogIgnoreRoleEveryone" });
+  });
+
+  it("saves only the log options that differ from the defaults", async () => {
+    await command.execute(fakeInteraction("log-option", { setting: "compact", enabled: true }));
+    await command.execute(fakeInteraction("log-option", { setting: "showIds", enabled: false }));
+    expect(guildSettings.get(GUILD_ID, Setting.LOG_OPTIONS)).toEqual({ compact: true, showIds: false });
+    await command.execute(fakeInteraction("log-option", { setting: "compact", enabled: false }));
+    const back = fakeInteraction("log-option", { setting: "showIds", enabled: true });
+    const outcome = await command.execute(back);
+    expect(guildSettings.get(GUILD_ID, Setting.LOG_OPTIONS)).toBeUndefined();
+    expect(outcome).toMatchObject({ status: Status.SUCCESS, key: "settingsLogOptionOn" });
+    expect(back.reply).toHaveBeenCalledWith(privateReply("Show IDs: on."));
   });
 
   it("ignores a channel in the server log, then stops ignoring it", async () => {

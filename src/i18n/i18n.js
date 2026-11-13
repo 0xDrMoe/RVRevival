@@ -11,7 +11,7 @@ export const SUPPORTED_LANGUAGES = ["en", "es", "de", "fr", "pt", "it", "ar"];
 // Discord's own locale codes for each language, used to translate the command
 // description in Discord's UI. Discord has no Arabic locale, so Arabic can only
 // be chosen with the BOT_LANGUAGE setting.
-const DISCORD_LOCALES = {
+export const DISCORD_LOCALES = {
   en: ["en-GB"], // en-US is the default description, so it isn't listed
   es: ["es-ES", "es-419"],
   de: ["de"],

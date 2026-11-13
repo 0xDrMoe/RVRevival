@@ -44,7 +44,34 @@ import { buildCurve, CURVE_PRESETS, MAX_FORMULA_LENGTH, STANDARD_FORMULA, standa
 import { contextsUsing, exampleValues, fillVariables, findVariableProblems, variablesFor } from "./variables.js";
 
 const LANGUAGES = { en: "English", es: "Español", de: "Deutsch", fr: "Français", pt: "Português", it: "Italiano", ar: "العربية" };
-const LOG_EVENTS = ["messageEdit", "messageDelete", "bulkDelete", "memberJoin", "memberLeave", "memberUpdate"];
+// What the server log records, by group (logs/logEvents.js).
+const LOG_EVENT_GROUPS = [
+  { id: "serverMessages", events: ["messageEdit", "messageDelete", "bulkDelete", "messagePin"] },
+  { id: "serverMembers", events: ["memberJoin", "memberLeave", "memberUpdate", "memberProfile", "memberBoost"] },
+  { id: "serverVoice", events: ["voiceJoin", "voiceLeave", "voiceMove", "voiceModeration"] },
+  {
+    id: "serverChanges",
+    events: [
+      "channelCreate",
+      "channelUpdate",
+      "channelDelete",
+      "roleCreate",
+      "roleUpdate",
+      "roleDelete",
+      "serverUpdate",
+      "emojiUpdate",
+      "inviteUpdate",
+      "webhookUpdate",
+      "threadUpdate",
+      "eventUpdate",
+      "integrationUpdate",
+      "automodRuleUpdate",
+    ],
+  },
+];
+const LOG_EVENTS = LOG_EVENT_GROUPS.flatMap((group) => group.events);
+// How server-log entries look and what they include, with their defaults (logs/logEvents.js).
+const LOG_OPTION_DEFAULTS = { compact: false, showIds: true, logBots: false, editDiff: true, whoDidIt: true, invites: true };
 // What the ticket log records (tickets/ticketLog.js).
 const TICKET_EVENTS = ["opened", "closed", "reopened", "memberAdded", "memberRemoved", "renamed", "deleted", "claimed", "unclaimed", "rated"];
 const CASE_ACTIONS = ["ban", "softban", "unban", "kick", "timeout", "untimeout", "warn", "note"];
@@ -2585,10 +2612,10 @@ const LOG_ROUTE_SECTIONS = [
       { route: "protection", children: ["raidAlert", "raidLockdown", "antiNuke"] },
     ],
   },
-  { section: "serverLog", items: LOG_EVENTS.map((route) => ({ route, label: `logEvent_${route}` })) },
+  { section: "serverLog", items: LOG_EVENT_GROUPS.map((group) => ({ route: group.id, children: group.events })) },
   { section: "ticketLog", items: TICKET_EVENTS.map((event) => ({ route: ticketRouteOf(event), label: `ticketEvent_${event}` })) },
 ];
-const routeLabel = (item) => t(item.label ?? `logRoute_${item.route}`);
+const routeLabel = (item) => t(item.label ?? (LOG_EVENTS.includes(item.route) ? `logEvent_${item.route}` : `logRoute_${item.route}`));
 // A field whose label is already translated text.
 const labelled = (text, control) => h("label", { class: "field" }, h("span", { class: "field-label" }, text), control);
 
@@ -2708,7 +2735,7 @@ function logRoutesCard(data, settings) {
         for (const route of item.children ?? []) {
           const child = pickers.get(route);
           child.options[0].textContent = group.value
-            ? t("logRouteSameAs", { group: routeLabel(item), channel: channelName(group.value) })
+            ? t("logRouteSameAs", { channel: channelName(group.value) })
             : label(fallback);
           own += child.value ? 1 : 0;
         }
@@ -2738,27 +2765,49 @@ async function showLogging(guildId) {
   const routes = logRoutesCard(data, data.settings);
 
   const disabled = new Set(data.settings.disabledLogEvents ?? []);
-  const eventSwitches = LOG_EVENTS.map((event) =>
+  const switchCard = ({ name, value, checked, title, help }) =>
     h(
       "label",
       { class: "switch-card" },
+      h("span", { class: "switch-text" }, h("strong", {}, title), h("span", { class: "help" }, help)),
+      h("span", { class: "switch" }, h("input", { type: "checkbox", name, value, checked, role: "switch" })),
+    );
+  const eventSwitches = [];
+  // One block per group, with its own "all on/off", so a server can switch off
+  // a whole kind of event (say, voice) in one go.
+  const eventGroups = LOG_EVENT_GROUPS.map((group) => {
+    const switches = group.events.map((event) =>
+      switchCard({ name: "logEvent", value: event, checked: !disabled.has(event), title: t(`logEvent_${event}`), help: t(`logEventHelp_${event}`) }),
+    );
+    eventSwitches.push(...switches);
+    const setGroup = (on) => (event) => {
+      switches.forEach((element) => (element.querySelector("input").checked = on));
+      event.currentTarget.dispatchEvent(new Event("change", { bubbles: true }));
+    };
+    return h(
+      "section",
+      { class: "log-event-group" },
       h(
-        "span",
-        { class: "switch-text" },
-        h("strong", {}, t(`logEvent_${event}`)),
-        h("span", { class: "help" }, t(`logEventHelp_${event}`)),
+        "div",
+        { class: "toolbar" },
+        h("h3", { class: "grow" }, t(`logRoute_${group.id}`)),
+        h("button", { class: "ghost small", type: "button", onclick: setGroup(true) }, t("allOn")),
+        h("button", { class: "ghost small", type: "button", onclick: setGroup(false) }, t("allOff")),
       ),
-      h(
-        "span",
-        { class: "switch" },
-        h("input", { type: "checkbox", name: "logEvent", value: event, checked: !disabled.has(event), role: "switch" }),
-      ),
-    ),
-  );
+      h("p", { class: "help" }, t(`logGroupHelp_${group.id}`)),
+      h("div", { class: "switch-grid" }, switches),
+    );
+  });
   const setAll = (on) => () => {
     eventSwitches.forEach((element) => (element.querySelector("input").checked = on));
     eventSwitches[0].dispatchEvent(new Event("change", { bubbles: true }));
   };
+
+  const savedOptions = { ...LOG_OPTION_DEFAULTS, ...(data.settings.logOptions ?? {}) };
+  const optionSwitches = Object.keys(LOG_OPTION_DEFAULTS).map((option) =>
+    switchCard({ name: "logOption", value: option, checked: savedOptions[option], title: t(`logOption_${option}`), help: t(`logOptionHelp_${option}`) }),
+  );
+  const ignorableRoles = data.roles.map((role) => roleItem(role, { dot: true }));
 
   const ticketsOff = new Set(data.settings.disabledTicketLogEvents ?? []);
   const ticketSwitches = TICKET_EVENTS.map((event) =>
@@ -2800,8 +2849,9 @@ async function showLogging(guildId) {
           h("button", { class: "ghost small", type: "button", onclick: setAll(true) }, t("allOn")),
           h("button", { class: "ghost small", type: "button", onclick: setAll(false) }, t("allOff")),
         ),
-        h("div", { class: "switch-grid" }, eventSwitches),
+        eventGroups,
       ),
+      card(t("logOptionsTitle"), "sliders", "blue", h("p", { class: "help" }, t("logOptionsHelp")), h("div", { class: "switch-grid" }, optionSwitches)),
       card(
         t("sectionTicketLog"),
         "ticket",
@@ -2817,6 +2867,13 @@ async function showLogging(guildId) {
         h("p", { class: "help" }, t("ignoredChannelsHelp")),
         checkList({ name: "ignore", items: ignorable, checked: data.settings.logIgnoredChannels ?? [], filterKey: "filterChannels" }),
       ),
+      card(
+        t("ignoredRoles"),
+        "eyeOff",
+        "gray",
+        h("p", { class: "help" }, t("ignoredRolesHelp")),
+        checkList({ name: "ignoreRole", items: ignorableRoles, checked: data.settings.logIgnoredRoles ?? [], filterKey: "filterRoles" }),
+      ),
     ],
     fields: {
       logsChannelId: selectValue("logsChannelId"),
@@ -2827,6 +2884,16 @@ async function showLogging(guildId) {
         return off.length > 0 ? off : null;
       },
       logIgnoredChannels: checkedList("ignore"),
+      logIgnoredRoles: checkedList("ignoreRole"),
+      // Only what differs from the defaults is saved, the same as the server does.
+      logOptions: (form) => {
+        const changed = Object.fromEntries(
+          [...form.querySelectorAll('input[name="logOption"]')]
+            .filter((box) => box.checked !== LOG_OPTION_DEFAULTS[box.value])
+            .map((box) => [box.value, box.checked]),
+        );
+        return Object.keys(changed).length > 0 ? changed : null;
+      },
       ticketLogChannelId: selectValue("ticketLogChannelId"),
       disabledTicketLogEvents: (form) => {
         const off = [...form.querySelectorAll('input[name="ticketLogEvent"]')].filter((box) => !box.checked).map((box) => box.value);

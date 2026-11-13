@@ -724,26 +724,39 @@ export const COMMAND_PARTS = [
           },
           {
             usage: "/settings server-log-channel channel",
-            what: "Where edited and deleted messages, bulk deletes, joins, leaves and nickname, role and timeout changes are logged.",
+            what: "Where the server log goes: messages (edits, deletions, pins), members (joins, leaves, role, name and avatar changes, boosts), voice activity and server changes (channels, roles, settings, invites…), each with who did it.",
             options: [["channel", "A staff-only channel. Nothing is logged until it's set."]],
           },
           {
             usage: "/settings log-event event enabled",
             what: "Switches one kind of server-log event off, or back on.",
             options: [
-              ["event", "Edited messages, deleted messages, bulk deletions, members joining, members leaving, or nickname, role and timeout changes."],
+              ["event", "Start typing to pick one of the 27 events, like *Deleted messages*, *Joining voice* or *Roles changed*. Suggestions show the group and say which are off."],
               ["enabled", "`True` to log it, `False` to stop."],
             ],
           },
           {
             usage: "/settings log-ignore channel",
-            what: "Stops logging edits and deletions in a channel or category, or starts again if it's already ignored.",
+            what: "Stops logging a channel or category (its messages, voice activity and changes), or starts again if it's already ignored.",
             options: [["channel", "A channel or a whole category, like a bot-commands or spam channel."]],
+          },
+          {
+            usage: "/settings log-ignore-role role",
+            what: "Stops logging members with a role, and the changes they make, or starts again if it's already ignored. Joins and leaves are always logged.",
+            options: [["role", "A role, like other bots' roles. Can't be `@everyone`."]],
+          },
+          {
+            usage: "/settings log-option option enabled",
+            what: "Switches one server-log option on or off.",
+            options: [
+              ["option", "*Compact entries* (no avatar, author line or extras), *Show IDs*, *Log bots too*, *Highlight edits* (changed words struck through or bold), *Say who did it* (from the audit log) or *Show the invite used* (needs Manage Server)."],
+              ["enabled", "`True` for on, `False` for off."],
+            ],
           },
           {
             usage: "/settings clear setting",
             what: "Resets one setting, as if it was never set.",
-            options: [["setting", "The staff role, country channel, logs channel, mod-log channel, server-log channel, mod role, switched-off log events, ignored log channels, or automod (every automod setting at once)."]],
+            options: [["setting", "The staff role, country channel, logs channel, mod-log channel, server-log channel, mod role, switched-off log events, ignored log channels, ignored log roles, log options, or automod (every automod setting at once)."]],
           },
           {
             usage: "/settings show",
@@ -809,6 +822,8 @@ export const COMMAND_PARTS = [
         example: [
           "/settings mod-role role:@Mods",
           "/settings server-log-channel channel:#server-log",
+          "/settings log-event event:Voice: Joining voice enabled:False",
+          "/settings log-option option:Compact entries enabled:True",
           "/settings automod rule rule:Invite links enabled:True action:Delete and warn",
           "/settings automod escalate warnings:3 action:Time out",
         ],

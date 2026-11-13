@@ -52,6 +52,8 @@ import { createActionLog } from "./logs/actionLog.js";
 import { createLogChannelPoster } from "./logs/logChannel.js";
 import { RecentIds } from "./logs/recentIds.js";
 import { createServerLog } from "./logs/serverLog.js";
+import { createAuditTrail } from "./logs/auditTrail.js";
+import { createInviteTracker } from "./logs/inviteTracker.js";
 import { SentMessageStore } from "./messages/sentMessageStore.js";
 import { MemberEvent, MemberEventStore } from "./members/memberEventStore.js";
 import { CaseStore } from "./moderation/caseStore.js";
@@ -99,6 +101,8 @@ const BASE_INTENTS = [
   GatewayIntentBits.GuildVoiceStates,
   // So the log poster notices when someone deletes or edits its webhooks.
   GatewayIntentBits.GuildWebhooks,
+  // So the server log can tell which invite a new member used.
+  GatewayIntentBits.GuildInvites,
 ];
 const PRIVILEGED_INTENT_SETS = [
   [GatewayIntentBits.GuildMembers, GatewayIntentBits.MessageContent],
@@ -211,7 +215,12 @@ async function start() {
   const modLog = createModLog({ poster, store });
   // Remembers what banned accounts looked like, to flag look-alike joins.
   const altHints = new AltHints(db);
-  const serverLog = createServerLog({ poster, botDeletions, guildSettings, altHints });
+  // Recent audit log entries, so the server log can say who did something.
+  const auditTrail = createAuditTrail();
+  // Which invite each new member used, for the server log's join entries.
+  let serverLog;
+  const inviteTracker = createInviteTracker({ logger, wants: (guild) => serverLog.tracksInvites(guild) });
+  serverLog = createServerLog({ poster, botDeletions, guildSettings, altHints, auditTrail, inviteTracker });
   // Saves and posts everything that happens to tickets (/tickets log).
   const ticketLog = createTicketLog({ tickets, poster, guildSettings, logger });
   // Anti-nuke (/antinuke) counts bans and kicks done through the bot as well.
@@ -426,6 +435,7 @@ async function start() {
       }, 5 * 60 * 1000);
       ticketSweep.unref();
       countSafely("start time", () => botStats.started());
+      inviteTracker.primeAll([...readyClient.guilds.cache.values()]).catch((error) => logger.error("Couldn't load invites", { error }));
     });
 
     client.on(Events.InteractionCreate, (interaction) => {
@@ -525,6 +535,23 @@ async function start() {
     client.on(Events.GuildBanAdd, safely("remembering a banned look", (ban) => ban.user && altHints.banned(ban.guild.id, ban.user)));
     client.on(Events.GuildBanRemove, safely("forgetting a banned look", (ban) => ban.user && altHints.unbanned(ban.guild.id, ban.user.id)));
     client.on(Events.GuildAuditLogEntryCreate, safely("an audit log entry", (entry, guild) => antiNuke.auditLogEntry(entry, guild)));
+    client.on(Events.GuildAuditLogEntryCreate, (entry, guild) => auditTrail.record(entry, guild));
+    client.on(Events.GuildAuditLogEntryCreate, safely("a server change", (entry, guild) => serverLog.auditLogEntry(entry, guild)));
+    client.on(Events.InviteCreate, (invite) => inviteTracker.inviteCreated(invite));
+    client.on(Events.InviteDelete, (invite) => inviteTracker.inviteDeleted(invite));
+    client.on(Events.GuildCreate, safely("loading invites", (guild) => inviteTracker.prime(guild)));
+    client.on(Events.GuildDelete, (guild) => inviteTracker.guildDeleted(guild.id));
+    client.on(Events.VoiceStateUpdate, safely("the voice log", (before, after) => serverLog.voiceStateUpdated(before, after)));
+    client.on(
+      Events.UserUpdate,
+      safely("a profile change", (before, after) =>
+        serverLog.userUpdated(
+          before,
+          after,
+          [...client.guilds.cache.values()].filter((guild) => guild.members.cache.has(after.id)),
+        ),
+      ),
+    );
     client.on(Events.GuildBanRemove, safely("an unban", (ban) => externalActions.onUnban(ban)));
 
     client.on(Events.ThreadDelete, safely("a deleted thread", (thread) => commands.get("tickets").threadDeleted(thread)));

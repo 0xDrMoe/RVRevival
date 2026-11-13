@@ -27,7 +27,7 @@
     <main class="main">
       <article class="legal">
         <h1>Privacy Policy</h1>
-        <p class="legal-updated">Last updated: 12 November 2026</p>
+        <p class="legal-updated">Last updated: 13 November 2026</p>
 
         <p>
           This policy explains what the Rabble Discord bot (“the bot”) and its web dashboard at
@@ -144,8 +144,13 @@
           <li>Ticket transcripts, as above.</li>
           <li>Text you give the bot yourself: reminders, AFK messages, appeal answers, case reasons.</li>
           <li>
-            If a server turns on its server log, the bot posts edited and deleted messages to that server’s own log
-            channel in Discord. Those posts are kept by Discord, in that server, under the control of its staff.
+            If a server turns on its server log, the bot posts edited and deleted messages, joins and leaves, name and
+            avatar changes, boosts, voice channel activity (who joined, left or moved, and for how long) and changes
+            staff make to the server to that server’s own log channel in Discord, with who did what when Discord’s audit
+            log says so and, for joins, which invite was used. Those posts are kept by Discord, in that server, under the
+            control of its staff. To work these out the bot keeps, in memory only and never on disk, when each member
+            joined their current voice channel, how many times each of the server’s invites has been used, and the last
+            few seconds of the audit log.
           </li>
         </ul>
 

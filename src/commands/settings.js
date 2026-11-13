@@ -8,6 +8,8 @@
 //   /settings mod-role role:@Mods                members with this role can use the moderation commands
 //   /settings log-event event:<…> enabled:false  switch one kind of server-log event off (or back on)
 //   /settings log-ignore channel:#spam           stop (or start again) logging messages from #spam
+//   /settings log-ignore-role role:@Bots         stop (or start again) logging members with a role
+//   /settings log-option option:<…> enabled:…    choose how server-log entries look and what they include
 //   /settings automod …                          set up automod (see automodSettings.js)
 //   /settings clear setting:<any of the above>
 //   /settings show                               list the current settings
@@ -18,7 +20,8 @@ import { ChannelType, InteractionContextType, MessageFlags, PermissionFlagsBits,
 import { normalizeAutomod } from "../automod/config.js";
 import { discordLocalizations, pickLanguage, translate } from "../i18n/i18n.js";
 import { result, Status } from "../logs/actionLog.js";
-import { LogEvent } from "../logs/serverLog.js";
+import { checkLogOptions, LOG_EVENT_GROUPS, LOG_EVENTS, LOG_OPTIONS, logOptionsOf } from "../logs/logEvents.js";
+import { logEventName, logGroupName, logOptionName, nameLocalizations } from "../logs/logEventNames.js";
 import { Setting } from "../settings/guildSettings.js";
 import { addAutomodGroup, AUTOMOD_GROUP, runAutomodSubcommand } from "./automodSettings.js";
 
@@ -29,15 +32,9 @@ const SETTING_OPTION = "setting";
 const EVENT_OPTION = "event";
 const ENABLED_OPTION = "enabled";
 
-// The server-log events admins can switch off, and how each is named.
-const LOG_EVENT_NAMES = [
-  { value: LogEvent.MESSAGE_EDIT, nameKey: "logEventMessageEdit" },
-  { value: LogEvent.MESSAGE_DELETE, nameKey: "logEventMessageDelete" },
-  { value: LogEvent.BULK_DELETE, nameKey: "logEventBulkDelete" },
-  { value: LogEvent.MEMBER_JOIN, nameKey: "logEventMemberJoin" },
-  { value: LogEvent.MEMBER_LEAVE, nameKey: "logEventMemberLeave" },
-  { value: LogEvent.MEMBER_UPDATE, nameKey: "logEventMemberUpdate" },
-];
+const OPTION_OPTION = "option";
+// Discord shows at most this many autocomplete suggestions.
+const MAX_SUGGESTIONS = 25;
 
 // The choices for /settings clear, and the message for each.
 const CLEARABLE = [
@@ -53,6 +50,8 @@ const CLEARABLE = [
   { value: Setting.MOD_ROLE, nameKey: "settingsModRoleName", clearedKey: "settingsModRoleCleared" },
   { value: Setting.DISABLED_LOG_EVENTS, nameKey: "settingsLogEventsName", clearedKey: "settingsLogEventsCleared" },
   { value: Setting.LOG_IGNORED_CHANNELS, nameKey: "settingsLogIgnoreName", clearedKey: "settingsLogIgnoreCleared" },
+  { value: Setting.LOG_IGNORED_ROLES, nameKey: "settingsLogIgnoreRoleName", clearedKey: "settingsLogIgnoreRoleCleared" },
+  { value: Setting.LOG_OPTIONS, nameKey: "settingsLogOptionsName", clearedKey: "settingsLogOptionsCleared" },
   { value: Setting.AUTOMOD, nameKey: "settingsAutomodName", clearedKey: "settingsAutomodCleared" },
 ];
 
@@ -126,9 +125,8 @@ export function buildSettingsCommandData() {
     .addSubcommand((sub) =>
       withDescription(sub.setName("log-event"), "settingsLogEventDescription")
         .addStringOption((option) =>
-          withDescription(option.setName(EVENT_OPTION), "settingsLogEventOptionDescription")
-            .setRequired(true)
-            .addChoices(...choicesOf(LOG_EVENT_NAMES)),
+          // 27 events: more than Discord allows as fixed choices, so it suggests them as you type.
+          withDescription(option.setName(EVENT_OPTION), "settingsLogEventOptionDescription").setRequired(true).setAutocomplete(true),
         )
         .addBooleanOption((option) =>
           withDescription(option.setName(ENABLED_OPTION), "settingsLogEventEnabledDescription").setRequired(true),
@@ -146,6 +144,28 @@ export function buildSettingsCommandData() {
             ChannelType.GuildCategory,
           ),
       ),
+    )
+    .addSubcommand((sub) =>
+      withDescription(sub.setName("log-ignore-role"), "settingsLogIgnoreRoleDescription").addRoleOption((option) =>
+        withDescription(option.setName(ROLE_OPTION), "settingsLogIgnoreRoleOptionDescription").setRequired(true),
+      ),
+    )
+    .addSubcommand((sub) =>
+      withDescription(sub.setName("log-option"), "settingsLogOptionDescription")
+        .addStringOption((option) =>
+          withDescription(option.setName(OPTION_OPTION), "settingsLogOptionOptionDescription")
+            .setRequired(true)
+            .addChoices(
+              ...LOG_OPTIONS.map((value) => ({
+                name: logOptionName(value).slice(0, 100),
+                name_localizations: nameLocalizations((language) => logOptionName(value, language)),
+                value,
+              })),
+            ),
+        )
+        .addBooleanOption((option) =>
+          withDescription(option.setName(ENABLED_OPTION), "settingsLogOptionEnabledDescription").setRequired(true),
+        ),
     )
     .addSubcommand((sub) =>
       withDescription(sub.setName("clear"), "settingsClearDescription").addStringOption((option) =>
@@ -260,17 +280,17 @@ export function createSettingsCommand({ guildSettings, forcedLanguage }) {
         return reply(Status.SUCCESS, "settingsModRoleSet", { role: `<@&${role.id}>` });
       }
       case "log-event": {
-        const choice = LOG_EVENT_NAMES.find(({ value }) => value === interaction.options.getString(EVENT_OPTION, true));
-        if (!choice) {
-          return reply(Status.FAILED, "unexpected");
+        const event = interaction.options.getString(EVENT_OPTION, true);
+        if (!LOG_EVENTS.includes(event)) {
+          return reply(Status.REFUSED, "settingsLogEventUnknown");
         }
         const enabled = interaction.options.getBoolean(ENABLED_OPTION, true);
         const disabled = guildSettings.getList(guildId, Setting.DISABLED_LOG_EVENTS);
-        if (disabled.includes(choice.value) === enabled) {
-          await guildSettings.toggleInList(guildId, Setting.DISABLED_LOG_EVENTS, choice.value);
+        if (disabled.includes(event) === enabled) {
+          await guildSettings.toggleInList(guildId, Setting.DISABLED_LOG_EVENTS, event);
         }
         return reply(Status.SUCCESS, enabled ? "settingsLogEventOn" : "settingsLogEventOff", {
-          event: text(choice.nameKey),
+          event: logEventName(event, language),
         });
       }
       case "log-ignore": {
@@ -278,6 +298,34 @@ export function createSettingsCommand({ guildSettings, forcedLanguage }) {
         const added = await guildSettings.toggleInList(guildId, Setting.LOG_IGNORED_CHANNELS, channel.id);
         return reply(Status.SUCCESS, added ? "settingsLogIgnoreAdded" : "settingsLogIgnoreRemoved", {
           channel: `<#${channel.id}>`,
+        });
+      }
+      case "log-ignore-role": {
+        const role = interaction.options.getRole(ROLE_OPTION, true);
+        // Everyone has @everyone, so ignoring it would switch the server log off.
+        if (role.id === guildId) {
+          return reply(Status.REFUSED, "settingsLogIgnoreRoleEveryone");
+        }
+        const added = await guildSettings.toggleInList(guildId, Setting.LOG_IGNORED_ROLES, role.id);
+        return reply(Status.SUCCESS, added ? "settingsLogIgnoreRoleAdded" : "settingsLogIgnoreRoleRemoved", {
+          role: `<@&${role.id}>`,
+        });
+      }
+      case "log-option": {
+        const option = interaction.options.getString(OPTION_OPTION, true);
+        if (!LOG_OPTIONS.includes(option)) {
+          return reply(Status.FAILED, "unexpected");
+        }
+        const enabled = interaction.options.getBoolean(ENABLED_OPTION, true);
+        const saved = guildSettings.get(guildId, Setting.LOG_OPTIONS) ?? {};
+        const next = checkLogOptions({ ...saved, [option]: enabled });
+        if (next) {
+          await guildSettings.set(guildId, Setting.LOG_OPTIONS, next);
+        } else {
+          await guildSettings.clear(guildId, Setting.LOG_OPTIONS);
+        }
+        return reply(Status.SUCCESS, enabled ? "settingsLogOptionOn" : "settingsLogOptionOff", {
+          option: logOptionName(option, language),
         });
       }
       case "clear": {
@@ -295,10 +343,10 @@ export function createSettingsCommand({ guildSettings, forcedLanguage }) {
         const modLogChannelId = guildSettings.get(guildId, Setting.MOD_LOG_CHANNEL);
         const serverLogChannelId = guildSettings.get(guildId, Setting.SERVER_LOG_CHANNEL);
         const modRoleId = guildSettings.get(guildId, Setting.MOD_ROLE);
-        const offEvents = LOG_EVENT_NAMES.filter(({ value }) =>
-          guildSettings.getList(guildId, Setting.DISABLED_LOG_EVENTS).includes(value),
-        );
+        const offEvents = LOG_EVENTS.filter((event) => guildSettings.getList(guildId, Setting.DISABLED_LOG_EVENTS).includes(event));
         const ignored = guildSettings.getList(guildId, Setting.LOG_IGNORED_CHANNELS);
+        const ignoredRoles = guildSettings.getList(guildId, Setting.LOG_IGNORED_ROLES);
+        const options = logOptionsOf(guildSettings, guildId);
         const lines = [
           staffRoleId ? text("settingsShowStaffRole", { role: `<@&${staffRoleId}>` }) : text("settingsShowNoStaffRole"),
           channelId ? text("settingsShowCountryChannel", { channel: `<#${channelId}>` }) : text("settingsShowNoCountryChannel"),
@@ -311,11 +359,17 @@ export function createSettingsCommand({ guildSettings, forcedLanguage }) {
             : text("settingsShowNoServerLogChannel"),
           modRoleId ? text("settingsShowModRole", { role: `<@&${modRoleId}>` }) : text("settingsShowNoModRole"),
           offEvents.length > 0
-            ? text("settingsShowLogEvents", { events: offEvents.map(({ nameKey }) => text(nameKey)).join(", ") })
+            ? text("settingsShowLogEvents", { events: offEvents.map((event) => logEventName(event, language)).join(", ") })
             : text("settingsShowAllLogEvents"),
           ignored.length > 0
             ? text("settingsShowLogIgnore", { channels: ignored.map((id) => `<#${id}>`).join(", ") })
             : text("settingsShowNoLogIgnore"),
+          ignoredRoles.length > 0
+            ? text("settingsShowLogIgnoreRoles", { roles: ignoredRoles.map((id) => `<@&${id}>`).join(", ") })
+            : text("settingsShowNoLogIgnoreRoles"),
+          text("settingsShowLogOptions", {
+            options: LOG_OPTIONS.map((option) => `${options[option] ? "✅" : "❌"} ${logOptionName(option, language)}`).join(" · "),
+          }),
           text("settingsShowAutomod", {
             status: text(normalizeAutomod(guildSettings.get(guildId, Setting.AUTOMOD)).enabled ? "automodStatusOn" : "automodStatusOff"),
           }),
@@ -328,5 +382,20 @@ export function createSettingsCommand({ guildSettings, forcedLanguage }) {
     return reply(Status.FAILED, "unexpected");
   }
 
-  return { name: COMMAND_NAME, data: buildSettingsCommandData(), execute };
+  // Suggests server-log events for /settings log-event, by name or group, in
+  // the member's language.
+  async function autocomplete(interaction) {
+    const language = pickLanguage(interaction.locale, forcedLanguage);
+    const typed = String(interaction.options.getFocused() ?? "").toLowerCase().trim();
+    const disabled = interaction.guildId ? guildSettings.getList(interaction.guildId, Setting.DISABLED_LOG_EVENTS) : [];
+    const suggestions = LOG_EVENT_GROUPS.flatMap((group) =>
+      group.events.map((event) => {
+        const name = `${logGroupName(group.id, language)}: ${logEventName(event, language)}${disabled.includes(event) ? ` (${translate(language, "settingsLogEventSuggestOff")})` : ""}`;
+        return { name: name.slice(0, 100), value: event };
+      }),
+    ).filter((choice) => !typed || choice.name.toLowerCase().includes(typed) || choice.value.toLowerCase().includes(typed));
+    await interaction.respond(suggestions.slice(0, MAX_SUGGESTIONS));
+  }
+
+  return { name: COMMAND_NAME, data: buildSettingsCommandData(), execute, autocomplete };
 }
