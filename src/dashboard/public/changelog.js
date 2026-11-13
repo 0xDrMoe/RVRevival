@@ -4,6 +4,17 @@
 export const CHANGELOG = [
   {
     date: "2026-11-13",
+    title: "Cleaner logs and ticket transcripts that look like Discord",
+    items: [
+      "Dashboard changes in the logs now show only what changed, a few lines per setting (like \"Bans: none → #bans\"), instead of the whole setting twice. Each setting gets its own section and the title links to the Activity page.",
+      "Moderation entries (locks, slowmode, role and nickname changes, purges, automod) have a clear title and the moderator's avatar, and long role and permission lists are shortened to \"and 12 more\".",
+      "No more double entries: a ban, kick, timeout, /role, /nick, purge or ticket action is logged once, in its case or ticket log entry, not again as a command use. Nickname, role and timeout changes the bot made for a moderation action, and leaves after a bot ban or kick, no longer repeat in the server log.",
+      "Ticket transcripts are now a web page that looks like the conversation in Discord: avatars, names in role colours, formatting, mentions, embeds and files. Open it from the Tickets page or the link in the ticket log; only people who can see the server's tickets can open it. The ticket log attaches it as an .html file.",
+      "Purge and bulk-delete transcripts are .html pages in the same look.",
+    ],
+  },
+  {
+    date: "2026-11-13",
     title: "Snooze, milestones, invite tracking and more",
     items: [
       "Reminders now come with Snooze 10 min, Snooze 1 hour and Tomorrow buttons, and right-click any message > Apps > Remind me to get a DM about it later.",

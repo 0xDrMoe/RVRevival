@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createPurgeCommand, pickMessagesToPurge } from "../src/commands/purge.js";
 import { Status } from "../src/logs/actionLog.js";
 import { RecentIds } from "../src/logs/recentIds.js";
-import { buildTranscript } from "../src/logs/transcript.js";
+import { deletedMessagesPage } from "../src/transcripts/deletedPage.js";
 import { GuildSettings } from "../src/settings/guildSettings.js";
 import { GUILD_ID, MOD_ID, TARGET_ID, fakeMember } from "./helpers/moderationFakes.js";
 
@@ -40,11 +40,12 @@ describe("pickMessagesToPurge", () => {
   });
 });
 
-describe("buildTranscript", () => {
-  it("lists messages oldest first", () => {
-    const text = buildTranscript([message("2", { ageMs: 1000 }), message("1", { ageMs: 5000 })]);
-    expect(text.split("\n").map((line) => line.split(": ").at(-1))).toEqual(["message 1", "message 2"]);
-    expect(text).toContain(`user-20 (${TARGET_ID})`);
+describe("deletedMessagesPage", () => {
+  it("shows the messages oldest first as a page", () => {
+    const page = deletedMessagesPage({ channel: { id: "1", name: "general" }, messages: [message("2", { ageMs: 1000 }), message("1", { ageMs: 5000 })], title: "Messages purged" });
+    expect(page).toMatch(/^<!doctype html>/);
+    expect(page).toContain("#general");
+    expect(page.indexOf("message 1")).toBeLessThan(page.indexOf("message 2"));
   });
 });
 
@@ -92,6 +93,7 @@ describe("/purge", () => {
     const built = await modLog.post.mock.results[0].value;
     expect(built.embed.toJSON().description).toContain("Purged 2 messages");
     expect(built.files).toHaveLength(1);
+    expect(built.files[0].name).toMatch(/\.html$/);
   });
 
   it("refuses without Manage Messages", async () => {

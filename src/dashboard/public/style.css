@@ -3751,6 +3751,16 @@ input.has-variable-problem {
   overflow-wrap: anywhere;
 }
 
+.transcript-frame {
+  display: block;
+  width: 100%;
+  height: min(75vh, 900px);
+  min-height: 420px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+
 /* --- Anti-nuke --------------------------------------------------------------------- */
 
 .limit-grid {

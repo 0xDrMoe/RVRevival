@@ -9,7 +9,7 @@
 
 import { AuditLogEvent, ChannelType, PermissionsBitField } from "discord.js";
 import { quote } from "./actionLog.js";
-import { buildLogEntry, byLine, formatDuration, LogColor } from "./logEntry.js";
+import { buildLogEntry, byLine, capList, formatDuration, LogColor } from "./logEntry.js";
 import { DEFAULT_LOG_OPTIONS, LogEvent } from "./logEvents.js";
 
 const A = AuditLogEvent;
@@ -197,7 +197,7 @@ function seconds(value, { zero = "Off" } = {}) {
 }
 
 function listOf(ids, mention) {
-  return Array.isArray(ids) && ids.length > 0 ? ids.map(mention).join(" ") : none;
+  return Array.isArray(ids) && ids.length > 0 ? capList(ids.map(mention), { separator: " " }) : none;
 }
 
 function formatValue(key, value, entry) {
@@ -280,10 +280,10 @@ function describeChange(change, entry, created) {
     const label = labelOf(key);
     const lines = [];
     if (added.length > 0) {
-      lines.push(`**${label}${created ? "" : " added"}:** ${added.join(", ")}`);
+      lines.push(`**${label}${created ? "" : " added"}:** ${capList(added)}`);
     }
     if (removed.length > 0) {
-      lines.push(`**${label} removed:** ${removed.join(", ")}`);
+      lines.push(`**${label} removed:** ${capList(removed)}`);
     }
     return lines;
   }

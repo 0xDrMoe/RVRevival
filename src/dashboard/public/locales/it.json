@@ -1882,5 +1882,9 @@
   "botAutorolesHelp": "Ruoli che ogni nuovo bot riceve al posto di quelli dei membri (fino a {max}), come un ruolo Bot. L'onboarding non copre i bot.",
   "sectionDehoist": "Nomi senza simboli (dehoist)",
   "dehoistOn": "Correggi i nomi che iniziano con simboli",
-  "dehoistHelp": "Nomi come !!!aaa stanno sopra a tutti. Nuovi membri e cambi di nome perdono i simboli iniziali. /dehoist run corregge chi c'è già. Serve Gestire nickname."
+  "dehoistHelp": "Nomi come !!!aaa stanno sopra a tutti. Nuovi membri e cambi di nome perdono i simboli iniziali. /dehoist run corregge chi c'è già. Serve Gestire nickname.",
+
+  "ticketsOpenPage": "Apri come pagina",
+  "ticketsDownloadPage": "Scarica .html",
+  "ticketsTranscriptHelp": "La conversazione come appariva su Discord. Immagini e file sono link di Discord e possono smettere di funzionare dopo un po'."
 }

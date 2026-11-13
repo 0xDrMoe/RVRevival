@@ -1882,5 +1882,9 @@
   "botAutorolesHelp": "Rôles que chaque nouveau bot reçoit au lieu de ceux des membres (jusqu'à {max}), comme un rôle Bots. L'accueil ne couvre pas les bots.",
   "sectionDehoist": "Noms sans symboles (dehoist)",
   "dehoistOn": "Corriger les noms commençant par des symboles",
-  "dehoistHelp": "Les noms comme !!!aaa passent devant tout le monde. Les nouveaux et les renommages perdent les symboles du début. /dehoist run corrige ceux déjà là. Il faut Gérer les pseudos."
+  "dehoistHelp": "Les noms comme !!!aaa passent devant tout le monde. Les nouveaux et les renommages perdent les symboles du début. /dehoist run corrige ceux déjà là. Il faut Gérer les pseudos.",
+
+  "ticketsOpenPage": "Ouvrir en page",
+  "ticketsDownloadPage": "Télécharger le .html",
+  "ticketsTranscriptHelp": "La conversation telle qu'elle apparaissait sur Discord. Les images et fichiers sont des liens Discord qui peuvent cesser de fonctionner avec le temps."
 }

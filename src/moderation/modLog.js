@@ -5,6 +5,8 @@
 import { EmbedBuilder, escapeMarkdown, time, TimestampStyles } from "discord.js";
 import { translate } from "../i18n/i18n.js";
 import { Setting } from "../settings/guildSettings.js";
+import { authorOf } from "../logs/actionLog.js";
+import { splitSummary } from "../logs/logEntry.js";
 import { caseRoute, LogRoute } from "../logs/logRoutes.js";
 import { formatDuration } from "../utils/duration.js";
 import { CaseAction } from "./caseStore.js";
@@ -118,12 +120,19 @@ export const noModLog = Object.freeze({
 });
 
 // An entry for a moderation action that isn't a case (lock, slowmode, role or
-// nickname changes, purge): "**Channel locked** in #general" plus detail lines.
+// nickname changes, purge). `summary` is "**Channel locked** in #general": the
+// bold part is the title, the rest goes above the detail lines.
 export function buildActionLogEmbed({ moderator, summary, lines = [], color = 0x5865f2 }) {
-  return new EmbedBuilder()
+  const { title, rest } = splitSummary(summary);
+  const embed = new EmbedBuilder()
     .setColor(color)
-    .setAuthor(moderator.tag ? { name: moderator.tag } : { name: moderator.id })
-    .setDescription([summary, ...lines].join("\n").slice(0, 4096))
+    .setAuthor(moderator.tag || moderator.username ? authorOf(moderator) : { name: moderator.id })
+    .setTitle(title.slice(0, 256))
     .setFooter({ text: `Moderator ID ${moderator.id}` })
     .setTimestamp();
+  const description = [rest, ...lines].filter(Boolean).join("\n");
+  if (description) {
+    embed.setDescription(description.length > 4096 ? `${description.slice(0, 4095)}…` : description);
+  }
+  return embed;
 }

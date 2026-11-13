@@ -389,7 +389,13 @@ describe("tickets", () => {
     expect(post.title).toBe("🎫 Ticket #1 closed");
     expect(post.fields).toContainEqual({ name: "Reason", value: "Fixed", inline: false });
     expect(post.fields).toContainEqual({ name: "Messages", value: "3", inline: true });
-    expect(post.files[0].name).toBe("ticket-0001.txt");
+    expect(post.files[0].name).toBe("ticket-0001.html");
+    const page = post.files[0].attachment.toString("utf8");
+    expect(page).toContain("<title>Ticket #1");
+    expect(page.indexOf("message 1")).toBeLessThan(page.indexOf("message 3"));
+    // Saved as data too, for the dashboard's transcript page.
+    const data = JSON.parse(t.tickets.transcriptData(GUILD_ID, 1));
+    expect(data.messages).toHaveLength(3);
     // Saved before the thread is archived.
     expect(thread.edit).toHaveBeenCalledWith(expect.objectContaining({ archived: true }));
   });
@@ -564,7 +570,7 @@ describe("ticket log", () => {
     audit.unshift({ targetId: thread.id, executorId: ADMIN_ID, createdTimestamp: 1_000_000, changes: [{ key: "archived" }] });
     await update({ archived: false }, { archived: true });
     expect(t.tickets.byNumber(GUILD_ID, 1)).toMatchObject({ closedBy: ADMIN_ID, closeReason: "Thread archived", hasTranscript: true });
-    expect(t.logPosts.at(-1).files[0].name).toBe("ticket-0001.txt");
+    expect(t.logPosts.at(-1).files[0].name).toBe("ticket-0001.html");
     // Unarchived again: it's open again.
     await update({ archived: true }, { archived: false });
     expect(t.tickets.openForUser(GUILD_ID, MEMBER_ID)).toMatchObject({ number: 1, closedAt: null });

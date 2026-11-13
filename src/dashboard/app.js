@@ -92,7 +92,8 @@ import { serverCheckup } from "./checkup.js";
 import { CommandUsageStore } from "../stats/commandUsage.js";
 import { canManage, DiscordApiError } from "./discordApi.js";
 import { SESSION_DAYS, SessionStore } from "./sessions.js";
-import { checkSettingChanges, describeValue, InvalidSetting, SETTING_RULES } from "./settingsRules.js";
+import { buildDashboardLogEmbed } from "./logEmbed.js";
+import { checkSettingChanges, describeChange, InvalidSetting, SETTING_RULES } from "./settingsRules.js";
 import { LogRoute, routedChannelId } from "../logs/logRoutes.js";
 import { brandingOf, InvalidBranding, planBrandingChange } from "../branding/branding.js";
 import { defaultEmbedColor } from "../community/welcomeEmbeds.js";
@@ -100,6 +101,9 @@ import { botCommandCatalog } from "../permissions/catalog.js";
 import { normalizeCommandRules } from "../permissions/commandRules.js";
 import { CUSTOM, InvalidPreset, planPreset } from "../permissions/presets.js";
 import { pageRenderer, publicRobots, publicSitemap } from "./seo.js";
+import { parseTranscriptData } from "../transcripts/snapshot.js";
+import { ticketTranscriptPage } from "../transcripts/ticketPage.js";
+import { renderNotice } from "../transcripts/render.js";
 import {
   buildTestMessages,
   checkAutomodText,
@@ -159,6 +163,9 @@ function contactHtml(contact) {
 }
 const SESSION_COOKIE = "rv_session";
 const STATE_COOKIE = "rv_oauth_state";
+// Where to go after logging in (a transcript link opened while logged out).
+const NEXT_COOKIE = "rv_next";
+const SAFE_NEXT = /^\/transcripts\/\d{17,20}\/\d{1,9}$/;
 // How long a person's Discord server list (and their permissions) is trusted.
 const GUILD_LIST_MS = 5 * 60 * 1000;
 // The soonest a Refresh asks Discord for the list again.
@@ -389,15 +396,18 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
   }
 
   app.addHook("onSend", async (request, reply, payload) => {
-    reply.header(
-      "Content-Security-Policy",
-      "default-src 'self'; img-src 'self' https: data:; style-src 'self'; script-src 'self'; " +
-        "connect-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
-    );
+    // Transcript pages set their own (no scripts at all, framed by the dashboard).
+    if (!reply.hasHeader("Content-Security-Policy")) {
+      reply.header(
+        "Content-Security-Policy",
+        "default-src 'self'; img-src 'self' https: data:; style-src 'self'; script-src 'self'; " +
+          "connect-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
+      );
+      // Older browsers ignore frame-ancestors.
+      reply.header("X-Frame-Options", "DENY");
+    }
     reply.header("X-Content-Type-Options", "nosniff");
     reply.header("Referrer-Policy", "same-origin");
-    // Older browsers ignore frame-ancestors.
-    reply.header("X-Frame-Options", "DENY");
     reply.header("Cross-Origin-Opener-Policy", "same-origin");
     reply.header("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=(), usb=()");
     // Browsers only ever reach the site over HTTPS once they've seen it there.
@@ -448,6 +458,10 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
   app.get("/auth/login", authLimit, async (request, reply) => {
     const state = randomBytes(16).toString("base64url");
     reply.setCookie(STATE_COOKIE, state, { ...cookieOptions, signed: true, maxAge: 600 });
+    const next = typeof request.query?.next === "string" && SAFE_NEXT.test(request.query.next) ? request.query.next : null;
+    if (next) {
+      reply.setCookie(NEXT_COOKIE, next, { ...cookieOptions, signed: true, maxAge: 600 });
+    }
     return reply.redirect(discord.authorizeUrl(state));
   });
 
@@ -479,7 +493,9 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     });
     reply.setCookie(SESSION_COOKIE, sessionToken, { ...cookieOptions, maxAge: SESSION_DAYS * 24 * 60 * 60 });
     logger.info("Dashboard login", { userId: user.id });
-    return reply.redirect("/servers");
+    const next = request.unsignCookie(request.cookies[NEXT_COOKIE] ?? "");
+    reply.clearCookie(NEXT_COOKIE, cookieOptions);
+    return reply.redirect(next.valid && SAFE_NEXT.test(next.value ?? "") ? next.value : "/servers");
   });
 
   app.post("/auth/logout", async (request, reply) => {
@@ -496,11 +512,16 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
   // --- Who is asking --------------------------------------------------------
 
   // The logged-in person, or a 401 reply.
-  function requireSession(request, reply) {
+  // With `page`, errors are small web pages instead of JSON (see refuse()).
+  function requireSession(request, reply, { page = false } = {}) {
     const token = request.cookies[SESSION_COOKIE];
     const session = sessions.get(token);
     if (!session) {
-      reply.code(401).send({ error: "login" });
+      if (page) {
+        reply.redirect(`/auth/login?next=${encodeURIComponent(request.url.split("?")[0])}`);
+      } else {
+        reply.code(401).send({ error: "login" });
+      }
       return undefined;
     }
     return { ...session, token };
@@ -564,15 +585,22 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
 
   // The session, server and access level for /api/guilds/:id routes, or
   // undefined after replying 401, 403 or 404. `manage` routes need Access.MANAGE.
-  async function requireGuild(request, reply, { manage = false } = {}) {
-    const session = requireSession(request, reply);
+  async function requireGuild(request, reply, { manage = false, page = false } = {}) {
+    const session = requireSession(request, reply, { page });
     if (!session) {
       return undefined;
     }
+    const refuse = (code, error) => {
+      if (page) {
+        refusePage(reply, code, error);
+      } else {
+        reply.code(code).send({ error });
+      }
+      return undefined;
+    };
     const guildId = request.params.id;
     if (!DISCORD_ID.test(guildId)) {
-      reply.code(404).send({ error: "not-found" });
-      return undefined;
+      return refuse(404, "not-found");
     }
     const guilds = await withDiscordLogin(session, reply, () => knownGuilds(session));
     if (reply.sent) {
@@ -580,17 +608,14 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     }
     const guild = guilds.find((entry) => entry.id === guildId);
     if (!guild) {
-      reply.code(403).send({ error: "forbidden" });
-      return undefined;
+      return refuse(403, "forbidden");
     }
     if (!(await discord.botGuildIds()).has(guildId)) {
-      reply.code(404).send({ error: "bot-not-in-server" });
-      return undefined;
+      return refuse(404, "bot-not-in-server");
     }
     const access = await accessTo(session, guild);
     if (!access || (manage && access !== Access.MANAGE)) {
-      reply.code(403).send({ error: "forbidden" });
-      return undefined;
+      return refuse(403, "forbidden");
     }
     return { session, guildId, access };
   }
@@ -677,11 +702,15 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     return null;
   }
 
-  // Saves `changes` ({ setting: value | null }, already checked). Returns the
-  // log lines for those that changed, and what each was before and after
-  // ({ setting: { before, after } }) so the Activity page can undo it.
-  async function saveSettings(guildId, guild, changes) {
+  // Saves `changes` ({ setting: value | null }, already checked). Returns what
+  // changed in each setting ({ sections: [{ label, lines }], notes }, only the
+  // parts that changed, a few lines each), the same as Activity page lines, and
+  // what each was before and after ({ setting: { before, after } }) so the
+  // Activity page can undo it. `channels` shows IDs as channels in the lines.
+  async function saveSettings(guildId, guild, changes, channels = []) {
     const lines = [];
+    const sections = [];
+    const notes = [];
     const undo = {};
     let ticketPanelChanged = false;
     for (const [setting, value] of Object.entries(changes)) {
@@ -695,18 +724,21 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
       } else {
         await guildSettings.set(guildId, setting, value);
       }
-      lines.push(`**${SETTING_RULES[setting].label}:** ${describeValue(setting, before)} → ${describeValue(setting, value)}`);
+      const label = SETTING_RULES[setting].label;
+      const changed = describeChange(setting, before, value, { channels, roles: guild.roles });
+      sections.push({ label, lines: changed });
+      lines.push(...changed.map((line) => (line.startsWith("**") ? `**${label} › ${line.slice(2)}` : `**${label}:** ${line}`)));
       undo[setting] = { before: before ?? null, after: savedValue(guildId, setting) ?? null };
       ticketPanelChanged ||= TICKET_PANEL_SETTINGS.includes(setting);
       if ([Setting.COUNTRY_GUIDE, Setting.COUNTRY_CHANNEL, Setting.COUNTRY_ROLES].includes(setting) && !(await redrawCountryGuide(guildId, guild))) {
-        lines.push("The posted country guide couldn't be updated; post it again from the Country page.");
+        notes.push("The posted country guide couldn't be updated; post it again from the Country page.");
       }
     }
     // Once, after both the look and the categories are saved.
     if (ticketPanelChanged && !(await redrawTicketPanel(guildId, guild))) {
-      lines.push("The ticket panel couldn't be updated; post it again with `/tickets panel`.");
+      notes.push("The ticket panel couldn't be updated; post it again with `/tickets panel`.");
     }
-    return { lines, undo };
+    return { lines: [...lines, ...notes], sections, notes, undo };
   }
 
   // Gives the posted ticket panel the current look and categories. Panels
@@ -829,8 +861,11 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
   };
 
   // Records what someone did on the dashboard (Activity page) and posts it in
-  // the server's logs channel when there is one.
-  async function logAction(guildId, session, summary, lines = [], undo = null) {
+  // the server's logs channel when there is one. `summary` is
+  // "**What happened** and where"; `lines` are the Activity page's lines. In
+  // Discord, `sections` ([{ label, lines }], one per setting) become fields and
+  // `notes` the description; without sections the lines are the description.
+  async function logAction(guildId, session, summary, lines = [], undo = null, { sections, notes = [] } = {}) {
     try {
       activity.add({ guildId, userId: session.userId, userName: session.username, summary, lines, undo });
     } catch (error) {
@@ -840,13 +875,7 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     if (!channelId) {
       return;
     }
-    const embed = {
-      color: 0x5865f2,
-      author: { name: `${session.username} · dashboard` },
-      description: [summary, ...lines].join("\n").slice(0, 4096),
-      footer: { text: `User ID ${session.userId}` },
-      timestamp: new Date().toISOString(),
-    };
+    const embed = buildDashboardLogEmbed({ session, summary, lines, sections, notes, activityUrl: `${baseUrl}/g/${guildId}/activity` });
     await discord.postMessage(channelId, { embeds: [embed] }).catch((error) =>
       logger.warn("Couldn't post a dashboard change in the logs channel", { guildId, error }),
     );
@@ -1024,10 +1053,10 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
       changes[Setting.PERMISSION_PRESET] = CUSTOM;
     }
 
-    const { lines, undo } = await saveSettings(guildId, guild, changes);
+    const { lines, sections, notes, undo } = await saveSettings(guildId, guild, changes, channels);
     if (lines.length > 0) {
       logger.info("Dashboard settings change", { guildId, userId: session.userId, settings: Object.keys(changes) });
-      await logAction(guildId, session, "**Settings changed**", lines, undo);
+      await logAction(guildId, session, "**Settings changed**", lines, undo, { sections, notes });
     }
     return { settings: settingsJson(guildId) };
   });
@@ -1291,6 +1320,67 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     };
   });
 
+  // Headers for transcript pages: inline styles only, no scripts, images from
+  // Discord, shown only on this site (the Tickets page frames them).
+  function transcriptHeaders(reply) {
+    return reply
+      .header(
+        "Content-Security-Policy",
+        "default-src 'none'; img-src https: data:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'",
+      )
+      .header("X-Frame-Options", "SAMEORIGIN")
+      .header("X-Robots-Tag", "noindex, nofollow")
+      .header("Referrer-Policy", "no-referrer")
+      .header("Cache-Control", "private, no-store")
+      .type("text/html; charset=utf-8");
+  }
+
+  const REFUSALS = {
+    "not-found": ["Not found", "There's no transcript here. The link may be wrong, or the ticket was deleted."],
+    "no-transcript": ["No transcript yet", "This ticket's transcript is saved when it's closed."],
+    forbidden: ["No access", "You can't see this server's tickets. Ask a server admin for access."],
+    "bot-not-in-server": ["Bot not in this server", "The bot isn't in this server any more, so its tickets can't be shown."],
+  };
+  function refusePage(reply, code, error) {
+    const [title, message] = REFUSALS[error] ?? REFUSALS["not-found"];
+    return transcriptHeaders(reply).code(code).send(renderNotice({ title, message, linkUrl: "/servers", linkText: "Open the dashboard" }));
+  }
+
+  // A ticket's transcript as a page that looks like the conversation, for
+  // anyone who can see the server's tickets on the dashboard. ?embed=1 is the
+  // Tickets page's frame; ?download=1 saves it as a file.
+  app.get("/transcripts/:id/:number", async (request, reply) => {
+    const access = await requireGuild(request, reply, { page: true });
+    if (!access) {
+      return reply;
+    }
+    const number = Number(request.params.number);
+    const ticket = Number.isInteger(number) && number > 0 ? tickets.byNumber(access.guildId, number) : undefined;
+    if (!ticket) {
+      return refusePage(reply, 404, "not-found");
+    }
+    const data = parseTranscriptData(tickets.transcriptData(access.guildId, number) ?? "");
+    const text = data ? undefined : tickets.transcript(access.guildId, number);
+    if (!data && text === undefined) {
+      return refusePage(reply, 404, "no-transcript");
+    }
+    const names = await peopleNames(access.guildId, [ticket.userId, ticket.closedBy, ticket.claimedBy].filter(Boolean));
+    const download = request.query?.download === "1";
+    const page = ticketTranscriptPage({
+      ticket,
+      data,
+      text,
+      names,
+      backUrl: download ? null : `/g/${access.guildId}/tickets?ticket=${number}`,
+      embedded: request.query?.embed === "1",
+    });
+    transcriptHeaders(reply);
+    if (download) {
+      reply.header("Content-Disposition", `attachment; filename="ticket-${String(number).padStart(4, "0")}.html"`);
+    }
+    return reply.send(page);
+  });
+
   app.get("/api/guilds/:id/tickets/:number", async (request, reply) => {
     const access = await requireGuild(request, reply);
     const number = access && caseNumber(request, reply);
@@ -1319,6 +1409,8 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     return {
       ticket: ticketJson(ticket, names),
       transcript,
+      // The transcript page (/transcripts/…), when one can be shown.
+      transcriptPage: transcript !== null ? `/transcripts/${guildId}/${number}` : null,
       events: events.map((event) => ({
         event: event.event,
         actorId: event.actorId,
@@ -2660,10 +2752,10 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     if (request.body?.dryRun !== false) {
       return { dryRun: true, changes: summary };
     }
-    const { lines, undo } = await saveSettings(guildId, guild, changes);
+    const { lines, sections, notes, undo } = await saveSettings(guildId, guild, changes, channels);
     if (lines.length > 0) {
       logger.info("Dashboard permission setup applied", { guildId, userId: session.userId, preset: request.body.preset });
-      await logAction(guildId, session, "**Permission setup applied**", lines, undo);
+      await logAction(guildId, session, "**Permission setup applied**", lines, undo, { sections, notes });
     }
     return { dryRun: false, changes: summary, settings: settingsJson(guildId) };
   });
@@ -2731,12 +2823,14 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     if (!activity.markUndone(guildId, entryId)) {
       return reply.code(404).send({ error: "cannot-undo", message: "This change was already undone." });
     }
-    const { lines, undo } = await saveSettings(guildId, guild, changes);
+    const { lines, sections, notes, undo } = await saveSettings(guildId, guild, changes, channels);
     if (skipped.length > 0) {
-      lines.push(`Left as they are (changed again since): ${skipped.join(", ")}`);
+      const note = `Left as they are (changed again since): ${skipped.join(", ")}`;
+      lines.push(note);
+      notes.push(note);
     }
     logger.info("Dashboard change undone", { guildId, userId: session.userId, entry: entryId });
-    await logAction(guildId, session, `**Undid a change** by ${entry.userName ?? entry.userId}`, lines, undo);
+    await logAction(guildId, session, `**Undid a change** by ${entry.userName ?? entry.userId}`, lines, undo, { sections, notes });
     return { settings: settingsJson(guildId), skipped };
   });
 

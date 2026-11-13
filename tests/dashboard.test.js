@@ -439,7 +439,8 @@ describe("dashboard", () => {
     expect(guildSettings.getList(GUILD_ID, Setting.LOG_IGNORED_CHANNELS)).toEqual([VOICE_ID]);
     const [channelId, payload] = discord.postMessage.mock.calls[0];
     expect(channelId).toBe(LOGS_ID);
-    expect(payload.embeds[0].description).toContain(`**Mod role:** *none* → <@&${ROLE_ID}>`);
+    expect(payload.embeds[0].title).toBe("Settings changed");
+    expect(payload.embeds[0].fields).toContainEqual({ name: "Mod role", value: `*none* → <@&${ROLE_ID}>` });
 
     const cleared = await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, { modRoleId: null });
     expect(cleared.json().settings.modRoleId).toBeUndefined();
@@ -544,7 +545,7 @@ describe("dashboard", () => {
     expect(saved.json().settings.automod.rules.links.allowedDomains).toEqual(["youtube.com"]);
     expect(guildSettings.get(GUILD_ID, Setting.AUTOMOD)).toMatchObject({ enabled: true, exemptRoleIds: [ROLE_ID] });
     const [, logged] = discord.postMessage.mock.calls.at(-1);
-    expect(logged.embeds[0].description).toContain("**Automod:** off → on · Invite link (warn)");
+    expect(logged.embeds[0].fields).toEqual([{ name: "Automod", value: expect.stringContaining("**Rules › Invite link › Action:** `delete` → `warn`") }]);
 
     const bad = await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, {
       automod: { ...wanted, timeoutMinutes: 0 },
@@ -576,7 +577,7 @@ describe("dashboard", () => {
     expect(saved.statusCode).toBe(200);
     expect(saved.json().settings.leveling).toMatchObject({ enabled: true, message: "GG {user}, level {level}!", noXpChannelIds: [VOICE_ID] });
     const [, logged] = discord.postMessage.mock.calls.at(-1);
-    expect(logged.embeds[0].description).toContain(`**Leveling:** off · announce here → on · announce channel · rewards 10: <@&${ROLE_ID}>`);
+    expect(logged.embeds[0].fields[0].value).toContain(`**Rewards:** added level 10\n**No XP channel:** added <#${VOICE_ID}>`);
 
     // Saving the same thing again changes nothing and logs nothing.
     const posts = discord.postMessage.mock.calls.length;
@@ -648,7 +649,7 @@ describe("dashboard", () => {
     expect(saved.json().settings).toMatchObject({ welcomeChannelId: TEXT_ID, welcomeMessage: "Hi {user}\nWelcome!", autoroleIds: [ROLE_ID] });
     expect(guildSettings.get(GUILD_ID, Setting.WELCOME_DM)).toBeUndefined();
     const [, logged] = discord.postMessage.mock.calls.at(-1);
-    expect(logged.embeds[0].description).toContain('**Welcome message:** *none* → "Hi {user} Welcome!"');
+    expect(logged.embeds[0].fields).toContainEqual({ name: "Welcome message", value: '*none* → "Hi {user} Welcome!"' });
 
     const tooLong = await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, { leaveMessage: "x".repeat(1001) });
     expect(tooLong.json()).toMatchObject({ error: "invalid-setting", setting: "leaveMessage" });
@@ -666,7 +667,7 @@ describe("dashboard", () => {
       welcomeEmbed: { title: "Welcome {username}", memberAvatar: true },
       welcomeDmEmbed: { description: "Rules are in {server}", color: 0xff0000 },
     });
-    expect(discord.postMessage.mock.calls.at(-1)[1].embeds[0].description).toContain("member's avatar");
+    expect(JSON.stringify(discord.postMessage.mock.calls.at(-1)[1].embeds[0].fields)).toContain("**Member avatar:** none → on");
     const badVariable = await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, { leaveEmbed: { title: "Level {level}" } });
     expect(badVariable.json()).toMatchObject({ error: "invalid-setting", setting: "leaveEmbed" });
     const badLink = await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, { leaveEmbed: { title: "x", image: { url: "ftp://x" } } });
@@ -1084,6 +1085,70 @@ describe("dashboard", () => {
     expect(response.statusCode).toBe(200);
   });
 
+  it("shows a ticket's transcript as a page behind the login", async () => {
+    const ticketStore = new TicketStore(db);
+    const ticket = ticketStore.open({ guildId: GUILD_ID, userId: USER_ID, subject: "Help <b>me</b>", createdAt: 1_700_000_000_000 });
+    ticketStore.close(ticket.id, { closedBy: USER_ID, closedAt: 1_700_000_100_000, reason: "Done" });
+    ticketStore.setTranscript(ticket.id, "Ticket #1\nhello", 1, {
+      version: 1,
+      guild: { id: GUILD_ID, name: "Rumbleverse", icon: null },
+      channel: null,
+      messages: [{ id: "1", authorId: USER_ID, createdAt: 1_700_000_000_000, editedAt: null, content: "**hi** <script>x</script>", embeds: [], attachments: [], stickers: [], replyTo: null, system: false }],
+      users: { [USER_ID]: { name: "Moe", username: "moe", avatar: null, bot: false, color: "#ff00aa" } },
+      channels: {},
+      roles: {},
+      truncated: false,
+    });
+    const old = ticketStore.open({ guildId: GUILD_ID, userId: USER_ID, subject: "Old", createdAt: 1 });
+    ticketStore.close(old.id, { closedBy: USER_ID, closedAt: 2, reason: null });
+    ticketStore.setTranscript(old.id, "[2026] moe: plain <i>text</i>", 1);
+
+    // Logged out: off to log in, and back here afterwards.
+    const anonymous = await app.inject({ method: "GET", url: `/transcripts/${GUILD_ID}/1` });
+    expect(anonymous.statusCode).toBe(302);
+    expect(anonymous.headers.location).toBe(`/auth/login?next=${encodeURIComponent(`/transcripts/${GUILD_ID}/1`)}`);
+    const start = await app.inject({ method: "GET", url: `/auth/login?next=${encodeURIComponent(`/transcripts/${GUILD_ID}/1`)}` });
+    const cookie = (name) => start.cookies.find((entry) => entry.name === name).value;
+    const state = new URL(start.headers.location).searchParams.get("state");
+    const back = await app.inject({ method: "GET", url: `/auth/callback?code=abc&state=${state}`, cookies: { rv_oauth_state: cookie("rv_oauth_state"), rv_next: cookie("rv_next") } });
+    expect(back.headers.location).toBe(`/transcripts/${GUILD_ID}/1`);
+    // Only transcript pages can be the way back.
+    const sneaky = await app.inject({ method: "GET", url: `/auth/login?next=${encodeURIComponent("https://evil.example.com")}` });
+    expect(sneaky.cookies.find((entry) => entry.name === "rv_next")).toBeUndefined();
+
+    const cookies = await login();
+    const page = await app.inject({ method: "GET", url: `/transcripts/${GUILD_ID}/1`, cookies });
+    expect(page.statusCode).toBe(200);
+    expect(page.headers["content-type"]).toContain("text/html");
+    expect(page.headers["content-security-policy"]).toContain("default-src 'none'");
+    expect(page.headers["content-security-policy"]).toContain("frame-ancestors 'self'");
+    expect(page.headers["x-frame-options"]).toBe("SAMEORIGIN");
+    expect(page.body).toContain("<strong>hi</strong>");
+    expect(page.body).toContain("&lt;script&gt;x&lt;/script&gt;");
+    expect(page.body).not.toContain("<script>");
+    expect(page.body).toContain("Help &lt;b&gt;me&lt;/b&gt;");
+    expect(page.body).toContain(`href="/g/${GUILD_ID}/tickets?ticket=1"`);
+    const framed = await app.inject({ method: "GET", url: `/transcripts/${GUILD_ID}/1?embed=1`, cookies });
+    expect(framed.body).toContain('class="embedded"');
+    expect(framed.body).not.toContain("Back to the dashboard");
+    const download = await app.inject({ method: "GET", url: `/transcripts/${GUILD_ID}/1?download=1`, cookies });
+    expect(download.headers["content-disposition"]).toBe('attachment; filename="ticket-0001.html"');
+
+    // Closed before transcripts were saved as data: the text, in the same look.
+    const plain = await app.inject({ method: "GET", url: `/transcripts/${GUILD_ID}/2`, cookies });
+    expect(plain.statusCode).toBe(200);
+    expect(plain.body).toContain("plain &lt;i&gt;text&lt;/i&gt;");
+    const api = (await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}/tickets/1`, cookies })).json();
+    expect(api.transcriptPage).toBe(`/transcripts/${GUILD_ID}/1`);
+
+    const missing = await app.inject({ method: "GET", url: `/transcripts/${GUILD_ID}/99`, cookies });
+    expect(missing.statusCode).toBe(404);
+    expect(missing.body).toContain("Not found");
+    const forbidden = await app.inject({ method: "GET", url: `/transcripts/${OTHER_GUILD_ID}/1`, cookies });
+    expect(forbidden.statusCode).toBe(403);
+    expect(forbidden.headers["content-type"]).toContain("text/html");
+  });
+
   it("lists tickets with names, filters them, and shows and downloads a transcript", async () => {
     const MEMBER_ID = "300000000000000009";
     const ticketStore = new TicketStore(db);
@@ -1170,7 +1235,7 @@ describe("dashboard", () => {
     expect(saved.statusCode).toBe(200);
     expect(guildSettings.get(GUILD_ID, Setting.JOIN_GATE)).toEqual({ minAgeDays: 7, action: "kick", alertJoins: 10 });
     const [, logged] = discord.postMessage.mock.calls.at(-1);
-    expect(logged.embeds[0].description).toContain("**Raid protection:** *none* → kick accounts under 7 days · alert at 10 joins a minute");
+    expect(logged.embeds[0].fields).toEqual([{ name: "Raid protection", value: "**Min age days:** none → 7\n**Action:** none → `kick`\n**Alert joins:** none → 10" }]);
     for (const joinGate of [{ minAgeDays: 0, action: "kick", alertJoins: null }, { minAgeDays: 5, action: "ban", alertJoins: null }, { minAgeDays: null, action: "kick", alertJoins: 1 }]) {
       const bad = await write(cookies, "PUT", `/api/guilds/${GUILD_ID}/settings`, { joinGate });
       expect(bad.json()).toMatchObject({ error: "invalid-setting", setting: "joinGate" });
