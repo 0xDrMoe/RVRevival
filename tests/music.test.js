@@ -15,7 +15,7 @@ import { nowPlayingMessage, progressBar, queueMessage, sourceLabel } from "../sr
 import { cleanPlaylistName, MAX_PLAYLISTS, PlaylistStore, savedTrack } from "../src/music/playlistStore.js";
 import { createMusic } from "../src/music/player.js";
 import { createRadio, isStationId, stationLabel, stationTrack, toStation } from "../src/music/radio.js";
-import { createSoundCloud, isPlayable, pickTranscoding } from "../src/music/soundcloud.js";
+import { createSoundCloud, isPlayable, pickTranscoding, rankTranscodings } from "../src/music/soundcloud.js";
 import { asUrl, createResolver, firstPlaylistEntry } from "../src/music/sources.js";
 import { ffmpegArgs, openAudio } from "../src/music/stream.js";
 import { formatTime, makeTrack, Source, trackLabel, Via } from "../src/music/track.js";
@@ -124,8 +124,19 @@ describe("matching songs to SoundCloud", () => {
 });
 
 describe("SoundCloud", () => {
-  it("picks a full MP3 file first and refuses previews", () => {
-    expect(pickTranscoding(scTrack())).toEqual({ url: `${API}/media/soundcloud:tracks:1/a/stream/progressive`, protocol: "progressive" });
+  it("picks HLS first, the old MP3 file last, and refuses previews", () => {
+    expect(pickTranscoding(scTrack())).toEqual({ url: `${API}/media/soundcloud:tracks:1/a/stream/hls`, protocol: "hls" });
+    const mixed = scTrack({
+      media: {
+        transcodings: [
+          { url: `${API}/p`, format: { protocol: "progressive", mime_type: "audio/mpeg" } },
+          { url: `${API}/opus`, format: { protocol: "hls", mime_type: 'audio/ogg; codecs="opus"' } },
+          { url: `${API}/drm`, format: { protocol: "ctr-encrypted-hls", mime_type: "audio/mpeg" } },
+          { url: `${API}/aac`, format: { protocol: "hls", mime_type: 'audio/mp4; codecs="mp4a.40.2"' } },
+        ],
+      },
+    });
+    expect(rankTranscodings(mixed).map((item) => item.url)).toEqual([`${API}/aac`, `${API}/opus`, `${API}/p`]);
     const previews = scTrack({ media: { transcodings: scTrack().media.transcodings.map((item) => ({ ...item, snipped: true })) } });
     expect(pickTranscoding(previews)).toBeNull();
     expect(isPlayable(previews)).toBe(false);
@@ -188,7 +199,31 @@ describe("SoundCloud", () => {
       expect(address.searchParams.get("track_authorization")).toBe("auth");
       return { url: "https://cf-media.sndcdn.com/abc.mp3?x=1" };
     });
-    expect(await createSoundCloud({ clientId: CLIENT, fetchJson }).streamFor(1)).toEqual({ url: "https://cf-media.sndcdn.com/abc.mp3?x=1", protocol: "progressive" });
+    expect(await createSoundCloud({ clientId: CLIENT, fetchJson }).streamFor(1)).toEqual({ url: "https://cf-media.sndcdn.com/abc.mp3?x=1", protocol: "hls", checked: null });
+  });
+
+  it("tries the next stream when one won't load, without looking up the client ID again", async () => {
+    const fetchJson = vi.fn(async (url) => {
+      const address = new URL(url);
+      if (address.pathname === "/tracks/1") {
+        return scTrack();
+      }
+      if (address.pathname.endsWith("/hls")) {
+        throw new MusicError("not-found", "api-v2.soundcloud.com answered 404.");
+      }
+      return { url: "https://cf-media.sndcdn.com/abc.mp3" };
+    });
+    const check = vi.fn(async (stream) => `opened ${stream.protocol}`);
+    const soundcloud = createSoundCloud({ clientId: CLIENT, fetchJson });
+    expect(await soundcloud.streamFor(1, { check })).toEqual({ url: "https://cf-media.sndcdn.com/abc.mp3", protocol: "progressive", checked: "opened progressive" });
+    expect(fetchJson).toHaveBeenCalledTimes(3);
+
+    // A stream that answers but won't open counts as broken too.
+    const failing = vi.fn(async () => {
+      throw new MusicError("not-found", "cf-media.sndcdn.com answered 404.");
+    });
+    await expect(soundcloud.streamFor(1, { check: failing })).rejects.toMatchObject({ reason: "no-stream" });
+    expect(failing).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -361,6 +396,21 @@ describe("what /play takes", () => {
     expect(found.tracks[0].stream).toEqual({ page: "https://b.bandcamp.com/track/song", trackId: 2 });
   });
 
+  it("finds another library's copy of a song whose stream broke", async () => {
+    const track = makeTrack({ title: "One More Time", artist: "Daft Punk", url: "https://soundcloud.com/dp/omt", durationMs: 320_000, source: Source.SOUNDCLOUD, stream: { id: 1 } });
+    const audius = { search: vi.fn(async () => [makeTrack({ title: "One More Time", artist: "Daft Punk", url: "https://audius.co/dp/omt", durationMs: 321_000, source: Source.AUDIUS, stream: { id: "a1" } })]) };
+    const soundcloud = { search: vi.fn(async () => [track]) };
+    const resolver = createResolver({ soundcloud, audius, bandcamp: { search: async () => [] }, jamendo: { enabled: false } });
+    expect(await resolver.alternative(track)).toMatchObject({ title: "One More Time", source: Source.AUDIUS, stream: { id: "a1" }, url: "https://audius.co/dp/omt", fallback: true });
+    expect(soundcloud.search).not.toHaveBeenCalled();
+
+    // The same upload doesn't count as another copy.
+    const fromAudius = { ...track, source: Source.AUDIUS, url: "https://audius.co/dp/omt" };
+    audius.search.mockClear();
+    expect(await resolver.alternative(fromAudius)).toMatchObject({ source: Source.SOUNDCLOUD, url: "https://soundcloud.com/dp/omt" });
+    expect(audius.search).not.toHaveBeenCalled();
+  });
+
   it("plays uploaded audio files only", () => {
     const resolver = createResolver({ soundcloud: {} });
     expect(resolver.fileTrack({ contentType: "audio/mpeg", url: "https://cdn.discordapp.com/attachments/1/2/song.mp3?ex=1", name: "song.mp3", duration: 12.5 })).toMatchObject({ title: "song", source: Source.FILE, durationMs: 12_500 });
@@ -401,6 +451,29 @@ describe("audio", () => {
     audio.stop();
     expect(child.kill).toHaveBeenCalledWith("SIGKILL");
     expect(abort).toHaveBeenCalled();
+  });
+
+  it("checks a SoundCloud stream opens and calls a broken library stream no-stream", async () => {
+    const child = Object.assign(new EventEmitter(), { stdin: new PassThrough(), stdout: new PassThrough(), stderr: new PassThrough(), exitCode: null, kill: vi.fn() });
+    const spawnImpl = vi.fn(() => child);
+    const abort = vi.fn();
+    const openUrl = vi.fn(async () => ({ url: new URL("https://cf-hls-media.sndcdn.com/p.m3u8"), response: new Response("#EXTM3U"), abort }));
+    const soundcloud = { streamFor: vi.fn(async (id, { check }) => {
+      const stream = { url: "https://cf-hls-media.sndcdn.com/p.m3u8", protocol: "hls" };
+      return { ...stream, checked: await check(stream) };
+    }) };
+    await openAudio({ source: Source.SOUNDCLOUD, stream: { id: 1 } }, { soundcloud, openUrl, spawnImpl });
+    expect(openUrl).toHaveBeenCalledWith("https://cf-hls-media.sndcdn.com/p.m3u8");
+    expect(abort).toHaveBeenCalled();
+    expect(spawnImpl.mock.calls[0][1]).toContain("https://cf-hls-media.sndcdn.com/p.m3u8");
+
+    const audius = { streamFor: async () => "https://audius.test/stream" };
+    const gone = vi.fn(async () => {
+      throw new MusicError("not-found", "audius.test answered 404.");
+    });
+    await expect(openAudio({ source: Source.AUDIUS, stream: { id: "a" } }, { audius, openUrl: gone, spawnImpl })).rejects.toMatchObject({ reason: "no-stream" });
+    // A plain link that's gone is still "nothing there".
+    await expect(openAudio({ source: Source.LINK, stream: { url: "https://x.test/a.mp3" } }, { openUrl: gone, spawnImpl })).rejects.toMatchObject({ reason: "not-found" });
   });
 
   it("refuses HLS that isn't HTTPS", async () => {
@@ -475,13 +548,13 @@ function fakeGuild({ humans = 1 } = {}) {
 const settings = (music = null) => ({ get: (guildId, key) => (key === "music" ? music : null) });
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
-function setup({ music = null, ready = async (track) => ({ ...track, source: track.source ?? Source.SOUNDCLOUD }), openAudio: open, maxPlayers = 25, humans = 1 } = {}) {
+function setup({ music = null, ready = async (track) => ({ ...track, source: track.source ?? Source.SOUNDCLOUD }), alternative = async () => null, openAudio: open, maxPlayers = 25, humans = 1 } = {}) {
   const voice = fakeVoice();
   const timers = [];
   const manager = createMusic({
     guildSettings: settings(music),
     logger: fakeLogger(),
-    resolver: { ready: vi.fn(ready), soundcloud: {}, bandcamp: {} },
+    resolver: { ready: vi.fn(ready), alternative: vi.fn(alternative), soundcloud: {}, bandcamp: {} },
     radio: {},
     voice,
     openAudio: open ?? vi.fn(async () => ({ stream: new PassThrough(), stop: vi.fn(), errors: [] })),
@@ -565,6 +638,32 @@ describe("music player", () => {
     expect(notes.at(-1)).toContain("Several songs in a row");
     expect(player.destroyed).toBe(true);
     expect(manager.get("g1")).toBeNull();
+  });
+
+  it("plays another library's copy when a song's audio won't load, once", async () => {
+    const openAudio = vi.fn(async (track) => {
+      if (track.source === Source.SOUNDCLOUD) {
+        throw new MusicError("no-stream", "SoundCloud wouldn't stream it.");
+      }
+      return { stream: new PassThrough(), stop: vi.fn(), errors: [] };
+    });
+    const alternative = async (track) => (track.title !== "B" ? { ...track, source: Source.AUDIUS, stream: { id: "x" }, url: "https://audius.co/a", fallback: true } : null);
+    const { manager, guild, voiceChannel, textChannel } = setup({ openAudio, alternative });
+    const player = await manager.join({ guild, channel: voiceChannel, textChannel });
+    player.add(songs("A", "B", "C"), { requestedBy: "u0" });
+    await flush();
+    await flush();
+    expect(player.current).toMatchObject({ title: "A", source: Source.AUDIUS, requestedBy: "u0" });
+    expect(player.queue.map((track) => track.title)).toEqual(["B", "C"]);
+    expect(player.failures).toBe(0);
+
+    // No other copy: skipped with a clear reason.
+    player.skip();
+    await flush();
+    await flush();
+    expect(player.current.title).toBe("C");
+    expect(player.current.source).toBe(Source.AUDIUS);
+    expect(textChannel.send.mock.calls.map(([payload]) => payload.content).find((note) => note?.includes("Couldn't play"))).toContain("audio wouldn't load");
   });
 
   it("pauses when everyone leaves, picks up when they're back, and leaves after the wait", async () => {

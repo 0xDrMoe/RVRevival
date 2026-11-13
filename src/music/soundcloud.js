@@ -21,18 +21,26 @@ export const SOUNDCLOUD_HOSTS = ["soundcloud.com", "www.soundcloud.com", "m.soun
 
 export const isSoundCloudUrl = (url) => SOUNDCLOUD_HOSTS.includes(url.hostname.toLowerCase());
 
-// The stream to use, best first: a full MP3 file, then HLS (MP3, Opus, AAC).
-// Returns { url, protocol } for the transcoding (its URL still needs the
-// client ID), or null when only previews exist.
-export function pickTranscoding(track) {
-  const full = (track?.media?.transcodings ?? []).filter((item) => !item.snipped && typeof item.url === "string" && item.url.startsWith(`${API}/`));
+// Every full stream of a track, best first: HLS (what soundcloud.com itself
+// plays: MP3, then AAC, then Opus), then the older single-file MP3, which
+// SoundCloud is retiring and often answers 404 for. Each is { url, protocol,
+// mime } (the URL still needs the client ID); [] when only previews exist.
+export function rankTranscodings(track) {
+  const full = (track?.media?.transcodings ?? []).filter(
+    (item) => !item.snipped && typeof item.url === "string" && item.url.startsWith(`${API}/`) && ["progressive", "hls"].includes(item.format?.protocol),
+  );
   const rank = (item) => {
-    const progressive = item.format?.protocol === "progressive";
     const mime = item.format?.mime_type ?? "";
-    return (progressive ? 0 : 10) + (mime.includes("mpeg") ? 0 : mime.includes("opus") ? 1 : 2);
+    const codec = mime.includes("mpeg") ? 0 : mime.includes("mp4") || mime.includes("aac") ? 1 : mime.includes("opus") ? 2 : 3;
+    return (item.format.protocol === "hls" ? 0 : 10) + codec;
   };
-  const best = full.filter((item) => ["progressive", "hls"].includes(item.format?.protocol)).sort((a, b) => rank(a) - rank(b))[0];
-  return best ? { url: best.url, protocol: best.format.protocol } : null;
+  return full.sort((a, b) => rank(a) - rank(b)).map((item) => ({ url: item.url, protocol: item.format.protocol, mime: item.format.mime_type ?? "" }));
+}
+
+// The best stream ({ url, protocol }), or null when only previews exist.
+export function pickTranscoding(track) {
+  const [best] = rankTranscodings(track);
+  return best ? { url: best.url, protocol: best.protocol } : null;
 }
 
 // Whether the whole track can be played for free.
@@ -104,8 +112,9 @@ export function createSoundCloud({ clientId: fixedClientId = null, fetchJson = d
 
   // GETs an API address with the client ID; a refused ID is looked up again
   // once. SoundCloud can answer 404 instead of 401 for a stale ID, so a 404
-  // is retried with a fresh ID too.
-  async function api(address, params = {}) {
+  // is retried with a fresh ID too, except for stream addresses
+  // (`staleOn404: false`), where a 404 means that stream is gone.
+  async function api(address, params = {}, { staleOn404 = true } = {}) {
     for (const refresh of [false, true]) {
       const url = new URL(address.startsWith("http") ? address : `${API}${address}`);
       for (const [key, value] of Object.entries(params)) {
@@ -115,7 +124,7 @@ export function createSoundCloud({ clientId: fixedClientId = null, fetchJson = d
       try {
         return await fetchJson(url.href);
       } catch (error) {
-        const refused = error instanceof MusicError && / answered (401|403|404)\.$/.test(error.message);
+        const refused = error instanceof MusicError && (staleOn404 ? / answered (401|403|404)\.$/ : / answered (401|403)\.$/).test(error.message);
         if (!refused || refresh || fixedClientId) {
           throw error;
         }
@@ -186,19 +195,44 @@ export function createSoundCloud({ clientId: fixedClientId = null, fetchJson = d
     },
 
     // The audio for a track ID, fetched just before it plays (the addresses
-    // expire): { url, protocol: "progressive" | "hls" }.
-    async streamFor(id) {
+    // expire): { url, protocol: "progressive" | "hls", checked }. Each stream
+    // is tried in turn until one works; `check(stream)` (optional) opens it
+    // and throws when it won't load, and what it returns comes back as
+    // `checked`. Throws MusicError("no-stream") when none works.
+    async streamFor(id, { check = null } = {}) {
       const track = await api(`/tracks/${encodeURIComponent(id)}`);
-      const transcoding = isPlayable(track) ? pickTranscoding(track) : null;
-      if (!transcoding) {
+      const transcodings = isPlayable(track) ? rankTranscodings(track) : [];
+      if (transcodings.length === 0) {
         throw new MusicError("not-free", "That SoundCloud track can't be streamed any more.");
       }
       const params = track.track_authorization ? { track_authorization: track.track_authorization } : {};
-      const answer = await api(transcoding.url, params);
-      if (typeof answer?.url !== "string" || !answer.url.startsWith("https://")) {
-        throw new MusicError("unreachable", "SoundCloud didn't give a stream.");
+      const problems = [];
+      for (const transcoding of transcodings) {
+        try {
+          const answer = await api(transcoding.url, params, { staleOn404: false });
+          if (typeof answer?.url !== "string" || !answer.url.startsWith("https://")) {
+            throw new MusicError("unreachable", "no stream address");
+          }
+          const stream = { url: answer.url, protocol: transcoding.protocol };
+          return { ...stream, checked: check ? await check(stream) : null };
+        } catch (error) {
+          problems.push(`${transcoding.protocol} ${transcoding.mime || "?"}: ${error?.message ?? error}`);
+        }
       }
-      return { url: answer.url, protocol: transcoding.protocol };
+      throw new MusicError("no-stream", `SoundCloud wouldn't stream it (${problems.join("; ")}).`);
+    },
+
+    // What each of a track's streams answers, for npm run music:check:
+    // [{ protocol, mime, address | error }].
+    async streamReport(id) {
+      const track = await api(`/tracks/${encodeURIComponent(id)}`);
+      const params = track.track_authorization ? { track_authorization: track.track_authorization } : {};
+      const report = [];
+      for (const transcoding of rankTranscodings(track)) {
+        const answer = await api(transcoding.url, params, { staleOn404: false }).catch((error) => ({ error }));
+        report.push({ protocol: transcoding.protocol, mime: transcoding.mime, address: typeof answer?.url === "string" ? answer.url : null, error: answer?.error?.message ?? null });
+      }
+      return { policy: track.policy, transcodings: (track.media?.transcodings ?? []).length, report };
     },
   };
 }

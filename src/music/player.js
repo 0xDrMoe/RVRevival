@@ -41,6 +41,8 @@ const FAILED_WITHIN_MS = 1_500;
 // Songs that can't play are skipped; the music stops only after this many in
 // a row (a long Spotify playlist can have several with no free copy).
 const MAX_FAILURES_IN_A_ROW = 12;
+// Songs that can be looked for in another library when their audio won't load.
+const LIBRARY_SOURCES = new Set(["soundcloud", "audius", "bandcamp", "jamendo"]);
 // Skipped songs within this long are listed in one message, not one each.
 const SKIP_NOTE_MS = 2 * 60_000;
 const SKIP_NOTE_LINES = 10;
@@ -275,7 +277,8 @@ export function createMusic({
           await this.#announce();
         }
       } catch (error) {
-        await this.#failed(next, error);
+        // The ready copy (with its source), so another copy can be looked for.
+        await this.#failed(this.current?.id === next.id ? this.current : next, error);
       }
     }
 
@@ -306,6 +309,22 @@ export function createMusic({
       const reason = error instanceof MusicError ? error.reason : "unreachable";
       // The exact cause (like "api-v2.soundcloud.com answered 404.") goes in the log.
       logger.warn("Couldn't start a song", { guildId: this.guildId, source: track.source ?? track.via, reason, error: error instanceof MusicError ? error.message : error });
+      const isCurrent = () => alreadyCurrent || this.current === track || this.current?.id === track.id;
+      // A library song whose audio wouldn't load: play the same song from
+      // another library instead (once), before skipping it.
+      if (!track.fallback && LIBRARY_SOURCES.has(track.source) && typeof resolver.alternative === "function" && isCurrent()) {
+        const other = await resolver.alternative(track).catch(() => null);
+        if (this.#destroyed) {
+          return;
+        }
+        if (other && isCurrent()) {
+          logger.info?.("Playing another copy of a song that wouldn't load", { guildId: this.guildId, from: track.source, to: other.source, url: other.url });
+          this.queue.unshift({ ...other, requestedBy: track.requestedBy });
+          this.#skipping = true;
+          await this.#playNext();
+          return;
+        }
+      }
       this.failures += 1;
       await this.#noteSkipped(translate(this.language, "musicSkippedBroken", { title: track.title, reason: translate(this.language, `musicError_${reason}`) }));
       if (this.failures >= MAX_FAILURES_IN_A_ROW) {
