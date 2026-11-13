@@ -50,6 +50,28 @@ export function buildLogEntry({ color, title, lines = [], details = [], user, th
   return embed;
 }
 
+// "**Case #5 deleted** (ban of @x)" -> title "Case #5 deleted", rest "(ban of @x)".
+// Titles can't show mentions, so anything after the bold part stays in the text.
+export function splitSummary(summary) {
+  const match = /^\*\*(.+?)\*\*[\s:·-]*(.*)$/s.exec(String(summary ?? "").trim());
+  if (!match) {
+    return { title: "Dashboard change", rest: String(summary ?? "").trim() };
+  }
+  const rest = match[2].trim();
+  return { title: match[1].replace(/[:\s]+$/, ""), rest: /^[a-z]/.test(rest) ? `${rest.charAt(0).toUpperCase()}${rest.slice(1)}` : rest };
+}
+
+// Most items one list in a log entry names; the rest are counted.
+export const MAX_LISTED = 12;
+
+// "a, b, c and 4 more": a list that can't make an entry long.
+export function capList(items, { max = MAX_LISTED, separator = ", " } = {}) {
+  const all = [...items];
+  const shown = all.slice(0, max);
+  const more = all.length - shown.length;
+  return `${shown.join(separator)}${more > 0 ? ` and ${more} more` : ""}`;
+}
+
 // "By @someone" (and the reason they gave), from an audit log entry.
 export function byLine(entry) {
   if (!entry?.executorId) {

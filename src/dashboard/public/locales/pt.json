@@ -1882,5 +1882,9 @@
   "botAutorolesHelp": "Cargos que cada bot novo recebe em vez dos de membros (até {max}), como um cargo Bots. A integração não cobre bots.",
   "sectionDehoist": "Remover símbolos de nomes",
   "dehoistOn": "Corrigir nomes que começam com símbolos",
-  "dehoistHelp": "Nomes como !!!aaa ficam acima de todos. Novos membros e mudanças de nome perdem os símbolos do início. /dehoist run corrige quem já está aqui. Precisa de Gerenciar apelidos."
+  "dehoistHelp": "Nomes como !!!aaa ficam acima de todos. Novos membros e mudanças de nome perdem os símbolos do início. /dehoist run corrige quem já está aqui. Precisa de Gerenciar apelidos.",
+
+  "ticketsOpenPage": "Abrir como página",
+  "ticketsDownloadPage": "Baixar .html",
+  "ticketsTranscriptHelp": "A conversa como aparecia no Discord. Imagens e arquivos são links do Discord e podem parar de funcionar depois de um tempo."
 }

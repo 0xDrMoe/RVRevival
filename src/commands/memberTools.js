@@ -17,6 +17,7 @@ import { isPermissionError } from "../utils/discordErrors.js";
 import { beginModerationCommand } from "./commandHelpers.js";
 import { withDescription } from "./moderation.js";
 import { LogRoute } from "../logs/logRoutes.js";
+import { markLoggedMemberChange } from "../logs/recentIds.js";
 
 // Discord's longest nickname.
 const MAX_NICKNAME_LENGTH = 32;
@@ -124,6 +125,7 @@ export function createMemberToolCommands({ guildSettings, modLog = noModLog, for
     const reason = interaction.options.getString("reason")?.trim() || undefined;
     try {
       const audit = auditReason(interaction.user, reason);
+      markLoggedMemberChange(guild.id, member.id);
       await (adding ? member.roles.add(chosenRole.id, audit) : member.roles.remove(chosenRole.id, audit));
     } catch (error) {
       if (!isPermissionError(error)) {
@@ -183,6 +185,7 @@ export function createMemberToolCommands({ guildSettings, modLog = noModLog, for
     const nickname = interaction.options.getString("nickname")?.trim() || null;
     const before = member.nickname;
     try {
+      markLoggedMemberChange(interaction.guildId, member.id);
       await member.setNickname(nickname, auditReason(interaction.user, "Nickname change"));
     } catch (error) {
       if (!isPermissionError(error)) {

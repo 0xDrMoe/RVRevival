@@ -1882,5 +1882,9 @@
   "botAutorolesHelp": "Rollen, die jeder neue Bot statt der Mitglieder-Rollen bekommt (bis zu {max}), etwa eine Bots-Rolle. Onboarding gilt nicht für Bots.",
   "sectionDehoist": "Namen entschärfen (Dehoist)",
   "dehoistOn": "Namen mit Symbolen am Anfang korrigieren",
-  "dehoistHelp": "Namen wie !!!aaa stehen ganz oben. Neue Mitglieder und Umbenennungen verlieren die Symbole am Anfang. /dehoist run korrigiert alle, die schon da sind. Braucht Spitznamen verwalten."
+  "dehoistHelp": "Namen wie !!!aaa stehen ganz oben. Neue Mitglieder und Umbenennungen verlieren die Symbole am Anfang. /dehoist run korrigiert alle, die schon da sind. Braucht Spitznamen verwalten.",
+
+  "ticketsOpenPage": "Als Seite öffnen",
+  "ticketsDownloadPage": ".html herunterladen",
+  "ticketsTranscriptHelp": "Das Gespräch so, wie es in Discord aussah. Bilder und Dateien sind Discord-Links und können nach einiger Zeit nicht mehr funktionieren."
 }

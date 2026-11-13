@@ -25,12 +25,13 @@ import { AttachmentBuilder, AuditLogEvent, time, TimestampStyles } from "discord
 import { Setting } from "../settings/guildSettings.js";
 import { canReadContent, codeBlock, formatBytes, quote } from "./actionLog.js";
 import { noAuditTrail } from "./auditTrail.js";
-import { buildLogEntry, byLine, formatDuration, LogColor } from "./logEntry.js";
+import { buildLogEntry, byLine, capList, formatDuration, LogColor } from "./logEntry.js";
 import { DEFAULT_LOG_OPTIONS, LogEvent, logOptionsOf } from "./logEvents.js";
 import { noInviteTracker } from "./inviteTracker.js";
+import { loggedMemberChanges as defaultLoggedMemberChanges, memberChangeKey } from "./recentIds.js";
 import { buildServerChangeEmbed, channelOfAuditEntry, eventOfAuditEntry } from "./serverChanges.js";
 import { describeEdit } from "./textDiff.js";
-import { buildTranscript } from "./transcript.js";
+import { deletedMessagesPage } from "../transcripts/deletedPage.js";
 
 export { LogEvent } from "./logEvents.js";
 
@@ -45,7 +46,7 @@ const unix = (ms) => Math.floor(ms / 1000);
 const relative = (ms) => time(unix(ms), TimestampStyles.RelativeTime);
 const fullDate = (ms) => time(unix(ms), TimestampStyles.LongDateTime);
 const avatarOf = (user) => user?.displayAvatarURL?.() ?? undefined;
-const roleList = (ids) => ids.map((id) => `<@&${id}>`).join(" ");
+const roleList = (ids) => capList(ids.map((id) => `<@&${id}>`), { separator: " " });
 
 function messageText(message) {
   if (message.partial) {
@@ -56,6 +57,12 @@ function messageText(message) {
   }
   return canReadContent(message) ? "*No text.*" : "*Text not available: the Message Content intent is off.*";
 }
+
+const sameRoles = (oldMember, newMember) => {
+  const before = oldMember.roles?.cache;
+  const after = newMember.roles?.cache;
+  return !before || !after || (before.size === after.size && [...after.keys()].every((id) => before.has(id)));
+};
 
 const jumpLink = (guildId, channelId, messageId) => `https://discord.com/channels/${guildId}/${channelId}/${messageId}`;
 
@@ -382,6 +389,7 @@ export function createServerLog({
   altHints,
   auditTrail = noAuditTrail,
   inviteTracker = noInviteTracker,
+  loggedMemberChanges = defaultLoggedMemberChanges,
   now = Date.now,
 }) {
   // Each event can have its own channel (log routes), named after the event.
@@ -457,7 +465,11 @@ export function createServerLog({
         embed: buildBulkDeleteEmbed(channel.id, others.length, known.length, options, deletedBy),
         files:
           canAttach && known.length > 0
-            ? [new AttachmentBuilder(Buffer.from(buildTranscript(known), "utf8"), { name: `deleted-${channel.id}.txt` })]
+            ? [
+                new AttachmentBuilder(Buffer.from(deletedMessagesPage({ guild, channel, messages: known, title: "Messages deleted", at: now() }), "utf8"), {
+                  name: `deleted-${channel.id}.html`,
+                }),
+              ]
             : [],
       }));
     },
@@ -491,7 +503,9 @@ export function createServerLog({
 
     async memberLeft(member) {
       voiceSince.delete(`${member.guild?.id}:${member.id}`);
-      if (member.user && wants(member.guild, LogEvent.MEMBER_LEAVE)) {
+      // Banned or kicked by the bot: the case already says so.
+      const loggedElsewhere = loggedMemberChanges?.has(memberChangeKey(member.guild?.id, member.id));
+      if (member.user && !loggedElsewhere && wants(member.guild, LogEvent.MEMBER_LEAVE)) {
         const options = optionsOf(member.guild);
         await post(member.guild, LogEvent.MEMBER_LEAVE, () => ({ embed: buildMemberLeftEmbed(member, options, now()) }));
       }
@@ -504,7 +518,11 @@ export function createServerLog({
       }
       const guild = newMember.guild;
       const tasks = [];
-      if (wants(guild, LogEvent.MEMBER_UPDATE, { member: newMember }) && buildMemberChangedEmbed(oldMember, newMember)) {
+      // A timeout, /role or /nick change the bot made is in the mod log already.
+      // So is a new nickname for the bot itself (the dashboard's Branding page logs that).
+      const ownNickname = isMe(guild, newMember.id) && sameRoles(oldMember, newMember) && oldMember.nickname !== newMember.nickname;
+      const loggedElsewhere = ownNickname || loggedMemberChanges?.has(memberChangeKey(guild?.id, newMember.id));
+      if (!loggedElsewhere && wants(guild, LogEvent.MEMBER_UPDATE, { member: newMember }) && buildMemberChangedEmbed(oldMember, newMember)) {
         tasks.push(
           (async () => {
             const rolesChanged = oldMember.roles.cache.size !== newMember.roles.cache.size || [...newMember.roles.cache.keys()].some((id) => !oldMember.roles.cache.has(id));

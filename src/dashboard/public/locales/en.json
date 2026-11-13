@@ -1882,5 +1882,9 @@
   "botAutorolesHelp": "Roles every new bot gets instead of the member autoroles (up to {max}), like a Bots role. Onboarding doesn't cover bots.",
   "sectionDehoist": "Dehoist names",
   "dehoistOn": "Fix names that start with symbols",
-  "dehoistHelp": "Names like !!!aaa sort above everyone. New members and renames lose the symbols at the start. /dehoist run fixes everyone already here. Needs Manage Nicknames."
+  "dehoistHelp": "Names like !!!aaa sort above everyone. New members and renames lose the symbols at the start. /dehoist run fixes everyone already here. Needs Manage Nicknames.",
+
+  "ticketsOpenPage": "Open as a page",
+  "ticketsDownloadPage": "Download .html",
+  "ticketsTranscriptHelp": "The conversation as it looked in Discord. Images and files are Discord links and can stop working after a while."
 }

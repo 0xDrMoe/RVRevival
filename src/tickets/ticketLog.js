@@ -11,6 +11,7 @@
 import { AttachmentBuilder, EmbedBuilder, escapeMarkdown } from "discord.js";
 import { LogRoute, ticketRoute } from "../logs/logRoutes.js";
 import { Setting } from "../settings/guildSettings.js";
+import { ticketTranscriptPage } from "../transcripts/ticketPage.js";
 
 // The values are saved in the database and the settings, so never rename one.
 export const TicketEvent = Object.freeze({
@@ -46,7 +47,11 @@ const STYLE = {
 const UNKNOWN = "Unknown or automatic";
 const MAX_PEOPLE_SHOWN = 20;
 
-export const transcriptFileName = (ticket) => `ticket-${String(ticket.number).padStart(4, "0")}.txt`;
+export const transcriptFileName = (ticket, extension = "html") => `ticket-${String(ticket.number).padStart(4, "0")}.${extension}`;
+
+// Where a ticket's transcript page is on the dashboard.
+export const transcriptUrl = (dashboardUrl, ticket) =>
+  dashboardUrl ? `${dashboardUrl.replace(/\/+$/, "")}/transcripts/${ticket.guildId}/${ticket.number}` : null;
 
 function peopleList(userIds) {
   const shown = userIds.slice(0, MAX_PEOPLE_SHOWN).map((id) => `<@${id}>`);
@@ -55,7 +60,8 @@ function peopleList(userIds) {
 }
 
 // One log entry. `messageCount` is for a closed ticket's transcript.
-export function buildTicketEventEmbed({ ticket, event, actorId = null, userIds = [], detail = null, messageCount, at = Date.now() }) {
+// `transcriptLink` is the dashboard page for a closed ticket's transcript.
+export function buildTicketEventEmbed({ ticket, event, actorId = null, userIds = [], detail = null, messageCount, transcriptLink = null, at = Date.now() }) {
   const style = STYLE[event] ?? STYLE[TicketEvent.CLOSED];
   const embed = new EmbedBuilder()
     .setColor(style.color)
@@ -83,6 +89,7 @@ export function buildTicketEventEmbed({ ticket, event, actorId = null, userIds =
       field("Category", ticket.categoryLabel, true);
       field("Subject", ticket.subject);
       field("Reason", detail);
+      field("Transcript", transcriptLink ? `[Open it on the dashboard](${transcriptLink})` : null);
       break;
     case TicketEvent.MEMBER_ADDED:
     case TicketEvent.MEMBER_REMOVED:
@@ -101,15 +108,17 @@ export function buildTicketEventEmbed({ ticket, event, actorId = null, userIds =
 // Options:
 //   tickets        the TicketStore (where the history is saved)
 //   poster         posts in log channels (logs/logChannel.js)
+//   dashboardUrl   links closed tickets to their transcript page, when set
 //   guildSettings, logger, now
-export function createTicketLog({ tickets, poster, guildSettings, logger, now = Date.now }) {
+export function createTicketLog({ tickets, poster, guildSettings, logger, dashboardUrl = null, now = Date.now }) {
   const isPosted = (guildId, event) => !guildSettings.getList(guildId, Setting.DISABLED_TICKET_LOG_EVENTS).includes(event);
 
   return {
     // Saves the event in the ticket's history and posts it, unless that kind
-    // is switched off. `transcript` (text) is attached when the channel allows
+    // is switched off. The transcript is attached as a web page (from
+    // `transcriptData`, else the `transcript` text) when the channel allows
     // files. Never throws: the ticket carries on whatever the log does.
-    async record(guild, ticket, { event, actorId = null, userIds = [], detail = null, transcript, messageCount }) {
+    async record(guild, ticket, { event, actorId = null, userIds = [], detail = null, transcript, transcriptData, messageCount }) {
       const at = now();
       try {
         tickets.addEvent(ticket, { event, actorId, userIds, detail, createdAt: at });
@@ -129,10 +138,23 @@ export function createTicketLog({ tickets, poster, guildSettings, logger, now = 
           guild,
           TICKET_LOG_SETTINGS,
           ({ canAttach }) => ({
-            embed: buildTicketEventEmbed({ ticket, event, actorId, userIds, detail, messageCount, at }),
+            embed: buildTicketEventEmbed({
+              ticket,
+              event,
+              actorId,
+              userIds,
+              detail,
+              messageCount,
+              transcriptLink: transcript || transcriptData ? transcriptUrl(dashboardUrl, ticket) : null,
+              at,
+            }),
             files:
-              transcript && canAttach
-                ? [new AttachmentBuilder(Buffer.from(transcript, "utf8"), { name: transcriptFileName(ticket) })]
+              (transcript || transcriptData) && canAttach
+                ? [
+                    new AttachmentBuilder(Buffer.from(ticketTranscriptPage({ ticket, data: transcriptData, text: transcript }), "utf8"), {
+                      name: transcriptFileName(ticket),
+                    }),
+                  ]
                 : [],
           }),
           { route },

@@ -250,7 +250,7 @@ const FEATURE_PARTS = [
         ],
         tips: [
           "Temporary bans survive restarts, and an automatic Unban case is added when they end.",
-          "`/purge` skips pinned messages and anything older than 14 days. A `.txt` transcript of what it deleted goes to the mod log.",
+          "`/purge` skips pinned messages and anything older than 14 days. A transcript of what it deleted (an `.html` page that looks like the chat) goes to the mod log.",
           "Bans, kicks and timeouts done from Discord's own menus still get a case (read from the audit log), but the member isn't DMed. Use the bot's commands.",
           "**Reason suggestions:** while you type a reason, Discord suggests the reasons your team uses most. Pick one or keep typing your own.",
           "**Warning thresholds** (Moderation page on the dashboard): for example 3 warnings in 30 days gives a 1 hour timeout, 5 in 30 days a ban. A threshold fires when a `/warn` makes the count reach it, and the bot says so in its reply. Its case shows `Warning threshold` as the reason.",
@@ -397,7 +397,7 @@ const FEATURE_PARTS = [
         example: ["/tickets panel channel:#support staff-role:@Mods", "/tickets close reason:Report handled, warning given", "/tickets log channel:#ticket-log"],
         tips: [
           "Placeholders work in the intro message and the thread name, for example `{category}-{number}`. A ticket type can follow the panel's or set its own. Switch the staff ping off to add staff quietly.",
-          "Closing saves a transcript, posted as a `.txt` in the ticket log and shown on the Tickets page. Closed tickets are locked and archived, not deleted. **Don't delete ticket threads**, or the transcript is lost.",
+          "Closing saves a transcript that looks like the conversation in Discord. The ticket log gets it as an `.html` file and a link to its page on the dashboard (only people who can see the server's tickets can open it), and the Tickets page shows it too. Closed tickets are locked and archived, not deleted. **Don't delete ticket threads**, or the transcript is lost.",
           "**Ticket log:** every ticket opened, closed, reopened, renamed, people added or removed and threads deleted is posted with who did it and when. That counts things done in Discord itself too (renaming or archiving the thread, mentioning someone into it). Without a ticket log channel it goes to the mod log. Each ticket's page on the dashboard shows its full history, even for kinds you switched off.",
           "Archiving a ticket's thread closes the ticket (with its transcript). Unarchiving it reopens the ticket, unless the member has opened another one since. Give the bot **View Audit Log** so the log shows who renamed or archived a thread.",
           "One open ticket per member, 50 per server. The staff role is pinged when one opens, unless you switch that off.",
@@ -569,10 +569,10 @@ const FEATURE_PARTS = [
         table: {
           head: ["Channel", "What it records"],
           rows: [
-            ["**Logs**", "Every command anyone runs (who, where, options and result), every message deleted from the country channel, and every dashboard change."],
+            ["**Logs**", "Every command anyone runs (who, where, options and result), every message deleted from the country channel, and every dashboard change (only what changed, a few lines per setting). Commands that already post a case or ticket log entry aren't logged twice."],
             ["**Mod log**", "Every case, purge transcript, lock, slowmode, role and nickname change. Without one, cases go to the logs channel."],
             ["**Ticket log** (optional)", "Every ticket opened, closed (with its transcript), reopened, renamed, people added or removed and thread deleted. Without one, these go to the mod log. Set it with `/tickets log` or on the Logging page."],
-            ["**Server log: messages**", "Edits (before, after, and the changed words: ~~removed~~ and **added**), deletions (text, attachments, stickers, when it was sent, what it replied to, and who deleted it), bulk deletions with a transcript file, and pins. Nothing in the server log is posted until a channel is set."],
+            ["**Server log: messages**", "Edits (before, after, and the changed words: ~~removed~~ and **added**), deletions (text, attachments, stickers, when it was sent, what it replied to, and who deleted it), bulk deletions with a transcript page, and pins. Nothing in the server log is posted until a channel is set."],
             ["**Server log: members**", "Joins (account age, look-alike warnings, the invite used and who made it), leaves (how long they stayed, roles, nickname), nickname, role and timeout changes (and who made them), username, display name and avatar changes, and boosts."],
             ["**Server log: voice**", "Joins, leaves (with time spent), moves between channels (and who moved them), and server mutes and deafens (and who did them)."],
             ["**Server log: server changes**", "Channels and categories, permission overwrites, roles (each permission added or removed), server settings, emojis, stickers and sounds, invites, webhooks, threads, scheduled events, bots and apps, and Discord AutoMod rules. Each says what changed, before → after, and who did it."],

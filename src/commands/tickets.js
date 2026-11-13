@@ -74,6 +74,7 @@ import { isDefaultLook } from "../tickets/panel.js";
 import { idleStep, MAX_AUTO_CLOSE_HOURS, normalizeTicketSupport, warningHours } from "../tickets/support.js";
 import { findCategory, subjectFromAnswers } from "../tickets/categories.js";
 import { buildTicketTranscript, fetchThreadMessages } from "../tickets/transcript.js";
+import { buildTranscriptData } from "../transcripts/snapshot.js";
 import { noTicketLog, TICKET_EVENTS, TicketEvent } from "../tickets/ticketLog.js";
 import { isPermissionError } from "../utils/discordErrors.js";
 import { accentColor } from "../branding/branding.js";
@@ -333,12 +334,14 @@ export function createTicketsCommand({
       actorId: closedBy,
       detail: reason,
       transcript: saved?.transcript,
+      transcriptData: saved?.data,
       messageCount: saved?.messageCount,
     });
     return closed;
   }
 
-  // Saves the conversation. Returns { transcript, messageCount }, or undefined
+  // Saves the conversation, as text and as data for the dashboard's
+  // transcript page. Returns { transcript, data, messageCount }, or undefined
   // if it couldn't be read. Never throws: a ticket whose history can't be read still closes.
   async function saveTranscript(thread, ticket, guild) {
     try {
@@ -352,8 +355,9 @@ export function createTicketsCommand({
         names[id] ??= member?.user?.tag ?? member?.user?.username;
       }
       const transcript = buildTicketTranscript({ ticket, guildName: guild.name, messages, names });
-      tickets.setTranscript(ticket.id, transcript, messages.length);
-      return { transcript, messageCount: messages.length };
+      const data = buildTranscriptData({ guild, channel: thread, messages });
+      tickets.setTranscript(ticket.id, transcript, messages.length, data);
+      return { transcript, data, messageCount: messages.length };
     } catch (error) {
       logger.warn("Couldn't save a ticket's transcript", { guildId: guild.id, ticket: ticket.number, error });
       return undefined;
@@ -380,6 +384,7 @@ export function createTicketsCommand({
       actorId: interaction.user.id,
       detail: reason,
       transcript: saved?.transcript,
+      transcriptData: saved?.data,
       messageCount: saved?.messageCount,
     });
     await interaction.channel
@@ -512,6 +517,7 @@ export function createTicketsCommand({
           event: TicketEvent.CLOSED,
           detail: reason,
           transcript: saved?.transcript,
+          transcriptData: saved?.data,
           messageCount: saved?.messageCount,
         });
         await thread

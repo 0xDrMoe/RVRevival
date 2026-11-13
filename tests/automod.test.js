@@ -107,7 +107,7 @@ describe("automod", () => {
     });
     expect(modLog.post).toHaveBeenCalledTimes(1);
     const { embed } = modLog.post.mock.calls[0][1]();
-    expect(embed.data.description).toContain("**Automod: Banned word**");
+    expect(embed.data.title).toBe("Automod: Banned word");
     expect(store.countGuildCases(GUILD_ID)).toEqual({});
   });
 
@@ -301,7 +301,7 @@ describe("automod", () => {
     expect(first.delete).not.toHaveBeenCalled();
     expect(channel.send).not.toHaveBeenCalled();
     expect(modLog.post).toHaveBeenCalledTimes(1);
-    expect(modLog.post.mock.calls[0][1]().embed.data.description).toContain("**Automod (log only): Banned word**");
+    expect(modLog.post.mock.calls[0][1]().embed.data.title).toBe("Automod (log only): Banned word");
     expect(store.countGuildCases(GUILD_ID)).toEqual({});
     clock += PUNISH_COOLDOWN_MS + 1;
     await automod.handleMessage(message("noob"));

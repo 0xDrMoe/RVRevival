@@ -8,6 +8,7 @@ import { pickLanguage, translate } from "../i18n/i18n.js";
 import { CaseAction } from "./caseStore.js";
 import { noModLog } from "./modLog.js";
 import { sendDm } from "../utils/dms.js";
+import { markLoggedMemberChange } from "../logs/recentIds.js";
 
 // Discord's longest audit log reason.
 const MAX_AUDIT_REASON = 512;
@@ -114,6 +115,8 @@ export function createModerationService({ store, modLog = noModLog, logger, forc
       // DM first: once banned, they no longer share a server with the bot.
       const dmSent = member ? await notify(user, guild, CaseAction.BAN, { reason, expiresAt }) : undefined;
       markOwnAction(guild, user.id, CaseAction.BAN);
+      // The case says they left; the server log doesn't post a leave too.
+      markLoggedMemberChange(guild.id, user.id);
       await guild.members.ban(user.id, { reason: auditReason(moderator, reason), deleteMessageSeconds });
       counted(guild, moderator, "ban");
       // A new ban replaces any temporary ban still waiting to end.
@@ -144,6 +147,7 @@ export function createModerationService({ store, modLog = noModLog, logger, forc
       const dmSent = await notify(member.user, guild, CaseAction.SOFTBAN, { reason });
       markOwnAction(guild, member.id, CaseAction.BAN);
       markOwnAction(guild, member.id, CaseAction.UNBAN);
+      markLoggedMemberChange(guild.id, member.id);
       await guild.members.ban(member.id, { reason: auditReason(moderator, reason), deleteMessageSeconds });
       await guild.members.unban(member.id, auditReason(moderator, `Softban: ${reason || "No reason given"}`));
       counted(guild, moderator, "ban");
@@ -153,6 +157,7 @@ export function createModerationService({ store, modLog = noModLog, logger, forc
     async kick({ guild, member, moderator, reason }) {
       const dmSent = await notify(member.user, guild, CaseAction.KICK, { reason });
       markOwnAction(guild, member.id, CaseAction.KICK);
+      markLoggedMemberChange(guild.id, member.id);
       await member.kick(auditReason(moderator, reason));
       counted(guild, moderator, "kick");
       return recordCase({ guild, action: CaseAction.KICK, user: member.user, moderator, reason, dmSent });
@@ -161,6 +166,7 @@ export function createModerationService({ store, modLog = noModLog, logger, forc
     async timeout({ guild, member, moderator, reason, durationMs }) {
       const expiresAt = now() + durationMs;
       markOwnAction(guild, member.id, CaseAction.TIMEOUT);
+      markLoggedMemberChange(guild.id, member.id);
       await member.timeout(durationMs, auditReason(moderator, reason));
       const dmSent = await notify(member.user, guild, CaseAction.TIMEOUT, { reason, expiresAt });
       return recordCase({
@@ -177,6 +183,7 @@ export function createModerationService({ store, modLog = noModLog, logger, forc
 
     async untimeout({ guild, member, moderator, reason }) {
       markOwnAction(guild, member.id, CaseAction.UNTIMEOUT);
+      markLoggedMemberChange(guild.id, member.id);
       await member.timeout(null, auditReason(moderator, reason));
       const dmSent = await notify(member.user, guild, CaseAction.UNTIMEOUT, { reason });
       return recordCase({ guild, action: CaseAction.UNTIMEOUT, user: member.user, moderator, reason, dmSent });

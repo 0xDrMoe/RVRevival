@@ -269,6 +269,57 @@ export async function saveAttachments(message, { fetchFile = fetch } = {}) {
   );
 }
 
+// Commands and buttons whose successful use posts an entry of its own: a
+// moderation case, a moderation action or a ticket log entry. Their command
+// entry would only say the same thing again (often in the same channel), so
+// it's left out. Refusals, failures and errors are still logged.
+export const LOGGED_ELSEWHERE = new Set([
+  "/ban",
+  "/softban",
+  "/unban",
+  "/kick",
+  "/timeout",
+  "/untimeout",
+  "/warn",
+  "/note",
+  "/clearwarns",
+  "/lock",
+  "/unlock",
+  "/slowmode",
+  "/role add",
+  "/role remove",
+  "/nick",
+  "/purge",
+  "/massrole add",
+  "/massrole remove",
+  "/quarantine add",
+  "/quarantine release",
+  "/temprole add",
+  "/temprole remove",
+  "/raid lockdown",
+  "/raid end",
+  "/tickets close",
+  "/tickets add",
+  "/tickets remove",
+  "/tickets claim",
+  // Buttons and forms, by label.
+  "Claim ticket button",
+  "Close ticket button",
+  "Ticket form",
+  "Ticket category form",
+  "Ticket rating",
+  "Report form",
+]);
+
+// Whether this use is already logged by what it did (see LOGGED_ELSEWHERE).
+export function isLoggedElsewhere(interaction, outcome) {
+  if (outcome?.status !== Status.SUCCESS) {
+    return false;
+  }
+  const name = outcome.action ? outcome.action.label : describeCommand(interaction).command;
+  return LOGGED_ELSEWHERE.has(name);
+}
+
 // Options:
 //   guildSettings   where the logs channel is stored (GuildSettings)
 //   logger
@@ -283,8 +334,12 @@ export function createActionLog({
   const post = (guild, route, build) => poster.post(guild, [Setting.LOGS_CHANNEL], build, { route });
 
   return {
-    logCommand: (interaction, outcome) =>
-      post(interaction.guild, LogRoute.COMMANDS, () => ({ embed: buildCommandLogEmbed(interaction, outcome) })),
+    logCommand: async (interaction, outcome) => {
+      if (isLoggedElsewhere(interaction, outcome)) {
+        return undefined;
+      }
+      return post(interaction.guild, LogRoute.COMMANDS, () => ({ embed: buildCommandLogEmbed(interaction, outcome) }));
+    },
 
     // Call before deleting a message: starts downloading its attachments while
     // their links still work. Skipped when the server has no logs channel.

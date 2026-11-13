@@ -8868,7 +8868,7 @@ function ticketHistory(guildId, events) {
 }
 
 async function showTicket(guildId, data, number) {
-  const { ticket, transcript, events = [] } = await api(`/api/guilds/${guildId}/tickets/${number}`);
+  const { ticket, transcript, transcriptPage = null, events = [] } = await api(`/api/guilds/${guildId}/tickets/${number}`);
   const facts = [
     [t("ticketsOpenedBy"), ticketPerson(guildId, ticket.userId, ticket.userName)],
     [t("ticketsOpened"), formatDate(ticket.createdAt)],
@@ -8885,6 +8885,8 @@ async function showTicket(guildId, data, number) {
     ticket.threadId
       ? h("a", { class: "button ghost small", href: `https://discord.com/channels/${guildId}/${ticket.threadId}`, target: "_blank", rel: "noopener" }, icon("external", "icon small"), t("ticketsOpenThread"))
       : null,
+    transcriptPage ? h("a", { class: "button ghost small", href: transcriptPage, target: "_blank", rel: "noopener" }, icon("external", "icon small"), t("ticketsOpenPage")) : null,
+    transcriptPage ? h("a", { class: "button ghost small", href: `${transcriptPage}?download=1`, download: "" }, icon("download", "icon small"), t("ticketsDownloadPage")) : null,
     transcript !== null ? h("a", { class: "button ghost small", href: `/api/guilds/${guildId}/tickets/${number}?download=1` }, icon("download", "icon small"), t("ticketsDownload")) : null,
   );
   show(
@@ -8907,7 +8909,20 @@ async function showTicket(guildId, data, number) {
         "blue",
         transcript === null
           ? h("p", { class: "muted" }, t(ticket.closedAt ? "ticketsNoTranscript" : "ticketsTranscriptLater"))
-          : h("pre", { class: "transcript" }, transcript),
+          : transcriptPage
+            ? [
+                h("p", { class: "help" }, t("ticketsTranscriptHelp")),
+                // The page has no scripts; links in it open in a new tab.
+                h("iframe", {
+                  class: "transcript-frame",
+                  src: `${transcriptPage}?embed=1`,
+                  title: t("ticketsTranscript"),
+                  loading: "lazy",
+                  referrerpolicy: "no-referrer",
+                  sandbox: "allow-popups allow-popups-to-escape-sandbox allow-same-origin",
+                }),
+              ]
+            : h("pre", { class: "transcript" }, transcript),
       ),
     ),
   );

@@ -1882,5 +1882,9 @@
   "botAutorolesHelp": "Roles que recibe cada bot nuevo en vez de los de miembros (hasta {max}), como un rol Bots. La incorporación no cubre bots.",
   "sectionDehoist": "Quitar símbolos de nombres",
   "dehoistOn": "Arreglar nombres que empiezan con símbolos",
-  "dehoistHelp": "Nombres como !!!aaa salen arriba de todos. Los nuevos y los cambios de nombre pierden los símbolos del inicio. /dehoist run arregla a los que ya están. Necesita Gestionar apodos."
+  "dehoistHelp": "Nombres como !!!aaa salen arriba de todos. Los nuevos y los cambios de nombre pierden los símbolos del inicio. /dehoist run arregla a los que ya están. Necesita Gestionar apodos.",
+
+  "ticketsOpenPage": "Abrir como página",
+  "ticketsDownloadPage": "Descargar .html",
+  "ticketsTranscriptHelp": "La conversación tal como se veía en Discord. Las imágenes y archivos son enlaces de Discord y pueden dejar de funcionar con el tiempo."
 }

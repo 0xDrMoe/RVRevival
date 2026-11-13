@@ -18,7 +18,7 @@ import {
 } from "discord.js";
 import { pickLanguage, translate } from "../i18n/i18n.js";
 import { authorOf, result, Status } from "../logs/actionLog.js";
-import { buildTranscript } from "../logs/transcript.js";
+import { deletedMessagesPage } from "../transcripts/deletedPage.js";
 import { isModerator } from "../moderation/checks.js";
 import { noModLog } from "../moderation/modLog.js";
 import { DAY_MS } from "../utils/duration.js";
@@ -124,7 +124,15 @@ export function createPurgeCommand({ guildSettings, modLog = noModLog, botDeleti
     await modLog.post(interaction.guild, ({ canAttach }) => ({
       embed: buildPurgeLogEmbed({ moderator: interaction.user, channelId: channel.id, count: deleted.length, userId }),
       files: canAttach
-        ? [new AttachmentBuilder(Buffer.from(buildTranscript(deleted), "utf8"), { name: `purge-${channel.id}.txt` })]
+        ? [
+            new AttachmentBuilder(
+              Buffer.from(
+                deletedMessagesPage({ guild: interaction.guild, channel, messages: deleted, title: "Messages purged", by: interaction.user.tag ?? interaction.user.username }),
+                "utf8",
+              ),
+              { name: `purge-${channel.id}.html` },
+            ),
+          ]
         : [],
     }), { route: LogRoute.PURGE });
 

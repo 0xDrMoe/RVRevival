@@ -4,6 +4,7 @@
 
 import { buildActionLogEmbed, noModLog } from "../moderation/modLog.js";
 import { LogRoute } from "../logs/logRoutes.js";
+import { markLoggedMemberChange } from "../logs/recentIds.js";
 
 // Options: client, store (TempRoleStore), modLog, logger
 export function createTempRoleScheduler({ client, store, modLog = noModLog, logger, intervalMs = 30_000, now = Date.now }) {
@@ -21,6 +22,7 @@ export function createTempRoleScheduler({ client, store, modLog = noModLog, logg
       return;
     }
     try {
+      markLoggedMemberChange(member.guild?.id, member.id);
       await member.roles.remove(role.id, "Temporary role ended");
     } catch (error) {
       logger.warn("Couldn't take a temporary role away", { guildId: guild.id, error });

@@ -81,6 +81,14 @@ export class TicketStore {
       byNumber: this.#db.prepare("SELECT * FROM tickets WHERE guild_id = ? AND number = ?"),
       setTranscript: this.#db.prepare("UPDATE tickets SET transcript = ?, message_count = ? WHERE id = ?"),
       transcript: this.#db.prepare("SELECT transcript FROM tickets WHERE guild_id = ? AND number = ?"),
+      setTranscriptData: this.#db.prepare(`
+        INSERT INTO ticket_transcripts (ticket_id, guild_id, data) VALUES (?, ?, ?)
+        ON CONFLICT (ticket_id) DO UPDATE SET data = excluded.data`),
+      transcriptData: this.#db.prepare(`
+        SELECT data FROM ticket_transcripts
+        WHERE ticket_id = (SELECT id FROM tickets WHERE guild_id = ? AND number = ?)`),
+      deleteTranscriptData: this.#db.prepare("DELETE FROM ticket_transcripts WHERE ticket_id = ?"),
+      guildOf: this.#db.prepare("SELECT guild_id FROM tickets WHERE id = ?"),
       // Newest first. :status is "open", "closed" or "all"; :userId and :before are optional.
       search: this.#db.prepare(`
         SELECT * FROM tickets
@@ -162,8 +170,23 @@ export class TicketStore {
     return this.#statements.search.all({ guildId, status, userId, before, limit }).map(toTicket);
   }
 
-  setTranscript(id, transcript, messageCount) {
-    this.#statements.setTranscript.run(transcript, messageCount, id);
+  // `data` (transcripts/snapshot.js) is what the dashboard draws the page from.
+  setTranscript(id, transcript, messageCount, data = undefined) {
+    inTransaction(this.#db, () => {
+      this.#statements.setTranscript.run(transcript, messageCount, id);
+      if (data !== undefined) {
+        const guildId = this.#statements.guildOf.get(id)?.guild_id;
+        if (guildId) {
+          this.#statements.setTranscriptData.run(id, guildId, JSON.stringify(data));
+        }
+      }
+    });
+  }
+
+  // The saved transcript data (JSON text), or undefined for tickets closed
+  // before transcripts were saved as data.
+  transcriptData(guildId, number) {
+    return this.#statements.transcriptData.get(guildId, number)?.data ?? undefined;
   }
 
   // The saved transcript text, or undefined.
@@ -197,6 +220,7 @@ export class TicketStore {
   delete(id) {
     inTransaction(this.#db, () => {
       this.#statements.deleteEvents.run(id);
+      this.#statements.deleteTranscriptData.run(id);
       this.#statements.delete.run(id);
     });
   }

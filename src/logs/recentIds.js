@@ -37,3 +37,17 @@ export class RecentIds {
     }
   }
 }
+
+// Members the bot just changed as part of something it logs itself (a
+// timeout case, /role, /nick, quarantine, temporary and mass roles, anti-nuke),
+// so the server log doesn't post the same nickname, role or timeout change
+// again. Changes the bot makes for other reasons (autoroles, role panels,
+// level rewards) are still logged there, since nothing else logs them.
+export const loggedMemberChanges = new RecentIds({ ttlMs: 30_000 });
+
+export const memberChangeKey = (guildId, userId) => `${guildId}:${userId}`;
+
+// Call right before changing the member.
+export function markLoggedMemberChange(guildId, ...userIds) {
+  loggedMemberChanges.add(userIds.flat().map((userId) => memberChangeKey(guildId, userId)));
+}

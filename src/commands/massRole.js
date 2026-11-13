@@ -23,6 +23,7 @@ import { beginModerationCommand } from "./commandHelpers.js";
 import { roleProblem } from "./memberTools.js";
 import { withDescription } from "./moderation.js";
 import { LogRoute } from "../logs/logRoutes.js";
+import { markLoggedMemberChange } from "../logs/recentIds.js";
 
 export const WHO = Object.freeze({ HUMANS: "humans", BOTS: "bots", EVERYONE: "everyone" });
 
@@ -100,6 +101,7 @@ export async function runMassRole({ members, roleId, adding, reason, job, onProg
       break;
     }
     try {
+      markLoggedMemberChange(member.guild?.id, member.id);
       await (adding ? member.roles.add(roleId, reason) : member.roles.remove(roleId, reason));
       counts.done += 1;
     } catch (error) {

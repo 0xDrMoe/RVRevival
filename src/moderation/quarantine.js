@@ -8,7 +8,9 @@
 import { buildActionLogEmbed, noModLog } from "./modLog.js";
 import { SavedRoles } from "../members/savedRoleStore.js";
 import { Setting } from "../settings/guildSettings.js";
+import { capList } from "../logs/logEntry.js";
 import { LogRoute } from "../logs/logRoutes.js";
+import { markLoggedMemberChange } from "../logs/recentIds.js";
 
 export class AlreadyQuarantined extends Error {
   name = "AlreadyQuarantined";
@@ -70,6 +72,7 @@ export function createQuarantine({ guildSettings, store, modLog = noModLog, logg
         savedAt: now(),
       });
       try {
+        markLoggedMemberChange(member.guild?.id, member.id);
         await member.roles.set([...kept.map((entry) => entry.id), ...(role ? [role.id] : [])], audit);
       } catch (error) {
         store.delete(guild.id, member.id, SavedRoles.QUARANTINE);
@@ -81,8 +84,8 @@ export function createQuarantine({ guildSettings, store, modLog = noModLog, logg
         `🔒 **Quarantined** · <@${member.id}>`,
         [
           reason ? `Reason: ${reason}` : null,
-          removed.length > 0 ? `Roles taken: ${removed.map((entry) => `<@&${entry.id}>`).join(", ")}` : "They had no roles the bot could take.",
-          kept.length > 0 ? `Roles kept (above the bot or managed): ${kept.map((entry) => `<@&${entry.id}>`).join(", ")}` : null,
+          removed.length > 0 ? `Roles taken: ${capList(removed.map((entry) => `<@&${entry.id}>`))}` : "They had no roles the bot could take.",
+          kept.length > 0 ? `Roles kept (above the bot or managed): ${capList(kept.map((entry) => `<@&${entry.id}>`))}` : null,
           role ? `Given <@&${role.id}>.` : null,
         ].filter(Boolean),
         0xe67e22,
@@ -102,6 +105,7 @@ export function createQuarantine({ guildSettings, store, modLog = noModLog, logg
       const restored = saved.roleIds.filter((id) => canManageRole(guild, guild.roles.cache.get(id)));
       const missing = saved.roleIds.filter((id) => !restored.includes(id));
       const keep = [...member.roles.cache.keys()].filter((id) => id !== guild.id && id !== roleId);
+      markLoggedMemberChange(member.guild?.id, member.id);
       await member.roles.set([...new Set([...keep, ...restored])], reason ?? "Quarantine ended");
       store.delete(guild.id, member.id, SavedRoles.QUARANTINE);
       await log(
@@ -110,7 +114,7 @@ export function createQuarantine({ guildSettings, store, modLog = noModLog, logg
         `🔓 **Released from quarantine** · <@${member.id}>`,
         [
           reason ? `Reason: ${reason}` : null,
-          restored.length > 0 ? `Roles given back: ${restored.map((id) => `<@&${id}>`).join(", ")}` : null,
+          restored.length > 0 ? `Roles given back: ${capList(restored.map((id) => `<@&${id}>`))}` : null,
           missing.length > 0 ? `${missing.length} role(s) couldn't be given back: deleted, or now above the bot.` : null,
         ].filter(Boolean),
         0x57f287,

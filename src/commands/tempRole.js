@@ -18,6 +18,7 @@ import { beginModerationCommand } from "./commandHelpers.js";
 import { roleProblem } from "./memberTools.js";
 import { withDescription } from "./moderation.js";
 import { LogRoute } from "../logs/logRoutes.js";
+import { markLoggedMemberChange } from "../logs/recentIds.js";
 
 const COMMAND_NAME = "temprole";
 export const MAX_TEMP_ROLE_MS = 365 * 24 * 60 * 60 * 1000;
@@ -100,6 +101,7 @@ export function createTempRoleCommand({ guildSettings, store, modLog = noModLog,
     const reason = interaction.options.getString("reason")?.trim() || null;
     if (!member.roles.cache.has(role.id)) {
       try {
+        markLoggedMemberChange(member.guild?.id, member.id);
         await member.roles.add(role.id, auditReason(interaction.user, `Temporary role for ${formatDuration(durationMs)}${reason ? `: ${reason}` : ""}`));
       } catch (error) {
         if (!isPermissionError(error)) {
@@ -128,6 +130,7 @@ export function createTempRoleCommand({ guildSettings, store, modLog = noModLog,
     }
     if (member.roles.cache.has(role.id)) {
       try {
+        markLoggedMemberChange(member.guild?.id, member.id);
         await member.roles.remove(role.id, auditReason(interaction.user, "Temporary role removed early"));
       } catch (error) {
         if (!isPermissionError(error)) {

@@ -11,29 +11,30 @@ import { MAX_THRESHOLD, MIN_THRESHOLD } from "../community/starboard.js";
 import { cleanTagContent, cleanTagName, MAX_TAG_LENGTH, MAX_TAGS, sortTags } from "../community/tags.js";
 import { MAX_AUTOROLES, MAX_MESSAGE_LENGTH } from "../community/welcome.js";
 import { checkWelcomeEmbed, describeWelcomeEmbed } from "../community/welcomeEmbeds.js";
-import { checkMilestones, describeMilestones, InvalidMilestones } from "../community/milestones.js";
+import { checkMilestones, describeMilestones, InvalidMilestones, normalizeMilestones } from "../community/milestones.js";
 import { InvalidMessage } from "../messages/embedMessage.js";
 import { checkLeveling, DEFAULT_LEVELING, InvalidLeveling, normalizeLeveling } from "../leveling/config.js";
-import { checkAntiNuke, describeAntiNuke, InvalidAntiNuke } from "../raid/antiNuke.js";
-import { checkRolePersist, InvalidRolePersist } from "../members/rolePersistence.js";
+import { checkAntiNuke, describeAntiNuke, InvalidAntiNuke, normalizeAntiNuke } from "../raid/antiNuke.js";
+import { checkRolePersist, InvalidRolePersist, normalizeRolePersist } from "../members/rolePersistence.js";
 import { checkMediaOnly, describeMediaOnly, InvalidMediaOnly } from "../community/mediaOnly.js";
-import { checkAppeals, InvalidAppeals } from "../appeals/config.js";
-import { checkCategories, describeCategories, InvalidCategories } from "../tickets/categories.js";
-import { checkLook, describeLook, InvalidPanel } from "../tickets/panel.js";
-import { checkTicketSupport, describeTicketSupport, InvalidTicketSupport } from "../tickets/support.js";
-import { checkWarnThresholds, describeWarnThresholds, InvalidWarnThresholds } from "../moderation/warnThresholds.js";
+import { checkAppeals, InvalidAppeals, normalizeAppeals } from "../appeals/config.js";
+import { checkCategories, describeCategories, InvalidCategories, normalizeCategories } from "../tickets/categories.js";
+import { checkLook, describeLook, InvalidPanel, normalizeLook } from "../tickets/panel.js";
+import { checkTicketSupport, describeTicketSupport, InvalidTicketSupport, normalizeTicketSupport } from "../tickets/support.js";
+import { checkWarnThresholds, describeWarnThresholds, InvalidWarnThresholds, normalizeWarnThresholds } from "../moderation/warnThresholds.js";
 import { checkJoinGate, InvalidJoinGate } from "../raid/raid.js";
 import { checkGuide, describeGuide, InvalidGuide } from "../countries/guide.js";
-import { checkCountryOptions, describeCountryOptions, InvalidCountryOptions } from "../countries/options.js";
-import { checkLogOptions, describeLogOptions, InvalidLogOptions, LOG_EVENTS } from "../logs/logEvents.js";
+import { checkCountryOptions, describeCountryOptions, InvalidCountryOptions, normalizeCountryOptions } from "../countries/options.js";
+import { checkLogOptions, describeLogOptions, InvalidLogOptions, LOG_EVENTS, normalizeLogOptions } from "../logs/logEvents.js";
 import { TICKET_EVENTS } from "../tickets/ticketLog.js";
-import { checkLogRoutes, describeLogRoutes, InvalidLogRoutes } from "../logs/logRoutes.js";
+import { changeLines, diffValues, serverMention } from "../logs/changeDiff.js";
+import { checkLogRoutes, describeLogRoutes, InvalidLogRoutes, normalizeLogRoutes } from "../logs/logRoutes.js";
 import { botCommandCatalog } from "../permissions/catalog.js";
-import { checkCommandRules, describeCommandRules, InvalidCommandRules } from "../permissions/commandRules.js";
+import { checkCommandRules, describeCommandRules, InvalidCommandRules, normalizeCommandRules } from "../permissions/commandRules.js";
 import { isModeratorRole } from "../permissions/moderatorPermissions.js";
 import { CUSTOM, PRESETS } from "../permissions/presets.js";
-import { checkMusic, describeMusic, InvalidMusic } from "../music/config.js";
-import { channelTypesFor, checkAutomation, describeAutomation, InvalidAutomation } from "../channels/automation.js";
+import { checkMusic, describeMusic, InvalidMusic, normalizeMusic } from "../music/config.js";
+import { channelTypesFor, checkAutomation, describeAutomation, InvalidAutomation, normalizeAutomation } from "../channels/automation.js";
 import { Setting } from "../settings/guildSettings.js";
 import { variableError } from "./public/variables.js";
 
@@ -641,4 +642,76 @@ export function describeValue(setting, value) {
     default:
       return Array.isArray(value) ? value.join(", ") : String(value);
   }
+}
+
+// Settings that are one value (a channel, a role, some text, on or off): their
+// change is "before → after". Every other setting lists only what changed in it.
+const WHOLE_VALUE_KINDS = new Set(["role", "givableRole", "channel", "text", "flag", "onByDefault", "nativePermissions", "preset"]);
+
+// What a saved value means when compared, so unset and the defaults compare equal.
+const NORMALIZE = {
+  automod: normalizeAutomod,
+  leveling: normalizeLeveling,
+  logRoutes: normalizeLogRoutes,
+  logOptions: normalizeLogOptions,
+  commandRules: normalizeCommandRules,
+  music: normalizeMusic,
+  channelAutomation: normalizeAutomation,
+  milestones: normalizeMilestones,
+  ticketSupport: normalizeTicketSupport,
+  antiNuke: normalizeAntiNuke,
+  countryRoles: normalizeCountryOptions,
+  warnThresholds: normalizeWarnThresholds,
+  appeals: normalizeAppeals,
+  ticketPanel: normalizeLook,
+  ticketCategories: normalizeCategories,
+  rolePersist: normalizeRolePersist,
+};
+
+// What the IDs in a list setting are, for settings that are a bare list.
+const LIST_KEYS = { channels: "channelIds", roles: "roleIds", autoroles: "roleIds" };
+
+// Better names than the keys give, for the first level of some settings.
+const KEY_LABELS = {
+  commandRules: (key, depth) => (depth === 0 ? `/${key}` : undefined),
+  automod: (key, depth, path) => (depth === 1 && path === "rules" ? RULE_LABELS[key] : undefined),
+};
+
+// What changed in `setting`, as at most a few short lines ("**Bans:** none →
+// #bans"). `server` ({ channels, roles }) shows IDs as channels and roles.
+export function describeChange(setting, before, after, server = {}) {
+  const kind = SETTING_RULES[setting]?.kind;
+  if (WHOLE_VALUE_KINDS.has(kind)) {
+    return [`${describeValue(setting, before)} → ${describeValue(setting, after)}`];
+  }
+  const normalize = NORMALIZE[kind] ?? ((value) => value);
+  const safely = (value) => {
+    try {
+      return normalize(value ?? null);
+    } catch {
+      return value ?? null;
+    }
+  };
+  const mention = serverMention({
+    channelIds: (server.channels ?? []).map((channel) => channel.id),
+    roleIds: (server.roles ?? []).map((role) => role.id),
+  });
+  const listKey = LIST_KEYS[kind];
+  const labelOf = KEY_LABELS[kind];
+  let parent;
+  const changes = diffValues(safely(before), safely(after), {
+    mention: (id, key) => mention(id, key ?? listKey),
+    label: (key, depth) => {
+      const name = labelOf?.(key, depth, parent);
+      if (depth === 0) {
+        parent = key;
+      }
+      return name;
+    },
+  });
+  if (changes.length === 0) {
+    // Only defaults filled in, or a change these lines can't show.
+    return ["updated"];
+  }
+  return changeLines(changes);
 }

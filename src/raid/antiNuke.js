@@ -13,8 +13,10 @@ import { AuditLogEvent, PermissionFlagsBits } from "discord.js";
 import { pickLanguage, translate } from "../i18n/i18n.js";
 import { buildActionLogEmbed, noModLog } from "../moderation/modLog.js";
 import { Setting } from "../settings/guildSettings.js";
+import { capList } from "../logs/logEntry.js";
 import { LogRoute } from "../logs/logRoutes.js";
 import { sendDm } from "../utils/dms.js";
+import { markLoggedMemberChange } from "../logs/recentIds.js";
 
 export const NukeAction = Object.freeze({
   CHANNEL_DELETE: "channelDelete",
@@ -177,6 +179,7 @@ export function createAntiNuke({ guildSettings, moderation, quarantine, modLog =
     const removable = roles.filter((role) => !role.managed && role.editable !== false);
     const kept = roles.filter((role) => !removable.includes(role));
     if (removable.length > 0) {
+      markLoggedMemberChange(member.guild?.id, member.id);
       await member.roles.remove(removable.map((role) => role.id), reason);
     }
     return { done: removable.length > 0 ? "stripped" : "failed", removed: removable.map((role) => role.id), kept: kept.map((role) => role.id) };
@@ -204,7 +207,7 @@ export function createAntiNuke({ guildSettings, moderation, quarantine, modLog =
     }
     logger.warn("Anti-nuke stepped in", { guildId: guild.id, userId, action, count, outcome: outcome.done });
     const results = {
-      stripped: `Their roles were taken away${quarantine ? " (they're quarantined; `/quarantine release` gives them back)" : ""}: ${(outcome.removed ?? []).map((id) => `<@&${id}>`).join(", ")}.`,
+      stripped: `Their roles were taken away${quarantine ? " (they're quarantined; `/quarantine release` gives them back)" : ""}: ${capList((outcome.removed ?? []).map((id) => `<@&${id}>`))}.`,
       kicked: "They were kicked.",
       banned: "They were banned.",
       left: "They're no longer in the server.",
@@ -212,7 +215,7 @@ export function createAntiNuke({ guildSettings, moderation, quarantine, modLog =
     };
     const lines = [results[outcome.done]];
     if (outcome.kept.length > 0) {
-      lines.push(`Roles the bot couldn't take: ${outcome.kept.map((id) => `<@&${id}>`).join(", ")}.`);
+      lines.push(`Roles the bot couldn't take: ${capList(outcome.kept.map((id) => `<@&${id}>`))}.`);
     }
     lines.push("Trust someone with `/antinuke trust` if this was expected.");
     await modLog.post(guild, () => ({

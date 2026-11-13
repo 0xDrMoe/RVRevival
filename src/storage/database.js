@@ -573,6 +573,17 @@ const MIGRATIONS = [
     count    INTEGER NOT NULL
   ) WITHOUT ROWID;
   `,
+  // 37: ticket transcripts as data (transcripts/snapshot.js), so the dashboard
+  // can show them as a page that looks like the conversation. Kept apart from
+  // tickets so ticket lists don't read them. Tickets closed before keep only
+  // their text transcript.
+  `
+  CREATE TABLE ticket_transcripts (
+    ticket_id INTEGER PRIMARY KEY,
+    guild_id  TEXT    NOT NULL,
+    data      TEXT    NOT NULL
+  );
+  `,
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS.length;
