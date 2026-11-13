@@ -1809,5 +1809,23 @@
   "playlistError_missing": "Non hai nessuna playlist chiamata **{name}**. Vedi /playlist list.",
   "playlistError_too-many": "Puoi avere fino a {max} playlist. Eliminane una prima.",
   "playlistError_full": "**{name}** è piena ({max} brani).",
-  "playlistError_bad-name": "I nomi delle playlist hanno da 1 a 50 caratteri."
+  "playlistError_bad-name": "I nomi delle playlist hanno da 1 a 50 caratteri.",
+
+  "automodRule_scamLinks": "Link truffa",
+  "automodRule_emojis": "Troppe emoji",
+  "automodRule_lines": "Troppe righe",
+  "automodRule_zalgo": "Testo distorto",
+  "automodLimit_emojis": "Emoji per messaggio",
+  "automodLimit_lines": "Righe per messaggio",
+  "automodNotice_scamLinks": "{user}, quel link sembra una truffa ed è stato rimosso. Se il tuo account l'ha inviato da solo, cambia la password.",
+  "automodNotice_emojis": "{user}, non inviare così tante emoji in una volta.",
+  "automodNotice_lines": "{user}, quel messaggio era troppo lungo (troppe righe). Scrivi più breve.",
+  "automodNotice_zalgo": "{user}, il testo distorto non è consentito qui.",
+  "testAutomodRule_scamLinks": "Link truffa",
+  "testAutomodRule_emojis": "Troppe emoji",
+  "testAutomodRule_lines": "Troppe righe",
+  "testAutomodRule_zalgo": "Testo distorto",
+  "automodShowLimitsMore": "Altri limiti: {emojis} emoji per messaggio, {lines} righe per messaggio.",
+
+  "automodUnknownLimit": "Scegli un'impostazione dall'elenco mentre scrivi."
 }

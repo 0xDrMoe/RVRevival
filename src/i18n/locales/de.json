@@ -1809,5 +1809,23 @@
   "playlistError_missing": "Du hast keine Playlist namens **{name}**. Siehe /playlist list.",
   "playlistError_too-many": "Du kannst bis zu {max} Playlists haben. Lösche zuerst eine.",
   "playlistError_full": "**{name}** ist voll ({max} Songs).",
-  "playlistError_bad-name": "Playlist-Namen haben 1 bis 50 Zeichen."
+  "playlistError_bad-name": "Playlist-Namen haben 1 bis 50 Zeichen.",
+
+  "automodRule_scamLinks": "Betrugslinks",
+  "automodRule_emojis": "Viele Emojis",
+  "automodRule_lines": "Viele Zeilen",
+  "automodRule_zalgo": "Verzerrter Text",
+  "automodLimit_emojis": "Emojis pro Nachricht",
+  "automodLimit_lines": "Zeilen pro Nachricht",
+  "automodNotice_scamLinks": "{user}, dieser Link sieht nach Betrug aus und wurde entfernt. Falls dein Konto ihn von selbst gesendet hat, ändere dein Passwort.",
+  "automodNotice_emojis": "{user}, bitte schick nicht so viele Emojis auf einmal.",
+  "automodNotice_lines": "{user}, die Nachricht war zu lang (zu viele Zeilen). Bitte fasse dich kürzer.",
+  "automodNotice_zalgo": "{user}, verzerrter Text ist hier nicht erlaubt.",
+  "testAutomodRule_scamLinks": "Betrugs-Links",
+  "testAutomodRule_emojis": "Zu viele Emojis",
+  "testAutomodRule_lines": "Zu viele Zeilen",
+  "testAutomodRule_zalgo": "Verzerrter Text",
+  "automodShowLimitsMore": "Weitere Grenzen: {emojis} Emojis pro Nachricht, {lines} Zeilen pro Nachricht.",
+
+  "automodUnknownLimit": "Wähle beim Tippen eine Einstellung aus der Liste."
 }

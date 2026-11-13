@@ -1809,5 +1809,23 @@
   "playlistError_missing": "Você não tem nenhuma playlist chamada **{name}**. Veja /playlist list.",
   "playlistError_too-many": "Você pode ter até {max} playlists. Exclua uma antes.",
   "playlistError_full": "**{name}** está cheia ({max} músicas).",
-  "playlistError_bad-name": "Nomes de playlist têm de 1 a 50 caracteres."
+  "playlistError_bad-name": "Nomes de playlist têm de 1 a 50 caracteres.",
+
+  "automodRule_scamLinks": "Links de golpe",
+  "automodRule_emojis": "Muitos emojis",
+  "automodRule_lines": "Muitas linhas",
+  "automodRule_zalgo": "Texto distorcido",
+  "automodLimit_emojis": "Emojis por mensagem",
+  "automodLimit_lines": "Linhas por mensagem",
+  "automodNotice_scamLinks": "{user}, esse link parece golpe e foi removido. Se sua conta o enviou sozinha, troque sua senha.",
+  "automodNotice_emojis": "{user}, não envie tantos emojis de uma vez.",
+  "automodNotice_lines": "{user}, essa mensagem era longa demais (linhas demais). Seja mais breve.",
+  "automodNotice_zalgo": "{user}, texto distorcido não é permitido aqui.",
+  "testAutomodRule_scamLinks": "Links de golpe",
+  "testAutomodRule_emojis": "Emojis demais",
+  "testAutomodRule_lines": "Linhas demais",
+  "testAutomodRule_zalgo": "Texto distorcido",
+  "automodShowLimitsMore": "Mais limites: {emojis} emojis por mensagem, {lines} linhas por mensagem.",
+
+  "automodUnknownLimit": "Escolha uma opção da lista enquanto digita."
 }

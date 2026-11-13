@@ -1809,5 +1809,23 @@
   "playlistError_missing": "No tienes ninguna lista llamada **{name}**. Mira /playlist list.",
   "playlistError_too-many": "Puedes tener hasta {max} listas. Borra una antes.",
   "playlistError_full": "**{name}** está llena ({max} canciones).",
-  "playlistError_bad-name": "Los nombres de lista tienen de 1 a 50 caracteres."
+  "playlistError_bad-name": "Los nombres de lista tienen de 1 a 50 caracteres.",
+
+  "automodRule_scamLinks": "Enlaces de estafa",
+  "automodRule_emojis": "Muchos emojis",
+  "automodRule_lines": "Muchas líneas",
+  "automodRule_zalgo": "Texto distorsionado",
+  "automodLimit_emojis": "Emojis por mensaje",
+  "automodLimit_lines": "Líneas por mensaje",
+  "automodNotice_scamLinks": "{user}, ese enlace parece una estafa y se eliminó. Si tu cuenta lo envió sola, cambia tu contraseña.",
+  "automodNotice_emojis": "{user}, no envíes tantos emojis a la vez.",
+  "automodNotice_lines": "{user}, ese mensaje era demasiado largo (demasiadas líneas). Hazlo más corto.",
+  "automodNotice_zalgo": "{user}, aquí no se permite texto distorsionado.",
+  "testAutomodRule_scamLinks": "Enlaces de estafa",
+  "testAutomodRule_emojis": "Demasiados emojis",
+  "testAutomodRule_lines": "Demasiadas líneas",
+  "testAutomodRule_zalgo": "Texto distorsionado",
+  "automodShowLimitsMore": "Más límites: {emojis} emojis por mensaje, {lines} líneas por mensaje.",
+
+  "automodUnknownLimit": "Elige un ajuste de la lista mientras escribes."
 }

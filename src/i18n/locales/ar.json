@@ -1809,5 +1809,23 @@
   "playlistError_missing": "ليست لديك قائمة تشغيل باسم **{name}**. راجع /playlist list.",
   "playlistError_too-many": "يمكنك امتلاك {max} قائمة تشغيل كحد أقصى. احذف واحدة أولًا.",
   "playlistError_full": "**{name}** ممتلئة ({max} أغنية).",
-  "playlistError_bad-name": "أسماء قوائم التشغيل من 1 إلى 50 حرفًا."
+  "playlistError_bad-name": "أسماء قوائم التشغيل من 1 إلى 50 حرفًا.",
+
+  "automodRule_scamLinks": "روابط احتيال",
+  "automodRule_emojis": "رموز كثيرة",
+  "automodRule_lines": "أسطر كثيرة",
+  "automodRule_zalgo": "نص مشوّه",
+  "automodLimit_emojis": "رموز في الرسالة",
+  "automodLimit_lines": "أسطر في الرسالة",
+  "automodNotice_scamLinks": "{user}، يبدو هذا الرابط احتيالًا فتمت إزالته. إذا أرسله حسابك من تلقاء نفسه فغيّر كلمة المرور.",
+  "automodNotice_emojis": "{user}، لا ترسل هذا العدد الكبير من الرموز التعبيرية دفعة واحدة.",
+  "automodNotice_lines": "{user}، كانت الرسالة طويلة جدًا (أسطر كثيرة). اجعلها أقصر من فضلك.",
+  "automodNotice_zalgo": "{user}، النص المشوّه غير مسموح به هنا.",
+  "testAutomodRule_scamLinks": "روابط الاحتيال",
+  "testAutomodRule_emojis": "رموز تعبيرية كثيرة",
+  "testAutomodRule_lines": "أسطر كثيرة",
+  "testAutomodRule_zalgo": "نص مشوّه",
+  "automodShowLimitsMore": "حدود أخرى: {emojis} رمزًا تعبيريًا في الرسالة، و{lines} سطرًا في الرسالة.",
+
+  "automodUnknownLimit": "اختر إعدادًا من القائمة أثناء الكتابة."
 }

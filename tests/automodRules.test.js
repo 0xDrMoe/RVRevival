@@ -4,8 +4,13 @@ import {
   findBannedWord,
   findBlockedLink,
   findInvites,
+  countEmojis,
+  countLines,
+  findScamLink,
   isMostlyCaps,
+  isZalgo,
   repeatKey,
+  textRuleDetail,
 } from "../src/automod/rules.js";
 
 describe("findBannedWord", () => {
@@ -92,5 +97,51 @@ describe("repeatKey", () => {
   it("ignores capitals and spacing", () => {
     expect(repeatKey("  Hello   THERE ")).toBe(repeatKey("hello there"));
     expect(repeatKey(undefined)).toBe("");
+  });
+});
+
+describe("scam links, emoji, lines and glitched text", () => {
+  it("catches look-alike Discord and Steam sites", () => {
+    expect(findScamLink("free nitro https://discord-nitro.gift/abc")).toMatch(/discord/);
+    expect(findScamLink("https://dlscord.com/x")).toMatch(/dlscord/);
+    expect(findScamLink("https://d1scord.gg/abc")).toMatch(/d1scord/);
+    expect(findScamLink("https://steamcommunlty.com/tradeoffer/new")).toMatch(/steamcommunity/);
+    expect(findScamLink("https://disc0rd-app.com")).toMatch(/discordapp/);
+    expect(findScamLink("https://www.xn--dscord-p9a.com")).toMatch(/look-alike/);
+  });
+
+  it("leaves the real sites and well-known look-alikes alone", () => {
+    for (const link of ["https://discord.com/x", "https://discord.gift/abc", "https://cdn.discordapp.com/a.png", "https://store.steampowered.com", "https://steamcommunity.com/id/me", "https://disboard.org", "https://discords.com", "https://steamgifts.com", "https://discord.js.org", "https://youtube.com/watch?v=1"]) {
+      expect(findScamLink(link), link).toBeUndefined();
+    }
+  });
+
+  it("catches links whose text shows another website, and free Nitro bait", () => {
+    expect(findScamLink("[discord.com/gifts](https://evil.example/claim)")).toMatch(/shows discord.com/);
+    expect(findScamLink("[https://steamcommunity.com](https://steamcommunity.com/id/me)")).toBeUndefined();
+    expect(findScamLink("[click here](https://example.com)")).toBeUndefined();
+    expect(findScamLink("Get free Nitro for 3 months https://bit.ly/abc")).toMatch(/bait/);
+    expect(findScamLink("I bought nitro yesterday, love it")).toBeUndefined();
+  });
+
+  it("counts emoji, with families, flags and custom emoji once each", () => {
+    expect(countEmojis("hi 😀😀 👨‍👩‍👧 🇨🇦 <:wave:123456789012345678> ✅")).toBe(6);
+    expect(countEmojis("plain text :)")).toBe(0);
+    expect(textRuleDetail("emojis", "😀".repeat(10), { limit: 10 })).toBe("10 emoji");
+    expect(textRuleDetail("emojis", "😀".repeat(9), { limit: 10 })).toBeUndefined();
+  });
+
+  it("counts lines, ignoring trailing line breaks", () => {
+    expect(countLines("a\nb\n\nc\n\n")).toBe(4);
+    expect(countLines("")).toBe(0);
+    expect(textRuleDetail("lines", "x\n".repeat(15), { limit: 15 })).toBe("15 lines");
+  });
+
+  it("spots stacked accent marks without catching real languages", () => {
+    expect(isZalgo("H̷̡̢̛e̵̡͠l̸̢̛l̴̨̛ó̶̢")).toBe(true);
+    expect(isZalgo(`a${"́".repeat(9)}`)).toBe(true);
+    for (const text of ["Tiếng Việt có dấu", "नमस्ते दुनिया", "مَرْحَبًا بِكُمْ", "สวัสดีครับ", "Ça va? Ñandú!"]) {
+      expect(isZalgo(text), text).toBe(false);
+    }
   });
 });

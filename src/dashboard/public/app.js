@@ -75,7 +75,7 @@ const LOG_OPTION_DEFAULTS = { compact: false, showIds: true, logBots: false, edi
 // What the ticket log records (tickets/ticketLog.js).
 const TICKET_EVENTS = ["opened", "closed", "reopened", "memberAdded", "memberRemoved", "renamed", "deleted", "claimed", "unclaimed", "rated"];
 const CASE_ACTIONS = ["ban", "softban", "unban", "kick", "timeout", "untimeout", "warn", "note"];
-const AUTOMOD_RULES = ["bannedWords", "invites", "links", "mentions", "spam", "duplicates", "caps"];
+const AUTOMOD_RULES = ["scamLinks", "bannedWords", "invites", "links", "mentions", "spam", "duplicates", "caps", "emojis", "lines", "zalgo"];
 const AUTOMOD_ACTIONS = ["delete", "warn", "timeout", "log"];
 const ESCALATION_ACTIONS = ["timeout", "kick", "ban"];
 // The numbers each rule uses: where they live in the automod settings, and their range.
@@ -90,6 +90,8 @@ const AUTOMOD_NUMBERS = {
     { path: "rules.caps.percent", key: "amCapsPercent", min: 50, max: 100 },
     { path: "rules.caps.minLength", key: "amCapsMinLength", min: 5, max: 200 },
   ],
+  emojis: [{ path: "rules.emojis.limit", key: "amEmojisLimit", min: 3, max: 100 }],
+  lines: [{ path: "rules.lines.limit", key: "amLinesLimit", min: 3, max: 100 }],
 };
 const MAX_MESSAGE_LENGTH = 1000;
 // Leveling limits, the same as src/leveling/config.js.

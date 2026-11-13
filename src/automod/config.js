@@ -9,6 +9,7 @@
 // The rules, in the order they're checked. The first one a message breaks wins.
 // The names are saved in the settings, so never rename one.
 export const AutomodRule = Object.freeze({
+  SCAM_LINKS: "scamLinks",
   BANNED_WORDS: "bannedWords",
   INVITES: "invites",
   LINKS: "links",
@@ -16,12 +17,16 @@ export const AutomodRule = Object.freeze({
   SPAM: "spam",
   DUPLICATES: "duplicates",
   CAPS: "caps",
+  EMOJIS: "emojis",
+  LINES: "lines",
+  ZALGO: "zalgo",
 });
 
 export const AUTOMOD_RULES = Object.values(AutomodRule);
 
 // How each rule is named in the mod log (English, like the other logs).
 export const RULE_LABELS = {
+  [AutomodRule.SCAM_LINKS]: "Scam link",
   [AutomodRule.BANNED_WORDS]: "Banned word",
   [AutomodRule.INVITES]: "Invite link",
   [AutomodRule.LINKS]: "Link",
@@ -29,6 +34,9 @@ export const RULE_LABELS = {
   [AutomodRule.SPAM]: "Spam",
   [AutomodRule.DUPLICATES]: "Repeated message",
   [AutomodRule.CAPS]: "Too many capitals",
+  [AutomodRule.EMOJIS]: "Too many emoji",
+  [AutomodRule.LINES]: "Too many lines",
+  [AutomodRule.ZALGO]: "Glitched text",
 };
 
 // What a rule does to a message that breaks it.
@@ -54,6 +62,8 @@ export const AUTOMOD_LIMITS = Object.freeze({
   duplicates: { path: ["rules", "duplicates", "count"], min: 2, max: 10, default: 3 },
   capsPercent: { path: ["rules", "caps", "percent"], min: 50, max: 100, default: 70 },
   capsMinLength: { path: ["rules", "caps", "minLength"], min: 5, max: 200, default: 15 },
+  emojis: { path: ["rules", "emojis", "limit"], min: 3, max: 100, default: 10 },
+  lines: { path: ["rules", "lines", "limit"], min: 3, max: 100, default: 15 },
   timeoutMinutes: { path: ["timeoutMinutes"], min: 1, max: 40320, default: 10 },
   escalationWarnings: { path: ["escalation", "warnings"], min: 0, max: 20, default: 0 },
   escalationTimeoutMinutes: { path: ["escalation", "timeoutMinutes"], min: 1, max: 40320, default: 60 },
@@ -75,6 +85,7 @@ const RULE_EXTRAS = { notify: true, timeoutMinutes: null, exemptRoleIds: [], exe
 
 // Each rule's default action and its own settings.
 const RULE_DEFAULTS = {
+  [AutomodRule.SCAM_LINKS]: { action: AutomodAction.TIMEOUT },
   [AutomodRule.BANNED_WORDS]: { action: AutomodAction.DELETE, words: [] },
   [AutomodRule.INVITES]: { action: AutomodAction.DELETE },
   [AutomodRule.LINKS]: { action: AutomodAction.DELETE, allowedDomains: [] },
@@ -90,6 +101,9 @@ const RULE_DEFAULTS = {
     percent: AUTOMOD_LIMITS.capsPercent.default,
     minLength: AUTOMOD_LIMITS.capsMinLength.default,
   },
+  [AutomodRule.EMOJIS]: { action: AutomodAction.DELETE, limit: AUTOMOD_LIMITS.emojis.default },
+  [AutomodRule.LINES]: { action: AutomodAction.DELETE, limit: AUTOMOD_LIMITS.lines.default },
+  [AutomodRule.ZALGO]: { action: AutomodAction.DELETE },
 };
 
 // Automod with everything switched off.

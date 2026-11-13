@@ -772,7 +772,7 @@ export const COMMAND_PARTS = [
             usage: "/settings automod rule rule enabled [action]",
             what: "Switches one rule on or off and chooses what it does.",
             options: [
-              ["rule", "Banned words, invite links, links, mass mentions, spam (messages too fast), repeated messages, or too many capitals."],
+              ["rule", "Scam links, banned words, invite links, links, mass mentions, spam (messages too fast), repeated messages, too many capitals, too many emoji, too many lines, or glitched text."],
               ["enabled", "Whether the rule is on."],
               ["action", "Delete the message, delete and warn, delete and time out, or log only (the message stays, the mod log notes it). Leave it out to keep the current one."],
             ],
@@ -781,7 +781,7 @@ export const COMMAND_PARTS = [
             usage: "/settings automod limit setting value",
             what: "Changes one of automod's numbers.",
             options: [
-              ["setting", "Mentions per message (default 5), spam messages (6) within spam seconds (5), repeats of the same message (3), capitals percent (70) and minimum letters (15), timeout length in minutes (10), and the timeout after too many warnings (60)."],
+              ["setting", "Mentions per message (default 5), spam messages (6) within spam seconds (5), repeats of the same message (3), capitals percent (70) and minimum letters (15), emoji per message (10), lines per message (15), timeout length in minutes (10), and the timeout after too many warnings (60)."],
               ["value", "The new number. Each setting has its own range, and the bot tells you if it's out of it."],
             ],
           },
