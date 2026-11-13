@@ -229,5 +229,28 @@ export function createResolver({
       }
       return { ...track, source: copy.source, stream: copy.stream, url: copy.url, durationMs: copy.durationMs ?? track.durationMs, artworkUrl: track.artworkUrl ?? copy.artworkUrl };
     },
+
+    // Another copy of a song whose audio wouldn't load, from the other
+    // libraries (Audius, Jamendo, Bandcamp, then SoundCloud unless that's
+    // the one that failed), or null. It keeps the song's own title.
+    async alternative(track) {
+      const lookup = track.lookup ?? { title: track.title, artist: track.artist, durationMs: track.durationMs };
+      if (!lookup?.title) {
+        return null;
+      }
+      const others = [
+        [Source.AUDIUS, audius],
+        [Source.JAMENDO, jamendo?.enabled ? jamendo : null],
+        [Source.BANDCAMP, bandcamp],
+        [Source.SOUNDCLOUD, soundcloud],
+      ]
+        .filter(([source, library]) => library && typeof library.search === "function" && source !== track.source)
+        .map(([, library]) => ({ search: async (query, options) => (await library.search(query, options)).filter((found) => found.url !== track.url) }));
+      const copy = await findOtherMatch(others, lookup).catch(() => null);
+      if (!copy) {
+        return null;
+      }
+      return { ...track, source: copy.source, stream: copy.stream, url: copy.url, durationMs: copy.durationMs ?? track.durationMs, artworkUrl: track.artworkUrl ?? copy.artworkUrl, lookup, fallback: true };
+    },
   };
 }

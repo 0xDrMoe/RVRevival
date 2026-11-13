@@ -20,6 +20,7 @@ export const USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (K
 //   not-audio     the link isn't audio
 //   preview-only  SoundCloud only lets subscribers hear it (30-second preview)
 //   no-match      no free copy of a Spotify, Apple Music or Deezer song
+//   no-stream     a library song was found but its audio wouldn't load
 //   unsupported   a kind of link that isn't supported (an artist page, say)
 export class MusicError extends Error {
   name = "MusicError";

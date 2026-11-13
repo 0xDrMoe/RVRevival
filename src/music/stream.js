@@ -41,7 +41,9 @@ export function ffmpegPath() {
 // an audio filter (music/filters.js).
 export function ffmpegArgs(input, { live = false, startMs = 0, filter = "off" } = {}) {
   const af = audioFilter(filter, live ? 0 : startMs);
-  const network = input === "pipe:0" ? [] : ["-protocol_whitelist", "https,tls,tcp,hls,crypto", "-reconnect", "1", "-reconnect_streamed", "1", "-reconnect_delay_max", "5"];
+  // HLS: only HTTPS, so any segment name can be allowed (SoundCloud's Opus
+  // segments end in .opus, which ffmpeg blocks by default).
+  const network = input === "pipe:0" ? [] : ["-protocol_whitelist", "https,tls,tcp,hls,crypto", "-allowed_extensions", "ALL", "-reconnect", "1", "-reconnect_streamed", "1", "-reconnect_delay_max", "5"];
   return [
     "-hide_banner",
     "-loglevel",
@@ -65,13 +67,29 @@ export function ffmpegArgs(input, { live = false, startMs = 0, filter = "off" } 
   ];
 }
 
-// Where to read a ready track's audio: { url } for the bot to download, or
-// { hls } for ffmpeg. `soundcloud`, `bandcamp` and `audius` come from the resolver.
-export async function audioAddress(track, { soundcloud, bandcamp, audius }) {
+// Songs from a music library: a 404 while opening their audio means the
+// stream broke, not that the song is missing.
+const LIBRARY_SOURCES = new Set([Source.SOUNDCLOUD, Source.BANDCAMP, Source.AUDIUS, Source.JAMENDO]);
+
+// Opens a SoundCloud stream to be sure it loads before it's chosen: a file
+// stays open to be played; for HLS only the playlist is asked for.
+async function checkSoundCloudStream(stream, openUrl) {
+  const opened = await openUrl(stream.url);
+  if (stream.protocol === "hls") {
+    opened.abort();
+    return null;
+  }
+  return opened;
+}
+
+// Where to read a ready track's audio: { url } for the bot to download
+// (with `download` when it's already open), or { hls } for ffmpeg.
+// `soundcloud`, `bandcamp` and `audius` come from the resolver.
+export async function audioAddress(track, { soundcloud, bandcamp, audius, openUrl = defaultOpenUrl }) {
   switch (track.source) {
     case Source.SOUNDCLOUD: {
-      const stream = await soundcloud.streamFor(track.stream.id);
-      return stream.protocol === "hls" ? { hls: stream.url } : { url: stream.url };
+      const stream = await soundcloud.streamFor(track.stream.id, { check: (found) => checkSoundCloudStream(found, openUrl) });
+      return stream.protocol === "hls" ? { hls: stream.url } : { url: stream.url, download: stream.checked ?? null };
     }
     case Source.BANDCAMP:
       return { url: await bandcamp.streamFor(track.stream) };
@@ -87,15 +105,27 @@ export async function audioAddress(track, { soundcloud, bandcamp, audius }) {
   }
 }
 
+// The address and, for a download, the open response.
+async function openSource(track, { soundcloud, bandcamp, audius, openUrl }) {
+  try {
+    const address = await audioAddress(track, { soundcloud, bandcamp, audius, openUrl });
+    const download = address.url ? (address.download ?? (await openUrl(address.url))) : null;
+    return { address, download };
+  } catch (error) {
+    if (LIBRARY_SOURCES.has(track.source) && error instanceof MusicError && error.reason === "not-found") {
+      throw new MusicError("no-stream", error.message);
+    }
+    throw error;
+  }
+}
+
 // Starts a track. Returns { stream, stop, errors }: the PCM stream for
 // createAudioResource, a function that stops the download and ffmpeg, and
 // ffmpeg's last error lines (for the log). Options: soundcloud, bandcamp,
-// startMs, filter, spawnImpl and openUrl (tests).
+// audius, startMs, filter, spawnImpl and openUrl (tests).
 export async function openAudio(track, { soundcloud, bandcamp, audius, spawnImpl = spawn, openUrl = defaultOpenUrl, logger, startMs = 0, filter = "off" }) {
-  const address = await audioAddress(track, { soundcloud, bandcamp, audius });
-  let download = null;
-  if (address.url) {
-    download = await openUrl(address.url);
+  const { address, download } = await openSource(track, { soundcloud, bandcamp, audius, openUrl });
+  if (download) {
     if (!download.response.body) {
       download.abort();
       throw new MusicError("not-audio", "That link sent nothing to play.");
