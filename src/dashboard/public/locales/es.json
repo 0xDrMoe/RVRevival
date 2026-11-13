@@ -1805,5 +1805,16 @@
   "musicSourceCatalogs": "Enlaces de Spotify, Apple Music y Deezer: se leen los nombres y se buscan copias gratuitas en SoundCloud.",
   "musicSourceRadio": "Radio por internet con /radio, de un directorio de unas 50.000 emisoras.",
   "musicSourceLinks": "Enlaces a archivos y streams de audio, y archivos de audio o vídeo subidos.",
-  "musicSourceYoutube": "YouTube no: YouTube no permite que otras apps reproduzcan sus vídeos."
+  "musicSourceYoutube": "YouTube no: YouTube no permite que otras apps reproduzcan sus vídeos.",
+
+  "amRule_scamLinks": "Enlaces de estafa y phishing",
+  "amRule_emojis": "Demasiados emojis",
+  "amRule_lines": "Demasiadas líneas",
+  "amRule_zalgo": "Texto distorsionado",
+  "amRuleHelp_scamLinks": "Sitios falsos de Discord y Steam (como dlscord.gift), enlaces cuyo texto muestra un sitio pero abren otro y cebos de \"Nitro gratis\". Los publican cuentas hackeadas, así que un aislamiento las frena mientras el dueño recupera su cuenta.",
+  "amRuleHelp_emojis": "Mensajes con demasiados emojis, incluidos los del servidor.",
+  "amRuleHelp_lines": "Muros de texto que empujan el chat hacia arriba, contados en líneas.",
+  "amRuleHelp_zalgo": "Texto con tildes apiladas que se derrama sobre otros mensajes. Los acentos normales y escrituras como el hindi o el árabe nunca cuentan.",
+  "amEmojisLimit": "Emojis en un mensaje",
+  "amLinesLimit": "Líneas en un mensaje"
 }

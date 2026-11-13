@@ -901,7 +901,7 @@
   "search_cases": "warn ban kick timeout mute punishments history",
   "search_members": "user lookup profile history notes",
   "search_tickets": "support help transcripts",
-  "search_automod": "spam invites links bad words filter caps mentions",
+  "search_automod": "spam invites links bad words filter caps mentions scam phishing emoji zalgo lines",
   "search_raid": "raid lockdown join gate account age alt",
   "search_welcome": "greet join leave goodbye message dm",
   "search_roles": "autorole role panel rolepanel buttons self roles reaction roles onboarding rejoin confirmations",
@@ -1805,5 +1805,16 @@
   "musicSourceCatalogs": "Spotify, Apple Music and Deezer links: read for the song names, then matched to free copies on SoundCloud.",
   "musicSourceRadio": "Internet radio with /radio, from a directory of about 50,000 stations.",
   "musicSourceLinks": "Links to audio files and streams, and uploaded audio or video files.",
-  "musicSourceYoutube": "Not YouTube: YouTube doesn't allow other apps to play its videos."
+  "musicSourceYoutube": "Not YouTube: YouTube doesn't allow other apps to play its videos.",
+
+  "amRule_scamLinks": "Scam and phishing links",
+  "amRule_emojis": "Too many emoji",
+  "amRule_lines": "Too many lines",
+  "amRule_zalgo": "Glitched text",
+  "amRuleHelp_scamLinks": "Fake Discord and Steam sites (like dlscord.gift), links whose text shows one website but open another, and \"free Nitro\" bait. Hacked accounts post these, so a timeout stops them while the owner gets their account back.",
+  "amRuleHelp_emojis": "Messages with too many emoji, counting the server's own emoji too.",
+  "amRuleHelp_lines": "Walls of text that push the chat up, counted in lines.",
+  "amRuleHelp_zalgo": "Text with accent marks stacked on top of each other, which spills over other messages. Normal accents and scripts like Hindi or Arabic are never caught.",
+  "amEmojisLimit": "Emoji in one message",
+  "amLinesLimit": "Lines in one message"
 }

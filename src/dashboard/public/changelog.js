@@ -4,6 +4,15 @@
 export const CHANGELOG = [
   {
     date: "2026-11-13",
+    title: "Automod catches scams, emoji floods, walls of text and glitched text",
+    items: [
+      "New Scam links rule: fake Discord and Steam sites (like dlscord.gift), links whose text shows one website but open another, and \"free Nitro\" bait. It times out by default, since hacked accounts post these, and it's on in every preset.",
+      "New rules for too many emoji (10 by default), too many lines (15) and glitched \"zalgo\" text. Normal accents and scripts like Hindi, Arabic and Thai are never caught.",
+      "/settings automod limit now suggests the setting as you type, and covers the new emoji and line limits.",
+    ],
+  },
+  {
+    date: "2026-11-13",
     title: "A far more detailed server log",
     items: [
       "21 new kinds of event: pins, name and avatar changes, boosts, voice joins, leaves, moves and server mutes, and server changes (channels and permissions, roles, server settings, emojis and stickers, invites, webhooks, threads, events, bots and apps, and Discord AutoMod rules).",

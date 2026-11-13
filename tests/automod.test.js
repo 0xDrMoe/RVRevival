@@ -148,6 +148,27 @@ describe("automod", () => {
     expect(store.listCases(GUILD_ID, TARGET_ID)[0]).toMatchObject({ action: CaseAction.TIMEOUT });
   });
 
+  it("times out for a scam link by default, before the links rule sees it", async () => {
+    await use(automodWith({ scamLinks: {}, links: {} }));
+    const sent = message("free nitro https://dlscord.gift/claim");
+    await automod.handleMessage(sent);
+    expect(sent.delete).toHaveBeenCalled();
+    expect(member.timeout).toHaveBeenCalledWith(10 * 60_000, expect.stringContaining("Automod · Scam link"));
+    expect(channel.send).toHaveBeenCalledWith(expect.objectContaining({ content: expect.stringContaining("looks like a scam") }));
+  });
+
+  it("deletes too many emoji, too many lines and glitched text", async () => {
+    await use(automodWith({ emojis: { limit: 5 }, lines: { limit: 4 }, zalgo: {} }));
+    for (const content of ["😀".repeat(5), "a\nb\nc\nd", "H̷̡̢̛e̵̡͠l̸̢̛l̴̨̛ó̶̢"]) {
+      const sent = message(content);
+      await automod.handleMessage(sent);
+      expect(sent.delete, content).toHaveBeenCalled();
+    }
+    const fine = message("👍 ok\nthanks");
+    await automod.handleMessage(fine);
+    expect(fine.delete).not.toHaveBeenCalled();
+  });
+
   it("warns instead of timing out a member the bot can't time out", async () => {
     member.moderatable = false;
     await use(automodWith({ mentions: { limit: 2 } }));

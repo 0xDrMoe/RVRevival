@@ -23,7 +23,7 @@ import { result, Status } from "../logs/actionLog.js";
 import { checkLogOptions, LOG_EVENT_GROUPS, LOG_EVENTS, LOG_OPTIONS, logOptionsOf } from "../logs/logEvents.js";
 import { logEventName, logGroupName, logOptionName, nameLocalizations } from "../logs/logEventNames.js";
 import { Setting } from "../settings/guildSettings.js";
-import { addAutomodGroup, AUTOMOD_GROUP, runAutomodSubcommand } from "./automodSettings.js";
+import { addAutomodGroup, AUTOMOD_GROUP, automodLimitSuggestions, runAutomodSubcommand } from "./automodSettings.js";
 
 const COMMAND_NAME = "settings";
 const ROLE_OPTION = "role";
@@ -218,7 +218,7 @@ export function createSettingsCommand({ guildSettings, forcedLanguage }) {
       return reply(Status.REFUSED, "settingsNoPermission");
     }
 
-    if (interaction.options.getSubcommandGroup(false) === AUTOMOD_GROUP) {
+    if (interaction.options.getSubcommandGroup?.(false) === AUTOMOD_GROUP) {
       return runAutomodSubcommand(interaction, {
         guildSettings,
         text,
@@ -386,6 +386,10 @@ export function createSettingsCommand({ guildSettings, forcedLanguage }) {
   // the member's language.
   async function autocomplete(interaction) {
     const language = pickLanguage(interaction.locale, forcedLanguage);
+    if (interaction.options.getSubcommandGroup?.(false) === AUTOMOD_GROUP) {
+      await interaction.respond(automodLimitSuggestions(interaction.options.getFocused(), language).slice(0, MAX_SUGGESTIONS));
+      return;
+    }
     const typed = String(interaction.options.getFocused() ?? "").toLowerCase().trim();
     const disabled = interaction.guildId ? guildSettings.getList(interaction.guildId, Setting.DISABLED_LOG_EVENTS) : [];
     const suggestions = LOG_EVENT_GROUPS.flatMap((group) =>

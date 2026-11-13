@@ -17,6 +17,7 @@ const PRESETS = {
   // Only the obvious: other servers' invites, ping floods and fast spam. Nothing is punished.
   light: {
     rules: {
+      scamLinks: rule(true, "delete"),
       bannedWords: rule(true, "delete"),
       invites: rule(true, "delete"),
       links: rule(false, "delete"),
@@ -24,6 +25,9 @@ const PRESETS = {
       spam: rule(true, "delete", { messages: 8, seconds: 5 }),
       duplicates: rule(false, "delete", { count: 4 }),
       caps: rule(false, "delete", { percent: 80, minLength: 20 }),
+      emojis: rule(false, "delete", { limit: 15 }),
+      lines: rule(false, "delete", { limit: 25 }),
+      zalgo: rule(false, "delete"),
     },
     timeoutMinutes: 10,
     escalation: { warnings: 0, action: "timeout", timeoutMinutes: 60 },
@@ -31,6 +35,7 @@ const PRESETS = {
   // Most servers: warns for invites and banned words, short timeouts for floods.
   balanced: {
     rules: {
+      scamLinks: rule(true, "timeout"),
       bannedWords: rule(true, "warn"),
       invites: rule(true, "warn"),
       links: rule(false, "delete"),
@@ -38,6 +43,9 @@ const PRESETS = {
       spam: rule(true, "timeout", { messages: 6, seconds: 5 }),
       duplicates: rule(true, "delete", { count: 3 }),
       caps: rule(false, "delete", { percent: 70, minLength: 15 }),
+      emojis: rule(false, "delete", { limit: 10 }),
+      lines: rule(false, "delete", { limit: 15 }),
+      zalgo: rule(true, "delete"),
     },
     timeoutMinutes: 10,
     escalation: { warnings: 3, action: "timeout", timeoutMinutes: 60 },
@@ -45,6 +53,7 @@ const PRESETS = {
   // Big or public servers: every rule on, links only to allowed websites, longer timeouts.
   strict: {
     rules: {
+      scamLinks: rule(true, "timeout"),
       bannedWords: rule(true, "warn"),
       invites: rule(true, "warn"),
       links: rule(true, "delete"),
@@ -52,6 +61,9 @@ const PRESETS = {
       spam: rule(true, "timeout", { messages: 5, seconds: 5 }),
       duplicates: rule(true, "warn", { count: 2 }),
       caps: rule(true, "delete", { percent: 70, minLength: 12 }),
+      emojis: rule(true, "delete", { limit: 8 }),
+      lines: rule(true, "delete", { limit: 12 }),
+      zalgo: rule(true, "delete"),
     },
     timeoutMinutes: 30,
     escalation: { warnings: 3, action: "timeout", timeoutMinutes: 1440 },

@@ -441,6 +441,7 @@ const FEATURE_PARTS = [
         table: {
           head: ["Rule", "Catches"],
           rows: [
+            ["Scam links", "Fake Discord and Steam sites (dlscord.gift, steamcommunlty.com), links whose text shows one website but open another, and \"free Nitro\" bait. On in every preset."],
             ["Banned words", "Words on your list, even with accents or l33t spelling."],
             ["Invite links", "Invites to other Discord servers. Your own are fine."],
             ["Links", "Websites that aren't on the allowed list."],
@@ -448,12 +449,15 @@ const FEATURE_PARTS = [
             ["Spam", "Too many messages too fast."],
             ["Repeats", "The same message over and over."],
             ["Capitals", "Messages that are mostly CAPITALS."],
+            ["Emoji", "Too many emoji in one message (10 by default)."],
+            ["Lines", "Walls of text: too many lines in one message (15 by default)."],
+            ["Glitched text", "\"Zalgo\" text with accents stacked on top of each other. Normal accents, Hindi, Arabic and Thai are never caught."],
           ],
         },
         commands: [
           ["/settings automod toggle enabled", "Turns automod on or off."],
           ["/settings automod rule rule enabled [action]", "Switches a rule and sets what it does: delete, delete and warn, delete and time out, or log only."],
-          ["/settings automod limit setting value", "Changes a rule's numbers (mentions, messages per seconds, repeats, caps)."],
+          ["/settings automod limit setting value", "Changes a rule's numbers (mentions, messages per seconds, repeats, caps, emoji, lines). Pick the setting from the list as you type."],
           ["/settings automod word word", "Adds a banned word, or removes it if it's on the list."],
           ["/settings automod allow-site site", "Allows a website, or removes it."],
           ["/settings automod exempt-role role", "Never checks that role (or stops)."],
@@ -465,6 +469,7 @@ const FEATURE_PARTS = [
           "**Try a message** on the **Automod** page (or `/test automod text`) shows which rules would catch a message, without posting anything.",
           "The page has two views. **Simple**: pick Light, Balanced (recommended) or Strict and switch single rules on or off. **Advanced**: every rule's action and numbers, the punishments, and *Fine-tune* per rule (its own notice, timeout length, and roles and channels it skips).",
           "Trying a rule out? Set it to **Log only**: matches go to the mod log and the message stays up.",
+          "Scam links are usually posted by hacked accounts. The default action, **delete and time out**, stops the spree while the owner gets their account back.",
           "Never checked: bots, the mod role, anyone with Manage Messages, exempt roles and channels, and the country channel.",
           "Warnings and timeouts become normal cases with \"Automod\" in the reason.",
           "When it gets it wrong: `/untimeout` the member, then delete the case and fix the word or site.",

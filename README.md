@@ -163,6 +163,7 @@ Automod checks every new and edited message and acts on the first rule it breaks
 
 | Rule | Catches |
 | --- | --- |
+| Scam links | Look-alike Discord and Steam sites (`dlscord.gift`, `steamcommunlty.com`, `xn--` look-alike letters), masked links whose text shows one website but open another, and "free Nitro" bait next to any outside link. Checked first; times out by default. |
 | Banned words | A word or phrase from the server's list. Whole words only, unless it starts or ends with `*` (`bad*` catches "badly"). Capitals, accents and number swaps (`n00b`) don't hide a word. |
 | Invite links | Discord invites to other servers (`discord.gg`, `discord.com/invite`, `dsc.gg`, `discord.me`). Invites to this server are allowed. |
 | Links | Links to websites that aren't on the allowed list. GIFs from Tenor and Discord's own links are always allowed. |
@@ -170,6 +171,9 @@ Automod checks every new and edited message and acts on the first rule it breaks
 | Spam | N messages within S seconds (default 6 in 5). The whole burst is deleted. |
 | Repeated messages | The same text sent N times within a minute (default 3). |
 | Too many capitals | At least P% capitals (default 70%) in a message with at least L letters (default 15). |
+| Too many emoji | N or more emoji in one message (default 10), counting the server's own emoji. |
+| Too many lines | N or more lines in one message (default 15). |
+| Glitched text | "Zalgo" text: several letters each buried under 3+ stacked accent marks. Normal accents and scripts like Hindi, Arabic and Thai never match. |
 
 Each rule's action is one of: **delete the message**, **delete and warn** (a warning case, DMed to the member), or **delete and time out** (a timeout case, default 10 minutes). Every time, the member is told in the channel (the notice disappears after a few seconds); deletions without a case are noted in the mod log. Cases are recorded with the bot as the moderator and `Automod · <rule>: "<message>"` as the reason, so `/modlogs` and the dashboard show them like any other. If the bot can't time out a member (their role is above the bot's), it warns instead. After it warns or times out a member, more broken rules in the next 10 seconds only delete, so one burst of spam doesn't stack up cases.
 
@@ -181,7 +185,7 @@ Admins set it up on the dashboard's **Automod** page, or with:
 
 - `/settings automod toggle enabled:<true | false>` switches automod on or off.
 - `/settings automod rule rule:<rule> enabled:<true | false> action:<action>` switches a rule on or off and picks its action (left out: unchanged).
-- `/settings automod limit setting:<limit> value:<number>` changes a number: mentions per message, spam messages and seconds, repeats, capitals percent and minimum letters, timeout length, escalation timeout length.
+- `/settings automod limit setting:<limit> value:<number>` changes a number: mentions per message, spam messages and seconds, repeats, capitals percent and minimum letters, emoji per message, lines per message, timeout length, escalation timeout length (suggested as you type).
 - `/settings automod word word:<word>` adds a banned word, or removes it if it's already listed (up to 200).
 - `/settings automod allow-site site:<website>` allows links to a website and its subdomains, or stops allowing it.
 - `/settings automod exempt-role role:<role>` and `exempt-channel channel:<channel or category>` add or remove an exemption.

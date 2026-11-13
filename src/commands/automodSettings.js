@@ -87,9 +87,11 @@ export function addAutomodGroup(command) {
       .addSubcommand((sub) =>
         withDescription(sub.setName("limit"), "automodLimitDescription")
           .addStringOption((option) =>
+            // Suggested as you type (automodAutocomplete), since a choice list
+            // this long would push /settings past Discord's size limit.
             withDescription(option.setName("setting"), "automodLimitOptionDescription")
               .setRequired(true)
-              .addChoices(...LIMIT_CHOICES),
+              .setAutocomplete(true),
           )
           .addIntegerOption((option) =>
             withDescription(option.setName("value"), "automodValueOptionDescription").setRequired(true).setMinValue(1),
@@ -137,6 +139,14 @@ export function addAutomodGroup(command) {
   );
 }
 
+// Suggests automod limits for /settings automod limit, in `language`.
+export function automodLimitSuggestions(typed, language) {
+  const query = String(typed ?? "").toLowerCase().trim();
+  return LIMIT_CHOICES.map((entry) => ({ name: translate(language, `automodLimit_${entry.value}`).slice(0, 100), value: entry.value })).filter(
+    (entry) => !query || entry.name.toLowerCase().includes(query) || entry.value.toLowerCase().includes(query),
+  );
+}
+
 // The automod settings as lines of text, in `language`.
 export function describeAutomod(config, text) {
   const list = (ids, format) => ids.map(format).join(", ");
@@ -177,6 +187,7 @@ export function describeAutomod(config, text) {
       minutes: config.timeoutMinutes,
     }),
   );
+  lines.push(text("automodShowLimitsMore", { emojis: rules.emojis.limit, lines: rules.lines.limit }));
   lines.push(
     config.escalation.warnings > 0
       ? text("automodShowEscalation", {
@@ -248,9 +259,9 @@ export async function runAutomodSubcommand(interaction, { guildSettings, text, r
     }
     case "limit": {
       const name = interaction.options.getString("setting", true);
-      const limit = AUTOMOD_LIMITS[name];
+      const limit = LIMIT_CHOICES.some((entry) => entry.value === name) ? AUTOMOD_LIMITS[name] : undefined;
       if (!limit) {
-        return reply(Status.FAILED, "unexpected");
+        return reply(Status.REFUSED, "automodUnknownLimit");
       }
       const value = interaction.options.getInteger("value", true);
       const values = { limit: text(`automodLimit_${name}`), value, min: limit.min, max: limit.max };

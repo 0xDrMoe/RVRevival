@@ -1809,5 +1809,23 @@
   "playlistError_missing": "Tu n'as pas de playlist appelée **{name}**. Vois /playlist list.",
   "playlistError_too-many": "Tu peux avoir jusqu'à {max} playlists. Supprimes-en une d'abord.",
   "playlistError_full": "**{name}** est pleine ({max} morceaux).",
-  "playlistError_bad-name": "Les noms de playlist font de 1 à 50 caractères."
+  "playlistError_bad-name": "Les noms de playlist font de 1 à 50 caractères.",
+
+  "automodRule_scamLinks": "Liens d'arnaque",
+  "automodRule_emojis": "Trop d'emojis",
+  "automodRule_lines": "Trop de lignes",
+  "automodRule_zalgo": "Texte corrompu",
+  "automodLimit_emojis": "Emojis par message",
+  "automodLimit_lines": "Lignes par message",
+  "automodNotice_scamLinks": "{user}, ce lien ressemble à une arnaque et a été supprimé. Si ton compte l'a envoyé tout seul, change ton mot de passe.",
+  "automodNotice_emojis": "{user}, n'envoie pas autant d'emojis d'un coup.",
+  "automodNotice_lines": "{user}, ce message était trop long (trop de lignes). Fais plus court.",
+  "automodNotice_zalgo": "{user}, le texte corrompu n'est pas autorisé ici.",
+  "testAutomodRule_scamLinks": "Liens d'arnaque",
+  "testAutomodRule_emojis": "Trop d'emojis",
+  "testAutomodRule_lines": "Trop de lignes",
+  "testAutomodRule_zalgo": "Texte corrompu",
+  "automodShowLimitsMore": "Autres limites : {emojis} emojis par message, {lines} lignes par message.",
+
+  "automodUnknownLimit": "Choisis un réglage dans la liste en tapant."
 }

@@ -32,7 +32,7 @@ import {
   RULE_LABELS,
   ruleSkips,
 } from "./config.js";
-import { countMentions, findBannedWord, findBlockedLink, findInvites, isMostlyCaps, repeatKey } from "./rules.js";
+import { countMentions, findBannedWord, findBlockedLink, findInvites, isMostlyCaps, repeatKey, textRuleDetail } from "./rules.js";
 import { LogRoute } from "../logs/logRoutes.js";
 import { deleteMessage } from "../utils/rateLimits.js";
 
@@ -266,6 +266,12 @@ export function createAutomod({
             return { rule, detail: `${settings.percent}%+ capitals`, messages: only };
           }
           break;
+        default: {
+          const detail = textRuleDetail(rule, content, settings);
+          if (detail) {
+            return { rule, detail, messages: only };
+          }
+        }
       }
     }
     return undefined;

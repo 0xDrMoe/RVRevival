@@ -21,7 +21,7 @@
 
 import { readFileSync } from "node:fs";
 import { activeRules, AutomodRule, AUTOMOD_RULES, normalizeAutomod } from "../automod/config.js";
-import { countMentions, findBannedWord, findBlockedLink, findInvites, isMostlyCaps } from "../automod/rules.js";
+import { countMentions, findBannedWord, findBlockedLink, findInvites, isMostlyCaps, textRuleDetail } from "../automod/rules.js";
 import { birthdaySettings } from "../birthdays/birthdays.js";
 import { buildStarboardPost, normalizeStarboard } from "../community/starboard.js";
 import { welcomePayload } from "../community/welcome.js";
@@ -386,6 +386,8 @@ export function checkAutomodText(savedConfig, text) {
       case AutomodRule.CAPS:
         detail = isMostlyCaps(content, settings) ? `${settings.percent}%+` : undefined;
         break;
+      default:
+        detail = textRuleDetail(rule, content, settings);
     }
     if (detail) {
       hits.push({ rule, detail: String(detail).slice(0, 100), action: settings.action, ruleOn: settings.enabled, on: config.enabled && settings.enabled, ...extra });

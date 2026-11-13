@@ -1809,5 +1809,23 @@
   "playlistError_missing": "You have no playlist called **{name}**. See /playlist list.",
   "playlistError_too-many": "You can have up to {max} playlists. Delete one first.",
   "playlistError_full": "**{name}** is full ({max} songs).",
-  "playlistError_bad-name": "Playlist names are 1 to 50 characters."
+  "playlistError_bad-name": "Playlist names are 1 to 50 characters.",
+
+  "automodRule_scamLinks": "Scam links",
+  "automodRule_emojis": "Too many emoji",
+  "automodRule_lines": "Too many lines",
+  "automodRule_zalgo": "Glitched text",
+  "automodLimit_emojis": "Emoji per message",
+  "automodLimit_lines": "Lines per message",
+  "automodNotice_scamLinks": "{user}, that link looks like a scam, so it was removed. If your account sent it by itself, change your password.",
+  "automodNotice_emojis": "{user}, please don't send so many emoji at once.",
+  "automodNotice_lines": "{user}, that message was too long (too many lines). Please keep it shorter.",
+  "automodNotice_zalgo": "{user}, glitched text isn't allowed here.",
+  "testAutomodRule_scamLinks": "Scam links",
+  "testAutomodRule_emojis": "Too many emoji",
+  "testAutomodRule_lines": "Too many lines",
+  "testAutomodRule_zalgo": "Glitched text",
+  "automodShowLimitsMore": "More limits: {emojis} emoji per message, {lines} lines per message.",
+
+  "automodUnknownLimit": "Pick a setting from the list as you type."
 }
