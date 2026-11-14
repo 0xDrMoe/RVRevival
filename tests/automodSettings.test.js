@@ -59,7 +59,6 @@ describe("/settings automod", () => {
       "allow-site",
       "exempt-role",
       "exempt-channel",
-      "escalate",
       "show",
     ]);
   });
@@ -134,16 +133,6 @@ describe("/settings automod", () => {
 
     await run("exempt-role", {});
     expect(config().exemptRoleIds).toEqual([]);
-  });
-
-  it("sets up escalation, and says when no rule warns", async () => {
-    const { interaction } = await run("escalate", { warnings: 3, action: "timeout" });
-    expect(config().escalation).toEqual({ warnings: 3, action: "timeout", timeoutMinutes: 60 });
-    expect(replyText(interaction)).toBe(
-      `After 3 warnings within 24 hours, members now get: Time out for 60 minutes.\n${translate("en", "automodEscalateNoWarnRule")}`,
-    );
-    const off = await run("escalate", { warnings: 0 });
-    expect(off.outcome).toMatchObject({ key: "automodEscalateOff" });
   });
 
   it("shows the settings, in the admin's language", async () => {

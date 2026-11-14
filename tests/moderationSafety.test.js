@@ -11,10 +11,15 @@ import { createModerationService } from "../src/moderation/moderationService.js"
 import { MAX_REPORTS_PER_WINDOW, ReportStatus, ReportStore } from "../src/moderation/reports.js";
 import {
   checkWarnThresholds,
+  describeWarnStep,
   describeWarnThresholds,
   InvalidWarnThresholds,
+  mergeEscalation,
   normalizeWarnThresholds,
   reachedThreshold,
+  stepFromEscalation,
+  withoutStep,
+  withStep,
 } from "../src/moderation/warnThresholds.js";
 import { GuildSettings, Setting } from "../src/settings/guildSettings.js";
 import { openDatabase } from "../src/storage/database.js";
@@ -62,10 +67,12 @@ describe("warning thresholds", () => {
     ];
     expect(checkWarnThresholds(value)).toEqual([value[1], value[0]]);
     expect(checkWarnThresholds([])).toBe(null);
-    expect(describeWarnThresholds(value)).toBe("3 warnings in 7 days → timeout 60 min; 5 warnings in 30 days → ban");
+    expect(describeWarnThresholds(value)).toBe("3 warnings within 7 days → time out for 1 hour; 5 warnings within 30 days → ban");
+    expect(describeWarnThresholds([{ count: 1, days: 1, action: "timeout", minutes: 2880 }])).toBe("1 warning within 1 day → time out for 2 days");
     expect(describeWarnThresholds(undefined)).toBe("*none*");
     for (const bad of [
-      [{ count: 1, days: 7, action: "kick" }],
+      [{ count: 0, days: 7, action: "kick" }],
+      [{ count: 21, days: 7, action: "kick" }],
       [{ count: 3, days: 0, action: "kick" }],
       [{ count: 3, days: 7, action: "mute" }],
       [{ count: 3, days: 7, action: "timeout" }],
@@ -76,6 +83,41 @@ describe("warning thresholds", () => {
       expect(() => checkWarnThresholds(bad)).toThrow(InvalidWarnThresholds);
     }
     expect(normalizeWarnThresholds([{ count: 1 }])).toEqual([]);
+  });
+
+  it("adds, replaces and removes single steps", () => {
+    const steps = [{ count: 3, days: 7, action: "kick" }];
+    expect(withStep(steps, { count: 2, days: 1, action: "timeout", minutes: 10 })).toEqual([
+      { count: 2, days: 1, action: "timeout", minutes: 10 },
+      { count: 3, days: 7, action: "kick" },
+    ]);
+    expect(withStep(steps, { count: 3, days: 30, action: "ban" })).toEqual([{ count: 3, days: 30, action: "ban" }]);
+    const full = Array.from({ length: 5 }, (_, index) => ({ count: index + 1, days: 7, action: "kick" }));
+    expect(() => withStep(full, { count: 9, days: 7, action: "ban" })).toThrow(InvalidWarnThresholds);
+    expect(withoutStep(steps, 3)).toEqual([]);
+    expect(withoutStep(steps, 4)).toEqual(steps);
+  });
+
+  it("describes a step in the reader's language", () => {
+    const en = (key, values) => translate("en", key, values);
+    expect(describeWarnStep({ count: 3, days: 30, action: "timeout", minutes: 60 }, en)).toBe("3 warnings within 30 days → time out for 1h");
+    expect(describeWarnStep({ count: 1, days: 1, action: "ban" }, en)).toBe("Every warning → ban");
+    expect(describeWarnStep({ count: 2, days: 1, action: "ban" }, en)).toBe("2 warnings within 24 hours → ban");
+    expect(describeWarnStep({ count: 2, days: 7, action: "kick" }, (key, values) => translate("de", key, values))).toBe("2 Verwarnungen innerhalb von 7 Tagen → kicken");
+  });
+
+  it("turns automod's old escalation into a step within 1 day", () => {
+    expect(stepFromEscalation({ warnings: 3, action: "timeout", timeoutMinutes: 90 })).toEqual({ count: 3, days: 1, action: "timeout", minutes: 90 });
+    expect(stepFromEscalation({ warnings: 2, action: "ban", timeoutMinutes: 60 })).toEqual({ count: 2, days: 1, action: "ban" });
+    expect(stepFromEscalation({ warnings: 0, action: "kick" })).toBeUndefined();
+    expect(stepFromEscalation({ warnings: 3, action: "nuke" })).toBeUndefined();
+    expect(stepFromEscalation(undefined)).toBeUndefined();
+    const existing = [{ count: 3, days: 30, action: "kick" }];
+    // A step the server already has for that count wins.
+    expect(mergeEscalation(existing, { warnings: 3, action: "ban" })).toEqual(existing);
+    expect(mergeEscalation(existing, { warnings: 2, action: "kick" })).toEqual([{ count: 2, days: 1, action: "kick" }, ...existing]);
+    const full = Array.from({ length: 5 }, (_, index) => ({ count: index + 4, days: 7, action: "kick" }));
+    expect(mergeEscalation(full, { warnings: 2, action: "ban" })).toEqual(full);
   });
 
   it("fires only on an exact count, and the highest step wins", () => {
@@ -138,9 +180,9 @@ describe("/warn with thresholds and reason suggestions", () => {
 
     const second = warnInteraction(guild, target, "spam again");
     await commands.get("warn").execute(second);
-    expect(target.timeout).toHaveBeenCalledWith(30 * 60_000, expect.stringContaining("Warning threshold: 2 warnings in 7 days"));
+    expect(target.timeout).toHaveBeenCalledWith(30 * 60_000, expect.stringContaining("Automatic punishment: 2 warnings within 7 days"));
     const answer = second.editReply.mock.calls.at(-1)[0].content;
-    expect(answer).toContain(translate("en", "modWarnThresholdApplied", { count: 2, days: 7, action: translate("en", "modThresholdAction_timeout"), number: 3 }));
+    expect(answer).toContain(translate("en", "modWarnThresholdApplied", { step: "2 warnings within 7 days → time out for 30m", number: 3 }));
     expect(store.getCase(GUILD_ID, 3).action).toBe(CaseAction.TIMEOUT);
   });
 

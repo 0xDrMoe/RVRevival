@@ -232,6 +232,11 @@ export class GuildSettings {
     return value;
   }
 
+  // The servers that have at least one setting.
+  guildIds() {
+    return [...this.#guilds.keys()];
+  }
+
   // Every setting of one server, as { setting: value }.
   all(guildId) {
     return { ...this.#guilds.get(guildId) };

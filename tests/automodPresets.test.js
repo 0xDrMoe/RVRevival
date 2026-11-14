@@ -46,7 +46,7 @@ describe("automod presets", () => {
     expect(matchingPreset(withPath(balanced, ["rules", "caps", "enabled"], true))).toBe(CUSTOM_PRESET);
     expect(matchingPreset(withPath(balanced, ["rules", "spam", "timeoutMinutes"], 5))).toBe(CUSTOM_PRESET);
     expect(matchingPreset(withPath(balanced, ["rules", "invites", "exemptChannelIds"], [CHANNEL_ID]))).toBe(CUSTOM_PRESET);
-    expect(matchingPreset(withPath(balanced, ["escalation", "warnings"], 4))).toBe(CUSTOM_PRESET);
+    expect(matchingPreset(withPath(balanced, ["timeoutMinutes"], 11))).toBe(CUSTOM_PRESET);
   });
 
   it("refuses an unknown preset", () => {

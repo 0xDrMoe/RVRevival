@@ -10,6 +10,9 @@
 //   /settings log-ignore channel:#spam           stop (or start again) logging messages from #spam
 //   /settings log-ignore-role role:@Bots         stop (or start again) logging members with a role
 //   /settings log-option option:<…> enabled:…    choose how server-log entries look and what they include
+//   /settings warn-step warnings:3 days:30 action:<…> timeout:1h
+//                                                after that many warnings (from anyone, automod included)
+//                                                in that many days, time out, kick or ban; action "remove" deletes the step
 //   /settings automod …                          set up automod (see automodSettings.js)
 //   /settings clear setting:<any of the above>
 //   /settings show                               list the current settings
@@ -22,7 +25,19 @@ import { discordLocalizations, pickLanguage, translate } from "../i18n/i18n.js";
 import { result, Status } from "../logs/actionLog.js";
 import { checkLogOptions, LOG_EVENT_GROUPS, LOG_EVENTS, LOG_OPTIONS, logOptionsOf } from "../logs/logEvents.js";
 import { logEventName, logGroupName, logOptionName, nameLocalizations } from "../logs/logEventNames.js";
+import {
+  describeWarnStep,
+  describeWarnSteps,
+  InvalidWarnThresholds,
+  LIMITS as WARN_STEP_LIMITS,
+  MAX_THRESHOLDS,
+  normalizeWarnThresholds,
+  THRESHOLD_ACTIONS,
+  withoutStep,
+  withStep,
+} from "../moderation/warnThresholds.js";
 import { Setting } from "../settings/guildSettings.js";
+import { parseDuration } from "../utils/duration.js";
 import { addAutomodGroup, AUTOMOD_GROUP, automodLimitSuggestions, runAutomodSubcommand } from "./automodSettings.js";
 
 const COMMAND_NAME = "settings";
@@ -53,7 +68,15 @@ const CLEARABLE = [
   { value: Setting.LOG_IGNORED_ROLES, nameKey: "settingsLogIgnoreRoleName", clearedKey: "settingsLogIgnoreRoleCleared" },
   { value: Setting.LOG_OPTIONS, nameKey: "settingsLogOptionsName", clearedKey: "settingsLogOptionsCleared" },
   { value: Setting.AUTOMOD, nameKey: "settingsAutomodName", clearedKey: "settingsAutomodCleared" },
+  { value: Setting.WARN_THRESHOLDS, nameKey: "settingsWarnStepsName", clearedKey: "settingsWarnStepsCleared" },
 ];
+
+// /settings warn-step: the actions, plus "remove" to delete the step.
+const WARN_STEP_REMOVE = "remove";
+const WARN_STEP_CHOICES = [...THRESHOLD_ACTIONS, WARN_STEP_REMOVE].map((value) => ({ value, nameKey: `settingsWarnStepAction_${value}` }));
+const DEFAULT_STEP_DAYS = 30;
+const DEFAULT_STEP_TIMEOUT_MINUTES = 60;
+
 
 // Discord choices for `entries` ({ value, nameKey }), named in every language.
 const choicesOf = (entries) =>
@@ -165,6 +188,26 @@ export function buildSettingsCommandData() {
         )
         .addBooleanOption((option) =>
           withDescription(option.setName(ENABLED_OPTION), "settingsLogOptionEnabledDescription").setRequired(true),
+        ),
+    )
+    .addSubcommand((sub) =>
+      withDescription(sub.setName("warn-step"), "settingsWarnStepDescription")
+        .addIntegerOption((option) =>
+          withDescription(option.setName("warnings"), "settingsWarnStepWarningsDescription")
+            .setRequired(true)
+            .setMinValue(WARN_STEP_LIMITS.minCount)
+            .setMaxValue(WARN_STEP_LIMITS.maxCount),
+        )
+        .addStringOption((option) =>
+          withDescription(option.setName("action"), "settingsWarnStepActionDescription")
+            .setRequired(true)
+            .addChoices(...choicesOf(WARN_STEP_CHOICES)),
+        )
+        .addIntegerOption((option) =>
+          withDescription(option.setName("days"), "settingsWarnStepDaysDescription").setMinValue(1).setMaxValue(WARN_STEP_LIMITS.maxDays),
+        )
+        .addStringOption((option) =>
+          withDescription(option.setName("timeout"), "settingsWarnStepTimeoutDescription").setMaxLength(20),
         ),
     )
     .addSubcommand((sub) =>
@@ -328,6 +371,65 @@ export function createSettingsCommand({ guildSettings, forcedLanguage }) {
           option: logOptionName(option, language),
         });
       }
+      case "warn-step": {
+        const count = interaction.options.getInteger("warnings", true);
+        const action = interaction.options.getString("action", true);
+        const steps = normalizeWarnThresholds(guildSettings.get(guildId, Setting.WARN_THRESHOLDS));
+        const answer = async (status, lines) => {
+          await interaction.reply({ content: lines.join("\n").slice(0, 2000), flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] } });
+          return { status, note: lines[0] };
+        };
+        const save = async (next) => {
+          if (next.length > 0) {
+            await guildSettings.set(guildId, Setting.WARN_THRESHOLDS, next);
+          } else {
+            await guildSettings.clear(guildId, Setting.WARN_THRESHOLDS);
+          }
+        };
+        if (action === WARN_STEP_REMOVE) {
+          if (!steps.some((step) => step.count === count)) {
+            return reply(Status.REFUSED, "settingsWarnStepMissing", { count });
+          }
+          const next = withoutStep(steps, count);
+          await save(next);
+          return answer(Status.SUCCESS, [
+            text("settingsWarnStepRemoved", { count }),
+            next.length > 0 ? text("settingsWarnStepList", { steps: describeWarnSteps(next, text) }) : text("settingsShowNoWarnSteps"),
+          ]);
+        }
+        if (!THRESHOLD_ACTIONS.includes(action)) {
+          return reply(Status.FAILED, "unexpected");
+        }
+        const days = interaction.options.getInteger("days") ?? steps.find((step) => step.count === count)?.days ?? DEFAULT_STEP_DAYS;
+        const step = { count, days, action };
+        if (action === "timeout") {
+          const typed = interaction.options.getString("timeout");
+          const ms = typed ? parseDuration(typed) : DEFAULT_STEP_TIMEOUT_MINUTES * 60_000;
+          const minutes = ms === undefined ? NaN : Math.round(ms / 60_000);
+          if (!Number.isInteger(minutes) || minutes < 1 || minutes > WARN_STEP_LIMITS.maxMinutes) {
+            return reply(Status.REFUSED, "settingsWarnStepBadTimeout");
+          }
+          step.minutes = minutes;
+        }
+        if (steps.length >= MAX_THRESHOLDS && !steps.some((entry) => entry.count === count)) {
+          return reply(Status.REFUSED, "settingsWarnStepFull", { max: MAX_THRESHOLDS });
+        }
+        let next;
+        try {
+          next = withStep(steps, step);
+        } catch (error) {
+          if (error instanceof InvalidWarnThresholds) {
+            return reply(Status.REFUSED, "unexpected");
+          }
+          throw error;
+        }
+        await save(next);
+        return answer(Status.SUCCESS, [
+          text("settingsWarnStepSaved", { step: describeWarnStep(next.find((entry) => entry.count === count), text) }),
+          text("settingsWarnStepList", { steps: describeWarnSteps(next, text) }),
+          text("settingsWarnStepCounts"),
+        ]);
+      }
       case "clear": {
         const choice = CLEARABLE.find(({ value }) => value === interaction.options.getString(SETTING_OPTION, true));
         if (!choice) {
@@ -347,6 +449,7 @@ export function createSettingsCommand({ guildSettings, forcedLanguage }) {
         const ignored = guildSettings.getList(guildId, Setting.LOG_IGNORED_CHANNELS);
         const ignoredRoles = guildSettings.getList(guildId, Setting.LOG_IGNORED_ROLES);
         const options = logOptionsOf(guildSettings, guildId);
+        const warnSteps = normalizeWarnThresholds(guildSettings.get(guildId, Setting.WARN_THRESHOLDS));
         const lines = [
           staffRoleId ? text("settingsShowStaffRole", { role: `<@&${staffRoleId}>` }) : text("settingsShowNoStaffRole"),
           channelId ? text("settingsShowCountryChannel", { channel: `<#${channelId}>` }) : text("settingsShowNoCountryChannel"),
@@ -370,6 +473,7 @@ export function createSettingsCommand({ guildSettings, forcedLanguage }) {
           text("settingsShowLogOptions", {
             options: LOG_OPTIONS.map((option) => `${options[option] ? "✅" : "❌"} ${logOptionName(option, language)}`).join(" · "),
           }),
+          warnSteps.length > 0 ? text("settingsShowWarnSteps", { steps: describeWarnSteps(warnSteps, text) }) : text("settingsShowNoWarnSteps"),
           text("settingsShowAutomod", {
             status: text(normalizeAutomod(guildSettings.get(guildId, Setting.AUTOMOD)).enabled ? "automodStatusOn" : "automodStatusOff"),
           }),

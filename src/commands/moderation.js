@@ -29,7 +29,7 @@ import {
 import { discordLocalizations, pickLanguage, translate } from "../i18n/i18n.js";
 import { result, Status } from "../logs/actionLog.js";
 import { hierarchyProblem, isModerator, outsiderProblem } from "../moderation/checks.js";
-import { applyWarnThreshold, normalizeWarnThresholds } from "../moderation/warnThresholds.js";
+import { applyWarnThreshold, describeWarnStep, normalizeWarnThresholds } from "../moderation/warnThresholds.js";
 import { Setting } from "../settings/guildSettings.js";
 import { DAY_MS, parseDuration } from "../utils/duration.js";
 import { getDiscordErrorCode, isPermissionError } from "../utils/discordErrors.js";
@@ -338,11 +338,11 @@ function createModerationCommand(spec, { guildSettings, moderation, forcedLangua
         moderation,
         thresholds: normalizeWarnThresholds(guildSettings.get(guild.id, Setting.WARN_THRESHOLDS)),
       }).catch((error) => {
-        logger?.warn("Couldn't apply a warning threshold", { guildId: guild.id, error });
+        logger?.warn("Couldn't apply a warning step", { guildId: guild.id, error });
         return { failed: true, threshold: null };
       });
       if (reached?.moderationCase) {
-        lines.push(text("modWarnThresholdApplied", { count: reached.threshold.count, days: reached.threshold.days, action: text(`modThresholdAction_${reached.threshold.action}`), number: reached.moderationCase.number }));
+        lines.push(text("modWarnThresholdApplied", { step: describeWarnStep(reached.threshold, text), number: reached.moderationCase.number }));
       } else if (reached?.failed) {
         lines.push(text("modWarnThresholdFailed"));
       }

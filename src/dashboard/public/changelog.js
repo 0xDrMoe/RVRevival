@@ -3,6 +3,17 @@
 
 export const CHANGELOG = [
   {
+    date: "2026-11-14",
+    title: "One place for automatic punishments after warnings",
+    items: [
+      "Warning thresholds are now \"Automatic punishments for warnings\" on the Moderation page, and they apply to every warning: a moderator's /warn, the Warn app and automod's \"Delete and warn\". Before, automod warnings never reached them.",
+      "Automod's own \"too many warnings\" setting is gone. If you had it on, it was moved into your steps as a step within 1 day, so nothing changes for your members.",
+      "Each step reads as a sentence (\"When a member gets 3 warnings within 1 day → Time out for 1 hour\"), timeouts can be set in minutes, hours or days, and \"What this means\" spells out the whole ladder. New servers can start from suggested steps.",
+      "Each automod action now says what it puts on the member's record, and whether it counts toward these steps.",
+      "New command: /settings warn-step adds, changes or removes a step from Discord.",
+    ],
+  },
+  {
     date: "2026-11-13",
     title: "Music: many more songs found",
     items: [

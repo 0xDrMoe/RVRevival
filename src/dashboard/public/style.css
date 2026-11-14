@@ -3553,27 +3553,126 @@ input.has-variable-problem {
 
 .threshold-row {
   flex-wrap: wrap;
+  align-items: flex-start;
+}
+
+/* A step reads as a sentence: "When a member gets [3] warnings within [30] days → [Time out] for [1] [hours]". */
+.threshold-sentence {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  min-width: 0;
 }
 
 .threshold-part {
   display: inline-flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 6px;
+}
+
+.threshold-part > span {
   white-space: nowrap;
 }
 
 .threshold-part input {
-  width: 5em;
+  width: 4.5em;
 }
 
-.threshold-row .threshold-action {
+.threshold-row select {
   width: auto;
-  flex: 1 1 8em;
   min-width: 0;
 }
 
 .threshold-row > button {
-  margin-left: auto;
+  margin-inline-start: auto;
+}
+
+/* What counts as a warning, and what doesn't. */
+.step-counts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: 10px;
+  margin: 12px 0 16px;
+}
+
+.step-counts-col {
+  padding: 10px 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 14px;
+}
+
+.step-counts-col strong {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.step-counts-green strong .icon {
+  color: #10b981;
+}
+
+.step-counts-muted strong .icon {
+  color: var(--muted);
+}
+
+.step-counts-col ul {
+  margin: 6px 0 0;
+  padding-inline-start: 18px;
+  color: var(--muted);
+}
+
+/* "What this means": the steps as sentences. */
+.step-preview {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  font-size: 14px;
+}
+
+.step-preview ol {
+  margin: 6px 0 0;
+  padding-inline-start: 20px;
+}
+
+.step-preview li + li {
+  margin-top: 3px;
+}
+
+.step-preview .help {
+  margin: 8px 0 0;
+}
+
+.step-problem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 0 0;
+  color: #dc2626;
+  font-weight: 600;
+}
+
+.step-suggest {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-bottom: 10px;
+}
+
+.step-suggest .help {
+  flex: 1 1 260px;
+  margin: 0;
+}
+
+.am-warn-steps .link-button {
+  display: inline-block;
+  margin-top: 8px;
 }
 
 .reward-role select {

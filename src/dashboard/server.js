@@ -5,6 +5,7 @@
 import { ConfigError, loadDashboardConfig } from "../config.js";
 import { CaseStore } from "../moderation/caseStore.js";
 import { GuildSettings } from "../settings/guildSettings.js";
+import { moveAutomodEscalation } from "../moderation/warnStepsMigration.js";
 import { closeDatabase, DEFAULT_DATABASE_FILE, openDatabase } from "../storage/database.js";
 import { logger, registerSecret } from "../utils/logger.js";
 import { liveSecrets } from "../feeds/liveApis.js";
@@ -23,6 +24,8 @@ async function start() {
   const db = openDatabase(DEFAULT_DATABASE_FILE);
   // Imports data/settings.json if the bot hasn't yet (see GuildSettings.load).
   const guildSettings = await GuildSettings.load(db);
+  // Automod's old warning escalation now lives in the warning steps.
+  await moveAutomodEscalation(guildSettings, logger);
   const store = new CaseStore(db);
   const discord = createDiscordApi({ config });
   const app = await buildDashboard({ config, db, discord, guildSettings, store, logger });

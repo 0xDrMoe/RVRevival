@@ -131,7 +131,7 @@ export class CaseStore {
         SELECT reason, COUNT(*) AS uses FROM cases
         WHERE guild_id = :guildId AND reason IS NOT NULL AND length(reason) <= :maxLength
           AND (:typed = '' OR instr(lower(reason), lower(:typed)) > 0)
-          AND reason NOT LIKE 'Automod%' AND reason NOT LIKE 'Warning threshold%'
+          AND reason NOT LIKE 'Automod%' AND reason NOT LIKE 'Warning threshold%' AND reason NOT LIKE 'Automatic punishment%'
         GROUP BY reason ORDER BY uses DESC, MAX(created_at) DESC LIMIT :limit`),
       updateReason: db.prepare(
         "UPDATE cases SET reason = ?, updated_at = ? WHERE guild_id = ? AND case_number = ?",

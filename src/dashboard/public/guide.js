@@ -253,7 +253,46 @@ const FEATURE_PARTS = [
           "`/purge` skips pinned messages and anything older than 14 days. A transcript of what it deleted (an `.html` page that looks like the chat) goes to the mod log.",
           "Bans, kicks and timeouts done from Discord's own menus still get a case (read from the audit log), but the member isn't DMed. Use the bot's commands.",
           "**Reason suggestions:** while you type a reason, Discord suggests the reasons your team uses most. Pick one or keep typing your own.",
-          "**Warning thresholds** (Moderation page on the dashboard): for example 3 warnings in 30 days gives a 1 hour timeout, 5 in 30 days a ban. A threshold fires when a `/warn` makes the count reach it, and the bot says so in its reply. Its case shows `Warning threshold` as the reason.",
+          "**Too many warnings?** Set up automatic punishments for warnings (see that section): the bot times out, kicks or bans for you, and `/warn` says so in its reply.",
+        ],
+      },
+      {
+        id: "warnsteps",
+        title: "Automatic punishments for warnings",
+        icon: "alert",
+        tone: "red",
+        page: "moderation",
+        summary: "After too many warnings, the bot times out, kicks or bans the member for you, from any warning: a moderator's or automod's.",
+        who: "Admins (**Manage Server**), on the **Moderation** page or with `/settings warn-step`.",
+        table: {
+          head: ["Counts as a warning", "Doesn't count"],
+          rows: [
+            ["`/warn` and the **Warn** app", "Notes, timeouts, kicks and bans"],
+            ["Automod rules set to **Delete and warn**", "Automod **Delete the message** and **Log only**"],
+          ],
+        },
+        commands: [
+          ["/settings warn-step warnings action [days] [timeout]", "Adds or changes the step for that many warnings. Action *Remove this step* deletes it."],
+          ["/settings show", "Lists the steps with the other settings."],
+          ["/settings clear setting", "Pick *Automatic punishments for warnings* to remove every step."],
+        ],
+        example: [
+          "/settings warn-step warnings:3 action:Time out days:1 timeout:1h",
+          "/settings warn-step warnings:5 action:Time out days:30 timeout:1d",
+          "/settings warn-step warnings:8 action:Ban days:90",
+        ],
+        steps: [
+          "**A warning is given**, by a moderator or by automod. It's saved as a Warn case on the member's record.",
+          "**The bot counts** the member's warnings in each step's window, like the last 30 days.",
+          "**A step is reached** when the count hits its number exactly. The bot times out, kicks or bans the member, and that becomes its own case with `Automatic punishment` in the reason.",
+          "**If one warning reaches two steps**, the one with more warnings wins. Each step happens once per run of warnings, so a 4th warning doesn't repeat the 3-warning timeout.",
+        ],
+        tips: [
+          "Up to 5 steps. The Moderation page shows each one as a sentence under **What this means**, and offers suggested steps to start from.",
+          "A step for **1 warning** acts on every warning.",
+          "Timeouts last up to 28 days (Discord's limit).",
+          "The bot can't punish anyone whose highest role is at or above its own. `/warn` says so when that happens.",
+          "Warnings deleted with `/case delete` or `/clearwarns` stop counting.",
         ],
       },
       {
@@ -443,7 +482,7 @@ const FEATURE_PARTS = [
         page: "automod",
         summary: "Checks every new and edited message and acts on the first rule it breaks.",
         who: "Admins, on the **Automod** page or with `/settings automod`.",
-        native: "Discord's own **AutoMod** (*Server Settings → AutoMod*) blocks words and spam before they're posted. Use it for that, and this for links, caps, repeats, warnings and escalation.",
+        native: "Discord's own **AutoMod** (*Server Settings → AutoMod*) blocks words and spam before they're posted. Use it for that, and this for links, caps, repeats and warnings.",
         table: {
           head: ["Rule", "Catches"],
           rows: [
@@ -468,7 +507,6 @@ const FEATURE_PARTS = [
           ["/settings automod allow-site site", "Allows a website, or removes it."],
           ["/settings automod exempt-role role", "Never checks that role (or stops)."],
           ["/settings automod exempt-channel channel", "Never checks that channel (or stops)."],
-          ["/settings automod escalate warnings [action]", "After that many automod warnings in 24 hours: time out, kick or ban."],
           ["/settings automod show", "Lists the automod settings."],
         ],
         tips: [
@@ -477,7 +515,7 @@ const FEATURE_PARTS = [
           "Trying a rule out? Set it to **Log only**: matches go to the mod log and the message stays up.",
           "Scam links are usually posted by hacked accounts. The default action, **delete and time out**, stops the spree while the owner gets their account back.",
           "Never checked: bots, the mod role, anyone with Manage Messages, exempt roles and channels, and the country channel.",
-          "Warnings and timeouts become normal cases with \"Automod\" in the reason.",
+          "Warnings and timeouts become normal cases with \"Automod\" in the reason. Automod's warnings count toward the **automatic punishments for warnings** on the Moderation page, together with moderators' warnings.",
           "When it gets it wrong: `/untimeout` the member, then delete the case and fix the word or site.",
           "Never post the banned-words list anywhere public.",
         ],
