@@ -23,7 +23,7 @@
 
 import { AttachmentBuilder, AuditLogEvent, time, TimestampStyles } from "discord.js";
 import { Setting } from "../settings/guildSettings.js";
-import { canReadContent, codeBlock, formatBytes, quote } from "./actionLog.js";
+import { canReadContent, codeBlock, formatBytes, MAX_CONTENT_LENGTH, quote, textFile } from "./actionLog.js";
 import { noAuditTrail } from "./auditTrail.js";
 import { buildLogEntry, byLine, capList, formatDuration, LogColor } from "./logEntry.js";
 import { DEFAULT_LOG_OPTIONS, LogEvent, logOptionsOf } from "./logEvents.js";
@@ -48,14 +48,40 @@ const fullDate = (ms) => time(unix(ms), TimestampStyles.LongDateTime);
 const avatarOf = (user) => user?.displayAvatarURL?.() ?? undefined;
 const roleList = (ids) => capList(ids.map((id) => `<@&${id}>`), { separator: " " });
 
-function messageText(message) {
+// A message's text in a code block, in full. Text longer than `max` is in an
+// attached file when `attached` (the entry says so), else the code block shows
+// the first `max` characters and how many more there were. Never "…".
+function messageText(message, { max = MAX_EDIT_TEXT, attached = false } = {}) {
   if (message.partial) {
     return "*Not available: the message was sent before the bot last started.*";
   }
-  if (message.content) {
-    return codeBlock(message.content.length > MAX_EDIT_TEXT ? `${message.content.slice(0, MAX_EDIT_TEXT)}…` : message.content);
+  const content = message.content;
+  if (content) {
+    if (content.length <= max) {
+      return codeBlock(content);
+    }
+    if (attached) {
+      return `*Too long to show here (${content.length} characters): it's in the attached file.*`;
+    }
+    return `${codeBlock(content.slice(0, max))}\n*${content.length - max} more characters not shown*`;
   }
   return canReadContent(message) ? "*No text.*" : "*Text not available: the Message Content intent is off.*";
+}
+
+const tooLong = (message, max) => !message.partial && (message.content?.length ?? 0) > max;
+
+// message.txt with a deleted message's full text when the embed can't hold it, else null.
+export function deletedMessageFile(message) {
+  return tooLong(message, MAX_CONTENT_LENGTH) ? textFile("message.txt", message.content) : null;
+}
+
+// edit.txt with both versions of an edited message when either is too long for the embed, else null.
+export function editedMessageFile(oldMessage, newMessage) {
+  if (!tooLong(oldMessage, MAX_EDIT_TEXT) && !tooLong(newMessage, MAX_EDIT_TEXT)) {
+    return null;
+  }
+  const before = oldMessage.partial ? "(not available)" : (oldMessage.content ?? "");
+  return textFile("edit.txt", `Before\n------\n${before}\n\nAfter\n-----\n${newMessage.content ?? ""}\n`);
 }
 
 const sameRoles = (oldMember, newMember) => {
@@ -69,8 +95,9 @@ const jumpLink = (guildId, channelId, messageId) => `https://discord.com/channel
 // --- Messages ---------------------------------------------------------------------
 
 // `deletedBy` is the audit log entry saying who deleted it, if someone else did.
-export function buildMessageDeletedEmbed(message, options = DEFAULT_LOG_OPTIONS, deletedBy = undefined) {
-  const lines = [messageText(message)];
+// `textAttached`: the full text is in an attached file (deletedMessageFile).
+export function buildMessageDeletedEmbed(message, options = DEFAULT_LOG_OPTIONS, deletedBy = undefined, { textAttached = false } = {}) {
+  const lines = [messageText(message, { max: MAX_CONTENT_LENGTH, attached: textAttached })];
   const details = [];
   const attachments = [...(message.attachments?.values() ?? [])];
   if (attachments.length > 0) {
@@ -108,8 +135,10 @@ export function buildMessageDeletedEmbed(message, options = DEFAULT_LOG_OPTIONS,
   );
 }
 
-export function buildMessageEditedEmbed(oldMessage, newMessage, options = DEFAULT_LOG_OPTIONS) {
-  const lines = ["**Before**", messageText(oldMessage), "**After**", messageText(newMessage)];
+// `textAttached`: both versions are in an attached file (editedMessageFile).
+export function buildMessageEditedEmbed(oldMessage, newMessage, options = DEFAULT_LOG_OPTIONS, { textAttached = false } = {}) {
+  const shown = { attached: textAttached };
+  const lines = ["**Before**", messageText(oldMessage, shown), "**After**", messageText(newMessage, shown)];
   const details = [];
   if (options.editDiff !== false && !oldMessage.partial) {
     const changes = describeEdit(oldMessage.content ?? "", newMessage.content ?? "");
@@ -448,7 +477,10 @@ export function createServerLog({
           )
         : undefined;
       const options = optionsOf(guild);
-      await post(guild, LogEvent.MESSAGE_DELETE, () => ({ embed: buildMessageDeletedEmbed(message, options, deletedBy) }));
+      await post(guild, LogEvent.MESSAGE_DELETE, ({ canAttach }) => {
+        const file = canAttach ? deletedMessageFile(message) : null;
+        return { embed: buildMessageDeletedEmbed(message, options, deletedBy, { textAttached: Boolean(file) }), files: file ? [file] : [] };
+      });
     },
 
     async messagesBulkDeleted(messages, channel) {
@@ -488,7 +520,10 @@ export function createServerLog({
         return;
       }
       const options = optionsOf(guild);
-      await post(guild, LogEvent.MESSAGE_EDIT, () => ({ embed: buildMessageEditedEmbed(oldMessage, newMessage, options) }));
+      await post(guild, LogEvent.MESSAGE_EDIT, ({ canAttach }) => {
+        const file = canAttach ? editedMessageFile(oldMessage, newMessage) : null;
+        return { embed: buildMessageEditedEmbed(oldMessage, newMessage, options, { textAttached: Boolean(file) }), files: file ? [file] : [] };
+      });
     },
 
     async memberJoined(member) {
