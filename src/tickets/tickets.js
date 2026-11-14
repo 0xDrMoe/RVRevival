@@ -7,7 +7,8 @@ import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, PermissionF
 import { pickLanguage, translate } from "../i18n/i18n.js";
 import { moderatorRoleId } from "../moderation/checks.js";
 import { Setting } from "../settings/guildSettings.js";
-import { findCategory, normalizeCategories } from "./categories.js";
+import { findCategory } from "./categories.js";
+import { findPanel, mainPanelCategories, mainPanelLook, panelCustomId, ticketPanels } from "./panels.js";
 import { DEFAULT_NAME_FORMAT, fillTemplate, formatThreadName, normalizeLook, PANEL_LIMITS } from "./panel.js";
 
 export const OPEN_BUTTON = "tk:open";
@@ -66,39 +67,55 @@ const MAX_MENU_DESCRIPTION = 100;
 
 export const serverLanguage = (guild, forcedLanguage) => pickLanguage(guild?.preferredLocale, forcedLanguage);
 
-// The saved panel { channelId, messageId, staffRoleId, title, message }, or undefined.
+// The main panel's saved message { channelId, messageId, … }, or undefined
+// when it isn't posted. Other panels: tickets/panels.js.
 export function ticketSettings(guildSettings, guildId) {
   const saved = guildSettings.get(guildId, Setting.TICKETS);
   return saved?.channelId ? saved : undefined;
 }
 
-export const ticketCategories = (guildSettings, guildId) => normalizeCategories(guildSettings.get(guildId, Setting.TICKET_CATEGORIES));
+// The main panel's categories and look (tickets/panels.js has every panel's).
+export const ticketCategories = mainPanelCategories;
+export const panelLook = mainPanelLook;
 
-// How the panel looks (tickets/panel.js). Servers that set their panel up
-// before the look was its own setting have the title and text saved with the
-// panel, so those are used until the look is saved.
-export function panelLook(guildSettings, guildId) {
-  const saved = guildSettings.get(guildId, Setting.TICKET_PANEL);
-  if (saved) {
-    return normalizeLook(saved);
+// The roles brought into a new ticket: the category's staff roles, else the
+// panel's, else the mod role.
+export function ticketStaffRoleIds(guildSettings, guildId, panel, category = null) {
+  if (category?.staffRoleIds?.length > 0) {
+    return category.staffRoleIds;
   }
-  const panel = guildSettings.get(guildId, Setting.TICKETS);
-  return normalizeLook({ title: panel?.title ?? null, description: panel?.message ?? null });
+  if (panel?.staffRoleIds?.length > 0) {
+    return panel.staffRoleIds;
+  }
+  const modRoleId = moderatorRoleId(guildSettings, guildId);
+  return modRoleId ? [modRoleId] : [];
 }
 
-// The role added to every ticket: the panel's staff role, else the mod role (or staff role).
-export function ticketStaffRoleId(guildSettings, guildId) {
-  return ticketSettings(guildSettings, guildId)?.staffRoleId ?? moderatorRoleId(guildSettings, guildId) ?? null;
+// Who may open a ticket from this category (or panel): members with one of
+// its roles, when it has any (the category's, else the panel's). Server
+// managers always may, so they can test it.
+export function mayOpen(interaction, panel, category = null) {
+  const allowed = category?.openRoleIds?.length > 0 ? category.openRoleIds : (panel?.openRoleIds ?? []);
+  if (allowed.length === 0 || interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
+    return { allowed: true, roleIds: allowed };
+  }
+  const roles = interaction.member?.roles?.cache;
+  return { allowed: allowed.some((roleId) => roles?.has(roleId)), roleIds: allowed };
 }
 
-// The staff role of a ticket's category, if it has its own.
-export function categoryStaffRoleId(guildSettings, guildId, categoryId) {
-  return findCategory(ticketCategories(guildSettings, guildId), categoryId)?.staffRoleId ?? null;
+// Every staff role that may handle a ticket: its panel's and its category's.
+// Without a ticket (/tickets list), every panel's and category's.
+function staffRolesFor(guildSettings, guildId, ticket) {
+  const panels = ticket ? [findPanel(guildSettings, guildId, ticket.panelId)].filter(Boolean) : ticketPanels(guildSettings, guildId);
+  return panels.flatMap((panel) => {
+    const categories = ticket ? [findCategory(panel.categories, ticket.categoryId)].filter(Boolean) : panel.categories;
+    return [...panel.staffRoleIds, ...categories.flatMap((category) => category.staffRoleIds)];
+  });
 }
 
 // Who may close any ticket, add or remove people, and list tickets: people who
-// can manage threads or the server, and the ticket staff role or mod role.
-// Inside a ticket (`ticket`), its category's staff role too.
+// can manage threads or the server, the mod role, and the staff roles of the
+// ticket's panel and category (outside a ticket, of any panel or category).
 export function isTicketStaff(interaction, guildSettings, ticket) {
   const permissions = interaction.memberPermissions;
   if (permissions?.has(PermissionFlagsBits.ManageThreads) || permissions?.has(PermissionFlagsBits.ManageGuild)) {
@@ -106,11 +123,7 @@ export function isTicketStaff(interaction, guildSettings, ticket) {
   }
   const roles = interaction.member?.roles?.cache;
   const guildId = interaction.guildId;
-  return [
-    ticketStaffRoleId(guildSettings, guildId),
-    moderatorRoleId(guildSettings, guildId),
-    ticket?.categoryId ? categoryStaffRoleId(guildSettings, guildId, ticket.categoryId) : null,
-  ].some((roleId) => roleId && roles?.has(roleId));
+  return [moderatorRoleId(guildSettings, guildId), ...staffRolesFor(guildSettings, guildId, ticket)].some((roleId) => roleId && roles?.has(roleId));
 }
 
 const paddedNumber = (number) => String(number).padStart(4, "0");
@@ -151,7 +164,8 @@ const categoryName = (category) => `${category.emoji ? `${category.emoji} ` : ""
 // that have a description are listed in the embed; a dropdown shows them itself.
 // `color` is the server's embed colour (see branding/branding.js), used when
 // the look has none.
-export function buildPanelMessage(language, { look: saved, categories = [], color = TICKET_COLOR }) {
+// `panelId` puts the panel in the buttons' IDs (none for the main panel).
+export function buildPanelMessage(language, { look: saved, categories = [], color = TICKET_COLOR, panelId = null }) {
   const look = normalizeLook(saved);
   const embed = new EmbedBuilder()
     .setColor(look.color ?? color)
@@ -175,15 +189,15 @@ export function buildPanelMessage(language, { look: saved, categories = [], colo
     const used = [json.title, json.description, json.author?.name, json.footer?.text].join("").length;
     embed.addFields(fieldsWithin(described.map((category) => ({ name: categoryName(category), value: category.description })), used));
   }
-  return { embeds: [embed], components: buildPanelComponents(language, { look, categories }) };
+  return { embeds: [embed], components: buildPanelComponents(language, { look, categories, panelId }) };
 }
 
 // The panel's rows: buttons, five to a row, or one dropdown.
-export function buildPanelComponents(language, { look: saved, categories = [] }) {
+export function buildPanelComponents(language, { look: saved, categories = [], panelId = null }) {
   const look = normalizeLook(saved);
   if (categories.length === 0) {
     const button = new ButtonBuilder()
-      .setCustomId(OPEN_BUTTON)
+      .setCustomId(panelCustomId(panelId, "open"))
       .setStyle(BUTTON_STYLE[look.buttonStyle])
       .setEmoji(look.buttonEmoji ?? "🎫")
       .setLabel(look.buttonLabel ?? translate(language, "ticketOpenButton"));
@@ -191,7 +205,7 @@ export function buildPanelComponents(language, { look: saved, categories = [] })
   }
   if (look.layout === "menu") {
     const menu = new StringSelectMenuBuilder()
-      .setCustomId(MENU_ID)
+      .setCustomId(panelCustomId(panelId, "menu"))
       .setPlaceholder(look.menuPlaceholder ?? translate(language, "ticketMenuPlaceholder"))
       .addOptions(
         categories.map((category) => ({
@@ -210,7 +224,7 @@ export function buildPanelComponents(language, { look: saved, categories = [] })
     rows.push(
       new ActionRowBuilder().addComponents(
         categories.slice(index, index + BUTTONS_PER_ROW).map((category) => {
-          const button = new ButtonBuilder().setCustomId(`${OPEN_PREFIX}${category.id}`).setStyle(BUTTON_STYLE[category.style] ?? ButtonStyle.Primary).setLabel(category.label);
+          const button = new ButtonBuilder().setCustomId(panelCustomId(panelId, "open", category.id)).setStyle(BUTTON_STYLE[category.style] ?? ButtonStyle.Primary).setLabel(category.label);
           return category.emoji ? button.setEmoji(category.emoji) : button;
         }),
       ),
@@ -221,11 +235,10 @@ export function buildPanelComponents(language, { look: saved, categories = [] })
 
 // The first message in a ticket: the intro (the category's, the panel's or
 // the built-in one), what the member answered, and the Close button.
-// `ping` says whether the staff role is pinged; when it is and the intro
-// doesn't mention it, the mention goes on a line of its own.
-// Returns the message and whether the staff role is mentioned in it.
-export function buildTicketWelcome(language, { ticket, staffRoleId, color = TICKET_COLOR, intro = null, ping = true, server = "" }) {
-  const staffMention = staffRoleId ? `<@&${staffRoleId}>` : null;
+// `ping` says whether the staff roles are pinged; when they are and the intro
+// doesn't mention them, the mentions go on a line of their own.
+export function buildTicketWelcome(language, { ticket, staffRoleIds = [], color = TICKET_COLOR, intro = null, ping = true, server = "" }) {
+  const staffMention = staffRoleIds.length > 0 ? staffRoleIds.map((id) => `<@&${id}>`).join(" ") : null;
   const values = {
     user: `<@${ticket.userId}>`,
     username: ticket.userName ?? "",
@@ -234,7 +247,7 @@ export function buildTicketWelcome(language, { ticket, staffRoleId, color = TICK
     category: ticket.categoryLabel ?? "",
     server,
   };
-  let content = intro ? fillTemplate(intro, values) : translate(language, staffRoleId ? "ticketWelcome" : "ticketWelcomeNoStaff", values);
+  let content = intro ? fillTemplate(intro, values) : translate(language, staffMention ? "ticketWelcome" : "ticketWelcomeNoStaff", values);
   if (ping && staffMention && !content.includes(staffMention)) {
     content = `${content}\n${staffMention}`;
   }
@@ -258,29 +271,35 @@ export function buildTicketWelcome(language, { ticket, staffRoleId, color = TICK
     content: content.slice(0, 2000),
     embeds: [embed],
     components: [new ActionRowBuilder().addComponents(button, claim)],
-    allowedMentions: { users: [ticket.userId], roles: pingsStaff ? [staffRoleId] : [] },
+    allowedMentions: { users: [ticket.userId], roles: pingsStaff ? staffRoleIds : [] },
   };
 }
 
-// Brings the staff role into a private thread. Mentioning a role adds everyone
-// who has it, but only when the role can be pinged; otherwise the people in
-// the bot's member cache who have it are added one by one.
-// With `pinged` false (the welcome didn't ping the role) they're added one by
+// Brings the staff roles into a private thread. Mentioning a role adds
+// everyone who has it, but only when the role can be pinged; otherwise the
+// people in the bot's member cache who have it are added one by one (at most
+// MAX_STAFF_ADDED people across all the roles).
+// With `pinged` false (the welcome didn't ping the roles) they're added one by
 // one too, which brings them in without a ping.
-export async function addStaff({ thread, guild, staffRoleId, logger, pinged = true }) {
-  const role = staffRoleId && guild.roles.cache.get(staffRoleId);
-  if (!role) {
+// Returns whether every role was brought in by its mention.
+export async function addStaff({ thread, guild, staffRoleIds = [], logger, pinged = true }) {
+  const roles = staffRoleIds.map((id) => guild.roles.cache.get(id)).filter(Boolean);
+  if (roles.length === 0) {
     return { pinged: false };
   }
-  const canPing = role.mentionable || guild.members.me?.permissions?.has(PermissionFlagsBits.MentionEveryone);
-  if (pinged && canPing) {
-    return { pinged: true };
+  const canPingAll = guild.members.me?.permissions?.has(PermissionFlagsBits.MentionEveryone);
+  const byHand = roles.filter((role) => !(pinged && (role.mentionable || canPingAll)));
+  const added = new Set();
+  for (const role of byHand) {
+    for (const member of role.members.values()) {
+      if (member.user?.bot || added.has(member.id) || added.size >= MAX_STAFF_ADDED) {
+        continue;
+      }
+      added.add(member.id);
+      await thread.members.add(member.id).catch((error) =>
+        logger.debug("Couldn't add a staff member to a ticket", { guildId: guild.id, userId: member.id, error }),
+      );
+    }
   }
-  const staff = [...role.members.values()].filter((member) => !member.user?.bot).slice(0, MAX_STAFF_ADDED);
-  for (const member of staff) {
-    await thread.members.add(member.id).catch((error) =>
-      logger.debug("Couldn't add a staff member to a ticket", { guildId: guild.id, userId: member.id, error }),
-    );
-  }
-  return { pinged: false };
+  return { pinged: byHand.length === 0 };
 }

@@ -1,5 +1,6 @@
 // Starts the bot. Slash commands are registered separately with `npm run register`.
 
+import { forgetPanelsIn } from "./tickets/panels.js";
 import { ReportStore } from "./moderation/reports.js";
 import { AltHints } from "./moderation/altHints.js";
 import { Client, Events, GatewayCloseCodes, GatewayIntentBits, Options, Partials } from "discord.js";
@@ -635,11 +636,10 @@ async function start() {
           .then(() => logger.info("The join-to-create hub was deleted; set a new one with /voice setup", { guildId: channel.guildId }))
           .catch((error) => logger.error("Couldn't turn off join-to-create after its hub was deleted", { error }));
       }
-      if (channel.guildId && guildSettings.get(channel.guildId, Setting.TICKETS)?.channelId === channel.id) {
-        guildSettings
-          .clear(channel.guildId, Setting.TICKETS)
-          .then(() => logger.info("The ticket channel was deleted; post a new panel with /tickets panel", { guildId: channel.guildId }))
-          .catch((error) => logger.error("Couldn't turn off tickets after their channel was deleted", { error }));
+      if (channel.guildId) {
+        forgetPanelsIn(guildSettings, channel.guildId, channel.id)
+          .then((count) => count > 0 && logger.info("A ticket panel's channel was deleted; post the panel again from the dashboard or with /tickets panel", { guildId: channel.guildId }))
+          .catch((error) => logger.error("Couldn't forget ticket panels after their channel was deleted", { error }));
       }
       if (channel.guildId && guildSettings.get(channel.guildId, Setting.STARBOARD)?.channelId === channel.id) {
         guildSettings

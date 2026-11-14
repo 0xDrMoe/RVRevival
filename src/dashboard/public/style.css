@@ -7808,3 +7808,73 @@ input.has-variable-problem {
   margin-top: 10px;
   flex-wrap: wrap;
 }
+
+/* --- Ticket panels: the list and the several-roles chooser ----------------------- */
+.panel-list li.selected {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+.panel-list .badge.warn {
+  background: color-mix(in srgb, var(--amber, #f0b232) 14%, transparent);
+  border-color: color-mix(in srgb, var(--amber, #f0b232) 35%, transparent);
+  color: var(--ink);
+}
+
+.role-chooser {
+  display: grid;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  min-width: 0;
+}
+
+.role-chooser .role-chips {
+  min-height: 28px;
+  align-items: center;
+}
+
+.role-chooser .role-chip {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.role-chip-remove {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  margin-right: -4px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.role-chip-remove:hover,
+.role-chip-remove:focus-visible {
+  background: color-mix(in srgb, var(--ink) 12%, transparent);
+}
+
+.role-chooser-add {
+  width: 100%;
+}
+
+.category-roles {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+}
+
+.ticket-panels .panel-list li > p {
+  margin: 0;
+}
+
+.ticket-panels .panel-list .toolbar {
+  flex-wrap: wrap;
+}

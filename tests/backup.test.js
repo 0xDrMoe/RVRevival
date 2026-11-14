@@ -150,7 +150,8 @@ describe("settings backup", () => {
 
   it("names settings the way the dashboard does", () => {
     expect(settingLabel(Setting.LOGS_CHANNEL)).toBe("Logs channel");
-    expect(settingLabel(Setting.TICKETS)).toBe("Ticket panel");
+    expect(settingLabel(Setting.TICKETS)).toBe("Main ticket panel");
+    expect(settingLabel(Setting.TICKET_PANELS)).toBe("Other ticket panels");
     expect(settingLabel("somethingNew")).toBe("somethingNew");
   });
 });

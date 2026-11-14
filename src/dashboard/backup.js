@@ -49,7 +49,8 @@ const NOT_BACKED_UP = new Set([Setting.LOCKDOWN, Setting.BOT_INVITER, Setting.BR
 // (stats counters get new channels elsewhere).
 const SAME_SERVER_LABELS = {
   [Setting.ROLE_PANELS]: "Role panels",
-  [Setting.TICKETS]: "Ticket panel",
+  [Setting.TICKETS]: "Main ticket panel",
+  [Setting.TICKET_PANELS]: "Other ticket panels",
   [Setting.TEMP_VOICE]: "Join-to-create voice",
   [Setting.STATS_COUNTERS]: "Server stats counters",
   [Setting.COUNTRY_GUIDE_POST]: "Posted country guide",

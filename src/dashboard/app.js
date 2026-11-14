@@ -20,6 +20,9 @@
 //   POST   /api/guilds/:id/role-panels           post a new role panel
 //   PUT    /api/guilds/:id/role-panels/:panel    change a role panel (edits its message)
 //   DELETE /api/guilds/:id/role-panels/:panel    delete a role panel and its message
+//   POST   /api/guilds/:id/ticket-panels         add a ticket panel and post it
+//   PUT    /api/guilds/:id/ticket-panels/:panel  change a ticket panel ("main" or an ID): channel, roles, look, categories
+//   DELETE /api/guilds/:id/ticket-panels/:panel  delete a ticket panel's message (and the panel, unless it's the main one)
 //   POST   /api/guilds/:id/test                  send a labelled test of a message (welcome, logs, level-up...)
 //   POST   /api/guilds/:id/automod/test          which automod rules a message would break
 //
@@ -56,7 +59,18 @@ import { SavedRoles, SavedRoleStore } from "../members/savedRoleStore.js";
 import { TempRoleStore } from "../tempRoles/tempRoleStore.js";
 import { AppealStatus, APPEAL_STATUSES, AppealStore } from "../appeals/appealStore.js";
 import { appealQuestions, MAX_ANSWER_LENGTH, normalizeAppeals } from "../appeals/config.js";
-import { normalizeCategories } from "../tickets/categories.js";
+import { checkCategories, describeCategories, InvalidCategories, normalizeCategories, readRoleList } from "../tickets/categories.js";
+import {
+  extraPanels,
+  isPosted,
+  MAIN_PANEL,
+  mainPanel,
+  MAX_TICKET_PANELS,
+  newPanelId,
+  normalizeExtraPanels,
+  saveExtraPanels,
+  saveMainPanel,
+} from "../tickets/panels.js";
 import { checkMessage, editableMessage, InvalidMessage, messageSummary, parseMessageLink } from "../messages/embedMessage.js";
 import { inviteLink } from "../guilds/invite.js";
 import { SentMessageStore } from "../messages/sentMessageStore.js";
@@ -74,7 +88,7 @@ import { MAX_STICKIES, MAX_STICKY_LENGTH, StickyStore } from "../sticky/stickySt
 import { BotStatsStore } from "../stats/botStats.js";
 import { checkTemplate, COUNTER_PRESETS, InvalidCounter, MAX_COUNTERS, newCounterId, normalizeCounters } from "../stats/statsCounters.js";
 import { buildPanelComponents, buildPanelMessage, panelLook, TICKET_COLOR } from "../tickets/tickets.js";
-import { DEFAULT_NAME_FORMAT, normalizeLook } from "../tickets/panel.js";
+import { checkLook, DEFAULT_NAME_FORMAT, describeLook, InvalidPanel as InvalidTicketPanel, normalizeLook } from "../tickets/panel.js";
 import { checkTicketSupport, normalizeTicketSupport } from "../tickets/support.js";
 import { normalizeWarnThresholds } from "../moderation/warnThresholds.js";
 import { BUILT_IN_GUIDE_KEYS, buildPostedGuide } from "../commands/countryHelp.js";
@@ -657,6 +671,13 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     [Setting.MUSIC]: normalizeMusic(guildSettings.get(guildId, Setting.MUSIC)),
     // With the title and text of panels set up before the look was saved on its own.
     [Setting.TICKET_PANEL]: panelLook(guildSettings, guildId),
+    [Setting.TICKET_PANELS]: normalizeExtraPanels(guildSettings.get(guildId, Setting.TICKET_PANELS)),
+    [Setting.TICKETS]: (() => {
+      const main = mainPanel(guildSettings, guildId);
+      return main.channelId || main.staffRoleIds.length > 0 || main.openRoleIds.length > 0
+        ? { channelId: main.channelId, messageId: main.messageId, staffRoleIds: main.staffRoleIds, openRoleIds: main.openRoleIds }
+        : null;
+    })(),
     [Setting.TICKET_SUPPORT]: normalizeTicketSupport(guildSettings.get(guildId, Setting.TICKET_SUPPORT)),
     [Setting.WARN_THRESHOLDS]: normalizeWarnThresholds(guildSettings.get(guildId, Setting.WARN_THRESHOLDS)),
   });
@@ -789,8 +810,9 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
       // The colour panels use when neither the look nor Branding sets one.
       color: brandingOf(guildSettings, guildId).color ?? TICKET_COLOR,
       brandColor: brandingOf(guildSettings, guildId).color,
-      staffRoleId: guildSettings.get(guildId, Setting.TICKETS)?.staffRoleId ?? null,
+      staffRoleId: mainPanel(guildSettings, guildId).staffRoleIds[0] ?? null,
       posted: Boolean(guildSettings.get(guildId, Setting.TICKETS)?.channelId),
+      maxPanels: MAX_TICKET_PANELS,
     };
   };
 
@@ -2627,6 +2649,223 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
       }
       await savePanels(guildId, panels.filter((entry) => entry !== panel));
       await logAction(guildId, session, `**Role panel deleted:** #${panel.id} ${panel.title}`, []);
+      return { settings: settingsJson(guildId) };
+    });
+  });
+
+  // --- Ticket panels ------------------------------------------------------------
+  // Every ticket panel (tickets/panels.js): the main one, kept in the settings
+  // it always had, and up to nine more. Saving posts the panel in its channel
+  // (or edits its message there) first, then saves it, so a panel Discord
+  // refused is never saved half done. Changes take turns per server with the
+  // role panels'.
+
+  const TICKET_PANEL_ID = /^[a-z0-9]{1,12}$/;
+
+  // Checks a panel from the Tickets page: { channelId, staffRoleIds,
+  // openRoleIds, look, categories }. Returns it cleaned, or throws
+  // InvalidTicketPanel. channelId may be null only for the main panel (not posted).
+  function checkTicketPanelInput(body, { guildId, guild, channels, main }) {
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      throw new InvalidTicketPanel("Send the ticket panel as an object.");
+    }
+    const isRole = (id) => id !== guildId && guild.roles.some((role) => role.id === id && !role.managed);
+    const problem = (message) => {
+      throw new InvalidTicketPanel(message);
+    };
+    const channelId = body.channelId ?? null;
+    if (channelId === null) {
+      if (!main) {
+        problem("Pick the channel the panel goes in.");
+      }
+    } else if (!channels.some((channel) => channel.id === channelId && channel.type === 0)) {
+      problem("Pick a text channel. Tickets are private threads, which announcement channels and forums can't have.");
+    }
+    let look;
+    let categories;
+    try {
+      look = checkLook(body.look) ?? normalizeLook(null);
+      categories = checkCategories(body.categories ?? [], { isRole }) ?? [];
+    } catch (error) {
+      if (error instanceof InvalidCategories) {
+        problem(error.message);
+      }
+      throw error;
+    }
+    return {
+      channelId,
+      staffRoleIds: readRoleList(body.staffRoleIds ?? [], problem, "Staff roles", isRole),
+      openRoleIds: readRoleList(body.openRoleIds ?? [], problem, "Who can open tickets", isRole),
+      look,
+      categories,
+    };
+  }
+
+  // The panel's message as Discord's API takes it.
+  function ticketPanelPayload(guildId, guild, panel) {
+    const language = pickLanguage(guild.preferred_locale, config.forcedLanguage);
+    const message = buildPanelMessage(language, {
+      look: panel.look,
+      categories: panel.categories,
+      color: brandingOf(guildSettings, guildId).color ?? undefined,
+      panelId: panel.id,
+    });
+    return { embeds: message.embeds.map((embed) => embed.toJSON()), components: message.components.map((row) => row.toJSON()) };
+  }
+
+  // Edits the panel's message, or posts it (again) when it's new, was deleted
+  // or moves to another channel. Returns the panel's message ID.
+  async function publishTicketPanel(guildId, guild, panel, previous) {
+    const payload = ticketPanelPayload(guildId, guild, panel);
+    const sameChannel = Boolean(previous?.messageId) && previous.channelId === panel.channelId;
+    if (sameChannel) {
+      try {
+        await discord.editMessage(panel.channelId, previous.messageId, payload);
+        return previous.messageId;
+      } catch (error) {
+        if (error.status !== 404) {
+          throw error;
+        }
+      }
+    }
+    const posted = await discord.postMessage(panel.channelId, payload);
+    if (previous?.messageId && !sameChannel) {
+      await discord.deleteMessage(previous.channelId, previous.messageId).catch(() => {});
+    }
+    return posted.id;
+  }
+
+  const roleMentions = (roleIds) => (roleIds.length > 0 ? roleIds.map((id) => `<@&${id}>`).join(" ") : "none");
+
+  // What changed between two versions of a panel, for the Activity page and the log.
+  function ticketPanelLines(before, after) {
+    const lines = [];
+    if ((before?.channelId ?? null) !== after.channelId) {
+      lines.push(`**Channel:** ${before?.channelId ? `<#${before.channelId}>` : "not posted"} → ${after.channelId ? `<#${after.channelId}>` : "not posted"}`);
+    }
+    if (!sameValue(before?.staffRoleIds ?? [], after.staffRoleIds)) {
+      lines.push(`**Staff roles:** ${roleMentions(before?.staffRoleIds ?? [])} → ${roleMentions(after.staffRoleIds)}`);
+    }
+    if (!sameValue(before?.openRoleIds ?? [], after.openRoleIds)) {
+      lines.push(`**Who can open:** ${before?.openRoleIds?.length ? roleMentions(before.openRoleIds) : "everyone"} → ${after.openRoleIds.length ? roleMentions(after.openRoleIds) : "everyone"}`);
+    }
+    if (!before || !sameValue(normalizeLook(before.look), after.look)) {
+      lines.push(`**Look:** ${describeLook(after.look)}`);
+    }
+    if (!before || !sameValue(before.categories, after.categories)) {
+      lines.push(`**Ticket types:** ${describeCategories(after.categories)}`);
+    }
+    return lines;
+  }
+
+  const ticketPanelName = (panel) => `${panel.id === MAIN_PANEL ? "Main ticket panel" : "Ticket panel"} "${panel.look.title || "🎫 Need help?"}"`;
+
+  // Creates (panelId null) or changes a ticket panel.
+  async function saveTicketPanel(request, reply, panelId) {
+    const access = await requireGuild(request, reply, { manage: true });
+    if (!access) {
+      return reply;
+    }
+    const { guildId, session } = access;
+    const [guild, channels] = await Promise.all([discord.guild(guildId), discord.channels(guildId)]);
+    let content;
+    try {
+      content = checkTicketPanelInput(request.body, { guildId, guild, channels, main: panelId === MAIN_PANEL });
+    } catch (error) {
+      if (error instanceof InvalidTicketPanel) {
+        return reply.code(400).send({ error: "invalid-panel", message: error.message });
+      }
+      throw error;
+    }
+    return panelLocks.run(guildId, async () => {
+      // /tickets panel may have changed the panels from the bot's process.
+      guildSettings.reloadIfChanged();
+      const extras = extraPanels(guildSettings, guildId);
+      const current = panelId === MAIN_PANEL ? mainPanel(guildSettings, guildId) : panelId === null ? undefined : extras.find((panel) => panel.id === panelId);
+      if (panelId !== null && !current) {
+        return reply.code(404).send({ error: "not-found", message: "That ticket panel was deleted. Reload the page." });
+      }
+      if (!current && extras.length + 1 >= MAX_TICKET_PANELS) {
+        return reply.code(409).send({ error: "panels-full", message: `A server can have up to ${MAX_TICKET_PANELS} ticket panels.` });
+      }
+      const draft = { id: current?.id ?? newPanelId(extras), ...content };
+      let messageId = null;
+      if (draft.channelId) {
+        try {
+          messageId = await publishTicketPanel(guildId, guild, draft, current);
+        } catch (error) {
+          return panelRefused(reply, error);
+        }
+      } else if (current?.messageId) {
+        // The main panel taken down from the dashboard.
+        await discord.deleteMessage(current.channelId, current.messageId).catch(() => {});
+      }
+      const saved = { ...draft, messageId };
+      let undo = null;
+      if (saved.id === MAIN_PANEL) {
+        // The look and types go through the usual settings, so the Activity
+        // page can undo them; the message was drawn above already.
+        const changes = { [Setting.TICKET_PANEL]: checkLook(saved.look), [Setting.TICKET_CATEGORIES]: saved.categories.length > 0 ? saved.categories : null };
+        for (const [setting, value] of Object.entries(changes)) {
+          const before = savedValue(guildId, setting);
+          if (!sameValue(before, value)) {
+            undo ??= {};
+            undo[setting] = { before: before ?? null, after: value };
+            await (value === null ? guildSettings.clear(guildId, setting) : guildSettings.set(guildId, setting, value));
+          }
+        }
+        await saveMainPanel(guildSettings, guildId, {
+          channelId: saved.channelId,
+          messageId,
+          staffRoleIds: saved.staffRoleIds,
+          openRoleIds: saved.openRoleIds,
+          // Tells redraws this panel's whole message may be redrawn.
+          title: saved.look.title,
+          message: saved.look.description,
+        });
+      } else {
+        await saveExtraPanels(guildSettings, guildId, current ? extras.map((panel) => (panel.id === saved.id ? saved : panel)) : [...extras, saved]);
+      }
+      const lines = ticketPanelLines(current, saved);
+      logger.info("Ticket panel saved from the dashboard", { guildId, userId: session.userId, panel: saved.id, categories: saved.categories.length });
+      if (lines.length > 0) {
+        await logAction(guildId, session, `**${ticketPanelName(saved)} ${current ? "changed" : "added"}**`, lines, undo);
+      }
+      return { panel: saved, settings: settingsJson(guildId) };
+    });
+  }
+
+  app.post("/api/guilds/:id/ticket-panels", panelLimit, (request, reply) => saveTicketPanel(request, reply, null));
+
+  app.put("/api/guilds/:id/ticket-panels/:panelId", panelLimit, (request, reply) => {
+    const { panelId } = request.params;
+    return TICKET_PANEL_ID.test(panelId ?? "") ? saveTicketPanel(request, reply, panelId) : reply.code(404).send({ error: "not-found" });
+  });
+
+  app.delete("/api/guilds/:id/ticket-panels/:panelId", panelLimit, async (request, reply) => {
+    const access = await requireGuild(request, reply, { manage: true });
+    if (!access) {
+      return reply;
+    }
+    const { guildId, session } = access;
+    const { panelId } = request.params;
+    return panelLocks.run(guildId, async () => {
+      guildSettings.reloadIfChanged();
+      const extras = extraPanels(guildSettings, guildId);
+      const panel = panelId === MAIN_PANEL ? mainPanel(guildSettings, guildId) : extras.find((entry) => entry.id === panelId);
+      if (!panel || (panel.id === MAIN_PANEL && !isPosted(panel))) {
+        return reply.code(404).send({ error: "not-found", message: "That ticket panel was already deleted." });
+      }
+      if (panel.messageId) {
+        await discord.deleteMessage(panel.channelId, panel.messageId).catch(() => {});
+      }
+      if (panel.id === MAIN_PANEL) {
+        // Its look and ticket types stay, ready to post again.
+        await saveMainPanel(guildSettings, guildId, { channelId: null, messageId: null });
+      } else {
+        await saveExtraPanels(guildSettings, guildId, extras.filter((entry) => entry !== panel));
+      }
+      await logAction(guildId, session, `**${ticketPanelName(panel)} ${panel.id === MAIN_PANEL ? "taken down" : "deleted"}**${panel.channelId ? ` from <#${panel.channelId}>` : ""}`, []);
       return { settings: settingsJson(guildId) };
     });
   });

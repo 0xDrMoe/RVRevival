@@ -16,6 +16,8 @@ function toTicket(row) {
         subject: row.subject,
         categoryId: row.category_id ?? null,
         categoryLabel: row.category_label ?? null,
+        // null for the main panel (tickets/panels.js).
+        panelId: row.panel_id ?? null,
         createdAt: row.created_at,
         closedAt: row.closed_at ?? null,
         closedBy: row.closed_by ?? null,
@@ -58,8 +60,8 @@ export class TicketStore {
     this.#statements = {
       nextNumber: this.#db.prepare("SELECT COALESCE(MAX(number), 0) + 1 AS next FROM tickets WHERE guild_id = ?"),
       insert: this.#db.prepare(`
-        INSERT INTO tickets (guild_id, number, user_id, subject, created_at, category_id, category_label)
-        VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING *`),
+        INSERT INTO tickets (guild_id, number, user_id, subject, created_at, category_id, category_label, panel_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING *`),
       get: this.#db.prepare("SELECT * FROM tickets WHERE id = ?"),
       openForUser: this.#db.prepare("SELECT * FROM tickets WHERE guild_id = ? AND user_id = ? AND closed_at IS NULL"),
       byThread: this.#db.prepare("SELECT * FROM tickets WHERE thread_id = ?"),
@@ -126,13 +128,14 @@ export class TicketStore {
   // Opens a ticket for the member, or returns undefined if they already have
   // one open. Checked and saved together, so two clicks can't open two.
   // `category` is the panel button's { id, label }, if it had several.
-  open({ guildId, userId, subject, category = null, createdAt = Date.now() }) {
+  // `panelId` is null for the main panel.
+  open({ guildId, userId, subject, category = null, panelId = null, createdAt = Date.now() }) {
     return inTransaction(this.#db, () => {
       if (this.#statements.openForUser.get(guildId, userId)) {
         return undefined;
       }
       const { next } = this.#statements.nextNumber.get(guildId);
-      return toTicket(this.#statements.insert.get(guildId, next, userId, subject, createdAt, category?.id ?? null, category?.label ?? null));
+      return toTicket(this.#statements.insert.get(guildId, next, userId, subject, createdAt, category?.id ?? null, category?.label ?? null, panelId));
     });
   }
 

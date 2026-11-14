@@ -1801,6 +1801,76 @@ describe("dashboard", () => {
     expect((await write(cookies, "DELETE", `${base}/1`)).statusCode).toBe(404);
   });
 
+  it("adds, changes, moves and deletes ticket panels, each with its own roles, look and types", async () => {
+    let next = 0;
+    discord.postMessage = vi.fn(async () => ({ id: `83000000000000000${next++}` }));
+    discord.deleteMessage = vi.fn(async () => {});
+    const cookies = await login();
+    const base = `/api/guilds/${GUILD_ID}/ticket-panels`;
+    const panel = (extra = {}) => ({
+      channelId: LOGS_ID,
+      staffRoleIds: [ROLE_ID],
+      openRoleIds: [],
+      look: { title: "Apply" },
+      categories: [{ id: "mod", label: "Moderator", staffRoleIds: [ROLE_ID], openRoleIds: [ROLE_ID], questions: ["Why you?"] }],
+      ...extra,
+    });
+
+    // Refused: no channel, a voice channel, @everyone, an unknown role, a broken look.
+    expect((await write(cookies, "POST", base, panel({ channelId: null }))).json().message).toContain("channel");
+    expect((await write(cookies, "POST", base, panel({ channelId: VOICE_ID }))).statusCode).toBe(400);
+    expect((await write(cookies, "POST", base, panel({ staffRoleIds: [GUILD_ID] }))).json().message).toContain("Staff roles");
+    expect((await write(cookies, "POST", base, panel({ openRoleIds: ["700000000000000077"] }))).json().message).toContain("Who can open");
+    expect((await write(cookies, "POST", base, panel({ look: { imageUrl: "nope" } }))).statusCode).toBe(400);
+    expect(discord.postMessage).not.toHaveBeenCalled();
+
+    const created = await write(cookies, "POST", base, panel());
+    expect(created.statusCode).toBe(200);
+    const { id } = created.json().panel;
+    expect(id).toMatch(/^[a-z0-9]{6}$/);
+    expect(created.json().panel).toMatchObject({ channelId: LOGS_ID, messageId: "830000000000000000", staffRoleIds: [ROLE_ID], categories: [{ id: "mod", openRoleIds: [ROLE_ID] }] });
+    const [, payload] = discord.postMessage.mock.calls[0];
+    expect(payload.embeds[0].title).toBe("Apply");
+    expect(payload.components[0].components[0].custom_id).toBe(`tk:p:${id}:open:mod`);
+    expect(created.json().settings.ticketPanels).toHaveLength(1);
+
+    // Editing changes the message in place; moving posts it in the new channel.
+    await write(cookies, "PUT", `${base}/${id}`, panel({ look: { title: "Applications" } }));
+    expect(discord.editMessage).toHaveBeenCalledWith(LOGS_ID, "830000000000000000", expect.objectContaining({ embeds: [expect.objectContaining({ title: "Applications" })] }));
+    const moved = await write(cookies, "PUT", `${base}/${id}`, panel({ channelId: TEXT_ID }));
+    expect(moved.json().panel).toMatchObject({ channelId: TEXT_ID, messageId: "830000000000000001" });
+    expect(discord.deleteMessage).toHaveBeenCalledWith(LOGS_ID, "830000000000000000");
+
+    // The main panel is posted from the page too, and its look goes through the usual settings.
+    const main = await write(cookies, "PUT", `${base}/main`, panel({ channelId: LOGS_ID, look: { title: "Support" }, categories: [], openRoleIds: [ROLE_ID] }));
+    expect(main.statusCode).toBe(200);
+    expect(guildSettings.get(GUILD_ID, Setting.TICKETS)).toMatchObject({ channelId: LOGS_ID, messageId: "830000000000000002", staffRoleIds: [ROLE_ID], openRoleIds: [ROLE_ID], title: "Support" });
+    expect(guildSettings.get(GUILD_ID, Setting.TICKET_PANEL)).toMatchObject({ title: "Support" });
+    expect(main.json().settings.tickets).toEqual({ channelId: LOGS_ID, messageId: "830000000000000002", staffRoleIds: [ROLE_ID], openRoleIds: [ROLE_ID] });
+    expect(discord.postMessage.mock.calls[2][1].components[0].components[0].custom_id).toBe("tk:open");
+    // The main panel can wait unposted; another panel can't.
+    expect((await write(cookies, "PUT", `${base}/main`, panel({ channelId: null }))).statusCode).toBe(200);
+    expect(discord.deleteMessage).toHaveBeenLastCalledWith(LOGS_ID, "830000000000000002");
+    expect(guildSettings.get(GUILD_ID, Setting.TICKETS)).toMatchObject({ channelId: null });
+    expect(guildSettings.get(GUILD_ID, Setting.TICKET_PANEL)).toMatchObject({ title: "Apply" });
+
+    expect((await write(cookies, "PUT", `${base}/nope99`, panel())).statusCode).toBe(404);
+    expect((await write(cookies, "DELETE", `${base}/${id}`)).json().settings.ticketPanels).toEqual([]);
+    expect(discord.deleteMessage).toHaveBeenLastCalledWith(TEXT_ID, "830000000000000001");
+    expect((await write(cookies, "DELETE", `${base}/${id}`)).statusCode).toBe(404);
+  });
+
+  it("refuses a new ticket panel once the server has the most", async () => {
+    await guildSettings.set(
+      GUILD_ID,
+      Setting.TICKET_PANELS,
+      Array.from({ length: 9 }, (_, index) => ({ id: `p${index}`, channelId: TEXT_ID, messageId: null })),
+    );
+    const cookies = await login();
+    const refused = await write(cookies, "POST", `/api/guilds/${GUILD_ID}/ticket-panels`, { channelId: TEXT_ID, look: {}, categories: [] });
+    expect(refused.statusCode).toBe(409);
+  });
+
   it("refuses a new role panel once the server has the most", async () => {
     await guildSettings.set(
       GUILD_ID,

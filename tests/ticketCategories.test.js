@@ -5,8 +5,12 @@ const ROLE_ID = "700000000000000001";
 const isRole = (id) => id === ROLE_ID;
 const bug = { id: "bugs", label: " Bug   report ", emoji: "🐞", description: "Broken things", staffRoleId: ROLE_ID, questions: ["What happened?"] };
 // What a category looks like once checked: every option filled in.
+const { staffRoleId: _single, ...bugFields } = bug;
 const cleaned = {
-  ...bug,
+  ...bugFields,
+  // The one staff role saved before lists reads as a list of one.
+  staffRoleIds: [ROLE_ID],
+  openRoleIds: [],
   label: "Bug report",
   style: "primary",
   intro: null,
@@ -30,6 +34,8 @@ describe("ticket categories", () => {
       [{ ...bug, label: "" }],
       [{ ...bug, emoji: "bug" }],
       [{ ...bug, staffRoleId: "700000000000000002" }],
+      [{ ...bug, staffRoleIds: ["700000000000000002"] }],
+      [{ ...bug, openRoleIds: "700000000000000001" }],
       [{ ...bug, questions: ["x".repeat(46)] }],
       [{ ...bug, questions: ["a", "b", "c", "d", "e", "f"] }],
       [{ ...bug, style: "pink" }],
