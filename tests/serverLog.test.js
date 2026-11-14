@@ -98,6 +98,24 @@ describe("server log", () => {
     expect(embed.description).toMatch(/\*\*Before\*\*\n```\nhello\n```\n\*\*After\*\*\n```\nhello there\n```/);
   });
 
+  it("attaches long edited and deleted text in full instead of cutting it", async () => {
+    const long = "z".repeat(3000);
+    await serverLog.messageEdited(fakeMessage({ guild }), fakeMessage({ guild, content: long, editedTimestamp: 1 }));
+    await serverLog.messageDeleted(fakeMessage({ guild, id: "600000000000000009", content: "w".repeat(3800) }));
+    const [edit, deletion] = logChannel.send.mock.calls.map((call) => call[0]);
+
+    expect(edit.files.map((file) => file.name)).toEqual(["edit.txt"]);
+    expect(String(edit.files[0].attachment)).toContain(long);
+    const editText = edit.embeds[0].toJSON().description;
+    expect(editText).toContain("```\nhello\n```");
+    expect(editText).toContain("it's in the attached file");
+    expect(editText).not.toContain("…");
+
+    expect(deletion.files.map((file) => file.name)).toEqual(["message.txt"]);
+    expect(String(deletion.files[0].attachment)).toBe("w".repeat(3800));
+    expect(deletion.embeds[0].toJSON().description).not.toContain("…");
+  });
+
   it("logs bulk deletions with a transcript, skipping the bot's own purges", async () => {
     const channel = { id: CHANNEL_ID, guild };
     const messages = new Collection([

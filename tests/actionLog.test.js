@@ -2,7 +2,9 @@ import { ApplicationCommandOptionType, GatewayIntentBits, IntentsBitField, Permi
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   Status,
+  buildCommandLog,
   buildCommandLogEmbed,
+  cleanLink,
   buildDeletedMessageLogEmbed,
   createActionLog,
   describeCommand,
@@ -65,16 +67,23 @@ describe("describeCommand", () => {
     });
   });
 
-  it("keeps typed text from adding formatting and cuts long text", () => {
+  it("keeps typed text from adding formatting and shows long text in full", () => {
     const interaction = {
       commandName: "country",
       options: { data: [{ name: "country", type: ApplicationCommandOptionType.String, value: "`@everyone`" + "x".repeat(200) }] },
     };
     const [line] = describeCommand(interaction).options;
-    expect(line.startsWith("country: `'@everyone'")).toBe(true);
-    expect(line.length).toBeLessThan(115);
-    expect(line.endsWith("…`")).toBe(true);
+    expect(line).toBe(`country: \`'@everyone'${"x".repeat(200)}\``);
+    expect(line).not.toContain("…");
   });
+
+  it("shows a link in full as a plain clickable link, without tracking parameters", () => {
+    const value =
+      "https://open.spotify.com/playlist/485oXyPf2Fy1eAKDAmUa2g?si=1oFeUixESdiD3OnRXEm90Q&utm_source=copy-link&utm_medium=share&pt=abc";
+    const interaction = { commandName: "play", options: { data: [{ name: "query", type: ApplicationCommandOptionType.String, value }] } };
+    expect(describeCommand(interaction).options).toEqual(["query: https://open.spotify.com/playlist/485oXyPf2Fy1eAKDAmUa2g?pt=abc"]);
+  });
+
 });
 
 describe("statusForOutcome", () => {
@@ -154,7 +163,8 @@ describe("buildDeletedMessageLogEmbed", () => {
 
   it("cuts very long text and says how much was left out", () => {
     const embed = buildDeletedMessageLogEmbed(fakeMessage({ content: "x".repeat(4000) }), result(Status.SUCCESS)).toJSON();
-    expect(embed.description).toContain("*…500 more characters not shown*");
+    expect(embed.description).toContain("*500 more characters not shown*");
+    expect(embed.description).not.toContain("…");
     expect(embed.description.length).toBeLessThanOrEqual(4096);
   });
 
@@ -287,5 +297,50 @@ describe("action log", () => {
     const saved = await actionLog.saveAttachments(fakeMessage({ guild: fakeGuild(), attachments: [fakeAttachment("1")] }));
     expect(saved).toEqual([]);
     expect(fetchFile).not.toHaveBeenCalled();
+  });
+});
+
+describe("cleanLink", () => {
+  it("drops tracking parameters and keeps the rest", () => {
+    expect(cleanLink("https://youtu.be/abc?si=xyz&t=42")).toBe("https://youtu.be/abc?t=42");
+    expect(cleanLink("https://example.com/a?utm_source=x&UTM_campaign=y&fbclid=z")).toBe("https://example.com/a");
+  });
+
+  it("only takes one plain http(s) link", () => {
+    expect(cleanLink("not a link")).toBeNull();
+    expect(cleanLink("https://a.com and more")).toBeNull();
+    expect(cleanLink("javascript:alert(1)")).toBeNull();
+    expect(cleanLink("https://user:pass@a.com/")).toBeNull();
+  });
+
+  it("encodes characters that could add mentions or end a markdown link", () => {
+    expect(cleanLink("https://a.com/<@123>/(x)`")).toBe("https://a.com/%3C@123%3E/%28x%29%60");
+  });
+});
+
+describe("buildCommandLog", () => {
+  const longInteraction = () => ({
+    ...fakeInteraction(),
+    commandName: "say",
+    options: { data: [{ name: "text", type: ApplicationCommandOptionType.String, value: "y".repeat(5000) }] },
+  });
+
+  it("puts options too long for the embed in an attached options.txt", () => {
+    const { embed, files } = buildCommandLog(longInteraction(), result(Status.SUCCESS), { canAttach: true });
+    const { description } = embed.toJSON();
+    expect(description).toContain("attached options.txt");
+    expect(description.length).toBeLessThanOrEqual(4096);
+    expect(files).toHaveLength(1);
+    expect(files[0].name).toBe("options.txt");
+    expect(String(files[0].attachment)).toContain("y".repeat(5000));
+  });
+
+  it("says how much was left out when it can't attach files", () => {
+    const { embed, files } = buildCommandLog(longInteraction(), result(Status.SUCCESS), { canAttach: false });
+    const { description } = embed.toJSON();
+    expect(files).toHaveLength(0);
+    expect(description.length).toBeLessThanOrEqual(4096);
+    expect(description).toMatch(/\d+ more characters not shown/);
+    expect(description).not.toContain("…");
   });
 });

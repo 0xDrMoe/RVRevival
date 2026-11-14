@@ -51,10 +51,11 @@ export function result(status, key, values) {
   return { status, key, values };
 }
 
-// Longest text shown for one option, so a pasted wall of text can't fill the log.
-const MAX_VALUE_LENGTH = 100;
 // Room left for a deleted message's text in one embed (Discord allows 4096).
-const MAX_CONTENT_LENGTH = 3500;
+// Longer text goes in an attached .txt file, so nothing is ever cut off.
+export const MAX_CONTENT_LENGTH = 3500;
+// Embed description limit.
+const MAX_DESCRIPTION = 4096;
 // Attachments are re-uploaded to the log, since their links die with the
 // message. Discord lets bots upload 10 MB per message and 10 files.
 const MAX_SAVED_BYTES = 8 * 1024 * 1024;
@@ -62,12 +63,46 @@ const MAX_SAVED_FILES = 10;
 const DOWNLOAD_TIMEOUT_MS = 15_000;
 
 // Shows typed text as inline code, so it can't add formatting or mentions.
+// The whole text is shown: inline code wraps, it's never cut short.
 export function quote(value) {
-  let text = String(value).replace(/`/g, "'").replace(/\s+/g, " ").trim();
-  if (text.length > MAX_VALUE_LENGTH) {
-    text = `${text.slice(0, MAX_VALUE_LENGTH - 1)}…`;
-  }
+  const text = String(value).replace(/`/g, "'").replace(/\s+/g, " ").trim();
   return text ? `\`${text}\`` : "(empty)";
+}
+
+// Query parameters that only track who shared a link (Spotify and YouTube
+// "si", utm_*, Facebook, Google and Instagram click IDs). They're dropped so
+// logged links are shorter; the link still opens the same page.
+const TRACKING_PARAM = /^(si|utm_[a-z_]+|fbclid|gclid|dclid|msclkid|igsh|igshid|mc_cid|mc_eid)$/i;
+
+// The value as a clean http(s) link, or null when it isn't exactly one link.
+export function cleanLink(value) {
+  const text = String(value ?? "").trim();
+  if (!/^https?:\/\/\S+$/i.test(text)) {
+    return null;
+  }
+  let url;
+  try {
+    url = new URL(text);
+  } catch {
+    return null;
+  }
+  if (url.username || url.password) {
+    return null;
+  }
+  for (const key of [...url.searchParams.keys()]) {
+    if (TRACKING_PARAM.test(key)) {
+      url.searchParams.delete(key);
+    }
+  }
+  // URL encodes spaces, <, > and backticks, so the link can't add a mention or
+  // formatting. Parentheses are encoded too, since they'd end a markdown link.
+  return url.href.replace(/\(/g, "%28").replace(/\)/g, "%29");
+}
+
+// A typed value: a plain link (clickable, wraps, shown in full) when it's a
+// link, else the text as inline code.
+export function quoteValue(value) {
+  return cleanLink(value) ?? quote(value);
 }
 
 function formatOptionValue(option) {
@@ -79,7 +114,7 @@ function formatOptionValue(option) {
     case ApplicationCommandOptionType.Channel:
       return `<#${option.value}>`;
     default:
-      return quote(option.value);
+      return quoteValue(option.value);
   }
 }
 
@@ -140,7 +175,7 @@ export function codeBlock(text) {
   let shown = text;
   let cut = "";
   if (shown.length > MAX_CONTENT_LENGTH) {
-    cut = `\n*…${shown.length - MAX_CONTENT_LENGTH} more characters not shown*`;
+    cut = `\n*${shown.length - MAX_CONTENT_LENGTH} more characters not shown*`;
     shown = shown.slice(0, MAX_CONTENT_LENGTH);
   }
   // A zero-width space keeps ``` inside the message from closing the block.
@@ -154,33 +189,59 @@ function describeAction(interaction, outcome) {
     return describeCommand(interaction);
   }
   const fields = Object.entries(outcome.action.fields ?? {});
-  return { command: outcome.action.label, options: fields.map(([name, value]) => `${name}: ${quote(value)}`) };
+  return { command: outcome.action.label, options: fields.map(([name, value]) => `${name}: ${quoteValue(value)}`) };
+}
+
+// A .txt file with text too long for an embed, so a log never cuts it short.
+export function textFile(name, text) {
+  return new AttachmentBuilder(Buffer.from(text, "utf8"), { name });
 }
 
 // One compact entry:
 //   [avatar] name
 //   **Refused** · `/country-staff set` in #channel
-//   member: @someone · country: `Canada`
+//   member: @someone · country: `Canada` · query: https://example.com/full/link
 //   > Only members with the @Staff role can use this command.
 //   User ID 123 · today at 21:43
-export function buildCommandLogEmbed(interaction, outcome) {
+// Every option is shown in full. When they don't fit in one embed, they go in
+// an attached options.txt instead (or, if the bot can't attach files there,
+// in a code block that says how much was left out).
+// Returns { embed, files }.
+export function buildCommandLog(interaction, outcome, { canAttach = true } = {}) {
   const { command, options } = describeAction(interaction, outcome);
   const style = styleOf(outcome);
   const where = interaction.channelId ? ` in <#${interaction.channelId}>` : "";
-  const lines = [`**${style.label}** · \`${command}\`${where}`];
-  if (options.length > 0) {
-    lines.push(options.join(" · "));
-  }
+  const head = `**${style.label}** · \`${command}\`${where}`;
   const detail = describeResult(outcome);
-  if (detail) {
-    lines.push(asQuote(detail));
+  const tail = detail ? asQuote(detail) : "";
+  const join = (...parts) => parts.filter(Boolean).join("\n");
+  const files = [];
+
+  let description = join(head, options.join(" · "), tail);
+  if (description.length > MAX_DESCRIPTION) {
+    const full = options.join("\n");
+    if (canAttach) {
+      files.push(textFile("options.txt", `${command}\n\n${full}\n`));
+      description = join(head, `*The options are too long to show here (${full.length} characters): they're in the attached options.txt.*`, tail);
+    } else {
+      description = join(head, codeBlock(full), tail);
+    }
   }
-  return new EmbedBuilder()
+  // A very long result note is the only thing left that can overflow.
+  if (description.length > MAX_DESCRIPTION) {
+    description = join(head, tail ? codeBlock(detail) : "");
+  }
+  const embed = new EmbedBuilder()
     .setColor(style.color)
     .setAuthor(authorOf(interaction.user))
-    .setDescription(lines.join("\n").slice(0, 4096))
+    .setDescription(description)
     .setFooter({ text: `User ID ${interaction.user.id}` })
     .setTimestamp();
+  return { embed, files };
+}
+
+export function buildCommandLogEmbed(interaction, outcome) {
+  return buildCommandLog(interaction, outcome, { canAttach: false }).embed;
 }
 
 // Whether the bot was allowed to read message text (the Message Content intent).
@@ -190,12 +251,16 @@ export function canReadContent(message) {
 
 // What a deleted message held: its text, attachments and stickers. `saved` is
 // the list from saveAttachments(), shown as "saved below" or why not.
-export function buildDeletedMessageLogEmbed(message, outcome, saved = []) {
+// With `textAttached`, text too long for the embed is in an attached
+// message.txt (see deletedTextFile) and the embed says so.
+export function buildDeletedMessageLogEmbed(message, outcome, saved = [], { textAttached = false } = {}) {
   const style = styleOf(outcome);
   const deleted = outcome.status === Status.SUCCESS;
   const lines = [`**${deleted ? "Message deleted" : "Couldn't delete a message"}** in <#${message.channelId}>`];
 
-  if (message.content) {
+  if (message.content && textAttached && message.content.length > MAX_CONTENT_LENGTH) {
+    lines.push(`*The text is too long to show here (${message.content.length} characters): it's in the attached message.txt.*`);
+  } else if (message.content) {
     lines.push(codeBlock(message.content));
   } else if (!canReadContent(message)) {
     lines.push("*Text not available: the Message Content intent is off.*");
@@ -224,9 +289,15 @@ export function buildDeletedMessageLogEmbed(message, outcome, saved = []) {
   return new EmbedBuilder()
     .setColor(style.color)
     .setAuthor(authorOf(message.author))
-    .setDescription(lines.join("\n").slice(0, 4096))
+    .setDescription(lines.join("\n").slice(0, MAX_DESCRIPTION))
     .setFooter({ text: `User ID ${message.author.id} · Message ID ${message.id}` })
     .setTimestamp(message.createdTimestamp ?? Date.now());
+}
+
+// message.txt with a deleted message's full text, when it's too long for the
+// embed; else null.
+export function deletedTextFile(message) {
+  return message.content && message.content.length > MAX_CONTENT_LENGTH ? textFile("message.txt", message.content) : null;
 }
 
 // Downloads a message's attachments (within Discord's upload limit), so they
@@ -338,7 +409,7 @@ export function createActionLog({
       if (isLoggedElsewhere(interaction, outcome)) {
         return undefined;
       }
-      return post(interaction.guild, LogRoute.COMMANDS, () => ({ embed: buildCommandLogEmbed(interaction, outcome) }));
+      return post(interaction.guild, LogRoute.COMMANDS, ({ canAttach }) => buildCommandLog(interaction, outcome, { canAttach }));
     },
 
     // Call before deleting a message: starts downloading its attachments while
@@ -352,9 +423,12 @@ export function createActionLog({
         const shown = canAttach
           ? saved
           : saved.map(({ id, file, reason }) => ({ id, reason: file ? "not saved: the bot needs Attach Files here" : reason }));
+        // Discord allows 10 files per message: the text file takes a slot only when needed.
+        const text = canAttach ? deletedTextFile(message) : null;
+        const files = shown.flatMap((entry) => (entry.file ? [entry.file] : []));
         return {
-          embed: buildDeletedMessageLogEmbed(message, outcome, shown),
-          files: shown.flatMap((entry) => (entry.file ? [entry.file] : [])),
+          embed: buildDeletedMessageLogEmbed(message, outcome, shown, { textAttached: Boolean(text) && files.length < MAX_SAVED_FILES }),
+          files: text && files.length < MAX_SAVED_FILES ? [text, ...files] : files,
         };
       }),
   };
