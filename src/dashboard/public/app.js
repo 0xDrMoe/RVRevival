@@ -8242,8 +8242,74 @@ function readTicketQuestions(container) {
   }));
 }
 
+// Several roles at once, compact enough for each ticket type: the chosen ones
+// as chips with a remove button, and a dropdown to add another. `emptyKey`
+// says what having none means. Changes fire "input", so forms refresh.
+// Read the choice back with readRoleChooser().
+const MAX_TICKET_ROLES = 10;
+
+function roleChooser({ className, roles, value = [], emptyKey, labelKey }) {
+  const chosen = [...new Set(value)];
+  const chips = h("div", { class: "role-chips" });
+  const empty = h("span", { class: "muted small-text" }, t(emptyKey));
+  const add = h("select", { class: "role-chooser-add", "aria-label": t(labelKey) });
+  const element = h("div", { class: `role-chooser ${className}` }, chips, add);
+  const roleName = (id) => roles.find((role) => role.id === id)?.label ?? t("unknownOption", { id });
+  const changed = () => element.dispatchEvent(new Event("input", { bubbles: true }));
+  function draw() {
+    chips.replaceChildren(
+      ...(chosen.length === 0
+        ? [empty]
+        : chosen.map((id) => {
+            const chip = h(
+              "span",
+              { class: "badge role-chip", "data-id": id },
+              h("span", {}, roleName(id)),
+              h(
+                "button",
+                {
+                  type: "button",
+                  class: "role-chip-remove",
+                  title: t("tagRemove"),
+                  "aria-label": `${t("tagRemove")} ${roleName(id)}`,
+                  onclick: () => {
+                    chosen.splice(chosen.indexOf(id), 1);
+                    draw();
+                    changed();
+                  },
+                },
+                "×",
+              ),
+            );
+            return chip;
+          })),
+    );
+    const left = roles.filter((role) => !chosen.includes(role.id));
+    add.replaceChildren(
+      h("option", { value: "" }, chosen.length >= MAX_TICKET_ROLES ? t("ticketRolesFull", { max: MAX_TICKET_ROLES }) : t("ticketRolesAdd")),
+      ...left.map((role) => h("option", { value: role.id }, role.label)),
+    );
+    add.disabled = chosen.length >= MAX_TICKET_ROLES || left.length === 0;
+  }
+  add.addEventListener("change", (event) => {
+    event.stopPropagation();
+    if (add.value && chosen.length < MAX_TICKET_ROLES) {
+      chosen.push(add.value);
+      draw();
+      changed();
+    }
+  });
+  draw();
+  return element;
+}
+
+const readRoleChooser = (element) => [...element.querySelectorAll(":scope > .role-chips > .role-chip")].map((chip) => chip.dataset.id);
+
+// A category's saved staff roles: the list, or the one role saved before lists.
+const categoryStaff = (category) => category.staffRoleIds ?? (category.staffRoleId ? [category.staffRoleId] : []);
+
 function categoryRow(category, roles, onRemove) {
-  const value = category ?? { id: newCategoryId(), label: "", emoji: null, description: null, staffRoleId: null, style: "primary", intro: null, nameFormat: null, pingStaff: null, questions: [] };
+  const value = category ?? { id: newCategoryId(), label: "", emoji: null, description: null, staffRoleIds: [], openRoleIds: [], style: "primary", intro: null, nameFormat: null, pingStaff: null, questions: [] };
   const questions = editableList({
     items: (value.questions ?? []).map(ticketQuestion),
     max: MAX_CATEGORY_QUESTIONS,
@@ -8253,8 +8319,8 @@ function categoryRow(category, roles, onRemove) {
     addKey: "ticketQuestionAdd",
   });
   const ping = value.pingStaff === true ? "on" : value.pingStaff === false ? "off" : "";
-  const staff = picker({ id: `staff-${value.id}`, options: roles, value: value.staffRoleId, emptyLabel: t("ticketCategoryStaffDefault") });
-  staff.classList.add("category-staff");
+  const staff = roleChooser({ className: "category-staff", roles, value: categoryStaff(value), emptyKey: "ticketCategoryStaffDefault", labelKey: "ticketCategoryStaff" });
+  const openers = roleChooser({ className: "category-open", roles, value: value.openRoleIds ?? [], emptyKey: "ticketCategoryOpenDefault", labelKey: "ticketCategoryOpen" });
   const row = h(
     "details",
     { class: "category-row", "data-id": value.id, open: !category },
@@ -8270,7 +8336,12 @@ function categoryRow(category, roles, onRemove) {
       ticketField("ticketCategoryLabel", h("input", { class: "category-label", type: "text", maxLength: 80, required: true, value: value.label, placeholder: t("ticketCategoryLabelPlaceholder") })),
       ticketField("ticketCategoryEmoji", h("input", { class: "category-emoji", type: "text", maxLength: 64, value: value.emoji ?? "", placeholder: "🐞" }), "category-emoji-field"),
       ticketField("ticketCategoryStyle", ticketStyleSelect("category-style", value.style, "ticketButtonStyle_")),
-      ticketField("ticketCategoryStaff", staff),
+    ),
+    h(
+      "div",
+      { class: "category-grid category-roles" },
+      h("div", { class: "field" }, h("span", { class: "field-label" }, t("ticketCategoryStaff")), staff, h("span", { class: "help" }, t("ticketCategoryStaffHelp"))),
+      h("div", { class: "field" }, h("span", { class: "field-label" }, t("ticketCategoryOpen")), openers, h("span", { class: "help" }, t("ticketCategoryOpenHelp"))),
     ),
     ticketField("ticketCategoryDescription", h("input", { class: "category-description", type: "text", maxLength: 200, value: value.description ?? "", placeholder: t("ticketCategoryDescriptionPlaceholder") })),
     ticketField(
@@ -8319,7 +8390,8 @@ function readTicketCategories(form) {
       label: row.querySelector(".category-label").value.trim(),
       emoji: row.querySelector(".category-emoji").value.trim() || null,
       description: row.querySelector(".category-description").value.trim() || null,
-      staffRoleId: row.querySelector(".category-staff").value || null,
+      staffRoleIds: readRoleChooser(row.querySelector(".category-staff")),
+      openRoleIds: readRoleChooser(row.querySelector(".category-open")),
       style: row.querySelector(".category-style").value,
       intro: row.querySelector(".category-intro").value.trim() || null,
       nameFormat: row.querySelector(".category-name-format").value.trim() || null,
@@ -8417,13 +8489,16 @@ function ticketPanelPreview(look, categories, data, defaults) {
 }
 
 // A new ticket's first message, for the first category (or the single button).
-function ticketWelcomePreview(look, category, data, defaults) {
-  const staffRoleId = category?.staffRoleId ?? defaults.staffRoleId ?? data.settings.modRoleId ?? data.settings.staffRoleId ?? null;
+// `panelStaff` is the panel's staff roles.
+function ticketWelcomePreview(look, category, data, defaults, panelStaff = []) {
+  const modRole = data.settings.modRoleId ?? data.settings.staffRoleId ?? null;
+  const staffRoles = category?.staffRoleIds?.length > 0 ? category.staffRoleIds : panelStaff.length > 0 ? panelStaff : modRole ? [modRole] : [];
+  const staffRoleId = staffRoles[0] ?? null;
   const values = {
     user: `@${t("ticketSampleUsername")}`,
     username: t("ticketSampleUsername"),
     number: "7",
-    staff: staffRoleId ? `<@&${staffRoleId}>` : defaults.staffWord,
+    staff: staffRoles.length > 0 ? staffRoles.map((id) => `<@&${id}>`).join(" ") : defaults.staffWord,
     category: category?.label ?? "",
     server: data.guild.name,
   };
@@ -8580,6 +8655,7 @@ function readColorChooser(form, id) {
 // walks through the panel one step at a time, with the previews alongside. Every
 // step can be opened from the step bar, and Save works from any of them.
 const TICKET_STEPS = [
+  { id: "setup", titleKey: "ticketSectionSetup", helpKey: "ticketStepSetupHelp", icon: "users", tone: "green" },
   { id: "panel", titleKey: "ticketSectionPanel", helpKey: "ticketStepPanelHelp", icon: "image", tone: "purple" },
   { id: "types", titleKey: "ticketCategories", helpKey: "ticketCategoriesHelp", icon: "layers", tone: "purple" },
   { id: "pick", titleKey: "ticketSectionPick", helpKey: "ticketStepPickHelp", icon: "list", tone: "blue" },
@@ -8587,13 +8663,23 @@ const TICKET_STEPS = [
   { id: "review", titleKey: "ticketSectionReview", helpKey: "ticketStepReviewHelp", icon: "check", tone: "green" },
 ];
 
-function ticketPanelEditor(guildId, data) {
+// `panel` is { id ("main", a panel's ID, or null for a new one), channelId,
+// staffRoleIds, openRoleIds, look, categories }. `onSaved(panelId)` runs
+// after a save, with the settings already updated.
+function ticketPanelEditor(guildId, data, panel, { onSaved }) {
   const defaults = data.ticketDefaults;
-  const look = data.settings.ticketPanel ?? {};
-  // @everyone is the role with the server's ID; listed first.
-  const roles = [{ id: guildId, label: t("feedsEveryone") }, ...data.roles.filter((role) => role.id !== guildId && !role.managed).map((role) => roleItem(role))];
+  const look = panel.look ?? {};
+  const isMain = panel.id === "main";
+  const posted = Boolean(panel.channelId);
+  // Staff roles and who can open: any role but @everyone and bots' own roles.
+  const roles = data.roles.filter((role) => role.id !== guildId && !role.managed).map((role) => roleItem(role));
+  const textChannels = data.channels.filter((channel) => channel.type === CHANNEL.TEXT).map((channel) => channelItem(channel, data.channels));
+  const channel = picker({ id: "tkChannel", options: textChannels, value: panel.channelId ?? "", emptyLabel: isMain ? t("ticketPanelNotPosted") : t("ticketPanelPickChannel") });
+  channel.required = !isMain;
+  const staffRoles = roleChooser({ className: "panel-staff", roles, value: panel.staffRoleIds ?? [], emptyKey: "ticketPanelStaffDefault", labelKey: "ticketPanelStaff" });
+  const openRoles = roleChooser({ className: "panel-open", roles, value: panel.openRoleIds ?? [], emptyKey: "ticketPanelOpenDefault", labelKey: "ticketPanelOpen" });
   const categories = editableList({
-    items: data.settings.ticketCategories ?? [],
+    items: panel.categories ?? [],
     max: MAX_TICKET_CATEGORIES,
     makeRow: (category, remove) => categoryRow(category, roles, remove),
     focus: ".category-label",
@@ -8633,8 +8719,14 @@ function ticketPanelEditor(guildId, data) {
   const next = h("button", { class: "primary", type: "button", onclick: () => checkStep(current) && go(current + 1) }, h("span", {}, t("wizardNext")), icon("chevronRight", "icon small"));
   const position = h("span", { class: "muted wizard-position" });
   const summaryCount = h("span", { class: "muted" });
+  const saveHelp = h("p", { class: "help" });
 
   const stepBodies = {
+    setup: [
+      field("ticketPanelChannel", isMain ? "ticketPanelChannelMainHelp" : "ticketPanelChannelHelp", channel),
+      h("div", { class: "field" }, h("span", { class: "field-label" }, t("ticketPanelStaff")), staffRoles, h("span", { class: "help" }, t("ticketPanelStaffHelp"))),
+      h("div", { class: "field" }, h("span", { class: "field-label" }, t("ticketPanelOpen")), openRoles, h("span", { class: "help" }, t("ticketPanelOpenHelp"))),
+    ],
     panel: [
       h("div", { class: "field" }, h("span", { class: "field-label" }, t("embedColor")), color),
       h("p", { class: "help" }, t("ticketColorHelp")),
@@ -8656,7 +8748,7 @@ function ticketPanelEditor(guildId, data) {
         h("span", { class: "switch" }, pingStaff),
       ),
     ],
-    review: [reviewList, h("p", { class: "help" }, t(defaults.posted ? "ticketSaveUpdatesPanel" : "ticketSaveNoPanel"))],
+    review: [reviewList, saveHelp],
   };
   const sections = TICKET_STEPS.map((step, index) =>
     h(
@@ -8720,6 +8812,18 @@ function ticketPanelEditor(guildId, data) {
     return true;
   }
 
+  const channelName = (id) => {
+    const found = data.channels.find((entry) => entry.id === id);
+    return found ? `#${found.name}` : t("unknownOption", { id });
+  };
+  const readPanel = () => ({
+    channelId: channel.value || null,
+    staffRoleIds: readRoleChooser(staffRoles),
+    openRoleIds: readRoleChooser(openRoles),
+    look: readTicketLook(form),
+    categories: readTicketCategories(form) ?? [],
+  });
+
   const form = h(
     "form",
     {
@@ -8737,15 +8841,16 @@ function ticketPanelEditor(guildId, data) {
         }
         setBusy(save, true);
         try {
-          const result = await api(`/api/guilds/${guildId}/settings`, {
-            method: "PUT",
-            body: { ticketPanel: readTicketLook(form), ticketCategories: readTicketCategories(form) },
+          const body = readPanel();
+          const result = await api(panel.id ? `/api/guilds/${guildId}/ticket-panels/${panel.id}` : `/api/guilds/${guildId}/ticket-panels`, {
+            method: panel.id ? "PUT" : "POST",
+            body,
           });
           data.settings = result.settings;
           state.cache = { guildId, data, at: Date.now() };
           state.unsaved = false;
-          refresh(false);
-          toast(t(defaults.posted ? "ticketPanelSavedPosted" : "ticketPanelSaved"));
+          toast(body.channelId ? t("ticketPanelSavedIn", { channel: channelName(body.channelId) }) : t("ticketPanelSaved"));
+          onSaved(result.panel.id);
         } catch (error) {
           failed(error);
         } finally {
@@ -8764,7 +8869,12 @@ function ticketPanelEditor(guildId, data) {
       h("button", { type: "button", class: "ghost small", onclick: () => go(TICKET_STEPS.findIndex((step) => step.id === stepId)) }, icon("edit", "icon small"), h("span", {}, t("wizardEdit")));
     const chip = h("span", { class: "color-dot" });
     chip.style.setProperty("--swatch", hexColor(now.color ?? defaults.color));
+    const roleNames = (ids, emptyKey) => (ids.length > 0 ? ids.map((id) => roles.find((role) => role.id === id)?.label ?? t("unknownOption", { id })).join(", ") : t(emptyKey));
+    const where = readPanel();
     const lines = [
+      ["setup", t("ticketPanelChannel"), where.channelId ? channelName(where.channelId) : t("ticketPanelNotPosted")],
+      ["setup", t("ticketPanelStaff"), roleNames(where.staffRoleIds, "ticketPanelStaffDefault")],
+      ["setup", t("ticketPanelOpen"), roleNames(where.openRoleIds, "ticketPanelOpenDefault")],
       ["panel", t("ticketSectionPanel"), h("span", {}, chip, `${now.title || defaults.title} · ${hexColor(now.color ?? defaults.color).toUpperCase()}`)],
       ["types", t("ticketCategories"), kinds.length > 0 ? kinds.map((kind) => `${kind.emoji ? `${kind.emoji} ` : ""}${kind.label || t("ticketCategoryNew")}`).join(", ") : t("ticketReviewNoTypes")],
       ["pick", t("ticketSectionPick"), kinds.length === 0 ? t("ticketReviewSingle", { label: now.buttonLabel || defaults.buttonLabel }) : t(now.layout === "menu" ? "ticketLayoutMenu" : "ticketLayoutButtons")],
@@ -8783,7 +8893,15 @@ function ticketPanelEditor(guildId, data) {
     singleButton.hidden = hasCategories;
     singleHelp.hidden = hasCategories;
     panelPreview.replaceChildren(ticketPanelPreview(now, kinds, data, defaults));
-    welcomePreview.replaceChildren(ticketWelcomePreview(now, kinds[0] ?? null, data, defaults));
+    welcomePreview.replaceChildren(ticketWelcomePreview(now, kinds[0] ?? null, data, defaults, readRoleChooser(staffRoles)));
+    const target = channel.value;
+    saveHelp.textContent = !target
+      ? t("ticketSaveNoPanel")
+      : target === panel.channelId
+        ? t("ticketSaveUpdatesPanel")
+        : posted
+          ? t("ticketSaveMovesPanel", { channel: channelName(target) })
+          : t("ticketSavePostsPanel", { channel: channelName(target) });
     for (const preview of [panelPreview, welcomePreview]) {
       preview.querySelectorAll("[data-color]").forEach((element) => element.style.setProperty("--embed-color", element.dataset.color || "transparent"));
     }
@@ -8797,7 +8915,13 @@ function ticketPanelEditor(guildId, data) {
   const editor = h(
     "details",
     { class: "card collapsible", open: true },
-    h("summary", {}, iconChip("edit", "purple"), h("span", { class: "card-title" }, t("ticketPanelEditor")), summaryCount),
+    h(
+      "summary",
+      {},
+      iconChip("edit", "purple"),
+      h("span", { class: "card-title" }, panel.id ? t("ticketPanelEditing", { name: ticketPanelLabel(panel, defaults) }) : t("ticketPanelNewTitle")),
+      summaryCount,
+    ),
     h(
       "div",
       { class: "embed-layout" },
@@ -8813,6 +8937,144 @@ function ticketPanelEditor(guildId, data) {
   go(0, false);
   refresh(false);
   return editor;
+}
+
+// A panel's name in lists: its title, or the default one.
+const ticketPanelLabel = (panel, defaults) => panel.look?.title || defaults.title;
+
+// Every ticket panel as the editor takes it: the main one first (from the
+// settings it always had), then the others.
+function ticketPanelsOf(data) {
+  const main = data.settings.tickets ?? {};
+  return [
+    {
+      id: "main",
+      channelId: main.channelId ?? null,
+      messageId: main.messageId ?? null,
+      staffRoleIds: main.staffRoleIds ?? [],
+      openRoleIds: main.openRoleIds ?? [],
+      look: data.settings.ticketPanel ?? {},
+      categories: data.settings.ticketCategories ?? [],
+    },
+    ...(Array.isArray(data.settings.ticketPanels) ? data.settings.ticketPanels : []),
+  ];
+}
+
+// The Tickets page's panels: a list with a New panel button, and the editor
+// for the one picked (the main panel to start with).
+function ticketPanelManager(guildId, data) {
+  const defaults = data.ticketDefaults;
+  const max = defaults.maxPanels ?? 10;
+  const listBody = h("div", { class: "ticket-panels" });
+  const countPill = h("span", { class: "count-pill" });
+  const editorSlot = h("div", {});
+  const newButton = h("button", { class: "primary small", type: "button", onclick: () => pick(null) }, icon("plus", "icon small"), t("ticketPanelNew"));
+  let selected = "main";
+
+  const channelName = (id) => {
+    const found = data.channels.find((entry) => entry.id === id);
+    return found ? `#${found.name}` : t("unknownOption", { id });
+  };
+  const roleNames = (ids) => ids.map((id) => `@${data.roles.find((role) => role.id === id)?.name ?? t("unknownOption", { id })}`).join(", ");
+
+  function savedSettings() {
+    state.cache = { guildId, data, at: Date.now() };
+    state.unsaved = false;
+  }
+
+  function list() {
+    const panels = ticketPanelsOf(data);
+    countPill.textContent = t("tagsCount", { count: panels.length, max });
+    newButton.disabled = panels.length >= max || selected === null;
+    listBody.replaceChildren(
+      h(
+        "ul",
+        { class: "panel-list" },
+        panels.map((panel) =>
+          h(
+            "li",
+            { class: panel.id === selected ? "selected" : "" },
+            h(
+              "div",
+              { class: "toolbar" },
+              h("strong", { class: "grow" }, ticketPanelLabel(panel, defaults)),
+              panel.id === "main" ? h("span", { class: "badge" }, t("ticketPanelMain")) : null,
+              h("span", { class: panel.channelId ? "muted" : "badge warn" }, panel.channelId ? channelName(panel.channelId) : t("ticketPanelNotPosted")),
+              panel.channelId && panel.messageId
+                ? h("a", { class: "button ghost small", href: `https://discord.com/channels/${guildId}/${panel.channelId}/${panel.messageId}`, target: "_blank", rel: "noopener noreferrer" }, t("rolePanelOpen"))
+                : null,
+              h("button", { class: "ghost small", type: "button", disabled: panel.id === selected, onclick: () => pick(panel.id) }, t("embedEdit")),
+              panel.id !== "main" || panel.channelId
+                ? h("button", { class: "ghost small danger", type: "button", onclick: () => remove(panel) }, t(panel.id === "main" ? "ticketPanelTakeDown" : "delete"))
+                : null,
+            ),
+            h(
+              "p",
+              { class: "muted small-text" },
+              [
+                t("ticketPanelTypesCount", { count: (panel.categories ?? []).length }),
+                panel.staffRoleIds?.length > 0 ? t("ticketPanelStaffList", { roles: roleNames(panel.staffRoleIds) }) : t("ticketPanelStaffDefault"),
+                panel.openRoleIds?.length > 0 ? t("ticketPanelOpenList", { roles: roleNames(panel.openRoleIds) }) : null,
+              ]
+                .filter(Boolean)
+                .join(" · "),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Opens the editor for a panel ("main", an ID, or null for a new one).
+  function pick(panelId) {
+    if (state.unsaved && !confirm(t("ticketPanelSwitchUnsaved"))) {
+      return;
+    }
+    state.unsaved = false;
+    selected = panelId;
+    const panel = panelId === null ? { id: null, channelId: null, staffRoleIds: [], openRoleIds: [], look: {}, categories: [] } : ticketPanelsOf(data).find((entry) => entry.id === panelId);
+    if (!panel) {
+      return pick("main");
+    }
+    editorSlot.replaceChildren(
+      ticketPanelEditor(guildId, data, panel, {
+        onSaved: (savedId) => {
+          savedSettings();
+          selected = savedId;
+          pick(savedId);
+        },
+      }),
+    );
+    list();
+    if (panelId !== "main" || panel.channelId) {
+      editorSlot.scrollIntoView({ block: "start", behavior: "smooth" });
+    }
+    return undefined;
+  }
+
+  async function remove(panel) {
+    const name = ticketPanelLabel(panel, defaults);
+    if (!confirm(t(panel.id === "main" ? "ticketPanelTakeDownConfirm" : "ticketPanelDeleteConfirm", { title: name }))) {
+      return;
+    }
+    try {
+      const result = await api(`/api/guilds/${guildId}/ticket-panels/${panel.id}`, { method: "DELETE" });
+      data.settings = result.settings;
+      savedSettings();
+      toast(t(panel.id === "main" ? "ticketPanelTakenDown" : "ticketPanelDeleted"));
+      pick(panel.id === selected && panel.id !== "main" ? "main" : selected ?? "main");
+    } catch (error) {
+      failed(error);
+    }
+  }
+
+  pick("main");
+  return h(
+    "div",
+    { class: "ticket-panel-manager" },
+    card(t("ticketPanelsTitle"), "layers", "purple", h("div", { class: "toolbar" }, h("p", { class: "help grow" }, t("ticketPanelsHelp", { max })), countPill, newButton), listBody),
+    editorSlot,
+  );
 }
 
 // The last 30 days of tickets, above the list.
@@ -8944,7 +9206,7 @@ async function showTicketList(guildId, data, query) {
       "tickets",
       pageHero("tickets", t("ticketsIntro"), data),
       statsRow,
-      canManageGuild(data) && data.ticketDefaults ? ticketPanelEditor(guildId, data) : null,
+      canManageGuild(data) && data.ticketDefaults ? ticketPanelManager(guildId, data) : null,
       canManageGuild(data) && data.settings ? ticketSupportCard(guildId, data) : null,
       filters,
       card(t("page_tickets"), "ticket", "cyan", summary, empty, list, h("div", { class: "center" }, more)),

@@ -60,9 +60,10 @@ export const Setting = Object.freeze({
   LEVELING: "leveling", // leveling and XP, an object (see leveling/config.js)
   WEEKLY_BOARD_CHANNEL: "weeklyBoardChannelId", // where the weekly leaderboard is posted each Monday; unset = not posted (see leveling/weeklyBoard.js)
   WEEKLY_BOARD_ROLE: "weeklyBoardRoleId", // role the week's top member holds until the next post; unset = none
-  TICKETS: "tickets", // the ticket panel, { channelId, messageId, staffRoleId, title, message } (see tickets/tickets.js)
+  TICKETS: "tickets", // the main ticket panel, { channelId, messageId, staffRoleIds, openRoleIds, title, message } (see tickets/panels.js)
   TICKET_PANEL: "ticketPanel", // how the ticket panel looks and what tickets start with, an object (see tickets/panel.js)
-  TICKET_CATEGORIES: "ticketCategories", // the panel's kinds of ticket, [{ id, label, emoji, description, staffRoleId, style, intro, nameFormat, pingStaff, questions }] (see tickets/categories.js)
+  TICKET_CATEGORIES: "ticketCategories", // the main panel's kinds of ticket, [{ id, label, emoji, description, staffRoleIds, openRoleIds, style, intro, nameFormat, pingStaff, questions }] (see tickets/categories.js)
+  TICKET_PANELS: "ticketPanels", // every other ticket panel, [{ id, channelId, messageId, staffRoleIds, openRoleIds, look, categories }] (see tickets/panels.js)
   TICKET_LOG_CHANNEL: "ticketLogChannelId", // where ticket events are posted; unset = the mod-log channel (see tickets/ticketLog.js)
   DISABLED_TICKET_LOG_EVENTS: "disabledTicketLogEvents", // ticket events not posted, a list of names (they're still saved)
   TICKET_SUPPORT: "ticketSupport", // auto-close after inactivity and ratings, { autoCloseHours, ratings } (see tickets/support.js)

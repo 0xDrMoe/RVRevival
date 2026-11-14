@@ -1,8 +1,15 @@
 // Ticket categories: several kinds of ticket on one panel ("Report a player",
 // "Bug report", "Billing"…), each a button or a dropdown option with its own
-// form questions, staff role, intro message, thread name and staff ping.
-// With no categories the panel has the single "Open a ticket" button.
-// Saved as Setting.TICKET_CATEGORIES and edited on the dashboard's Tickets page.
+// form questions, staff roles, who may open it, intro message, thread name and
+// staff ping. With no categories the panel has the single "Open a ticket" button.
+// The main panel's are saved as Setting.TICKET_CATEGORIES, every other panel
+// keeps its own (tickets/panels.js); all are edited on the dashboard's Tickets page.
+//
+// staffRoleIds: the roles brought into its tickets (and allowed to handle
+// them) instead of the panel's; empty follows the panel. Saved categories
+// from before held one `staffRoleId`, which still reads as a list of one.
+// openRoleIds: only members with one of these roles may open it; empty
+// follows the panel (and an empty panel list means everyone).
 //
 // A category's intro, thread name and ping left empty (null) follow the
 // panel's (tickets/panel.js).
@@ -18,6 +25,8 @@ export const MAX_ANSWER_LENGTH = 1000;
 export const MAX_DESCRIPTION_LENGTH = 200;
 export const MAX_INTRO_LENGTH = 1500;
 export const MAX_NAME_FORMAT_LENGTH = 90;
+// Staff roles, and roles allowed to open, per category or panel.
+export const MAX_TICKET_ROLES = 10;
 
 export const BUTTON_STYLES = ["primary", "secondary", "success", "danger"];
 export const QUESTION_STYLES = ["short", "paragraph"];
@@ -104,14 +113,9 @@ function readCategory(value, problem, { isRole = () => true } = {}) {
   if (description.length > MAX_DESCRIPTION_LENGTH) {
     problem(`${where}: the description is at most ${MAX_DESCRIPTION_LENGTH} characters.`);
   }
-  let staffRoleId = null;
-  if (value.staffRoleId !== null && value.staffRoleId !== undefined) {
-    if (typeof value.staffRoleId === "string" && SNOWFLAKE.test(value.staffRoleId) && isRole(value.staffRoleId)) {
-      staffRoleId = value.staffRoleId;
-    } else {
-      problem(`${where}: pick a staff role that exists and isn't @everyone or a bot's role.`);
-    }
-  }
+  const legacyStaff = value.staffRoleId === null || value.staffRoleId === undefined ? [] : [value.staffRoleId];
+  const staffRoleIds = readRoleList(value.staffRoleIds ?? legacyStaff, problem, `${where}: staff roles`, isRole);
+  const openRoleIds = readRoleList(value.openRoleIds ?? [], problem, `${where}: who can open it`, isRole);
   let style = "primary";
   if (value.style !== undefined && value.style !== null) {
     if (BUTTON_STYLES.includes(value.style)) {
@@ -149,7 +153,8 @@ function readCategory(value, problem, { isRole = () => true } = {}) {
     label,
     emoji,
     description: description && description.length <= MAX_DESCRIPTION_LENGTH ? description : null,
-    staffRoleId,
+    staffRoleIds,
+    openRoleIds,
     style,
     intro: intro && intro.length <= MAX_INTRO_LENGTH ? intro : null,
     nameFormat: nameFormat && nameFormat.length <= MAX_NAME_FORMAT_LENGTH ? nameFormat : null,
@@ -161,6 +166,28 @@ function readCategory(value, problem, { isRole = () => true } = {}) {
           .slice(0, MAX_CATEGORY_QUESTIONS)
       : [],
   };
+}
+
+// A list of role IDs: each a role that exists and isn't @everyone or a bot's
+// role (`isRole`), no repeats, at most MAX_TICKET_ROLES. Broken entries are
+// reported to `problem` and left out.
+export function readRoleList(value, problem, what, isRole = () => true) {
+  if (!Array.isArray(value)) {
+    problem(`${what}: send a list of roles.`);
+    return [];
+  }
+  if (value.length > MAX_TICKET_ROLES) {
+    problem(`${what}: pick at most ${MAX_TICKET_ROLES} roles.`);
+  }
+  const roles = [];
+  for (const id of value) {
+    if (typeof id !== "string" || !SNOWFLAKE.test(id) || !isRole(id)) {
+      problem(`${what}: pick roles that exist and aren't @everyone or a bot's role.`);
+    } else if (!roles.includes(id)) {
+      roles.push(id);
+    }
+  }
+  return roles.slice(0, MAX_TICKET_ROLES);
 }
 
 const ignore = () => {};
@@ -204,13 +231,18 @@ export function checkCategories(value, { isRole }) {
 
 export const findCategory = (categories, id) => (id ? categories.find((category) => category.id === id) : undefined);
 
-// "Bug report · 🐞, staff @QA, 2 questions", for log entries.
+const mentions = (roleIds) => roleIds.map((id) => `<@&${id}>`).join(" ");
+
+// "🐞 Bug report (staff @QA; only @Testers) · 2 question(s)", for log entries.
 export function describeCategories(categories) {
   return normalizeCategories(categories)
-    .map(
-      (category) =>
-        `${category.emoji ? `${category.emoji} ` : ""}${category.label}${category.staffRoleId ? ` (staff <@&${category.staffRoleId}>)` : ""} · ${category.questions.length || 1} question(s)`,
-    )
+    .map((category) => {
+      const roles = [
+        category.staffRoleIds.length > 0 ? `staff ${mentions(category.staffRoleIds)}` : null,
+        category.openRoleIds.length > 0 ? `only ${mentions(category.openRoleIds)}` : null,
+      ].filter(Boolean);
+      return `${category.emoji ? `${category.emoji} ` : ""}${category.label}${roles.length > 0 ? ` (${roles.join("; ")})` : ""} · ${category.questions.length || 1} question(s)`;
+    })
     .join("; ") || "none (one Open a ticket button)";
 }
 

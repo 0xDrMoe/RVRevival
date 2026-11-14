@@ -623,23 +623,23 @@ export const COMMAND_PARTS = [
         tone: "cyan",
         page: "tickets",
         related: "tickets",
-        summary: "Posts the **Open a ticket** button, and handles tickets: private threads between a member and the staff.",
-        who: "`panel`, `off`, `log` and `log-event` need an admin (**Manage Server**). The rest needs ticket staff: the panel's staff role, the mod role, or **Manage Threads**. Members can close their own ticket.",
+        summary: "Posts ticket panels (up to 10 per server, each in its own channel) and handles tickets: private threads between a member and the staff.",
+        who: "`panel`, `off`, `log` and `log-event` need an admin (**Manage Server**). The rest needs ticket staff: a staff role of the ticket's panel or category, the mod role, or **Manage Threads**. Members can close their own ticket.",
         usages: [
           {
             usage: "/tickets panel channel [staff-role] [title] [message]",
-            what: "Posts the panel, with the look and ticket types saved on the **Tickets** page. Running it again replaces the old panel. **Admins.**",
+            what: "Posts a panel in that channel, with the look, staff roles, who can open and ticket types saved on the **Tickets** page. If that channel already has a panel, it's posted again in place; otherwise a new panel is added (the first one becomes the main panel). Each panel keeps its own settings. **Admins.**",
             options: [
-              ["channel", "Where the button goes. Tickets open as private threads in this channel."],
-              ["staff-role", "Who answers tickets and is pinged when one opens. Defaults to the mod role."],
+              ["channel", "Where the panel goes. Tickets from it open as private threads in this channel."],
+              ["staff-role", "Sets this panel's staff role: who answers its tickets and is pinged when one opens. Left out, the panel keeps the staff roles it has (the mod role when it has none). Add more staff roles on the Tickets page."],
               ["title", "The panel's title, up to 100 characters. It's saved with the panel's look, so you can leave it out next time."],
               ["message", "The panel's text, up to 1000 characters. Saved the same way. The Tickets page allows up to 4096."],
             ],
           },
           {
-            usage: "/tickets off",
-            what: "Removes the button. Tickets already open stay open. **Admins.**",
-            options: [],
+            usage: "/tickets off [channel]",
+            what: "Removes a panel and its message. Tickets already open stay open. **Admins.**",
+            options: [["channel", "The panel's channel. Only needed when the server has more than one panel."]],
           },
           {
             usage: "/tickets close [reason]",

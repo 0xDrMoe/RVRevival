@@ -6,6 +6,8 @@ import { GuildSettings, Setting } from "../src/settings/guildSettings.js";
 import { CLAIM_BUTTON, CLOSE_BUTTON, FORM_ID, MAX_OPEN_TICKETS, MENU_ID, OPEN_BUTTON, RATE_PREFIX, threadName } from "../src/tickets/tickets.js";
 import { checkTicketSupport, idleStep, normalizeTicketSupport } from "../src/tickets/support.js";
 import { TicketStore, MAX_EVENTS_PER_TICKET } from "../src/tickets/ticketStore.js";
+import { forgetPanelsIn, MAX_TICKET_PANELS, normalizeExtraPanels, PANEL_PREFIX, panelCustomId, parsePanelCustomId, ticketPanels } from "../src/tickets/panels.js";
+import { checkCategories, normalizeCategories } from "../src/tickets/categories.js";
 import { createTicketLog, TicketEvent } from "../src/tickets/ticketLog.js";
 import { LogRoute } from "../src/logs/logRoutes.js";
 import { buildTicketTranscript, fetchThreadMessages, MAX_TRANSCRIPT_MESSAGES } from "../src/tickets/transcript.js";
@@ -201,7 +203,8 @@ describe("tickets", () => {
     expect(t.guildSettings.get(GUILD_ID, Setting.TICKETS)).toEqual({
       channelId: CHANNEL_ID,
       messageId: "600000000000000001",
-      staffRoleId: STAFF_ROLE_ID,
+      staffRoleIds: [STAFF_ROLE_ID],
+      openRoleIds: [],
       title: "Support",
       message: null,
     });
@@ -472,6 +475,186 @@ describe("tickets", () => {
     expect(t.tickets.byThread(t.threads[0].id)).toMatchObject({ closeReason: "Thread deleted" });
     // Other threads are ignored.
     expect(() => t.command.threadDeleted({ id: "819999999999999999" })).not.toThrow();
+  });
+});
+
+describe("several ticket panels", () => {
+  const APPLY_CHANNEL_ID = "800000000000000010";
+  const APPS_ROLE_ID = "700000000000000010";
+  const LEADS_ROLE_ID = "700000000000000011";
+  const VERIFIED_ROLE_ID = "700000000000000012";
+
+  // Another text channel the bot can use, with its own message IDs.
+  function addChannel(t, id) {
+    let sent = 0;
+    const channel = { ...t.channel, id, send: vi.fn(async () => ({ id: `61${id.slice(2, 4)}0000000000000${(sent += 1)}` })), messages: { delete: vi.fn(async () => {}) } };
+    t.guild.channels.cache.set(id, channel);
+    return channel;
+  }
+  const addRole = (t, id, mentionable = true, members = []) =>
+    t.guild.roles.cache.set(id, { id, mentionable, members: new Map(members.map((member) => [member, { id: member, user: { bot: false } }])) });
+
+  it("adds a panel in another channel, posts each channel's panel again in place, and stops at the limit", async () => {
+    const t = setup();
+    const apply = addChannel(t, APPLY_CHANNEL_ID);
+    await t.postPanel();
+    const { run, outcome } = await t.postPanel({ channel: { id: APPLY_CHANNEL_ID }, title: "Apply to the team" });
+    expect(outcome.key).toBe("ticketPanelAdded");
+    expect(t.lastText(run)).toContain("2 panels");
+    // The first panel stays where it was.
+    expect(t.channel.messages.delete).not.toHaveBeenCalled();
+    const [main, extra] = ticketPanels(t.guildSettings, GUILD_ID);
+    expect(main.channelId).toBe(CHANNEL_ID);
+    expect(extra).toMatchObject({ channelId: APPLY_CHANNEL_ID, look: { title: "Apply to the team" }, categories: [] });
+    const button = apply.send.mock.calls[0][0].components[0].toJSON().components[0];
+    expect(button.custom_id).toBe(`tk:p:${extra.id}:open`);
+
+    // Again in the same channel: the same panel, posted again, look kept.
+    await t.postPanel({ channel: { id: APPLY_CHANNEL_ID } });
+    expect(apply.messages.delete).toHaveBeenCalledWith(extra.messageId);
+    const panels = ticketPanels(t.guildSettings, GUILD_ID);
+    expect(panels).toHaveLength(2);
+    expect(panels[1]).toMatchObject({ id: extra.id, look: { title: "Apply to the team" } });
+
+    for (let index = panels.length; index < MAX_TICKET_PANELS; index += 1) {
+      addChannel(t, `80000000000000002${index}`);
+      expect((await t.postPanel({ channel: { id: `80000000000000002${index}` } })).outcome.status).toBe(Status.SUCCESS);
+    }
+    addChannel(t, "800000000000000030");
+    expect((await t.postPanel({ channel: { id: "800000000000000030" } })).outcome.key).toBe("ticketPanelsFull");
+  });
+
+  it("asks which panel to remove when there are several, and removes only that one", async () => {
+    const t = setup();
+    const apply = addChannel(t, APPLY_CHANNEL_ID);
+    await t.postPanel({ "staff-role": { id: STAFF_ROLE_ID } });
+    await t.postPanel({ channel: { id: APPLY_CHANNEL_ID } });
+    const off = (options = {}) => t.command.execute(t.interaction({ subcommand: "off", manageGuild: true, options }));
+    expect((await off()).key).toBe("ticketPanelPickChannel");
+    expect((await off({ channel: { id: OTHER_CHANNEL_ID } })).key).toBe("ticketPanelNoneThere");
+
+    const extraMessage = ticketPanels(t.guildSettings, GUILD_ID)[1].messageId;
+    expect((await off({ channel: { id: APPLY_CHANNEL_ID } })).status).toBe(Status.SUCCESS);
+    expect(apply.messages.delete).toHaveBeenCalledWith(extraMessage);
+    expect(t.guildSettings.get(GUILD_ID, Setting.TICKET_PANELS)).toBeUndefined();
+
+    // One left: no channel needed. The staff role is kept for the next panel.
+    expect((await off()).status).toBe(Status.SUCCESS);
+    expect(t.guildSettings.get(GUILD_ID, Setting.TICKETS)).toEqual({ staffRoleIds: [STAFF_ROLE_ID], openRoleIds: [], title: null, message: null, channelId: null, messageId: null });
+    expect((await off()).key).toBe("ticketPanelNone");
+  });
+
+  it("opens tickets in their own panel's channel, with that panel's staff roles and categories", async () => {
+    const t = setup();
+    addRole(t, APPS_ROLE_ID);
+    addRole(t, LEADS_ROLE_ID, false, ["300000000000000055"]);
+    addChannel(t, APPLY_CHANNEL_ID);
+    await t.postPanel({ "staff-role": { id: STAFF_ROLE_ID } });
+    await t.guildSettings.set(GUILD_ID, Setting.TICKET_PANELS, [
+      {
+        id: "apply",
+        channelId: APPLY_CHANNEL_ID,
+        messageId: "610000000000000099",
+        staffRoleIds: [APPS_ROLE_ID, LEADS_ROLE_ID],
+        look: { title: "Apply", intro: "Thanks {user}, {staff} will read it." },
+        categories: [{ id: "mod", label: "Moderator", questions: ["Why you?"] }],
+      },
+    ]);
+    const click = t.interaction({ customId: panelCustomId("apply", "open", "mod"), userId: MEMBER_ID });
+    await t.command.componentPrefixes[PANEL_PREFIX].handle(click);
+    const modal = click.showModal.mock.calls[0][0].toJSON();
+    expect(modal.custom_id).toBe("tk:p:apply:form:mod");
+
+    const form = t.interaction({ customId: modal.custom_id, userId: MEMBER_ID, subject: "I'm active" });
+    expect((await t.command.componentPrefixes[PANEL_PREFIX].handle(form)).key).toBe("ticketOpened");
+    const ticket = t.tickets.openForUser(GUILD_ID, MEMBER_ID);
+    expect(ticket).toMatchObject({ panelId: "apply", categoryId: "mod" });
+    const welcome = t.threads[0].send.mock.calls[0][0];
+    expect(welcome.content).toBe(`Thanks <@${MEMBER_ID}>, <@&${APPS_ROLE_ID}> <@&${LEADS_ROLE_ID}> will read it.`);
+    expect(welcome.allowedMentions.roles).toEqual([APPS_ROLE_ID, LEADS_ROLE_ID]);
+    // The role that can't be pinged is brought in person by person.
+    expect(t.threads[0].members.add.mock.calls.map(([id]) => id)).toContain("300000000000000055");
+
+    // This panel's staff handle its tickets; the main panel's staff don't.
+    const inThread = (roleIds) => t.interaction({ customId: CLOSE_BUTTON, userId: STRANGER_ID, channelId: t.threads[0].id, roleIds });
+    expect((await t.command.components[CLOSE_BUTTON].handle(inThread([STAFF_ROLE_ID]))).key).toBe("ticketCloseNoPermission");
+    expect((await t.command.components[CLOSE_BUTTON].handle(inThread([LEADS_ROLE_ID]))).status).toBe(Status.SUCCESS);
+
+    // Any panel's staff may list tickets.
+    const list = t.interaction({ subcommand: "list", userId: STRANGER_ID, roleIds: [APPS_ROLE_ID] });
+    expect((await t.command.execute(list)).status).toBe(Status.SUCCESS);
+  });
+
+  it("lets only members with the right roles open a panel's or a category's tickets", async () => {
+    const t = setup();
+    addRole(t, VERIFIED_ROLE_ID);
+    addRole(t, APPS_ROLE_ID);
+    await t.postPanel();
+    await t.guildSettings.set(GUILD_ID, Setting.TICKETS, { ...t.guildSettings.get(GUILD_ID, Setting.TICKETS), openRoleIds: [VERIFIED_ROLE_ID] });
+    await t.guildSettings.set(GUILD_ID, Setting.TICKET_CATEGORIES, [
+      { id: "help", label: "Help" },
+      { id: "staff", label: "Staff only", openRoleIds: [APPS_ROLE_ID] },
+    ]);
+    const click = (categoryId, roleIds, extra = {}) => {
+      const run = t.interaction({ customId: `tk:open:${categoryId}`, userId: MEMBER_ID, roleIds, ...extra });
+      return t.command.componentPrefixes["tk:open:"].handle(run).then((outcome) => ({ run, outcome }));
+    };
+    const refused = await click("help", []);
+    expect(refused.outcome.key).toBe("ticketOpenNotAllowed");
+    expect(t.lastText(refused.run)).toContain(`<@&${VERIFIED_ROLE_ID}>`);
+    expect((await click("help", [VERIFIED_ROLE_ID])).run.showModal).toHaveBeenCalled();
+    // The category's own list replaces the panel's.
+    expect((await click("staff", [VERIFIED_ROLE_ID])).outcome.key).toBe("ticketOpenNotAllowed");
+    expect((await click("staff", [APPS_ROLE_ID])).run.showModal).toHaveBeenCalled();
+    // Server managers can always try it out.
+    expect((await click("staff", [], { manageGuild: true })).run.showModal).toHaveBeenCalled();
+    // The form checks again.
+    const form = t.interaction({ customId: "tk:form:staff", userId: MEMBER_ID, subject: "x" });
+    expect((await t.command.componentPrefixes["tk:form:"].handle(form)).key).toBe("ticketOpenNotAllowed");
+  });
+
+  it("forgets panels whose channel is deleted, and refuses buttons of a removed panel", async () => {
+    const t = setup();
+    addChannel(t, APPLY_CHANNEL_ID);
+    await t.postPanel();
+    await t.postPanel({ channel: { id: APPLY_CHANNEL_ID } });
+    const extra = ticketPanels(t.guildSettings, GUILD_ID)[1];
+    expect(await forgetPanelsIn(t.guildSettings, GUILD_ID, APPLY_CHANNEL_ID)).toBe(1);
+    const click = t.interaction({ customId: panelCustomId(extra.id, "open"), userId: MEMBER_ID });
+    expect((await t.command.componentPrefixes[PANEL_PREFIX].handle(click)).key).toBe("ticketsOff");
+    expect(await forgetPanelsIn(t.guildSettings, GUILD_ID, CHANNEL_ID)).toBe(1);
+    expect(ticketPanels(t.guildSettings, GUILD_ID).filter((panel) => panel.channelId)).toEqual([]);
+  });
+
+  it("reads and writes panel IDs, keeping the main panel's old ones", () => {
+    expect(panelCustomId(null, "open")).toBe("tk:open");
+    expect(panelCustomId("main", "form", "bugs")).toBe("tk:form:bugs");
+    expect(panelCustomId("abc123", "menu")).toBe("tk:p:abc123:menu");
+    expect(parsePanelCustomId("tk:open")).toEqual({ panelId: "main", kind: "open", categoryId: null });
+    expect(parsePanelCustomId("tk:form:bugs")).toEqual({ panelId: "main", kind: "form", categoryId: "bugs" });
+    expect(parsePanelCustomId("tk:p:abc123:open:bugs")).toEqual({ panelId: "abc123", kind: "open", categoryId: "bugs" });
+    expect(parsePanelCustomId("tk:p:ABC:open")).toBeNull();
+    expect(parsePanelCustomId("tk:close")).toBeNull();
+    expect(
+      normalizeExtraPanels([
+        { id: "a1", channelId: CHANNEL_ID, staffRoleIds: [STAFF_ROLE_ID, STAFF_ROLE_ID, "nope"] },
+        { id: "a1", channelId: CHANNEL_ID },
+        { id: "main", channelId: CHANNEL_ID },
+        { id: "b2" },
+      ]).map((panel) => [panel.id, panel.staffRoleIds]),
+    ).toEqual([["a1", [STAFF_ROLE_ID]]]);
+  });
+
+  it("gives categories several staff roles and who-can-open roles, reading the old single role", () => {
+    expect(normalizeCategories([{ id: "a", label: "A", staffRoleId: STAFF_ROLE_ID }])[0]).toMatchObject({ staffRoleIds: [STAFF_ROLE_ID], openRoleIds: [] });
+    const isRole = (id) => id !== MOD_ROLE_ID;
+    expect(checkCategories([{ id: "a", label: "A", staffRoleIds: [STAFF_ROLE_ID, APPS_ROLE_ID], openRoleIds: [VERIFIED_ROLE_ID] }], { isRole })[0]).toMatchObject({
+      staffRoleIds: [STAFF_ROLE_ID, APPS_ROLE_ID],
+      openRoleIds: [VERIFIED_ROLE_ID],
+    });
+    expect(() => checkCategories([{ id: "a", label: "A", openRoleIds: [MOD_ROLE_ID] }], { isRole })).toThrow(/who can open/);
+    const tooMany = Array.from({ length: 11 }, (_, index) => `7000000000000001${String(index).padStart(2, "0")}`);
+    expect(() => checkCategories([{ id: "a", label: "A", staffRoleIds: tooMany }], { isRole })).toThrow(/at most 10/);
   });
 });
 

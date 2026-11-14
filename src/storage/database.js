@@ -584,6 +584,12 @@ const MIGRATIONS = [
     data      TEXT    NOT NULL
   );
   `,
+  // 38: which ticket panel a ticket was opened from (tickets/panels.js), so
+  // its panel's staff roles can handle it. NULL is the main panel, as every
+  // ticket before was.
+  `
+  ALTER TABLE tickets ADD COLUMN panel_id TEXT;
+  `,
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS.length;
