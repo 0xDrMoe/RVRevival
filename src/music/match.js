@@ -84,7 +84,7 @@ export function matchScore(lookup, candidate) {
   return 0.5 * titleScore + 0.25 * artistScore + 0.25 * durationScore - (variant ? 0.5 : 0);
 }
 
-// The best candidate for a song, or null.
+// The best candidate for a song with its score ({ candidate, score }), or null.
 function bestOf(lookup, candidates) {
   let best = null;
   for (const candidate of candidates) {
@@ -93,13 +93,14 @@ function bestOf(lookup, candidates) {
       best = { candidate, score };
     }
   }
-  return best?.candidate ?? null;
+  return best;
 }
 
-// The best SoundCloud track for a song (a SoundCloud API track), or null.
-// `soundcloud` is createSoundCloud(). Tries the song's title without its
-// tags too, when that's different.
-export async function findMatch(soundcloud, lookup) {
+// The best SoundCloud track for a song and its score ({ candidate, score },
+// candidate being a SoundCloud API track), or null. `soundcloud` is
+// createSoundCloud(). Tries the song's title without its tags too, when
+// that's different.
+export async function findScoredMatch(soundcloud, lookup) {
   const query = matchQuery(lookup);
   const found = bestOf(lookup, await soundcloud.search(query, { limit: 20 }));
   if (found) {
@@ -109,9 +110,15 @@ export async function findMatch(soundcloud, lookup) {
   return tidy !== query ? bestOf(lookup, await soundcloud.search(tidy, { limit: 20 })) : null;
 }
 
+// The best SoundCloud track for a song (a SoundCloud API track), or null.
+export async function findMatch(soundcloud, lookup) {
+  return (await findScoredMatch(soundcloud, lookup))?.candidate ?? null;
+}
+
 // The best copy in other libraries (each with search(query) → queue tracks),
-// tried in order, or null. Failures are skipped.
-export async function findOtherMatch(libraries, lookup) {
+// tried in order, with its score ({ candidate, score }), or null. Failures
+// are skipped.
+export async function findOtherScoredMatch(libraries, lookup) {
   for (const library of libraries) {
     const candidates = await library.search(matchQuery(lookup), { limit: 10 }).catch(() => []);
     const found = bestOf(lookup, candidates);
@@ -120,4 +127,9 @@ export async function findOtherMatch(libraries, lookup) {
     }
   }
   return null;
+}
+
+// The best copy in other libraries, or null.
+export async function findOtherMatch(libraries, lookup) {
+  return (await findOtherScoredMatch(libraries, lookup))?.candidate ?? null;
 }

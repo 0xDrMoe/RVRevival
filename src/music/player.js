@@ -32,6 +32,7 @@ import { MusicError } from "./net.js";
 import { nowPlayingMessage } from "./nowPlaying.js";
 import { createRadio } from "./radio.js";
 import { createResolver } from "./sources.js";
+import { voiceBitrate } from "./quality.js";
 import { openAudio as defaultOpenAudio } from "./stream.js";
 
 const JOIN_TIMEOUT_MS = 20_000;
@@ -130,6 +131,16 @@ export function createMusic({
 
     get voiceChannel() {
       return this.guild.channels.cache.get(this.channelId) ?? null;
+    }
+
+    // Encodes at the voice channel's bitrate (music/quality.js voiceBitrate),
+    // read again for each song so a changed channel bitrate is picked up.
+    #applyBitrate() {
+      try {
+        this.#resource?.encoder?.setBitrate?.(voiceBitrate(this.voiceChannel?.bitrate));
+      } catch (error) {
+        logger?.warn?.("Couldn't set the music bitrate", { error: error?.message });
+      }
     }
 
     get destroyed() {
@@ -269,6 +280,7 @@ export function createMusic({
         }
         this.#resource = voice.createAudioResource(this.#audio.stream, { inputType: StreamType.Raw, inlineVolume: true, metadata: this.current });
         this.#resource.volume?.setVolume(this.volume / 100);
+        this.#applyBitrate();
         this.audioPlayer.play(this.#resource);
         this.#startedAt = Date.now();
         if (forced?.refresh && this.#nowPlaying) {

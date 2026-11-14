@@ -15,7 +15,8 @@ import { nowPlayingMessage, progressBar, queueMessage, sourceLabel } from "../sr
 import { cleanPlaylistName, MAX_PLAYLISTS, PlaylistStore, savedTrack } from "../src/music/playlistStore.js";
 import { createMusic } from "../src/music/player.js";
 import { createRadio, isStationId, stationLabel, stationTrack, toStation } from "../src/music/radio.js";
-import { createSoundCloud, isPlayable, pickTranscoding, rankTranscodings } from "../src/music/soundcloud.js";
+import { createSoundCloud, isPlayable, pickTranscoding, rankTranscodings, soundCloudQuality, transcodingKbps } from "../src/music/soundcloud.js";
+import { codecOf, rankNearTies, trackQuality, voiceBitrate } from "../src/music/quality.js";
 import { asUrl, createResolver, firstPlaylistEntry } from "../src/music/sources.js";
 import { checkFfmpeg, ffmpegArgs, openAudio } from "../src/music/stream.js";
 import { openHls, parsePlaylist } from "../src/music/hls.js";
@@ -1069,5 +1070,109 @@ describe("finding songs", () => {
     const found = await createJamendo({ clientId: "abc", fetchJson }).search("song");
     expect(found).toEqual([expect.objectContaining({ title: "Song", source: Source.JAMENDO, stream: { url: "https://prod.jamendo.test/a.mp3" } })]);
     expect(new URL(fetchJson.mock.calls[0][0]).searchParams.get("client_id")).toBe("abc");
+  });
+});
+
+describe("sound quality", () => {
+  const hls = (name, mime, extra = {}) => ({ url: `${API}/${name}`, format: { protocol: "hls", mime_type: mime }, ...extra });
+
+  it("knows each stream's codec and bitrate", () => {
+    expect(codecOf('audio/ogg; codecs="opus"')).toBe("opus");
+    expect(codecOf('audio/mp4; codecs="mp4a.40.2"')).toBe("aac");
+    expect(codecOf("audio/mpeg")).toBe("mp3");
+    expect(codecOf("")).toBeNull();
+    expect(transcodingKbps(hls("a", "audio/mp4", { preset: "aac_160k" }))).toBe(160);
+    expect(transcodingKbps(hls("a", "audio/mp4", { preset: "aac_hq", quality: "hq" }))).toBe(256);
+    expect(transcodingKbps(hls("o", 'audio/ogg; codecs="opus"', { preset: "opus_0_0" }))).toBe(64);
+    expect(transcodingKbps(hls("m", "audio/mpeg", { preset: "mp3_1_0" }))).toBe(128);
+    expect(trackQuality({ source: Source.AUDIUS })).toBe(320);
+    expect(trackQuality({ source: Source.SOUNDCLOUD }, 208)).toBe(208);
+    expect(trackQuality({ source: Source.RADIO })).toBe(0);
+  });
+
+  it("tries SoundCloud's best-sounding stream first, HLS before the old file", () => {
+    const track = scTrack({
+      media: {
+        transcodings: [
+          { url: `${API}/p`, format: { protocol: "progressive", mime_type: "audio/mpeg" } },
+          hls("mp3", "audio/mpeg", { preset: "mp3_1_0" }),
+          hls("opus", 'audio/ogg; codecs="opus"', { preset: "opus_0_0" }),
+          hls("aac", 'audio/mp4; codecs="mp4a.40.2"', { preset: "aac_160k" }),
+        ],
+      },
+    });
+    expect(rankTranscodings(track).map((item) => item.url)).toEqual([`${API}/aac`, `${API}/opus`, `${API}/mp3`, `${API}/p`]);
+    expect(rankTranscodings(track)[0]).toMatchObject({ kbps: 160, quality: 208 });
+    expect(soundCloudQuality(track)).toBe(208);
+    // Opus 64k and MP3 128k sound about the same: Opus first.
+    expect(soundCloudQuality(scTrack())).toBe(128);
+    expect(soundCloudQuality(scTrack({ media: { transcodings: [] } }))).toBe(0);
+  });
+
+  it("lets quality break near-ties only", () => {
+    const ranked = rankNearTies([
+      { name: "sc", score: 1.05, quality: 128 },
+      { name: "sc2", score: 1.04, quality: 128 },
+      { name: "audius", score: 1.02, quality: 320 },
+      { name: "audius2", score: 1.01, quality: 320 },
+      { name: "worse", score: 0.7, quality: 320 },
+    ]);
+    expect(ranked.map((item) => item.name)).toEqual(["audius", "sc", "sc2", "audius2", "worse"]);
+    expect(rankNearTies([{ name: "a", score: 1, quality: 1 }, { name: "b", score: 1, quality: 1 }]).map((item) => item.name)).toEqual(["a", "b"]);
+    expect(rankNearTies([])).toEqual([]);
+  });
+
+  it("plays the better-sounding copy when word searches match equally", async () => {
+    const audiusSong = (title, id) => makeTrack({ title, artist: "Band", source: Source.AUDIUS, stream: { id }, url: `https://audius.co/band/${id}` });
+    const soundcloud = { find: async () => ({ tracks: [scTrack({ id: 5, title: "Song", user: { username: "Band" }, permalink_url: "https://soundcloud.com/band/song" })], previews: 0 }) };
+    const equal = createResolver({ soundcloud, audius: { search: async () => [audiusSong("Song", "a1")] }, bandcamp: {} });
+    expect((await equal.resolve("band song")).tracks[0]).toMatchObject({ source: Source.AUDIUS, stream: { id: "a1" } });
+
+    // A better match wins whatever it sounds like.
+    const worse = createResolver({ soundcloud, audius: { search: async () => [audiusSong("Song (sped up)", "a2")] }, bandcamp: {} });
+    expect((await worse.resolve("band song")).tracks[0]).toMatchObject({ source: Source.SOUNDCLOUD, stream: { id: 5 } });
+
+    // Audius's own 3rd result doesn't jump SoundCloud's top one.
+    const third = createResolver({ soundcloud, audius: { search: async () => [audiusSong("Other", "x"), audiusSong("Thing", "y"), audiusSong("Song", "a3")] }, bandcamp: {} });
+    expect((await third.resolve("band song")).tracks[0]).toMatchObject({ source: Source.SOUNDCLOUD });
+  });
+
+  it("matches Spotify songs to the better-sounding copy when both fit", async () => {
+    const lookup = { title: "Song", artist: "Band", durationMs: 180_000 };
+    const track = makeTrack({ title: "Song", artist: "Band", via: Via.SPOTIFY, lookup });
+    const soundcloud = { search: vi.fn(async () => [scTrack({ id: 9, title: "Song", user: { username: "Band" }, full_duration: 180_500 })]) };
+    const audiusCopy = (durationMs) => ({ search: vi.fn(async () => [makeTrack({ title: "Song", artist: "Band", durationMs, source: Source.AUDIUS, stream: { id: "x" }, url: "https://audius.co/band/song" })]) });
+
+    const audius = audiusCopy(181_000);
+    expect(await createResolver({ soundcloud, audius }).ready(track)).toMatchObject({ source: Source.AUDIUS, stream: { id: "x" } });
+    expect(soundcloud.search).toHaveBeenCalled();
+    expect(audius.search).toHaveBeenCalled();
+
+    // Audius's copy is 8 seconds off: SoundCloud's closer one plays.
+    expect(await createResolver({ soundcloud, audius: audiusCopy(188_000) }).ready(track)).toMatchObject({ source: Source.SOUNDCLOUD, stream: { id: 9 } });
+    // Audius failing doesn't matter.
+    expect(await createResolver({ soundcloud, audius: { search: async () => Promise.reject(new Error("down")) } }).ready(track)).toMatchObject({ source: Source.SOUNDCLOUD });
+  });
+
+  it("encodes at the voice channel's bitrate, between 96 and 128 kbps", async () => {
+    expect(voiceBitrate(64_000)).toBe(96_000);
+    expect(voiceBitrate(112_000)).toBe(112_000);
+    expect(voiceBitrate(384_000)).toBe(128_000);
+    expect(voiceBitrate(undefined)).toBe(96_000);
+
+    const { voice, manager, guild, voiceChannel, textChannel } = setup();
+    const setBitrate = vi.fn();
+    voice.createAudioResource.mockImplementation((stream, { metadata }) => ({ stream, metadata, playbackDuration: 0, volume: { setVolume: vi.fn() }, encoder: { setBitrate } }));
+    voiceChannel.bitrate = 256_000;
+    const player = await manager.join({ guild, channel: voiceChannel, textChannel });
+    player.add(songs("A", "B"), { requestedBy: "u0" });
+    await flush();
+    expect(setBitrate).toHaveBeenLastCalledWith(128_000);
+
+    // Changed between songs: the next song uses the new bitrate.
+    voiceChannel.bitrate = 104_000;
+    voice.players[0].finish();
+    await flush();
+    expect(setBitrate).toHaveBeenLastCalledWith(104_000);
   });
 });

@@ -8,6 +8,7 @@
 
 import { makeTrack, Source } from "./track.js";
 import { fetchJson as defaultFetchJson, fetchText as defaultFetchText, MusicError } from "./net.js";
+import { codecOf, equivalentKbps } from "./quality.js";
 
 const API = "https://api-v2.soundcloud.com";
 const PAGES = ["https://soundcloud.com/", "https://soundcloud.com/discover", "https://m.soundcloud.com/"];
@@ -21,21 +22,46 @@ export const SOUNDCLOUD_HOSTS = ["soundcloud.com", "www.soundcloud.com", "m.soun
 
 export const isSoundCloudUrl = (url) => SOUNDCLOUD_HOSTS.includes(url.hostname.toLowerCase());
 
-// Every full stream of a track, best first: HLS (what soundcloud.com itself
-// plays: MP3, then AAC, then Opus), then the older single-file MP3, which
-// SoundCloud is retiring and often answers 404 for. Each is { url, protocol,
-// mime } (the URL still needs the client ID); [] when only previews exist.
+// What a SoundCloud stream really carries, in kbps: its preset names it
+// ("aac_160k") or its codec says it (MP3 128, AAC 160 or 256 for "hq", Opus 64).
+export function transcodingKbps(item) {
+  const named = String(item?.preset ?? "").match(/(\d{2,3})k\b/);
+  if (named) {
+    return Number(named[1]);
+  }
+  const codec = codecOf(item?.format?.mime_type);
+  if (codec === "aac") {
+    return item?.quality === "hq" ? 256 : 160;
+  }
+  return codec === "opus" ? 64 : 128;
+}
+
+// A stream's MP3-equivalent quality (music/quality.js).
+const transcodingQuality = (item) => equivalentKbps(codecOf(item?.format?.mime_type) ?? "mp3", transcodingKbps(item));
+
+// On equal quality: Opus, then AAC, then MP3 (Opus is what Discord plays).
+const CODEC_ORDER = { opus: 0, aac: 1, mp3: 2 };
+
+// Every full stream of a track, best first. HLS comes first, as
+// soundcloud.com plays it; the older single-file MP3, which SoundCloud is
+// retiring and often answers 404 for, comes last. Within each, the best
+// sounding first (AAC 160k, then Opus 64k, then MP3 128k). If one won't
+// load, streamFor tries the next. Each is { url, protocol, mime, kbps,
+// quality } (the URL still needs the client ID); [] when only previews exist.
 export function rankTranscodings(track) {
   const full = (track?.media?.transcodings ?? []).filter(
     (item) => !item.snipped && typeof item.url === "string" && item.url.startsWith(`${API}/`) && ["progressive", "hls"].includes(item.format?.protocol),
   );
-  const rank = (item) => {
-    const mime = item.format?.mime_type ?? "";
-    const codec = mime.includes("mpeg") ? 0 : mime.includes("mp4") || mime.includes("aac") ? 1 : mime.includes("opus") ? 2 : 3;
-    return (item.format.protocol === "hls" ? 0 : 10) + codec;
-  };
-  return full.sort((a, b) => rank(a) - rank(b)).map((item) => ({ url: item.url, protocol: item.format.protocol, mime: item.format.mime_type ?? "" }));
+  const ranked = full.map((item) => ({ item, quality: transcodingQuality(item), codec: CODEC_ORDER[codecOf(item.format?.mime_type)] ?? 3 }));
+  ranked.sort(
+    (a, b) =>
+      (a.item.format.protocol === "hls" ? 0 : 1) - (b.item.format.protocol === "hls" ? 0 : 1) || b.quality - a.quality || a.codec - b.codec,
+  );
+  return ranked.map(({ item, quality }) => ({ url: item.url, protocol: item.format.protocol, mime: item.format.mime_type ?? "", kbps: transcodingKbps(item), quality }));
 }
+
+// The MP3-equivalent quality of a track's best free stream, or 0.
+export const soundCloudQuality = (track) => rankTranscodings(track).reduce((best, item) => Math.max(best, item.quality), 0);
 
 // The best stream ({ url, protocol }), or null when only previews exist.
 export function pickTranscoding(track) {
@@ -230,7 +256,7 @@ export function createSoundCloud({ clientId: fixedClientId = null, fetchJson = d
       const report = [];
       for (const transcoding of rankTranscodings(track)) {
         const answer = await api(transcoding.url, params, { staleOn404: false }).catch((error) => ({ error }));
-        report.push({ protocol: transcoding.protocol, mime: transcoding.mime, address: typeof answer?.url === "string" ? answer.url : null, error: answer?.error?.message ?? null });
+        report.push({ protocol: transcoding.protocol, mime: transcoding.mime, kbps: transcoding.kbps, address: typeof answer?.url === "string" ? answer.url : null, error: answer?.error?.message ?? null });
       }
       return { policy: track.policy, transcodings: (track.media?.transcodings ?? []).length, report };
     },

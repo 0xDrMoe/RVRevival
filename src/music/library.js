@@ -1,15 +1,18 @@
 // Word searches across every free library at once: SoundCloud (the biggest),
 // Audius, Bandcamp and Jamendo (with JAMENDO_CLIENT_ID). Results are ranked
-// together on how much of what was typed is in their title and artist, with
-// SoundCloud first on a tie. A library that fails or is slow is left out
-// rather than failing the search.
+// together on how much of what was typed is in their title and artist. When
+// copies match about equally well, the better-sounding one comes first
+// (music/quality.js), then SoundCloud, the library most likely to play. A
+// library that fails or is slow is left out rather than failing the search.
 
 import { cleanQuery, queryScore, words } from "./match.js";
 import { MusicError } from "./net.js";
-import { toTrack } from "./soundcloud.js";
+import { rankNearTies, trackQuality } from "./quality.js";
+import { soundCloudQuality, toTrack } from "./soundcloud.js";
 import { Source } from "./track.js";
 
-// Small nudges so ties go to the library most likely to play.
+// Small nudges toward the library most likely to play, so it wins exact
+// ties and a clearly better match elsewhere still beats it.
 const SOURCE_BONUS = { [Source.SOUNDCLOUD]: 0.05, [Source.AUDIUS]: 0.02, [Source.JAMENDO]: 0, [Source.BANDCAMP]: -0.02 };
 const RANK_STEP = 0.01;
 // How many Bandcamp picks /play checks before giving up on them.
@@ -43,18 +46,20 @@ export function createLibrary({ soundcloud, audius = null, bandcamp = null, jame
         return;
       }
       const value = answer.value;
-      const tracks = name === "soundcloud" ? value.tracks.map(toTrack) : value;
+      const tracks = name === "soundcloud" ? value.tracks.map((raw) => ({ track: toTrack(raw), kbps: soundCloudQuality(raw) })) : value.map((track) => ({ track, kbps: null }));
       if (name === "soundcloud") {
         previews = Math.max(previews, value.previews);
       }
-      tracks.forEach((track, rank) => {
-        scored.push({ track, score: queryScore(typed, track) + (SOURCE_BONUS[track.source] ?? 0) - rank * RANK_STEP });
+      tracks.forEach(({ track, kbps }, rank) => {
+        scored.push({ track, quality: trackQuality(track, kbps), score: queryScore(typed, track) + (SOURCE_BONUS[track.source] ?? 0) - rank * RANK_STEP });
       });
     });
-    scored.sort((a, b) => b.score - a.score);
+    // Best match first; among near-ties, the best-sounding copy. Duplicates
+    // below keep that copy.
+    const ranked = rankNearTies(scored);
     const seen = new Set();
     const tracks = [];
-    for (const { track } of scored) {
+    for (const { track } of ranked) {
       const keys = [track.url, sameSong(track)].filter(Boolean);
       if (keys.some((key) => seen.has(key))) {
         continue;
@@ -63,7 +68,7 @@ export function createLibrary({ soundcloud, audius = null, bandcamp = null, jame
       tracks.push(track);
     }
     // `tracks`: one copy of each song (for /search); `all`: every result, best first.
-    return { tracks, all: scored.map(({ track }) => track), previews, failed, everyFailed: failed.length === searches.length };
+    return { tracks, all: ranked.map(({ track }) => track), previews, failed, everyFailed: failed.length === searches.length };
   }
 
   const nothing = (typed, { previews, failed, everyFailed }) => {
