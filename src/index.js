@@ -76,6 +76,7 @@ import { ScheduledMessageStore } from "./scheduled/scheduledMessageStore.js";
 import { createBirthdays } from "./birthdays/birthdays.js";
 import { BirthdayStore } from "./birthdays/birthdayStore.js";
 import { GuildSettings, Setting } from "./settings/guildSettings.js";
+import { moveAutomodEscalation } from "./moderation/warnStepsMigration.js";
 import { TicketStore } from "./tickets/ticketStore.js";
 import { createTicketLog } from "./tickets/ticketLog.js";
 import { closeDatabase, DEFAULT_DATABASE_FILE, openDatabase, optimizeDatabase } from "./storage/database.js";
@@ -160,6 +161,8 @@ async function start() {
   // Settings and moderation cases live in data/bot.db (SQLite).
   const db = openDatabase(DEFAULT_DATABASE_FILE);
   const guildSettings = await GuildSettings.load(db);
+  // Automod's old warning escalation now lives in the warning steps.
+  await moveAutomodEscalation(guildSettings, logger);
   const store = new CaseStore(db);
   // Reminders set with /remind.
   const reminders = new ReminderStore(db);

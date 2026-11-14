@@ -19,6 +19,7 @@ import { createHash, createHmac, hkdfSync, timingSafeEqual } from "node:crypto";
 import { Setting } from "../settings/guildSettings.js";
 import { normalizeCounters } from "../stats/statsCounters.js";
 import { checkSettingChanges, InvalidSetting, SETTING_RULES } from "./settingsRules.js";
+import { foldEscalationInto } from "../moderation/warnStepsMigration.js";
 
 export const BACKUP_FORMAT = "rabble-settings-backup";
 export const BACKUP_VERSION = 2;
@@ -327,7 +328,8 @@ export function planRestore(backup, { guildId, channels, roles, isOwner, canMana
   const apply = {};
   const skipped = [];
   let unchanged = 0;
-  for (const [setting, value] of Object.entries(backup.settings)) {
+  // Older backups keep automod's warning escalation, now a warning step.
+  for (const [setting, value] of Object.entries(foldEscalationInto(backup.settings))) {
     if (!KNOWN.has(setting) || NOT_BACKED_UP.has(setting)) {
       skipped.push({ setting, reason: "unknown" });
       continue;

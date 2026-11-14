@@ -77,7 +77,6 @@ const TICKET_EVENTS = ["opened", "closed", "reopened", "memberAdded", "memberRem
 const CASE_ACTIONS = ["ban", "softban", "unban", "kick", "timeout", "untimeout", "warn", "note"];
 const AUTOMOD_RULES = ["scamLinks", "bannedWords", "invites", "links", "mentions", "spam", "duplicates", "caps", "emojis", "lines", "zalgo"];
 const AUTOMOD_ACTIONS = ["delete", "warn", "timeout", "log"];
-const ESCALATION_ACTIONS = ["timeout", "kick", "ban"];
 // The numbers each rule uses: where they live in the automod settings, and their range.
 const AUTOMOD_NUMBERS = {
   mentions: [{ path: "rules.mentions.limit", key: "amMentionsLimit", min: 2, max: 50 }],
@@ -2336,8 +2335,40 @@ function readJoinGate(form) {
   return { minAgeDays, action: form.querySelector("#gateAction").value, alertJoins };
 }
 
-// Warning thresholds (moderation/warnThresholds.js): one row per step.
+// Warning steps, "Automatic punishments for warnings" (moderation/warnThresholds.js):
+// one row per step, read as a sentence. They run after every warning,
+// automod's included.
 const MAX_WARN_THRESHOLDS = 5;
+const MAX_STEP_MINUTES = 28 * 24 * 60;
+const STEP_UNITS = [
+  ["minute", 1],
+  ["hour", 60],
+  ["day", 24 * 60],
+];
+// What a server starts from when it has no steps yet.
+const SUGGESTED_WARN_STEPS = [
+  { count: 3, days: 1, action: "timeout", minutes: 60 },
+  { count: 5, days: 30, action: "timeout", minutes: 24 * 60 },
+  { count: 8, days: 90, action: "ban" },
+];
+
+// 90 -> "90 minutes", 120 -> "2 hours", 2880 -> "2 days", in the page's language.
+function stepDuration(minutes) {
+  const [unit, size] = [...STEP_UNITS].reverse().find(([, length]) => minutes % length === 0) ?? STEP_UNITS[0];
+  return new Intl.NumberFormat(state.language, { style: "unit", unit, unitDisplay: "long" }).format(minutes / size);
+}
+
+// "3 warnings within 30 days: time out for 1 hour". A step for 1 warning acts
+// on every warning, so its days don't matter.
+function warnStepText({ count, days, action, minutes }) {
+  const what = action === "timeout" ? t("stepAction_timeout", { duration: stepDuration(minutes) }) : t(`stepAction_${action}`);
+  if (count === 1) {
+    return t("stepEveryLine", { action: what });
+  }
+  const window = new Intl.NumberFormat(state.language, { style: "unit", unit: "day", unitDisplay: "long" }).format(days);
+  return t("stepLine", { count, window, action: what });
+}
+
 function warnThresholdRow(entry, remove) {
   const number = (className, value, min, max, label) =>
     h("input", { class: className, type: "number", min, max, step: 1, required: true, value: String(value), inputMode: "numeric", "aria-label": label });
@@ -2346,31 +2377,81 @@ function warnThresholdRow(entry, remove) {
     { class: "threshold-action", "aria-label": t("thresholdAction") },
     ["timeout", "kick", "ban"].map((value) => h("option", { value, selected: (entry?.action ?? "timeout") === value }, t(`thresholdAction_${value}`))),
   );
-  const minutes = number("threshold-minutes", entry?.minutes ?? 60, 1, 40320, t("thresholdMinutes"));
-  const minutesWrap = h("label", { class: "threshold-part" }, minutes, h("span", {}, t("thresholdMinutesUnit")));
-  const syncMinutes = () => (minutesWrap.hidden = action.value !== "timeout");
-  action.addEventListener("change", syncMinutes);
-  syncMinutes();
+  const minutes = entry?.minutes ?? 60;
+  const [unitName, unitSize] = [...STEP_UNITS].reverse().find(([, size]) => minutes % size === 0) ?? STEP_UNITS[0];
+  const length = number("threshold-length", minutes / unitSize, 1, MAX_STEP_MINUTES / unitSize, t("thresholdLength"));
+  const unit = h(
+    "select",
+    { class: "threshold-unit", "aria-label": t("thresholdUnit") },
+    STEP_UNITS.map(([name, size]) => h("option", { value: String(size), selected: name === unitName }, t(`thresholdUnit_${name}`))),
+  );
+  // Keep the timeout within Discord's 28 days whatever the unit.
+  unit.addEventListener("change", () => (length.max = String(MAX_STEP_MINUTES / Number(unit.value))));
+  const lengthWrap = h("span", { class: "threshold-part" }, h("span", {}, t("thresholdFor")), length, unit);
+  const syncLength = () => (lengthWrap.hidden = action.value !== "timeout");
+  action.addEventListener("change", syncLength);
+  syncLength();
   const row = h(
     "div",
     { class: "reward-row threshold-row" },
-    icon("alert"),
-    h("label", { class: "threshold-part" }, number("threshold-count", entry?.count ?? 3, 2, 20, t("thresholdCount")), h("span", {}, t("thresholdWarningsIn"))),
-    h("label", { class: "threshold-part" }, number("threshold-days", entry?.days ?? 30, 1, 365, t("thresholdDays")), h("span", {}, t("thresholdDaysArrow"))),
-    action,
-    minutesWrap,
+    h(
+      "span",
+      { class: "threshold-sentence" },
+      h("span", { class: "threshold-part" }, h("span", {}, t("thresholdWhen")), number("threshold-count", entry?.count ?? 3, 1, 20, t("thresholdCount"))),
+      h("span", { class: "threshold-part" }, h("span", {}, t("thresholdWarningsWithin")), number("threshold-days", entry?.days ?? 30, 1, 365, t("thresholdDays")), h("span", {}, t("thresholdDaysArrow"))),
+      h("span", { class: "threshold-part" }, action, lengthWrap),
+    ),
     h("button", { class: "ghost small", type: "button", onclick: () => remove(row) }, t("tagRemove")),
   );
   return row;
 }
 
+// The rows as saved values. A row's timeout length is converted to minutes.
 function readWarnThresholds(form) {
   const rows = [...form.querySelectorAll(".threshold-row")].map((row) => {
     const action = row.querySelector(".threshold-action").value;
     const entry = { count: Number(row.querySelector(".threshold-count").value), days: Number(row.querySelector(".threshold-days").value), action };
-    return action === "timeout" ? { ...entry, minutes: Number(row.querySelector(".threshold-minutes").value) } : entry;
+    if (action !== "timeout") {
+      return entry;
+    }
+    return { ...entry, minutes: Number(row.querySelector(".threshold-length").value) * Number(row.querySelector(".threshold-unit").value) };
   });
   return rows.length > 0 ? rows.sort((a, b) => a.count - b.count) : null;
+}
+
+// "What this means": the steps as plain sentences, in order, with a note when
+// two rows have the same number of warnings (the server refuses that).
+function warnStepsPreview(form, box) {
+  const steps = readWarnThresholds(form) ?? [];
+  const valid = steps.filter(
+    (step) =>
+      Number.isInteger(step.count) && step.count >= 1 && step.count <= 20 && Number.isInteger(step.days) && step.days >= 1 && step.days <= 365 &&
+      (step.action !== "timeout" || (Number.isInteger(step.minutes) && step.minutes >= 1 && step.minutes <= MAX_STEP_MINUTES)),
+  );
+  const counts = steps.map((step) => step.count);
+  const duplicate = counts.find((count, index) => counts.indexOf(count) !== index);
+  box.hidden = steps.length === 0;
+  box.replaceChildren(
+    ...[
+      h("strong", {}, t("stepPreviewTitle")),
+      h("ol", {}, valid.map((step) => h("li", {}, warnStepText(step)))),
+      duplicate !== undefined ? h("p", { class: "step-problem" }, icon("alert"), t("stepDuplicate", { count: duplicate })) : null,
+      valid.length < steps.length ? h("p", { class: "step-problem" }, icon("alert"), t("stepInvalid")) : null,
+      h("p", { class: "help" }, t("stepPreviewNote")),
+    ].filter(Boolean),
+  );
+}
+
+// What counts as a warning, and what doesn't.
+function warnStepCounts() {
+  const column = (iconName, tone, titleKey, keys) =>
+    h("div", { class: `step-counts-col step-counts-${tone}` }, h("strong", {}, icon(iconName), t(titleKey)), h("ul", {}, keys.map((key) => h("li", {}, t(key)))));
+  return h(
+    "div",
+    { class: "step-counts" },
+    column("check", "green", "stepCountsTitle", ["stepCounts_warn", "stepCounts_automod"]),
+    column("x", "muted", "stepNotCountsTitle", ["stepNotCounts_other", "stepNotCounts_automod"]),
+  );
 }
 
 async function showModeration(guildId) {
@@ -2386,6 +2467,38 @@ async function showModeration(guildId) {
     emptyKey: "thresholdsNone",
     addKey: "thresholdsAdd",
   });
+  const stepsPreview = h("div", { class: "step-preview", "aria-live": "polite" });
+  const refreshSteps = () => {
+    const form = stepsPreview.closest("form");
+    if (form) {
+      warnStepsPreview(form, stepsPreview);
+    }
+    suggestSteps.hidden = thresholds.list.children.length > 0;
+  };
+  // Offered while there are no steps: a sensible ladder to start from.
+  const suggestSteps = h(
+    "div",
+    { class: "step-suggest" },
+    h("p", { class: "help" }, t("thresholdsSuggestHelp", { steps: SUGGESTED_WARN_STEPS.map(warnStepText).join(" · ") })),
+    h(
+      "button",
+      {
+        class: "ghost small",
+        type: "button",
+        onclick: () => {
+          thresholds.set(SUGGESTED_WARN_STEPS);
+          thresholds.list.dispatchEvent(new Event("input", { bubbles: true }));
+        },
+      },
+      t("thresholdsSuggest"),
+    ),
+  );
+  for (const type of ["input", "change"]) {
+    thresholds.list.addEventListener(type, () => queueMicrotask(refreshSteps));
+  }
+  thresholds.addButton.addEventListener("click", () => queueMicrotask(refreshSteps));
+  // The form exists once the page is built.
+  queueMicrotask(refreshSteps);
   const roles = roleOptions(data);
   const rolePicker = (key) => picker({ id: key, options: roles, value: data.settings[key], emptyLabel: t("notSet") });
   settingsPage({
@@ -2417,9 +2530,12 @@ async function showModeration(guildId) {
         "alert",
         "red",
         h("p", { class: "help" }, t("thresholdsHelp")),
+        warnStepCounts(),
         h("div", { class: "toolbar" }, thresholds.count, h("span", { class: "grow" }), thresholds.addButton),
         thresholds.empty,
+        suggestSteps,
         thresholds.list,
+        stepsPreview,
       ),
       card(
         t("sectionModLog"),
@@ -2952,6 +3068,17 @@ function automodNumber({ path, key, min, max }, config) {
   return field(key, null, h("input", { type: "number", min, max, step: 1, required: true, value: readAt(config, path), "data-path": path, "data-kind": "int" }));
 }
 
+// A rule's "What happens" menu, with a line saying what the choice puts on
+// the member's record (and whether it counts toward the warning steps).
+function automodActionField(rule, value) {
+  const select = automodSelect(`rules.${rule}.action`, AUTOMOD_ACTIONS, value, "amAction_");
+  const hint = h("span", { class: "help" });
+  const sync = () => (hint.textContent = t(`amActionHint_${select.value}`));
+  select.addEventListener("change", sync);
+  sync();
+  return h("label", { class: "field" }, h("span", { class: "field-label" }, t("amAction")), select, hint);
+}
+
 function automodSelect(path, options, value, labelPrefix) {
   return h(
     "select",
@@ -3024,7 +3151,7 @@ function automodRule(rule, config, lists) {
     h(
       "div",
       { class: "rule-body" },
-      field("amAction", null, automodSelect(`rules.${rule}.action`, AUTOMOD_ACTIONS, settings.action, "amAction_")),
+      automodActionField(rule, settings.action),
       (AUTOMOD_NUMBERS[rule] ?? []).map((number) => automodNumber(number, config)),
       automodFineTune(rule, settings, lists),
     ),
@@ -3094,16 +3221,17 @@ function ruleOutcome(config, rule) {
   return settings.action === "timeout" ? `${label} (${formatDuration((settings.timeoutMinutes ?? config.timeoutMinutes) * 60_000)})` : label;
 }
 
-// What happens after too many warnings, in a few words.
-function escalationText(escalation) {
-  if (escalation.warnings <= 0) {
-    return t("amPointNoEscalation");
-  }
-  const action =
-    escalation.action === "timeout"
-      ? t("amEscalationFor", { duration: formatDuration(escalation.timeoutMinutes * 60_000) })
-      : t(`amEscalation_${escalation.action}`);
-  return t("amPointEscalation", { count: escalation.warnings, action });
+// Too many warnings: automod's warnings count toward the Moderation page's
+// steps, so show those here with a link instead of a second setting.
+function automodWarnSteps(guildId, steps) {
+  return h(
+    "div",
+    { class: "step-preview am-warn-steps" },
+    h("strong", {}, t("amWarnStepsTitle")),
+    h("p", { class: "help" }, t("amWarnStepsHelp")),
+    steps.length > 0 ? h("ol", {}, steps.map((step) => h("li", {}, warnStepText(step)))) : h("p", { class: "muted" }, t("amWarnStepsNone")),
+    h("a", { class: "link-button", href: `/g/${guildId}/moderation` }, t("amWarnStepsEdit")),
+  );
 }
 
 // The bullet points under a preset: what it switches on and how hard it punishes.
@@ -3115,7 +3243,7 @@ function presetPoints(config) {
     { class: "am-points" },
     on.map((rule) => h("li", {}, h("strong", {}, t(`amRule_${rule}`)), ": ", ruleOutcome(config, rule))),
     off.length > 0 ? h("li", { class: "muted" }, t("amPointOff", { rules: off.map((rule) => t(`amRule_${rule}`)).join(", ") })) : null,
-    h("li", {}, escalationText(config.escalation)),
+    h("li", {}, t("amPointWarnSteps")),
   );
 }
 
@@ -3300,18 +3428,8 @@ async function showAutomod(guildId) {
           "amTimeoutMinutesHelp",
           h("input", { type: "number", min: 1, max: 40320, step: 1, required: true, value: config.timeoutMinutes, "data-path": "timeoutMinutes", "data-kind": "int" }),
         ),
-        field(
-          "amEscalationWarnings",
-          "amEscalationWarningsHelp",
-          h("input", { type: "number", min: 0, max: 20, step: 1, required: true, value: config.escalation.warnings, "data-path": "escalation.warnings", "data-kind": "int" }),
-        ),
-        field("amEscalationAction", null, automodSelect("escalation.action", ESCALATION_ACTIONS, config.escalation.action, "amEscalation_")),
-        field(
-          "amEscalationMinutes",
-          null,
-          h("input", { type: "number", min: 1, max: 40320, step: 1, required: true, value: config.escalation.timeoutMinutes, "data-path": "escalation.timeoutMinutes", "data-kind": "int" }),
-        ),
       ),
+      automodWarnSteps(guildId, data.settings.warnThresholds ?? []),
     ),
   ];
 

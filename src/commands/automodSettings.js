@@ -8,20 +8,19 @@
 //   /settings automod allow-site site:youtube.com            allow links to a website, or stop allowing it
 //   /settings automod exempt-role role:@Trusted              let a role skip automod, or stop letting it
 //   /settings automod exempt-channel channel:#memes          switch automod off in a channel, or back on
-//   /settings automod escalate warnings:3 action:<…>         punish members after too many warnings in 24 hours
 //   /settings automod show
+//
+// What happens after too many warnings is set with /settings warn-step (the
+// server's warning steps), and automod's warnings count toward it.
 
 import { ChannelType } from "discord.js";
 import {
   activeRules,
-  AutomodAction,
   AUTOMOD_ACTIONS,
   AUTOMOD_LIMITS,
   AUTOMOD_RULES,
   cleanDomain,
   cleanWord,
-  ESCALATION_ACTIONS,
-  EscalationAction,
   MAX_ALLOWED_DOMAINS,
   MAX_BANNED_WORDS,
   MAX_EXEMPT_CHANNELS,
@@ -44,10 +43,7 @@ const choice = (value, nameKey) => ({
 });
 const RULE_CHOICES = AUTOMOD_RULES.map((rule) => choice(rule, `automodRule_${rule}`));
 const ACTION_CHOICES = AUTOMOD_ACTIONS.map((action) => choice(action, `automodAction_${action}`));
-const ESCALATION_CHOICES = ESCALATION_ACTIONS.map((action) => choice(action, `automodEscalation_${action}`));
-const LIMIT_CHOICES = Object.keys(AUTOMOD_LIMITS)
-  .filter((name) => name !== "escalationWarnings")
-  .map((name) => choice(name, `automodLimit_${name}`));
+const LIMIT_CHOICES = Object.keys(AUTOMOD_LIMITS).map((name) => choice(name, `automodLimit_${name}`));
 
 const EXEMPTABLE_CHANNELS = [
   ChannelType.GuildText,
@@ -121,20 +117,6 @@ export function addAutomodGroup(command) {
             .addChannelTypes(...EXEMPTABLE_CHANNELS),
         ),
       )
-      .addSubcommand((sub) =>
-        withDescription(sub.setName("escalate"), "automodEscalateDescription")
-          .addIntegerOption((option) =>
-            withDescription(option.setName("warnings"), "automodWarningsOptionDescription")
-              .setRequired(true)
-              .setMinValue(AUTOMOD_LIMITS.escalationWarnings.min)
-              .setMaxValue(AUTOMOD_LIMITS.escalationWarnings.max),
-          )
-          .addStringOption((option) =>
-            withDescription(option.setName("action"), "automodEscalateActionOptionDescription").addChoices(
-              ...ESCALATION_CHOICES,
-            ),
-          ),
-      )
       .addSubcommand((sub) => withDescription(sub.setName("show"), "automodShowDescription")),
   );
 }
@@ -188,14 +170,7 @@ export function describeAutomod(config, text) {
     }),
   );
   lines.push(text("automodShowLimitsMore", { emojis: rules.emojis.limit, lines: rules.lines.limit }));
-  lines.push(
-    config.escalation.warnings > 0
-      ? text("automodShowEscalation", {
-          count: config.escalation.warnings,
-          action: escalationName(config.escalation, text),
-        })
-      : text("automodShowNoEscalation"),
-  );
+  lines.push(text("automodShowWarnSteps"));
   lines.push(text("automodShowAlwaysExempt"));
   return lines;
 }
@@ -216,11 +191,6 @@ function spoilerList(words) {
     count += 1;
   }
   return count < words.length ? `${shown} (+${words.length - count})` : shown;
-}
-
-function escalationName({ action, timeoutMinutes }, text) {
-  const name = text(`automodEscalation_${action}`);
-  return action === EscalationAction.TIMEOUT ? text("automodEscalationTimeoutFor", { action: name, minutes: timeoutMinutes }) : name;
 }
 
 const ruleNames = (config, text) => activeRules(config).map((rule) => text(`automodRule_${rule}`)).join(", ");
@@ -336,28 +306,6 @@ export async function runAutomodSubcommand(interaction, { guildSettings, text, r
       }
       await save({ ...config, exemptChannelIds: [...ids, channel.id] });
       return reply(Status.SUCCESS, "automodExemptChannelAdded", values);
-    }
-    case "escalate": {
-      const warnings = interaction.options.getInteger("warnings", true);
-      const requested = interaction.options.getString("action");
-      const action = ESCALATION_ACTIONS.includes(requested) ? requested : config.escalation.action;
-      const limit = AUTOMOD_LIMITS.escalationWarnings;
-      if (warnings < limit.min || warnings > limit.max) {
-        return reply(Status.REFUSED, "unexpected");
-      }
-      const next = { ...config, escalation: { ...config.escalation, warnings, action } };
-      await save(next);
-      if (warnings === 0) {
-        return reply(Status.SUCCESS, "automodEscalateOff");
-      }
-      // Only warnings count, so it does nothing unless a rule warns.
-      const warns = AUTOMOD_RULES.some((rule) => config.rules[rule].enabled && config.rules[rule].action === AutomodAction.WARN);
-      return reply(
-        Status.SUCCESS,
-        "automodEscalateSet",
-        { count: warnings, action: escalationName(next.escalation, text) },
-        warns ? [] : ["automodEscalateNoWarnRule"],
-      );
     }
     case "show":
       return show(describeAutomod(config, text));

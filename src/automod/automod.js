@@ -17,17 +17,15 @@
 import { PermissionFlagsBits, RESTJSONErrorCodes } from "discord.js";
 import { pickLanguage, translate } from "../i18n/i18n.js";
 import { codeBlock } from "../logs/actionLog.js";
-import { CaseAction } from "../moderation/caseStore.js";
 import { moderatorRoleId } from "../moderation/checks.js";
 import { buildActionLogEmbed, noModLog } from "../moderation/modLog.js";
+import { applyWarnThreshold, normalizeWarnThresholds } from "../moderation/warnThresholds.js";
 import { derivedSetting, Setting } from "../settings/guildSettings.js";
 import { getDiscordErrorCode } from "../utils/discordErrors.js";
 import {
   activeRules,
   AutomodAction,
   AutomodRule,
-  ESCALATION_WINDOW_MS,
-  EscalationAction,
   normalizeAutomod,
   RULE_LABELS,
   ruleSkips,
@@ -321,28 +319,16 @@ export function createAutomod({
     }
   }
 
-  // Times out, kicks or bans a member who reached the warning limit.
-  async function escalate(guild, member, moderator, config) {
-    const { warnings, action, timeoutMinutes } = config.escalation;
-    if (warnings <= 0) {
-      return;
-    }
-    const count = moderation.store.countCasesSince(guild.id, member.id, CaseAction.WARN, now() - ESCALATION_WINDOW_MS);
-    if (count < warnings) {
-      return;
-    }
-    const reason = `Automod: ${count} warnings in 24 hours`;
-    if (action === EscalationAction.TIMEOUT && member.moderatable !== false) {
-      await moderation.timeout({ guild, member, moderator, reason, durationMs: timeoutMinutes * 60_000 });
-    } else if (action === EscalationAction.KICK && member.kickable !== false) {
-      await moderation.kick({ guild, member, moderator, reason });
-    } else if (action === EscalationAction.BAN && member.bannable !== false) {
-      await moderation.ban({ guild, user: member.user, member, moderator, reason });
-    } else {
-      logger.warn("Automod couldn't punish a member who reached the warning limit; their role is above the bot's", {
+  // After an automod warning: the server's warning steps (Moderation page)
+  // apply to automod's warnings just like to /warn.
+  async function applyWarnSteps(guild, member, moderator) {
+    const thresholds = derivedSetting(guildSettings, guild.id, Setting.WARN_THRESHOLDS, normalizeWarnThresholds) ?? [];
+    const reached = await applyWarnThreshold({ guild, member, moderation, thresholds, moderator, now: now() });
+    if (reached?.failed) {
+      logger.warn("Automod couldn't apply a warning step; the member's role is above the bot's", {
         guildId: guild.id,
         userId: member.id,
-        action,
+        action: reached.threshold.action,
       });
     }
   }
@@ -412,7 +398,7 @@ export function createAutomod({
     try {
       if (action === AutomodAction.WARN) {
         await moderation.warn({ guild, member, moderator, reason });
-        await escalate(guild, member, moderator, config);
+        await applyWarnSteps(guild, member, moderator);
       } else if (action === AutomodAction.TIMEOUT) {
         await moderation.timeout({ guild, member, moderator, reason, durationMs: (ruleSettings.timeoutMinutes ?? config.timeoutMinutes) * 60_000 });
       } else {

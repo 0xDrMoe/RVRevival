@@ -48,8 +48,7 @@ export const COMMAND_PARTS = [
         example: ["/warn member:@Player reason:Spamming emotes in #general after a verbal warning"],
         tips: [
           "A warning doesn't stop the member chatting. Use `/timeout` for that.",
-          "Warnings count towards automod's **escalate** setting, so a member can be timed out, kicked or banned automatically after too many in 24 hours.",
-          "Set **Warning thresholds** on the dashboard's Moderation page to act on manual warnings too, like *3 warnings in 7 days → time out 1 hour*.",
+          "Every warning counts toward the server's **automatic punishments for warnings** (Moderation page, or `/settings warn-step`), like *3 warnings within 7 days → time out for 1 hour*. Warnings from automod count too.",
           "The reason box suggests the reasons your staff use most, so similar cases read the same.",
           "Not worth a warning, but worth remembering? Use `/note` instead.",
           "Gave it to the wrong person? An admin can delete it with `/case delete`. To remove every warning, an admin runs `/clearwarns`.",
@@ -79,7 +78,7 @@ export const COMMAND_PARTS = [
         tips: [
           "Good for context another mod will want later: a verbal warning, a suspected alt, a report that didn't need action.",
           "Works on people who already left, by user ID.",
-          "Notes aren't punishments, so they never count towards automod escalation.",
+          "Notes aren't warnings, so they never count toward the automatic punishments for warnings.",
         ],
       },
       {
@@ -778,9 +777,19 @@ export const COMMAND_PARTS = [
             ],
           },
           {
+            usage: "/settings warn-step warnings action [days] [timeout]",
+            what: "Adds or changes one **automatic punishment for warnings**: once a member has that many warnings within that many days, the bot times them out, kicks or bans them, and it goes on their record as a case. Warnings from `/warn`, the Warn app and automod all count.",
+            options: [
+              ["warnings", "How many warnings, 1 to 20. Each number can have one step; using it again replaces that step."],
+              ["action", "*Time out*, *Kick*, *Ban*, or *Remove this step* to delete the step for that number of warnings."],
+              ["days", "Count warnings from this many days back, 1 to 365. Default 30, or the step's current days when you change one."],
+              ["timeout", "For a timeout: how long, like `10m`, `1h` or `2d`, up to 28 days. Default `1h`."],
+            ],
+          },
+          {
             usage: "/settings clear setting",
             what: "Resets one setting, as if it was never set.",
-            options: [["setting", "The staff role, country channel, logs channel, mod-log channel, server-log channel, mod role, switched-off log events, ignored log channels, ignored log roles, log options, or automod (every automod setting at once)."]],
+            options: [["setting", "The staff role, country channel, logs channel, mod-log channel, server-log channel, mod role, switched-off log events, ignored log channels, ignored log roles, log options, automod (every automod setting at once), or the automatic punishments for warnings."]],
           },
           {
             usage: "/settings show",
@@ -830,14 +839,6 @@ export const COMMAND_PARTS = [
             options: [["channel", "The channel or category."]],
           },
           {
-            usage: "/settings automod escalate warnings [action]",
-            what: "Punishes members automatically once they collect that many warnings within 24 hours.",
-            options: [
-              ["warnings", "How many warnings, 1 to 20. `0` switches escalation off."],
-              ["action", "Time out (for the escalation timeout length), kick or ban."],
-            ],
-          },
-          {
             usage: "/settings automod show",
             what: "Lists every automod setting, only to you.",
             options: [],
@@ -849,12 +850,13 @@ export const COMMAND_PARTS = [
           "/settings log-event event:Voice: Joining voice enabled:False",
           "/settings log-option option:Compact entries enabled:True",
           "/settings automod rule rule:Invite links enabled:True action:Delete and warn",
-          "/settings automod escalate warnings:3 action:Time out",
+          "/settings warn-step warnings:3 action:Time out days:1 timeout:1h",
         ],
         tips: [
           "The bot warns you when it's missing permissions in a channel you pick.",
           "Deleted roles and channels are forgotten automatically.",
           "Never checked by automod: bots, the mod role, anyone with Manage Messages, exempt roles and channels, and the country channel.",
+          "Automod has no punishment ladder of its own: rules set to *Delete and warn* add warnings, and `/settings warn-step` decides what happens after too many.",
           "The **Permissions**, **Logging** and **Automod** pages do all of this with a preview, and more.",
         ],
       },

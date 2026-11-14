@@ -38,7 +38,8 @@ describe("normalizeAutomod", () => {
     expect(config.rules.bannedWords).toMatchObject({ enabled: true, action: "delete", words: ["bad word"] });
     expect(config.rules.links.allowedDomains).toEqual(["youtube.com"]);
     expect(config.exemptRoleIds).toEqual([ROLE_ID]);
-    expect(config.escalation).toEqual({ warnings: 3, action: "ban", timeoutMinutes: 60 });
+    // The old escalation moved to the warning steps, so it's dropped here.
+    expect(config).not.toHaveProperty("escalation");
     expect(activeRules(config)).toEqual(["bannedWords", "spam"]);
   });
 
@@ -99,7 +100,6 @@ describe("checkAutomod", () => {
     ["an unknown action", () => withPath(valid(), ["rules", "caps", "action"], "ban")],
     ["a number out of range", () => withPath(valid(), ["rules", "spam", "seconds"], 1)],
     ["a decimal", () => withPath(valid(), ["timeoutMinutes"], 2.5)],
-    ["a bad escalation", () => withPath(valid(), ["escalation", "action"], "nuke")],
     ["a too-long word", () => withPath(valid(), ["rules", "bannedWords", "words"], ["x".repeat(61)])],
     ["a bad website", () => withPath(valid(), ["rules", "links", "allowedDomains"], ["no spaces.com x"])],
     ["a foreign role", () => ({ ...valid(), exemptRoleIds: ["700000000000000009"] })],

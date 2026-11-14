@@ -1,7 +1,8 @@
 // Ready-made automod setups for the Automod page's Simple view. A preset sets
-// which rules are on, what they do, their numbers, the timeout length and
-// warning escalation, and resets each rule's advanced extras. It never touches
-// the banned words, allowed websites, exempt roles or channels, or the main switch.
+// which rules are on, what they do, their numbers and the timeout length, and
+// resets each rule's advanced extras. It never touches the banned words,
+// allowed websites, exempt roles or channels, or the main switch. What happens
+// after too many warnings is the Moderation page's warning steps.
 //
 // Plain data with no page code, so tests check every preset is a valid
 // automod setting (tests/automodPresets.test.js).
@@ -30,7 +31,6 @@ const PRESETS = {
       zalgo: rule(false, "delete"),
     },
     timeoutMinutes: 10,
-    escalation: { warnings: 0, action: "timeout", timeoutMinutes: 60 },
   },
   // Most servers: warns for invites and banned words, short timeouts for floods.
   balanced: {
@@ -48,7 +48,6 @@ const PRESETS = {
       zalgo: rule(true, "delete"),
     },
     timeoutMinutes: 10,
-    escalation: { warnings: 3, action: "timeout", timeoutMinutes: 60 },
   },
   // Big or public servers: every rule on, links only to allowed websites, longer timeouts.
   strict: {
@@ -66,7 +65,6 @@ const PRESETS = {
       zalgo: rule(true, "delete"),
     },
     timeoutMinutes: 30,
-    escalation: { warnings: 3, action: "timeout", timeoutMinutes: 1440 },
   },
 };
 
@@ -84,7 +82,6 @@ export function applyPreset(config, preset) {
     next.rules[name] = { ...next.rules[name], ...structuredClone(RULE_EXTRAS), ...settings };
   }
   next.timeoutMinutes = values.timeoutMinutes;
-  next.escalation = { ...values.escalation };
   return next;
 }
 
@@ -106,11 +103,7 @@ export function matchingPreset(config) {
           sameList(current.exemptChannelIds)
         );
       });
-      return (
-        rulesMatch &&
-        config.timeoutMinutes === values.timeoutMinutes &&
-        Object.entries(values.escalation).every(([key, value]) => config.escalation?.[key] === value)
-      );
+      return rulesMatch && config.timeoutMinutes === values.timeoutMinutes;
     }) ?? CUSTOM_PRESET
   );
 }

@@ -231,20 +231,27 @@ describe("automod", () => {
     expect(store.listCases(GUILD_ID, TARGET_ID)).toHaveLength(2);
   });
 
-  it("escalates after enough warnings in 24 hours", async () => {
-    await use(
-      automodWith({ bannedWords: { action: "warn", words: ["noob"] } }, { escalation: { warnings: 2, action: "kick", timeoutMinutes: 60 } }),
-    );
+  it("applies the server's warning steps to its own warnings", async () => {
+    await use(automodWith({ bannedWords: { action: "warn", words: ["noob"] } }));
+    await guildSettings.set(GUILD_ID, Setting.WARN_THRESHOLDS, [{ count: 2, days: 1, action: "kick" }]);
     await automod.handleMessage(message("noob"));
     expect(member.kick).not.toHaveBeenCalled();
     clock += PUNISH_COOLDOWN_MS;
     await automod.handleMessage(message("noob again"));
-    expect(member.kick).toHaveBeenCalledWith(expect.stringContaining("Automod: 2 warnings in 24 hours"));
+    expect(member.kick).toHaveBeenCalledWith(expect.stringContaining("Automatic punishment: 2 warnings within 1 day"));
     expect(store.listCases(GUILD_ID, TARGET_ID).map((entry) => entry.action)).toEqual([
       CaseAction.KICK,
       CaseAction.WARN,
       CaseAction.WARN,
     ]);
+  });
+
+  it("counts a moderator's earlier warning toward the steps too", async () => {
+    await use(automodWith({ bannedWords: { action: "warn", words: ["noob"] } }));
+    await guildSettings.set(GUILD_ID, Setting.WARN_THRESHOLDS, [{ count: 2, days: 7, action: "timeout", minutes: 15 }]);
+    await moderation.warn({ guild, member, moderator: { id: "9".repeat(18), tag: "mod" }, reason: "manual" });
+    await automod.handleMessage(message("noob"));
+    expect(member.timeout).toHaveBeenLastCalledWith(15 * 60_000, expect.stringContaining("Automatic punishment"));
   });
 
   it("checks edited messages, but not for spam", async () => {

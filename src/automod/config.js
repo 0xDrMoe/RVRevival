@@ -42,17 +42,18 @@ export const RULE_LABELS = {
 // What a rule does to a message that breaks it.
 export const AutomodAction = Object.freeze({
   DELETE: "delete", // delete it, tell the member in the channel and note it in the mod log
-  WARN: "warn", // delete it and warn the member (a case)
+  WARN: "warn", // delete it and warn the member (a case that counts toward the warning steps)
   TIMEOUT: "timeout", // delete it and time the member out (a case)
   LOG: "log", // leave it, only note it in the mod log (to try a rule out first)
 });
 
 export const AUTOMOD_ACTIONS = Object.values(AutomodAction);
 
-// What happens once a member collects enough warnings within ESCALATION_WINDOW_MS.
-export const EscalationAction = Object.freeze({ TIMEOUT: "timeout", KICK: "kick", BAN: "ban" });
-export const ESCALATION_ACTIONS = Object.values(EscalationAction);
-export const ESCALATION_WINDOW_MS = 24 * 60 * 60 * 1000;
+// What happens after too many warnings isn't automod's job any more: automod's
+// warnings count toward the server's warning steps (moderation/warnThresholds.js),
+// like every other warning. Older saves may still carry an `escalation`
+// object; it's ignored here and moved into the steps at startup
+// (moderation/warnStepsMigration.js).
 
 // Every number automod uses: where it lives in the configuration, its range and default.
 export const AUTOMOD_LIMITS = Object.freeze({
@@ -65,8 +66,6 @@ export const AUTOMOD_LIMITS = Object.freeze({
   emojis: { path: ["rules", "emojis", "limit"], min: 3, max: 100, default: 10 },
   lines: { path: ["rules", "lines", "limit"], min: 3, max: 100, default: 15 },
   timeoutMinutes: { path: ["timeoutMinutes"], min: 1, max: 40320, default: 10 },
-  escalationWarnings: { path: ["escalation", "warnings"], min: 0, max: 20, default: 0 },
-  escalationTimeoutMinutes: { path: ["escalation", "timeoutMinutes"], min: 1, max: 40320, default: 60 },
 });
 
 export const MAX_BANNED_WORDS = 200;
@@ -116,11 +115,6 @@ export function defaultAutomod() {
     exemptRoleIds: [],
     exemptChannelIds: [],
     timeoutMinutes: AUTOMOD_LIMITS.timeoutMinutes.default,
-    escalation: {
-      warnings: AUTOMOD_LIMITS.escalationWarnings.default,
-      action: EscalationAction.TIMEOUT,
-      timeoutMinutes: AUTOMOD_LIMITS.escalationTimeoutMinutes.default,
-    },
   };
 }
 
@@ -202,9 +196,6 @@ export function normalizeAutomod(saved) {
       Object.assign(config, withPath(config, limit.path, value));
     }
   }
-  if (ESCALATION_ACTIONS.includes(saved.escalation?.action)) {
-    config.escalation.action = saved.escalation.action;
-  }
   config.exemptRoleIds = validIds(saved.exemptRoleIds, MAX_EXEMPT_ROLES);
   config.exemptChannelIds = validIds(saved.exemptChannelIds, MAX_EXEMPT_CHANNELS);
   return config;
@@ -246,9 +237,6 @@ export function checkAutomod(value, { isRole, isChannel }) {
     if (!inRange(readPath(value, limit.path), limit)) {
       throw new InvalidAutomod(`${name} must be a whole number from ${limit.min} to ${limit.max}.`);
     }
-  }
-  if (!ESCALATION_ACTIONS.includes(value.escalation?.action)) {
-    throw new InvalidAutomod("Pick what happens after too many warnings.");
   }
   const words = readPath(value, ["rules", AutomodRule.BANNED_WORDS, "words"]);
   if (!Array.isArray(words) || words.length > MAX_BANNED_WORDS) {
