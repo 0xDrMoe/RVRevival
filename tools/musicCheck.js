@@ -17,6 +17,7 @@ import { createLyrics } from "../src/music/lyrics.js";
 import { cleanQuery } from "../src/music/match.js";
 import { fetchText, openUrl } from "../src/music/net.js";
 import { createSoundCloud, toTrack } from "../src/music/soundcloud.js";
+import { trackQuality } from "../src/music/quality.js";
 import { createResolver } from "../src/music/sources.js";
 import { checkFfmpeg, openAudio } from "../src/music/stream.js";
 import { trackLabel } from "../src/music/track.js";
@@ -97,7 +98,7 @@ await check("sc stream", async () => {
   const lines = [`"${first.title}" (id ${first.id}, ${policy}, ${transcodings} formats)`];
   for (const item of report) {
     const opened = item.address ? await probe(item.address).catch((error) => failed(error)) : `FAILED: ${item.error}`;
-    lines.push(`  ${item.protocol} ${item.mime || "?"}: ${opened}`);
+    lines.push(`  ${item.protocol} ${item.mime || "?"} (${item.kbps} kbps): ${opened}`);
   }
   lines.push(`  bot plays it: ${await decode(toTrack(first)).catch((error) => failed(error))}`);
   return lines.join("\n");
@@ -139,7 +140,8 @@ const library = createLibrary({ soundcloud, audius, bandcamp, jamendo });
 await check("/search", async () => (await library.search(query, { limit: 5 })).map((track) => `${trackLabel(track)} (${track.source})`).join(" | "));
 await check("/play", async () => {
   const track = await library.best(query);
-  return `${trackLabel(track)} (${track.source})`;
+  const quality = track.source === "soundcloud" ? "best of its formats, see sc stream" : `about ${trackQuality(track)} kbps MP3-equivalent`;
+  return `${trackLabel(track)} (${track.source}, ${quality})`;
 });
 
 const spotify = "https://open.spotify.com/track/0DiWol3AO6WpXZgp0goxAV";

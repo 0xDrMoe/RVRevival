@@ -19,9 +19,10 @@ import { createBandcamp, isBandcampUrl } from "./bandcamp.js";
 import { createCatalogs, isShortCatalogLink, parseCatalogLink } from "./catalogs.js";
 import { createJamendo } from "./jamendo.js";
 import { createLibrary } from "./library.js";
-import { findMatch, findOtherMatch } from "./match.js";
+import { findOtherMatch, findOtherScoredMatch, findScoredMatch } from "./match.js";
 import { expandLink as defaultExpandLink, MusicError, openUrl as defaultOpenUrl } from "./net.js";
-import { createSoundCloud, isSoundCloudUrl, toTrack } from "./soundcloud.js";
+import { MATCH_TIE, rankNearTies, trackQuality } from "./quality.js";
+import { createSoundCloud, isSoundCloudUrl, soundCloudQuality, toTrack } from "./soundcloud.js";
 import { makeTrack, Source } from "./track.js";
 
 const YOUTUBE_HOSTS = /(^|\.)(youtube\.com|youtu\.be|youtube-nocookie\.com)$/i;
@@ -206,20 +207,29 @@ export function createResolver({
     },
 
     // A Spotify, Apple Music or Deezer song, matched to a free copy
-    // (SoundCloud, then Audius and Jamendo); other tracks as they are.
-    // Throws MusicError("no-match"), or SoundCloud's error when it failed
-    // and nothing else had the song.
+    // (SoundCloud and Audius at once, then Jamendo); other tracks as they
+    // are. When both have about equally good matches, the better-sounding
+    // copy plays (Audius serves 320 kbps). Throws MusicError("no-match"), or
+    // SoundCloud's error when it failed and nothing else had the song.
     async ready(track) {
       if (track.source) {
         return track;
       }
       let soundcloudError = null;
-      const match = await findMatch(soundcloud, track.lookup).catch((error) => {
-        soundcloudError = error;
-        logger?.warn?.("SoundCloud couldn't be searched for a match", { error: error?.message });
-        return null;
-      });
-      const copy = match ? toTrack(match) : await findOtherMatch([audius, jamendo?.enabled ? jamendo : null].filter(Boolean), track.lookup);
+      const [onSoundCloud, onAudius] = await Promise.all([
+        findScoredMatch(soundcloud, track.lookup).catch((error) => {
+          soundcloudError = error;
+          logger?.warn?.("SoundCloud couldn't be searched for a match", { error: error?.message });
+          return null;
+        }),
+        audius ? findOtherScoredMatch([audius], track.lookup).catch(() => null) : null,
+      ]);
+      const options = [
+        ...(onSoundCloud ? [{ copy: toTrack(onSoundCloud.candidate), score: onSoundCloud.score, quality: soundCloudQuality(onSoundCloud.candidate) }] : []),
+        ...(onAudius ? [{ copy: onAudius.candidate, score: onAudius.score, quality: trackQuality(onAudius.candidate) }] : []),
+      ];
+      const copy =
+        options.length > 0 ? rankNearTies(options, { tie: MATCH_TIE })[0].copy : jamendo?.enabled ? await findOtherMatch([jamendo], track.lookup) : null;
       if (!copy) {
         // A SoundCloud 404 here means SoundCloud itself failed, not that the song is missing.
         if (soundcloudError instanceof MusicError && soundcloudError.reason === "not-found") {
