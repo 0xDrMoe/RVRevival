@@ -230,6 +230,10 @@ const caseJson = (moderationCase) => ({
 // Country roles are named after a country, the same test /country uses.
 const COUNTRY_NAMES = new Set(countryList.countries.map((country) => normalizeName(country.name)));
 
+// Roles in the order Server Settings > Roles shows them: highest first. Discord
+// lets two roles share a position; then the older one (smaller id) is higher.
+export const byRolePosition = (a, b) => b.position - a.position || (BigInt(a.id) < BigInt(b.id) ? -1 : BigInt(a.id) > BigInt(b.id) ? 1 : 0);
+
 const roleJson = ({ id, name, color, position, managed, hoist, mentionable, permissions, unicode_emoji: emoji }) => ({
   id,
   name,
@@ -987,7 +991,7 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
         ? guild.roles
             .filter((role) => role.id !== guildId)
             .map(roleJson)
-            .sort((a, b) => b.position - a.position)
+            .sort(byRolePosition)
         : [],
       // The server's own emojis, for the emoji pickers (GET /guilds/:id includes them).
       emojis: manage ? (guild.emojis ?? []).filter((emoji) => emoji.id && emoji.name).map(emojiJson) : [],
@@ -1246,7 +1250,7 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
             roles: member.roles
               .map((roleId) => rolesById.get(roleId))
               .filter(Boolean)
-              .sort((a, b) => b.position - a.position)
+              .sort(byRolePosition)
               .map(({ id, name, color }) => ({ id, name, color })),
           }
         : null,

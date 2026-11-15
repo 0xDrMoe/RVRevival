@@ -2082,15 +2082,26 @@ const channelItem = (channel, channels) => ({
   group: channels.find((other) => other.id === channel.parentId)?.name,
 });
 
-// A role as a picker or checklist item. Pickers put country and bot roles under
-// their own headings, and checklists fold country roles away.
+// A role as a picker or checklist item. Roles keep the server's order (data.roles
+// is highest first, like Server Settings > Roles); bot roles stay in their place
+// with a "Bot" tag. Pickers put country roles under their own heading at the end,
+// and checklists fold them away.
 const roleItem = (role, { mention = true, dot = false } = {}) => ({
   id: role.id,
-  label: mention ? `@${role.name}` : role.name,
+  label: `${mention ? `@${role.name}` : role.name}${role.managed ? ` (${t("roleBot")})` : ""}`,
   dot: dot ? roleDot(role) : undefined,
-  group: role.managed ? t("roleKind_bot") : role.country ? t("roleKind_country") : undefined,
+  group: role.country ? t("roleKind_country") : undefined,
   country: Boolean(role.country),
 });
+
+// Role ids sorted the way the server orders its roles (highest first), whatever
+// order they were saved or picked in. `roles` is data.roles or a list of role
+// items in that order; ids of deleted roles go last.
+function inRoleOrder(ids, roles) {
+  const rank = new Map(roles.map((role, index) => [role.id, index]));
+  const at = (id) => rank.get(id) ?? roles.length;
+  return [...ids].sort((a, b) => at(a) - at(b));
+}
 
 const roleOptions = (data) => data.roles.map((role) => roleItem(role));
 const postableChannels = (data) =>
@@ -6628,13 +6639,13 @@ function describePermissionSetting(setting, value, data) {
     case "staffRoleId":
       return roleName(data, value);
     case "dashboardRoleIds":
-      return value.map((id) => roleName(data, id)).join(", ");
+      return inRoleOrder(value, data.roles).map((id) => roleName(data, id)).join(", ");
     case "permissionPreset":
       return presetName(value);
     case "commandRules": {
       const given = Object.entries(value).filter(([, rule]) => rule.roleIds.length > 0);
       return given.length > 0
-        ? given.map(([name, rule]) => `/${name}: ${rule.roleIds.map((id) => roleName(data, id)).join(", ")}`).join(" · ")
+        ? given.map(([name, rule]) => `/${name}: ${inRoleOrder(rule.roleIds, data.roles).map((id) => roleName(data, id)).join(", ")}`).join(" · ")
         : t("permValueNoGrants");
     }
     default:
@@ -8260,7 +8271,7 @@ function roleChooser({ className, roles, value = [], emptyKey, labelKey }) {
     chips.replaceChildren(
       ...(chosen.length === 0
         ? [empty]
-        : chosen.map((id) => {
+        : inRoleOrder(chosen, roles).map((id) => {
             const chip = h(
               "span",
               { class: "badge role-chip", "data-id": id },
@@ -8869,7 +8880,7 @@ function ticketPanelEditor(guildId, data, panel, { onSaved }) {
       h("button", { type: "button", class: "ghost small", onclick: () => go(TICKET_STEPS.findIndex((step) => step.id === stepId)) }, icon("edit", "icon small"), h("span", {}, t("wizardEdit")));
     const chip = h("span", { class: "color-dot" });
     chip.style.setProperty("--swatch", hexColor(now.color ?? defaults.color));
-    const roleNames = (ids, emptyKey) => (ids.length > 0 ? ids.map((id) => roles.find((role) => role.id === id)?.label ?? t("unknownOption", { id })).join(", ") : t(emptyKey));
+    const roleNames = (ids, emptyKey) => (ids.length > 0 ? inRoleOrder(ids, roles).map((id) => roles.find((role) => role.id === id)?.label ?? t("unknownOption", { id })).join(", ") : t(emptyKey));
     const where = readPanel();
     const lines = [
       ["setup", t("ticketPanelChannel"), where.channelId ? channelName(where.channelId) : t("ticketPanelNotPosted")],
@@ -8975,7 +8986,7 @@ function ticketPanelManager(guildId, data) {
     const found = data.channels.find((entry) => entry.id === id);
     return found ? `#${found.name}` : t("unknownOption", { id });
   };
-  const roleNames = (ids) => ids.map((id) => `@${data.roles.find((role) => role.id === id)?.name ?? t("unknownOption", { id })}`).join(", ");
+  const roleNames = (ids) => inRoleOrder(ids, data.roles).map((id) => `@${data.roles.find((role) => role.id === id)?.name ?? t("unknownOption", { id })}`).join(", ");
 
   function savedSettings() {
     state.cache = { guildId, data, at: Date.now() };
