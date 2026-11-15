@@ -235,6 +235,8 @@ Admins set it up on the dashboard's **Welcome & leave** and **Roles & panels** p
 
 Giving roles needs **Manage Roles** and the bot's role above the autoroles.
 
+Autoroles not given? Run `npm run autoroles:check` (or `npm run autoroles:check -- <server ID>`) on the server. It reads the saved autoroles and asks Discord for the roles, the bot's permissions, the Server Members Intent, rules screening and Onboarding, then says for each autorole whether the bot can give it and why not.
+
 **Roles on rejoin.** `/welcome persist enabled:true` (or the switch on the dashboard's **Roles & panels** page) makes the bot remember members' roles when they leave and give them back when they rejoin, so leaving can't shake off a restricted role. Roles with moderator permissions (ban, kick, manage anything, mention everyone…), bot and booster roles, and roles above the bot are never given back automatically; the dashboard can also list roles to never give back. Saved roles are used once and forgotten after a year. Quarantined members keep their [quarantine](#quarantine) instead.
 
 **Community servers should use Onboarding.** Discord's own Onboarding (Server Settings → Onboarding) gives new members roles and lets them pick their own, so on a Community server we recommend it over autoroles and role panels. `/welcome autorole`, `/welcome show`, `/rolepanel create`, saving a new panel in `/rolepanel setup` and the dashboard's Roles & panels page say so when the server is a Community server. Autoroles and role panels are there for servers that don't use Onboarding.
