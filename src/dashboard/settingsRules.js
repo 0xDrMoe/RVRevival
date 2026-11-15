@@ -94,6 +94,7 @@ export const SETTING_RULES = Object.freeze({
   [Setting.WELCOME_DM_EMBED]: { kind: "welcomeEmbed", label: "Welcome DM embed" },
   [Setting.AUTOROLES]: { kind: "autoroles", label: "Autoroles" },
   [Setting.BOT_AUTOROLES]: { kind: "autoroles", label: "Bot autoroles" },
+  [Setting.AUTOROLES_ON_JOIN]: { kind: "flag", label: "Give autoroles right away" },
   [Setting.MILESTONES]: { kind: "milestones", types: POSTING_CHANNELS, label: "Member milestones" },
   [Setting.INVITE_TRACKING]: { kind: "flag", label: "Invite tracking" },
   [Setting.DEHOIST]: { kind: "flag", label: "Dehoist names" },

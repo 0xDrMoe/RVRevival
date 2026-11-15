@@ -1938,6 +1938,8 @@
   "inviteTrackingHelp": "Para /invites member e /invites top. O bot precisa de Gerenciar servidor para ler os convites; sem isso, as entradas são salvas sem quem convidou.",
   "sectionBotAutoroles": "Cargos automáticos de bots",
   "botAutorolesHelp": "Cargos que cada bot novo recebe em vez dos de membros (até {max}), como um cargo Bots. A integração não cobre bots.",
+  "autorolesOnJoin": "Dar os cargos automáticos na hora",
+  "autorolesOnJoinHelp": "Ligado: os membros recebem os cargos automáticos assim que entram, mesmo antes de aceitarem as regras. Desligado: se o servidor pede para aceitar as regras primeiro (Configurações do servidor > Configuração de segurança ou Integração), recebem depois de aceitar. Sem tela de regras, recebem ao entrar nos dois casos.",
   "sectionDehoist": "Remover símbolos de nomes",
   "dehoistOn": "Corrigir nomes que começam com símbolos",
   "dehoistHelp": "Nomes como !!!aaa ficam acima de todos. Novos membros e mudanças de nome perdem os símbolos do início. /dehoist run corrige quem já está aqui. Precisa de Gerenciar apelidos.",

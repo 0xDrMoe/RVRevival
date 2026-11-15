@@ -4598,6 +4598,12 @@ async function showRoles(guildId) {
         "green",
         h("p", { class: "help" }, t("autorolesHelp", { max: MAX_AUTOROLES })),
         checkList({ name: "autorole", items: givable, checked: data.settings.autoroleIds ?? [], filterKey: "filterRoles" }),
+        h(
+          "label",
+          { class: "switch-card" },
+          h("span", { class: "switch-text" }, h("strong", {}, t("autorolesOnJoin")), h("span", { class: "help" }, t("autorolesOnJoinHelp"))),
+          h("span", { class: "switch" }, h("input", { id: "autorolesOnJoin", type: "checkbox", role: "switch", checked: Boolean(data.settings.autorolesOnJoin), "aria-label": t("autorolesOnJoin") })),
+        ),
       ),
       card(
         t("sectionBotAutoroles"),
@@ -4643,6 +4649,8 @@ async function showRoles(guildId) {
     fields: {
       autoroleIds: checkedList("autorole"),
       botAutoroleIds: checkedList("botAutorole"),
+      // Off (wait for the rules) is the default, saved as no value.
+      autorolesOnJoin: (form) => (form.querySelector("#autorolesOnJoin").checked ? true : null),
       rolePersist: readRolePersist,
       // On is the default, saved as no value.
       roleConfirmations: (form) => (form.querySelector("#roleConfirmDefault").checked ? null : false),

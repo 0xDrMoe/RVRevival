@@ -173,6 +173,14 @@ describe("welcomer", () => {
     expect(accepted.roles.add).toHaveBeenCalledWith([MEMBER_ROLE_ID], "Autorole");
   });
 
+  it("gives pending members their autoroles on join when the server switched that on", async () => {
+    const guild = fakeGuild();
+    const guildSettings = await settingsWith({ [Setting.AUTOROLES]: [MEMBER_ROLE_ID], [Setting.AUTOROLES_ON_JOIN]: true });
+    const pending = fakeMember(guild, { pending: true });
+    await createWelcomer({ guildSettings, logger: fakeLogger() }).memberJoined(pending);
+    expect(pending.roles.add).toHaveBeenCalledWith([MEMBER_ROLE_ID], "Autorole");
+  });
+
   it("warns once when it can't give roles", async () => {
     const guild = fakeGuild({ canManageRoles: false });
     const guildSettings = await settingsWith({ [Setting.AUTOROLES]: [MEMBER_ROLE_ID] });

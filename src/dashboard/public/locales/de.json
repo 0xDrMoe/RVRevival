@@ -1938,6 +1938,8 @@
   "inviteTrackingHelp": "Für /invites member und /invites top. Der Bot braucht Server verwalten, um Einladungen zu lesen; ohne das werden Beitritte ohne Einladenden gespeichert.",
   "sectionBotAutoroles": "Automatische Bot-Rollen",
   "botAutorolesHelp": "Rollen, die jeder neue Bot statt der Mitglieder-Rollen bekommt (bis zu {max}), etwa eine Bots-Rolle. Onboarding gilt nicht für Bots.",
+  "autorolesOnJoin": "Auto-Rollen sofort vergeben",
+  "autorolesOnJoinHelp": "An: Mitglieder bekommen die Auto-Rollen sofort beim Beitritt, noch bevor sie die Serverregeln akzeptieren. Aus: Wenn dein Server verlangt, zuerst die Regeln zu akzeptieren (Servereinstellungen > Sicherheitseinrichtung oder Onboarding), bekommen sie sie danach. Ohne Regelabfrage gibt es sie in beiden Fällen beim Beitritt.",
   "sectionDehoist": "Namen entschärfen (Dehoist)",
   "dehoistOn": "Namen mit Symbolen am Anfang korrigieren",
   "dehoistHelp": "Namen wie !!!aaa stehen ganz oben. Neue Mitglieder und Umbenennungen verlieren die Symbole am Anfang. /dehoist run korrigiert alle, die schon da sind. Braucht Spitznamen verwalten.",

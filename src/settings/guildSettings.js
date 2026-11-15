@@ -50,6 +50,7 @@ export const Setting = Object.freeze({
   WELCOME_DM_EMBED: "welcomeDmEmbed", // like WELCOME_EMBED, for the welcome DM
   AUTOROLES: "autoroleIds", // roles given to every new member, a list of IDs
   BOT_AUTOROLES: "botAutoroleIds", // roles given to every new bot, a list of IDs
+  AUTOROLES_ON_JOIN: "autorolesOnJoin", // true: give autoroles on join, even before the member accepts the rules (membership screening)
   MILESTONES: "memberMilestones", // member-count milestone posts, { channelId, every, message } (see community/milestones.js)
   INVITE_TRACKING: "inviteTracking", // true: remember who invited each new member for /invites (see members/inviteStats.js)
   DEHOIST: "dehoist", // true: rename members whose names start with symbols to sort above others (see moderation/dehoist.js)

@@ -1938,6 +1938,8 @@
   "inviteTrackingHelp": "Para /invites member y /invites top. El bot necesita Gestionar servidor para leer las invitaciones; sin él, las entradas se guardan sin invitador.",
   "sectionBotAutoroles": "Roles automáticos de bots",
   "botAutorolesHelp": "Roles que recibe cada bot nuevo en vez de los de miembros (hasta {max}), como un rol Bots. La incorporación no cubre bots.",
+  "autorolesOnJoin": "Dar los roles automáticos al instante",
+  "autorolesOnJoinHelp": "Activado: los miembros reciben los roles automáticos en cuanto entran, incluso antes de aceptar las reglas del servidor. Desactivado: si tu servidor pide aceptar las reglas primero (Ajustes del servidor > Configuración de seguridad u Onboarding), los reciben al aceptarlas. Sin pantalla de reglas, se dan al entrar en ambos casos.",
   "sectionDehoist": "Quitar símbolos de nombres",
   "dehoistOn": "Arreglar nombres que empiezan con símbolos",
   "dehoistHelp": "Nombres como !!!aaa salen arriba de todos. Los nuevos y los cambios de nombre pierden los símbolos del inicio. /dehoist run arregla a los que ya están. Necesita Gestionar apodos.",
