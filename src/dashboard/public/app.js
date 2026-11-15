@@ -4892,6 +4892,339 @@ async function showColors(guildId) {
 }
 
 // The color list: add, change, delete, add a pack, sort, and the picture.
+// The Color roles page's "Create colors" wizard: what to make (one color with a
+// colour picker, or several pasted as hex codes), its style, where it goes in
+// the list, and a review with the real list picture before anything is made.
+const COLOR_WIZARD_STEPS = [
+  { id: "colors", titleKey: "colorWizardColors", helpKey: "colorWizardColorsHelp", icon: "palette", tone: "purple" },
+  { id: "style", titleKey: "colorWizardStyle", helpKey: "colorWizardStyleHelp", icon: "sparkles", tone: "pink" },
+  { id: "place", titleKey: "colorWizardPlace", helpKey: "colorWizardPlaceHelp", icon: "list", tone: "blue" },
+  { id: "review", titleKey: "colorWizardReview", helpKey: "colorWizardReviewHelp", icon: "check", tone: "green" },
+];
+// The most one run can add (src/colors/drafts.js MAX_DRAFTS).
+const COLOR_WIZARD_MAX = 25;
+// Quick picks that read well on Discord's dark and light themes.
+const COLOR_ROLE_SWATCHES = ["#e53935", "#fb8c00", "#fdd835", "#43a047", "#00acc1", "#1e88e5", "#8e24aa", "#ec407a", "#bdbdbd"];
+const randomHex = () => `#${Math.floor(Math.random() * 0x1000000).toString(16).padStart(6, "0")}`;
+const sameHex = (a, b) => normalHex(a ?? "") === normalHex(b ?? "");
+
+// Pasted lines as the server reads them (src/colors/drafts.js parseColorLines):
+// "Name #hex [#hex2]", "#hex Name" or "#hex". Kept in step so the review matches.
+function readColorLines(text) {
+  const HEX = /^#?(?:[0-9a-f]{3}|[0-9a-f]{6})$/i;
+  return text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const words = line.split(/[\s,;]+/).filter(Boolean);
+      const codes = words.filter((word) => word.startsWith("#") || (HEX.test(word) && /\d/.test(word)));
+      return { name: words.filter((word) => !codes.includes(word)).join(" "), hex: codes[0] ?? "", hex2: codes[1] ?? null, extra: codes.length > 2 };
+    });
+}
+
+// A member name in a role colour (or gradient), as Discord shows it.
+function colorNameSample(name, hex, hex2) {
+  const text = h("strong", { class: "color-sample-name" }, name);
+  if (hex2) {
+    text.classList.add("gradient");
+    text.style.backgroundImage = `linear-gradient(90deg, ${hex}, ${hex2})`;
+  } else {
+    text.style.color = hex;
+  }
+  return text;
+}
+
+// `getInfo()` gives the page's { colors, gradients, max }; `onCreated(result)`
+// runs with the server's answer ({ colors } now, or { adding } for several).
+function colorWizard(guildId, getInfo, { onCreated, onCancel }) {
+  const mode = { value: "one" };
+  const modeOne = h("input", { type: "radio", name: "cwMode", value: "one", checked: true });
+  const modeMany = h("input", { type: "radio", name: "cwMode", value: "many" });
+  const modePicker = h(
+    "div",
+    { class: "preset-grid", role: "radiogroup", "aria-label": t("colorWizardMode") },
+    h("label", { class: "preset-option" }, modeOne, h("span", { class: "preset-text" }, h("strong", {}, t("colorWizardOne")), h("span", { class: "help" }, t("colorWizardOneHelp")))),
+    h("label", { class: "preset-option" }, modeMany, h("span", { class: "preset-text" }, h("strong", {}, t("colorWizardMany")), h("span", { class: "help" }, t("colorWizardManyHelp")))),
+  );
+
+  const start = randomHex();
+  const name = h("input", { id: "cwName", type: "text", maxLength: 32, autocomplete: "off", placeholder: t("colorWizardNameAuto") });
+  const primary = colorChooser({ id: "cwHex", value: Number.parseInt(start.slice(1), 16), fallback: Number.parseInt(start.slice(1), 16), followKey: "colorWizardFollow", resetKey: "colorWizardRandom", swatches: COLOR_ROLE_SWATCHES, reset: false });
+  const hexOf = (chooser) => normalHex(chooser.querySelector("input[type=color]").value) ?? "#000000";
+  const setHex = (chooser, hex) => {
+    const box = chooser.querySelector("input[type=color]");
+    box.value = hex;
+    box.dispatchEvent(new Event("input", { bubbles: true }));
+  };
+  const randomButton = h("button", { type: "button", class: "ghost small", onclick: () => setHex(primary, randomHex()) }, icon("refresh", "icon small"), h("span", {}, t("colorWizardRandom")));
+  const lines = h("textarea", { id: "cwLines", rows: 8, spellcheck: false, placeholder: "Sky #4fc3f7\nSunset #ff7043 #ab47bc\n#43a047" });
+  const lineCount = h("span", { class: "muted" });
+  const oneFields = h(
+    "div",
+    {},
+    field("colorName", "colorWizardNameHelp", name),
+    h("div", { class: "field" }, h("span", { class: "field-label" }, t("colorWizardHex")), primary, h("div", { class: "toolbar" }, randomButton), h("span", { class: "help" }, t("colorWizardHexHelp"))),
+  );
+  const manyFields = h("div", { hidden: true }, field("colorWizardLines", "colorWizardLinesHelp", lines), lineCount);
+
+  // Style: a gradient for one color (servers with enhanced role styles only).
+  const gradientOn = h("input", { id: "cwGradient", type: "checkbox", role: "switch", "aria-label": t("colorGradient") });
+  const secondary = colorChooser({ id: "cwHex2", value: 0xffffff, fallback: 0xffffff, followKey: "colorWizardFollow", resetKey: "colorWizardRandom", swatches: COLOR_ROLE_SWATCHES, reset: false });
+  const gradientCard = h(
+    "label",
+    { class: "switch-card" },
+    h("span", { class: "switch-text" }, h("strong", {}, t("colorGradient")), h("span", { class: "help" }, t("colorWizardGradientHelp"))),
+    h("span", { class: "switch" }, gradientOn),
+  );
+  const secondaryField = h("div", { class: "field", hidden: true }, h("span", { class: "field-label" }, t("colorWizardHex2")), secondary);
+  const noGradients = h("p", { class: "help notice" }, t("colorWizardNoGradients"));
+  const manyStyle = h("p", { class: "help", hidden: true }, t("colorWizardManyStyle"));
+  const samples = h("div", { class: "color-samples" });
+
+  // Place: where the new colors go. Color 1 is the highest role.
+  const place = h("select", { id: "cwPlace" });
+  const placeHelp = h("p", { class: "help" });
+
+  const reviewRows = h("div", { class: "color-review" });
+  const reviewImage = h("div", { class: "color-preview" });
+  const create = h("button", { class: "primary", type: "submit" }, icon("plus", "icon small"), h("span", {}, t("colorWizardCreate")));
+  const cancel = h("button", { class: "ghost", type: "button", onclick: () => onCancel() }, t("cancel"));
+  const back = h("button", { class: "ghost", type: "button", onclick: () => go(current - 1) }, icon("chevronLeft", "icon small"), h("span", {}, t("wizardBack")));
+  const next = h("button", { class: "primary", type: "button", onclick: () => checkStep(current) && go(current + 1) }, h("span", {}, t("wizardNext")), icon("chevronRight", "icon small"));
+  const position = h("span", { class: "muted wizard-position" });
+
+  const stepBodies = {
+    colors: [modePicker, oneFields, manyFields],
+    style: [gradientCard, noGradients, secondaryField, manyStyle, h("span", { class: "field-label" }, t("colorWizardSamples")), samples],
+    place: [field("colorWizardPlace", null, place), placeHelp],
+    review: [reviewRows, reviewImage],
+  };
+  const sections = COLOR_WIZARD_STEPS.map((step, index) =>
+    h(
+      "div",
+      { class: "editor-section wizard-panel", id: `cw-step-${step.id}`, role: "group", "aria-labelledby": `cw-step-title-${step.id}`, hidden: index !== 0 },
+      h("h3", { class: "editor-section-title", id: `cw-step-title-${step.id}` }, iconChip(step.icon, step.tone, "sm"), t(step.titleKey)),
+      h("p", { class: "help" }, t(step.helpKey)),
+      ...stepBodies[step.id],
+    ),
+  );
+  const stepButtons = COLOR_WIZARD_STEPS.map((step, index) =>
+    h(
+      "button",
+      { type: "button", class: "wizard-step", "aria-controls": `cw-step-${step.id}`, "aria-label": t(step.titleKey), title: t(step.titleKey), onclick: () => go(index) },
+      h("span", { class: "wizard-step-number", "aria-hidden": "true" }, String(index + 1)),
+      h("span", { class: "wizard-step-label" }, t(step.titleKey)),
+    ),
+  );
+  const stepBar = h("ol", { class: "wizard-steps", "aria-label": t("colorWizardTitle") }, stepButtons.map((button) => h("li", {}, button)));
+
+  let current = 0;
+  const seen = new Set([0]);
+  function go(index, focus = true) {
+    current = Math.max(0, Math.min(COLOR_WIZARD_STEPS.length - 1, index));
+    seen.add(current);
+    sections.forEach((section, number) => (section.hidden = number !== current));
+    stepButtons.forEach((button, number) => {
+      button.classList.toggle("done", seen.has(number) && number !== current);
+      if (number === current) {
+        button.setAttribute("aria-current", "step");
+      } else {
+        button.removeAttribute("aria-current");
+      }
+    });
+    const last = current === COLOR_WIZARD_STEPS.length - 1;
+    back.disabled = current === 0;
+    next.hidden = last;
+    create.hidden = !last;
+    position.textContent = t("wizardPosition", { step: current + 1, total: COLOR_WIZARD_STEPS.length });
+    if (last) {
+      loadReview();
+    }
+    if (focus) {
+      sections[current].querySelector(".editor-section-title").scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
+  }
+
+  // The colors as typed, in the shape the server takes.
+  function drafts() {
+    if (mode.value === "many") {
+      return readColorLines(lines.value);
+    }
+    const hex = hexOf(primary);
+    return [{ name: name.value.trim(), hex, hex2: gradientOn.checked && getInfo().gradients && !sameHex(hexOf(secondary), hex) ? hexOf(secondary) : null }];
+  }
+  const placeValue = () => (place.value === "end" ? null : Number(place.value));
+
+  function checkStep(index) {
+    if (COLOR_WIZARD_STEPS[index].id !== "colors") {
+      return true;
+    }
+    const field = mode.value === "many" ? lines : primary.querySelector(".color-hex");
+    if (mode.value === "many") {
+      const count = readColorLines(lines.value).length;
+      lines.setCustomValidity(count === 0 ? t("colorWizardLinesEmpty") : count > COLOR_WIZARD_MAX ? t("colorWizardLinesTooMany", { max: COLOR_WIZARD_MAX }) : "");
+    }
+    if (!field.checkValidity()) {
+      field.reportValidity();
+      return false;
+    }
+    return true;
+  }
+
+  function refresh() {
+    mode.value = modeMany.checked ? "many" : "one";
+    const many = mode.value === "many";
+    oneFields.hidden = many;
+    manyFields.hidden = !many;
+    lines.setCustomValidity("");
+    const info = getInfo();
+    const count = many ? readColorLines(lines.value).length : 1;
+    lineCount.textContent = many ? t("colorWizardLineCount", { count, max: COLOR_WIZARD_MAX }) : "";
+    gradientCard.hidden = many || !info.gradients;
+    noGradients.hidden = many || info.gradients;
+    secondaryField.hidden = many || !info.gradients || !gradientOn.checked;
+    manyStyle.hidden = !many;
+    // How each new color's name looks on Discord's dark and light themes.
+    const shown = drafts().filter((draft) => normalHex(draft.hex)).slice(0, 6);
+    samples.replaceChildren(
+      ...["dark", "light"].map((theme) =>
+        h(
+          "div",
+          { class: `color-sample ${theme}` },
+          shown.length === 0
+            ? h("span", { class: "muted" }, t("colorWizardNoSample"))
+            : shown.map((draft) => h("div", { class: "color-sample-line" }, colorNameSample(draft.name || t("colorWizardSampleName"), normalHex(draft.hex), draft.hex2 && info.gradients ? normalHex(draft.hex2) : null), h("span", {}, t("colorWizardSampleText")))),
+        ),
+      ),
+    );
+    // Place options follow the current list.
+    const keep = place.value;
+    place.replaceChildren(
+      h("option", { value: "end" }, t("colorWizardPlaceEnd", { number: info.colors.length + 1 })),
+      info.colors.length > 0 ? h("option", { value: "1" }, t("colorWizardPlaceTop")) : null,
+      ...info.colors.slice(1).map((color, index) => h("option", { value: String(index + 2) }, t("colorWizardPlaceBefore", { number: index + 2, name: color.name }))),
+    );
+    place.value = [...place.options].some((option) => option.value === keep) ? keep : "end";
+    placeHelp.textContent = t(place.value === "end" ? "colorWizardPlaceEndHelp" : "colorWizardPlaceAtHelp", { count });
+    if (current === COLOR_WIZARD_STEPS.length - 1) {
+      loadReview();
+    }
+  }
+
+  // The review asks the server, so names, checks and the picture match what
+  // would really be made. Typing waits a moment before asking again.
+  let reviewTimer;
+  let reviewToken = 0;
+  let reviewOk = false;
+  function loadReview() {
+    clearTimeout(reviewTimer);
+    create.disabled = true;
+    reviewTimer = setTimeout(async () => {
+      const token = ++reviewToken;
+      try {
+        const result = await api(`/api/guilds/${guildId}/colors/preview`, { method: "POST", body: { colors: drafts(), position: placeValue() } });
+        if (token !== reviewToken) {
+          return;
+        }
+        showReview(result);
+      } catch (error) {
+        if (token === reviewToken) {
+          reviewRows.replaceChildren(h("p", { class: "muted" }, t("colorWizardReviewFailed")));
+          failed(error);
+        }
+      }
+    }, 250);
+  }
+  function showReview(result) {
+    const typed = drafts();
+    const problems = result.problems.map((problem) =>
+      h(
+        "li",
+        { class: "color-problem" },
+        icon("alert", "icon small"),
+        h("span", {}, t(`colorProblem_${problem.problem}`, { number: problem.index + 1, line: typed[problem.index]?.name || typed[problem.index]?.hex || "", name: problem.name ?? "", max: getInfo().max })),
+      ),
+    );
+    reviewOk = result.colors.length > 0 && result.problems.length === 0;
+    create.disabled = !reviewOk;
+    const edit = (stepId) => {
+      const step = COLOR_WIZARD_STEPS.findIndex((entry) => entry.id === stepId);
+      return h("button", { type: "button", class: "ghost small", onclick: () => go(step) }, icon("edit", "icon small"), h("span", {}, `${t("wizardEdit")}: ${t(COLOR_WIZARD_STEPS[step].titleKey)}`));
+    };
+    // replaceChildren would write a skipped part as the text "null".
+    const parts = [
+      result.colors.length > 0
+        ? h(
+            "ol",
+            { class: "color-rows" },
+            result.colors.map((color) => {
+              const swatch = h("span", { class: "color-swatch", "aria-hidden": "true" });
+              swatch.style.background = color.hex2 ? `linear-gradient(90deg, ${color.hex}, ${color.hex2})` : color.hex;
+              return h(
+                "li",
+                { class: "color-row" },
+                h("span", { class: "color-number" }, `${color.number}.`),
+                swatch,
+                h("strong", { class: "grow" }, color.name),
+                h("code", {}, color.hex2 ? `${color.hex} → ${color.hex2}` : color.hex),
+              );
+            }),
+          )
+        : h("p", { class: "muted" }, t("colorWizardNothing")),
+      problems.length > 0 ? h("ul", { class: "color-problems" }, problems) : null,
+      h("div", { class: "toolbar" }, edit("colors"), edit("style"), edit("place")),
+      h("p", { class: "help" }, t(result.colors.length > 1 ? "colorWizardCreateManyHelp" : "colorWizardCreateHelp", { count: result.colors.length })),
+    ];
+    reviewRows.replaceChildren(...parts.filter(Boolean));
+    reviewImage.replaceChildren(
+      ...(result.image ? [h("p", { class: "help" }, t("colorWizardPicture")), h("img", { class: "color-preview-image", src: result.image, alt: t("colorPreviewAlt") })] : []),
+    );
+  }
+
+  const form = h(
+    "form",
+    {
+      class: "color-wizard wizard",
+      noValidate: true,
+      oninput: () => refresh(),
+      onchange: () => refresh(),
+      onsubmit: async (event) => {
+        event.preventDefault();
+        if (!reviewOk || !checkStep(0)) {
+          return;
+        }
+        setBusy(create, true);
+        try {
+          const colors = drafts();
+          const result =
+            colors.length === 1 && mode.value === "one"
+              ? await api(`/api/guilds/${guildId}/colors`, { method: "POST", body: { ...colors[0], position: placeValue() } })
+              : await api(`/api/guilds/${guildId}/colors/batch`, { method: "POST", body: { colors, position: placeValue() } });
+          name.value = "";
+          lines.value = "";
+          setHex(primary, randomHex());
+          seen.clear();
+          go(0, false);
+          refresh();
+          onCreated(result);
+        } catch (error) {
+          failed(error);
+        } finally {
+          setBusy(create, false);
+          create.disabled = !reviewOk;
+        }
+      },
+    },
+    stepBar,
+    ...sections,
+    h("div", { class: "toolbar wizard-nav" }, back, position, h("span", { class: "grow" }), cancel, create, next),
+  );
+  go(0, false);
+  refresh();
+  return { element: form, refresh };
+}
+
 function colorManager(guildId, data) {
   const body = h("div", { class: "color-list" });
   const countPill = h("span", { class: "count-pill" });
@@ -4983,26 +5316,35 @@ function colorManager(guildId, data) {
     body.replaceChildren(
       info.colors.length === 0 ? h("p", { class: "muted empty" }, t("colorsNone")) : h("ol", { class: "color-rows" }, info.colors.map(row)),
     );
-    refreshPreview();
+    refreshPreview();  wizard.refresh();
   }
 
-  // Adding one color.
-  const newName = h("input", { class: "grow", maxLength: 32, placeholder: t("colorNamePlaceholder"), "aria-label": t("colorName") });
-  const newHex = h("input", { type: "color", value: "#9b6bff", "aria-label": t("colorHex") });
-  const addButton = h("button", { class: "primary small", type: "button" }, icon("plus", "icon small"), t("colorAdd"));
-  addButton.addEventListener("click", async () => {
-    setBusy(addButton, true);
-    try {
-      const result = await api(`/api/guilds/${guildId}/colors`, { method: "POST", body: { name: newName.value, hex: newHex.value } });
-      newName.value = "";
-      toast(t("colorAdded"));
-      savedColors(result.colors);
-    } catch (error) {
-      failed(error);
-    } finally {
-      setBusy(addButton, false);
-    }
+  // Creating colors goes through the wizard, opened from the list's toolbar
+  // (and open from the start while the list is empty).
+  const addButton = h("button", { class: "primary small", type: "button" }, icon("plus", "icon small"), t("colorWizardOpen"));
+  const wizard = colorWizard(guildId, () => info, {
+    onCreated: async (result) => {
+      if (result.colors) {
+        toast(t("colorAdded"));
+        savedColors(result.colors);
+      } else {
+        toast(t("colorWizardStarted", { count: result.adding }));
+        await waitForPack(t("colorWizardDone"));
+      }
+      showWizard(false);
+    },
+    onCancel: () => showWizard(info.colors.length === 0),
   });
+  const wizardCard = card(t("colorWizardTitle"), "plus", "purple", wizard.element);
+  function showWizard(open) {
+    wizardCard.hidden = !open;
+    addButton.hidden = open;
+    if (open) {
+      wizard.refresh();
+      wizardCard.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
+  }
+  addButton.addEventListener("click", () => showWizard(true));
 
   // A pack, made in the background; the list reloads when it's done.
   const packPicker = h("select", { "aria-label": t("colorPack") }, COLOR_PACKS.map((pack) => h("option", { value: pack }, t(`colorPack_${pack}`))));
@@ -5019,14 +5361,14 @@ function colorManager(guildId, data) {
       setBusy(packButton, false);
     }
   });
-  async function waitForPack() {
+  async function waitForPack(doneMessage = t("colorPackDone")) {
     for (let tries = 0; tries < 60; tries += 1) {
       await new Promise((resolve) => setTimeout(resolve, 2000));
       const latest = await api(`/api/guilds/${guildId}/colors`);
       if (!latest.packRunning) {
         info = latest;
         savedColors(latest.colors);
-        toast(t("colorPackDone"));
+        toast(doneMessage);
         return;
       }
     }
@@ -5048,22 +5390,24 @@ function colorManager(guildId, data) {
   });
 
   list();
+  showWizard(info.colors.length === 0);
   api(`/api/guilds/${guildId}/colors`)
     .then((latest) => {
       info = latest;
       list();
+      wizard.refresh();
     })
     .catch(failed);
 
   return h(
     "div",
     { class: "settings-cards" },
+    wizardCard,
     card(
       t("sectionColorList"),
       "palette",
       "amber",
-      h("div", { class: "toolbar" }, h("p", { class: "help grow" }, t("colorListHelp")), countPill),
-      h("div", { class: "toolbar color-add" }, newName, newHex, addButton),
+      h("div", { class: "toolbar" }, h("p", { class: "help grow" }, t("colorListHelp")), countPill, addButton),
       body,
       h("div", { class: "toolbar" }, field("colorPack", "colorPackHelp", packPicker), packButton),
       h("div", { class: "toolbar" }, field("colorSortBy", "colorSortHelp", sortPicker), sortButton),
@@ -8842,7 +9186,7 @@ function normalHex(text) {
   return `#${digits.toLowerCase()}`;
 }
 
-function colorChooser({ id, value, fallback, followKey, resetKey }) {
+function colorChooser({ id, value, fallback, followKey, resetKey, swatches: palette = EMBED_SWATCHES, reset: canReset = true }) {
   const native = h("input", { id, type: "color", value: hexColor(value ?? fallback), "aria-label": t("embedColor") });
   const hex = h("input", {
     id: `${id}Hex`,
@@ -8897,7 +9241,7 @@ function colorChooser({ id, value, fallback, followKey, resetKey }) {
   });
   reset.addEventListener("click", () => choose(hexColor(fallback), false));
 
-  const swatches = EMBED_SWATCHES.map((swatch) => {
+  const swatches = palette.map((swatch) => {
     const button = h("button", { type: "button", class: "swatch", title: swatch, "aria-label": swatch, onclick: () => choose(swatch, true) });
     button.style.setProperty("--swatch", swatch);
     return button;
@@ -8929,7 +9273,7 @@ function colorChooser({ id, value, fallback, followKey, resetKey }) {
         )
       : null;
 
-  element.append(h("div", { class: "color-chooser-row" }, native, hex, dropper, h("div", { class: "swatches" }, swatches), reset), status);
+  element.append(h("div", { class: "color-chooser-row" }, native, hex, dropper, h("div", { class: "swatches" }, swatches), canReset ? reset : null), status);
   update();
   return element;
 }

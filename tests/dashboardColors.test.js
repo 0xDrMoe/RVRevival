@@ -117,7 +117,7 @@ describe("dashboard color roles", () => {
 
     expect((await send(cookies, "POST", base, { name: "red", hex: "#ff0001" })).statusCode).toBe(409);
     expect((await send(cookies, "POST", base, { name: "Bad", hex: "nope" })).statusCode).toBe(400);
-    expect((await send(cookies, "POST", base, { name: "Fade", hex: "#ff0000", hex2: "#0000ff" })).json().message).toContain("Gradient");
+    expect((await send(cookies, "POST", base, { name: "Fade", hex: "#ff0000", hex2: "#0000ff" })).json().message).toContain("gradient");
 
     const edited = await send(cookies, "PUT", `${base}/${roleId}`, { name: "Crimson", hex: "#dc143c" });
     expect(edited.json().colors[0]).toMatchObject({ name: "Crimson", hex: "#dc143c" });
@@ -159,6 +159,42 @@ describe("dashboard color roles", () => {
     const ids = sorted.json().colors.map((color) => color.roleId);
     expect(ids.every((id, index) => index === 0 || position(ids[index - 1]) > position(id))).toBe(true);
     expect((await send(cookies, "POST", `${base}/sort`, { by: "nope" })).statusCode).toBe(400);
+  });
+
+  it("previews new colors with names, problems and the picture, then makes them where asked", async () => {
+    const cookies = await login();
+    await send(cookies, "POST", base, { name: "Red", hex: "#ff0000" });
+    await send(cookies, "POST", base, { name: "Blue", hex: "#0000ff" });
+
+    const preview = await send(cookies, "POST", `${base}/preview`, { colors: [{ name: "", hex: "#43a047" }, { name: "red", hex: "#111111" }, { name: "Fade", hex: "#fff", hex2: "#000" }], position: 2 });
+    expect(preview.statusCode).toBe(200);
+    expect(preview.json()).toMatchObject({
+      colors: [{ name: "Green", hex: "#43a047", hex2: null, number: 2 }],
+      problems: [{ index: 1, problem: "name-taken" }, { index: 2, problem: "gradient" }],
+      room: 98,
+    });
+    expect(preview.json().image).toMatch(/^data:image\/png;base64,/);
+    // Nothing is made by a preview.
+    expect(discord.createRole).toHaveBeenCalledTimes(2);
+
+    // One color at a chosen place, with an automatic name.
+    const one = await send(cookies, "POST", base, { name: "", hex: "#43a047", position: 1 });
+    expect(one.json().colors.map((color) => color.name)).toEqual(["Green", "Red", "Blue"]);
+    const position = (name) => discord.roles.find((role) => role.name === name).position;
+    expect(position("Green")).toBeGreaterThan(position("Red"));
+
+    // Several: refused whole when one has a problem, made in the background otherwise.
+    const refused = await send(cookies, "POST", `${base}/batch`, { colors: [{ name: "Sky", hex: "#4fc3f7" }, { name: "blue", hex: "#000" }] });
+    expect(refused.statusCode).toBe(400);
+    expect(refused.json().problems).toEqual([{ index: 1, problem: "name-taken", name: "blue" }]);
+    const batch = await send(cookies, "POST", `${base}/batch`, { colors: [{ name: "Sky", hex: "#4fc3f7" }, { name: "Sun", hex: "#fdd835" }], position: 2 });
+    expect(batch.statusCode).toBe(202);
+    expect(batch.json()).toEqual({ adding: 2 });
+    await vi.waitFor(() => expect(guildSettings.get(GUILD_ID, Setting.COLORS).map((color) => color.name)).toEqual(["Green", "Sky", "Sun", "Red", "Blue"]));
+    await vi.waitFor(async () => expect((await send(cookies, "GET", base)).json().packRunning).toBe(false));
+    const order = ["Green", "Sky", "Sun", "Red", "Blue"].map(position);
+    expect(order).toEqual([...order].sort((a, b) => b - a));
+    expect((await send(cookies, "POST", `${base}/batch`, { colors: [] })).statusCode).toBe(400);
   });
 
   it("draws the list picture", async () => {

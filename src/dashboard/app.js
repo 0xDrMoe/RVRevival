@@ -117,6 +117,7 @@ import {
   sortColors,
 } from "../colors/colors.js";
 import { GRADIENT_FEATURE } from "../colors/colorService.js";
+import { checkNewColors, insertColors, MAX_DRAFTS } from "../colors/drafts.js";
 import { renderColorList } from "../colors/listImage.js";
 import { normalizeColorOptions } from "../colors/options.js";
 import { PACK_NAMES, PACKS } from "../colors/packs.js";
@@ -2771,38 +2772,121 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     return reply.header("Cache-Control", "no-store").type("image/png").send(png);
   });
 
+  // What the wizard sends: { colors: [{ name, hex, hex2 }], position }, or one
+  // color as { name, hex, hex2, position }. Position 1 is the top of the list.
+  const readDrafts = (body) => ({
+    entries: Array.isArray(body?.colors) ? body.colors : [{ name: body?.name, hex: body?.hex, hex2: body?.hex2 }],
+    position: Number.isInteger(body?.position) ? body.position : null,
+  });
+  const DRAFT_PROBLEMS = {
+    hex: "isn't a colour. Use a hex code like #3d6fe0.",
+    hex2: "has a second colour that isn't a hex code.",
+    gradient: "is a gradient, which needs Discord's enhanced role styles (boost level 2).",
+    extra: "has more than two colours.",
+    "name-taken": "has a name the list already has.",
+    duplicate: "has the same name as another new color.",
+    full: `doesn't fit: a server can have up to ${MAX_COLORS} colors.`,
+  };
+  const draftProblem = (problems) => `Color ${problems[0].index + 1} ${DRAFT_PROBLEMS[problems[0].problem]}`;
+
+  // The wizard's last step: the colors as they'd be made (named, checked) and
+  // the list picture with them in place, before anything is created.
+  app.post("/api/guilds/:id/colors/preview", { config: { rateLimit: { max: 60, timeWindow: "1 minute" } } }, async (request, reply) => {
+    const access = await requireGuild(request, reply, { manage: true });
+    if (!access) {
+      return reply;
+    }
+    const { entries, position } = readDrafts(request.body);
+    const guild = await discord.guild(access.guildId);
+    guildSettings.reloadIfChanged();
+    const list = colorsOf(guildSettings, access.guildId);
+    const { colors, problems } = checkNewColors(list, entries, { gradients: canGradient(guild) });
+    const after = insertColors(list, colors.map((color) => ({ ...color, roleId: null })), position);
+    const image = after.length > 0 ? `data:image/png;base64,${(await renderColorList(after)).toString("base64")}` : null;
+    const numbers = colors.map((color) => after.indexOf(after.find((entry) => entry.name === color.name)) + 1);
+    return { colors: colors.map((color, index) => ({ ...color, number: numbers[index] })), problems, room: Math.max(0, MAX_COLORS - list.length), max: MAX_DRAFTS, image };
+  });
+
+  // Makes the roles one after another (Discord paces role creation), saves them
+  // into the list at `position` and moves the block to match.
+  async function makeColors(guildId, session, drafts, position, what) {
+    const added = [];
+    let failure = null;
+    try {
+      for (const draft of drafts) {
+        const role = await discord.createRole(guildId, { name: draft.name, permissions: "0", hoist: false, mentionable: false, ...roleColorBody(draft.hex, draft.hex2) }, "Color roles");
+        added.push({ roleId: role.id, name: draft.name, hex: draft.hex, hex2: draft.hex2 ?? null, made: true, addedAt: Date.now() });
+      }
+    } catch (error) {
+      failure = error;
+      logger.warn("Couldn't make every color role", { guildId, what, made: added.length, of: drafts.length, error });
+    }
+    if (added.length > 0) {
+      guildSettings.reloadIfChanged();
+      const current = colorsOf(guildSettings, guildId);
+      const next = insertColors(current, added.filter((color) => !nameTaken(current, color.name)), position).slice(0, MAX_COLORS);
+      await saveColors(guildSettings, guildId, next);
+      await placeColorBlock(guildId, next, current.map((color) => color.roleId));
+      const lines = added.map((color) => `${next.findIndex((entry) => entry.roleId === color.roleId) + 1}. <@&${color.roleId}> (${color.hex}${color.hex2 ? ` → ${color.hex2}` : ""})`);
+      await logAction(guildId, session, added.length === 1 ? `**Color added:** ${lines[0]}` : `**${what}:** ${added.length} colors`, added.length === 1 ? [] : lines);
+    }
+    return { added, failure };
+  }
+
   app.post("/api/guilds/:id/colors", colorLimit, async (request, reply) => {
     const access = await requireGuild(request, reply, { manage: true });
     if (!access) {
       return reply;
     }
     const { guildId, session } = access;
-    const guild = await discord.guild(guildId);
-    const input = readColorInput(request.body, guild);
-    if (input.problem) {
-      return reply.code(400).send({ error: "invalid-color", message: input.problem });
+    const { entries, position } = readDrafts(request.body);
+    if (entries.length !== 1) {
+      return reply.code(400).send({ error: "invalid-color", message: "Add one color here; several go through /colors/batch." });
     }
+    const guild = await discord.guild(guildId);
     return colorLocks.run(guildId, async () => {
       guildSettings.reloadIfChanged();
       const list = colorsOf(guildSettings, guildId);
-      if (list.length >= MAX_COLORS) {
-        return reply.code(409).send({ error: "colors-full", message: `A server can have up to ${MAX_COLORS} colors.` });
+      const { colors, problems } = checkNewColors(list, entries, { gradients: canGradient(guild) });
+      if (problems.length > 0) {
+        const status = ["name-taken", "duplicate", "full"].includes(problems[0].problem) ? 409 : 400;
+        return reply.code(status).send({ error: problems[0].problem === "full" ? "colors-full" : status === 409 ? "name-taken" : "invalid-color", message: draftProblem(problems), problems });
       }
-      if (nameTaken(list, input.name)) {
-        return reply.code(409).send({ error: "name-taken", message: `There's already a color called ${input.name}.` });
+      const { added, failure } = await makeColors(guildId, session, colors, position, "Color added");
+      if (added.length === 0) {
+        return colorRefused(reply, failure);
       }
-      let role;
-      try {
-        role = await discord.createRole(guildId, { name: input.name, permissions: "0", hoist: false, mentionable: false, ...roleColorBody(input.hex, input.hex2) }, "Color roles");
-      } catch (error) {
-        return colorRefused(reply, error);
-      }
-      const next = [...list, { roleId: role.id, name: input.name, hex: input.hex, hex2: input.hex2, made: true, addedAt: Date.now() }];
-      await saveColors(guildSettings, guildId, next);
-      await placeColorBlock(guildId, next, list.map((color) => color.roleId));
-      await logAction(guildId, session, `**Color added:** ${next.length}. <@&${role.id}> (${input.hex}${input.hex2 ? ` → ${input.hex2}` : ""})`, []);
-      return { colors: colorsJson(guildId, await discord.guild(guildId)) };
+      return { colors: colorsJson(guildId, await discord.guild(guildId)), added: added.map((color) => color.roleId) };
     });
+  });
+
+  // Several colors at once from the wizard, made in the background like a pack.
+  // Nothing is made if any of them has a problem, so the wizard can fix them first.
+  app.post("/api/guilds/:id/colors/batch", colorLimit, async (request, reply) => {
+    const access = await requireGuild(request, reply, { manage: true });
+    if (!access) {
+      return reply;
+    }
+    const { guildId, session } = access;
+    const { entries, position } = readDrafts(request.body);
+    if (!Array.isArray(request.body?.colors) || entries.length === 0 || entries.length > MAX_DRAFTS) {
+      return reply.code(400).send({ error: "invalid-colors", message: `Send 1 to ${MAX_DRAFTS} colors.` });
+    }
+    if (packsRunning.has(guildId)) {
+      return reply.code(409).send({ error: "pack-running", message: "Colors are still being added. Wait a moment." });
+    }
+    const guild = await discord.guild(guildId);
+    guildSettings.reloadIfChanged();
+    const { colors, problems } = checkNewColors(colorsOf(guildSettings, guildId), entries, { gradients: canGradient(guild) });
+    if (problems.length > 0) {
+      return reply.code(400).send({ error: "invalid-colors", message: draftProblem(problems), problems });
+    }
+    packsRunning.add(guildId);
+    colorLocks
+      .run(guildId, () => makeColors(guildId, session, colors, position, "Colors added"))
+      .catch((error) => logger.error("Adding colors crashed", { guildId, error }))
+      .finally(() => packsRunning.delete(guildId));
+    return reply.code(202).send({ adding: colors.length });
   });
 
   app.put("/api/guilds/:id/colors/:roleId", colorLimit, async (request, reply) => {
@@ -2897,25 +2981,7 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     }
     packsRunning.add(guildId);
     colorLocks
-      .run(guildId, async () => {
-        const added = [];
-        try {
-          for (const [name, hex] of entries) {
-            const role = await discord.createRole(guildId, { name, permissions: "0", hoist: false, mentionable: false, ...roleColorBody(hex, null) }, "Color roles");
-            added.push({ roleId: role.id, name, hex, hex2: null, made: true, addedAt: Date.now() });
-          }
-        } catch (error) {
-          logger.warn("Couldn't finish adding a color pack", { guildId, pack, added: added.length, error });
-        }
-        if (added.length > 0) {
-          guildSettings.reloadIfChanged();
-          const current = colorsOf(guildSettings, guildId);
-          const next = [...current, ...added.filter((color) => !nameTaken(current, color.name))].slice(0, MAX_COLORS);
-          await saveColors(guildSettings, guildId, next);
-          await placeColorBlock(guildId, next, current.map((color) => color.roleId));
-          await logAction(guildId, session, `**Color pack added:** ${pack}, ${added.length} colors`, []);
-        }
-      })
+      .run(guildId, () => makeColors(guildId, session, entries.map(([name, hex]) => ({ name, hex, hex2: null })), null, `Color pack added (${pack})`))
       .catch((error) => logger.error("Color pack crashed", { guildId, error }))
       .finally(() => packsRunning.delete(guildId));
     return reply.code(202).send({ adding: entries.length });

@@ -48,10 +48,13 @@ import {
 import { ColorError, colorOptionsOf, GRADIENT_FEATURE, PICK_PREFIX, REMOVE_ID, createColorService } from "../colors/colorService.js";
 import { checkColorOptions, InvalidColorOptions, RANDOM_JOIN_COLOR } from "../colors/options.js";
 import { PACK_NAMES, PACKS } from "../colors/packs.js";
+import { nearestName } from "../colors/drafts.js";
 import { discordLocalizations, pickLanguage, translate } from "../i18n/i18n.js";
 import { result, Status } from "../logs/actionLog.js";
 import { Setting } from "../settings/guildSettings.js";
 import { isPermissionError } from "../utils/discordErrors.js";
+
+export { nearestName };
 
 const COMMAND_NAME = "color";
 const MEMBER_SUBCOMMANDS = new Set(["list", "set", "random", "remove", "info"]);
@@ -142,18 +145,6 @@ export function buildColorCommandData() {
         .addBooleanOption((option) => withDescription(option.setName("overlap-warning"), "colorOverlapOptionDescription")),
     )
     .toJSON();
-}
-
-// The closest named color in the packs, as a starting name for a suggestion.
-export function nearestName(hex) {
-  const target = hexToInt(hex);
-  const distance = (other) => {
-    const value = hexToInt(other);
-    return ((target >> 16) - (value >> 16)) ** 2 + (((target >> 8) & 255) - ((value >> 8) & 255)) ** 2 + ((target & 255) - (value & 255)) ** 2;
-  };
-  return Object.values(PACKS)
-    .flat()
-    .reduce((best, entry) => (distance(entry[1]) < distance(best[1]) ? entry : best))[0];
 }
 
 // Options:

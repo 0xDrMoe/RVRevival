@@ -829,7 +829,7 @@ const FEATURE_PARTS = [
         ],
         steps: [
           "Move the bot's role above the roles that have their own colour (or give those roles no colour), since Discord shows the colour of a member's highest coloured role.",
-          "Add colors on the **Color roles** page, with `/color add`, or start with `/color pack pack:Classic`.",
+          "On the **Color roles** page, press **Create colors**. The wizard walks through the colour (picker, eyedropper or hex code, or several hex codes pasted one per line), a gradient, where the colors go in the list, and a review with the list picture before anything is made. `/color add` and `/color pack pack:Classic` work too.",
           "Post a panel with `/color panel channel:#colors`, or let members use `/color set`.",
         ],
         example: ["/color add name:Sky Blue hex:#29b6f6", "/color set color:3", "/color panel channel:#colors"],
@@ -838,6 +838,7 @@ const FEATURE_PARTS = [
           "Roles made by the bot are deleted with their color. Roles added with `/color existing` are only taken off the list.",
           "A role deleted by hand stays on the list as missing; `/color sync` makes it again and copies name and colour changes made in Discord's role settings.",
           "Gradient colors need Discord's enhanced role styles (boost level 2).",
+          "Pasting several colors: one per line, like `Sky #4fc3f7`. A second hex code makes a gradient, and a line with only a hex code is named after the closest colour (like *Red*). Up to 25 at a time; nothing is made until every line is fine.",
           "Up to 100 colors and 5 panels per server. The picture leaves out characters its font can't draw, like emoji.",
         ],
       },

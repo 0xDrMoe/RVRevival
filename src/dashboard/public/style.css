@@ -3129,21 +3129,86 @@ input.has-variable-problem {
 }
 
 .color-inputs input[type="color"],
-.color-add input[type="color"] {
-  width: 44px;
-  height: 32px;
-  padding: 2px;
-}
-
 .check.inline {
   display: inline-flex;
   gap: 4px;
   align-items: center;
 }
 
-.color-add > input.grow {
+/* Color roles: the create wizard */
+.color-samples {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.color-sample {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
   min-width: 0;
-  flex: 1 1 160px;
+}
+
+.color-sample.dark {
+  background: #313338;
+  color: #dbdee1;
+}
+
+.color-sample.light {
+  background: #ffffff;
+  color: #313338;
+}
+
+.color-sample .muted {
+  color: inherit;
+  opacity: 0.7;
+}
+
+.color-sample-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.color-sample-name.gradient {
+  color: transparent;
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+
+.color-wizard textarea {
+  font-family: var(--font-mono, ui-monospace, monospace);
+}
+
+.color-review .color-row code {
+  font-size: 0.85em;
+  overflow-wrap: anywhere;
+}
+
+.color-problems {
+  display: grid;
+  gap: 6px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.color-problem {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  color: var(--danger);
+}
+
+.color-problem .icon {
+  flex: none;
+  margin-top: 2px;
 }
 
 .color-preview-image {
