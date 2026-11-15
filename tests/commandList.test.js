@@ -34,6 +34,7 @@ describe("command list", () => {
       "welcome",
       "test",
       "rolepanel",
+      "color",
       "tag",
       "tags",
       "embed",

@@ -35,6 +35,8 @@ import { isModeratorRole } from "../permissions/moderatorPermissions.js";
 import { CUSTOM, PRESETS } from "../permissions/presets.js";
 import { checkMusic, describeMusic, InvalidMusic, normalizeMusic } from "../music/config.js";
 import { channelTypesFor, checkAutomation, describeAutomation, InvalidAutomation, normalizeAutomation } from "../channels/automation.js";
+import { checkColorOptions, describeColorOptions, InvalidColorOptions, normalizeColorOptions } from "../colors/options.js";
+import { normalizeColors } from "../colors/colors.js";
 import { Setting } from "../settings/guildSettings.js";
 import { variableError } from "./public/variables.js";
 
@@ -119,6 +121,7 @@ export const SETTING_RULES = Object.freeze({
   [Setting.AUTO_RESPONDERS]: { kind: "autoResponders", types: RESPONDER_CHANNELS, label: "Auto-responders" },
   [Setting.MEDIA_ONLY]: { kind: "mediaOnly", types: [ChannelType.GuildText, ChannelType.GuildAnnouncement], label: "Media-only channels" },
   [Setting.MUSIC]: { kind: "music", label: "Music" },
+  [Setting.COLOR_OPTIONS]: { kind: "colorOptions", types: POSTING_CHANNELS, label: "Color roles" },
   [Setting.CHANNEL_AUTOMATION]: { kind: "channelAutomation", label: "Channel automation" },
   [Setting.SETUP_SKIPPED]: { kind: "setupSteps", label: "Skipped setup steps" },
   [Setting.LOG_ROUTES]: { kind: "logRoutes", types: POSTING_CHANNELS, label: "Log channels per log type" },
@@ -130,7 +133,7 @@ export const SETTING_RULES = Object.freeze({
 
 // Checks one value. Returns what to save: null clears the setting, and empty
 // lists become null. Throws InvalidSetting.
-function checkValue(setting, value, { guildId, channels, roles }) {
+function checkValue(setting, value, { guildId, channels, roles, colors = [] }) {
   const rule = SETTING_RULES[setting];
   if (!rule) {
     throw new InvalidSetting(setting, "Unknown setting");
@@ -357,6 +360,19 @@ function checkValue(setting, value, { guildId, channels, roles }) {
         }
         throw error;
       }
+    case "colorOptions":
+      try {
+        return checkColorOptions(value, {
+          isRole: roleOk,
+          isChannel: (id) => channelOk(id, rule.types),
+          isColor: (id) => normalizeColors(colors).some((color) => color.roleId === id),
+        });
+      } catch (error) {
+        if (error instanceof InvalidColorOptions) {
+          throw new InvalidSetting(setting, error.message);
+        }
+        throw error;
+      }
     case "music":
       try {
         return checkMusic(value, { isRole: roleOk });
@@ -575,6 +591,9 @@ export function describeValue(setting, value) {
   if (SETTING_RULES[setting]?.kind === "music") {
     return describeMusic(value);
   }
+  if (SETTING_RULES[setting]?.kind === "colorOptions") {
+    return describeColorOptions(value);
+  }
   if (value === null || value === undefined || (Array.isArray(value) && value.length === 0)) {
     return "*none*";
   }
@@ -657,6 +676,7 @@ const NORMALIZE = {
   logOptions: normalizeLogOptions,
   commandRules: normalizeCommandRules,
   music: normalizeMusic,
+  colorOptions: normalizeColorOptions,
   channelAutomation: normalizeAutomation,
   milestones: normalizeMilestones,
   ticketSupport: normalizeTicketSupport,

@@ -91,6 +91,9 @@ export const Setting = Object.freeze({
   COUNTRY_GUIDE_POST: "countryGuidePost", // the last guide posted, { channelId, messageId }, so the dashboard can update it
   BRANDING: "branding", // the bot's look in this server, { color } (see branding/branding.js)
   CHANNEL_AUTOMATION: "channelAutomation", // auto-publish, auto-threads, keep-alive, auto-delete, auto-slowmode, auto-reactions, counting and bump reminders, an object (see channels/automation.js)
+  COLORS: "colorRoles", // color roles members pick from, a list of { roleId, name, hex, hex2, made, addedAt } (see colors/colors.js)
+  COLOR_OPTIONS: "colorOptions", // how color roles work: the list picture, channel, managers, who can pick, join color, an object (see colors/options.js)
+  COLOR_PANELS: "colorPanels", // posted color panels, a list of { channelId, messageId, key } (see colors/colorService.js)
   MUSIC: "music", // the music player, { djRoleId, defaultVolume, maxQueue, announce, leaveAfterMinutes } (see music/config.js)
 });
 

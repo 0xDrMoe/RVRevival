@@ -16,6 +16,7 @@ import { createModerationCommands } from "./moderation.js";
 import { createPurgeCommand } from "./purge.js";
 import { createRemindCommand, createRemindMeMenu } from "./remind.js";
 import { createRolePanelCommand } from "./rolePanel.js";
+import { createColorCommand } from "./color.js";
 import { createRoleConfirmations, RoleConfirmStore } from "../roles/roleConfirmations.js";
 import { createSettingsCommand } from "./settings.js";
 import { createStarboardCommand } from "./starboard.js";
@@ -82,7 +83,8 @@ import { createAutomateCommand } from "./automate.js";
 // `automation` (channels/automation.js) gives /automate show the counting score.
 // `growth` (members/growthStore.js) with `inviteTracker` (logs/inviteTracker.js)
 // runs /invites, `dehoist` (moderation/dehoist.js) /dehoist run, and
-// `personalData` (members/personalData.js) /mydata.
+// `personalData` (members/personalData.js) /mydata. `colors`
+// (colors/colorService.js) is shared with the join color (made by /color when left out).
 export function createCommands({
   logger,
   guildSettings,
@@ -118,6 +120,7 @@ export function createCommands({
   inviteTracker,
   dehoist,
   personalData,
+  colors,
   roleConfirmations = createRoleConfirmations({ guildSettings, store: new RoleConfirmStore(), forcedLanguage }),
   dashboardUrl,
   memberLoader = createMemberLoader(),
@@ -145,6 +148,7 @@ export function createCommands({
     createWelcomeCommand({ guildSettings, forcedLanguage }),
     createTestCommand({ guildSettings, forcedLanguage }),
     createRolePanelCommand({ guildSettings, logger, forcedLanguage, confirmations: roleConfirmations }),
+    createColorCommand({ guildSettings, logger, forcedLanguage, service: colors }),
     ...createTagCommands({ guildSettings, forcedLanguage }),
     createEmbedCommand({ guildSettings, forcedLanguage, sentMessages }),
     createRemindCommand({ reminders, forcedLanguage }),
