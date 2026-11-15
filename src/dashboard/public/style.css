@@ -1148,6 +1148,7 @@ form.settings > * + * {
   flex-direction: column;
   gap: 12px;
   height: calc(100vh - var(--topbar));
+  height: calc(100dvh - var(--topbar));
   padding: 14px 12px 24px;
   overflow-y: auto;
   background: var(--surface);
@@ -2476,7 +2477,15 @@ dialog textarea {
     inset-inline-start: 0;
     z-index: 40;
     width: min(300px, 86vw);
+    /* Stretch between the top bar and the bottom of the screen. The desktop
+       align-self: start also applies to fixed boxes in current browsers, and
+       would size the drawer to all its links, leaving nothing to scroll. */
+    align-self: stretch;
     height: auto;
+    max-height: none;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
     transform: translateX(-105%);
     transition: transform 0.2s ease;
     box-shadow: var(--shadow-lg, 0 10px 40px rgba(0, 0, 0, 0.25));
