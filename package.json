@@ -14,6 +14,7 @@
     "register": "node --env-file-if-exists=.env src/register-commands.js",
     "dashboard": "node --env-file-if-exists=.env src/dashboard/server.js",
     "music:check": "node --env-file-if-exists=.env tools/musicCheck.js",
+    "autoroles:check": "node --env-file-if-exists=.env tools/autoroleCheck.js",
     "test": "vitest run",
     "test:watch": "vitest"
   },
