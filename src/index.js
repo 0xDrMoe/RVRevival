@@ -61,6 +61,7 @@ import { createInviteTracker } from "./logs/inviteTracker.js";
 import { GrowthStore } from "./members/growthStore.js";
 import { createInviteStats, inviteTrackingOn } from "./members/inviteStats.js";
 import { createPersonalData } from "./members/personalData.js";
+import { createColorService } from "./colors/colorService.js";
 import { createMilestones } from "./community/milestones.js";
 import { createDehoist } from "./moderation/dehoist.js";
 import { SentMessageStore } from "./messages/sentMessageStore.js";
@@ -326,6 +327,8 @@ async function start() {
   });
   // Members' saved playlists (/playlist).
   const musicPlaylists = new PlaylistStore(db);
+  // Color roles (/color): shared by the command, the color panels and the join color.
+  const colors = createColorService({ guildSettings, logger, forcedLanguage });
   const commands = createCommands({
     logger,
     guildSettings,
@@ -365,6 +368,7 @@ async function start() {
       database: db,
       onDeleted: ({ highlightGuildIds }) => highlightGuildIds.forEach((guildId) => highlights.changed(guildId)),
     }),
+    colors,
     dashboardUrl: config.dashboardUrl,
     memberLoader,
   });
@@ -416,6 +420,7 @@ async function start() {
   let feedPoller;
   // Checks tickets for inactivity (tickets/support.js) every 5 minutes.
   let ticketSweep;
+  let colorPanelSweep;
   let livePoller;
 
   function connect(intents) {
@@ -473,6 +478,12 @@ async function start() {
           .catch((error) => logger.error("Couldn't check tickets for inactivity", { error }));
       }, 5 * 60 * 1000);
       ticketSweep.unref();
+      // Color panels catch up with colors changed on the dashboard.
+      clearInterval(colorPanelSweep);
+      colorPanelSweep = setInterval(() => {
+        colors.sweepPanels([...readyClient.guilds.cache.values()]).catch((error) => logger.error("Couldn't update color panels", { error }));
+      }, 60 * 1000);
+      colorPanelSweep.unref();
       countSafely("start time", () => botStats.started());
       inviteTracker.primeAll([...readyClient.guilds.cache.values()]).catch((error) => logger.error("Couldn't load invites", { error }));
     });
@@ -551,6 +562,8 @@ async function start() {
     client.on(Events.GuildMemberAdd, safely("the join gate", (member) => raidGuard.memberJoined(member)));
     client.on(Events.GuildMemberAdd, safely("a quarantined member rejoining", (member) => quarantine.memberJoined(member)));
     client.on(Events.GuildMemberAdd, safely("giving roles back", (member) => rolePersistence.memberJoined(member)));
+    client.on(Events.GuildMemberAdd, safely("a join color", (member) => colors.memberJoined(member)));
+    client.on(Events.GuildMemberUpdate, safely("a join color after screening", (before, after) => colors.memberUpdated(before, after)));
     client.on(Events.GuildMemberRemove, safely("saving roles", (member) => rolePersistence.memberLeft(member)));
     client.on(Events.GuildMemberRemove, safely("a leave message", (member) => welcomer.memberLeft(member)));
     client.on(Events.GuildMemberRemove, safely("an invited member leaving", (member) => inviteStats.memberLeft(member)));

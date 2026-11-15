@@ -100,6 +100,26 @@ import { ScheduledMessageStore } from "../scheduled/scheduledMessageStore.js";
 import { MAX_DELAY_MS, MAX_INTERVAL_MS, MAX_SCHEDULED, MAX_SCHEDULED_LENGTH, MIN_INTERVAL_MS } from "../scheduled/scheduler.js";
 import { buildCaseEmbed } from "../moderation/modLog.js";
 import { Setting } from "../settings/guildSettings.js";
+import {
+  anchorFor,
+  blockPositions,
+  cleanColorName,
+  colorsOf,
+  hexToInt,
+  MAX_COLORS,
+  MAX_NAME_LENGTH,
+  nameTaken,
+  normalizeColors,
+  parseColor,
+  reorderPositions,
+  saveColors,
+  SortKind,
+  sortColors,
+} from "../colors/colors.js";
+import { GRADIENT_FEATURE } from "../colors/colorService.js";
+import { renderColorList } from "../colors/listImage.js";
+import { normalizeColorOptions } from "../colors/options.js";
+import { PACK_NAMES, PACKS } from "../colors/packs.js";
 import { ActivityStore } from "./activityStore.js";
 import { errorReference } from "../utils/errorReference.js";
 import { serverCheckup } from "./checkup.js";
@@ -673,6 +693,8 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     [Setting.APPEALS]: normalizeAppeals(guildSettings.get(guildId, Setting.APPEALS)),
     [Setting.MEDIA_ONLY]: normalizeMediaOnly(guildSettings.get(guildId, Setting.MEDIA_ONLY)),
     [Setting.MUSIC]: normalizeMusic(guildSettings.get(guildId, Setting.MUSIC)),
+    [Setting.COLOR_OPTIONS]: normalizeColorOptions(guildSettings.get(guildId, Setting.COLOR_OPTIONS)),
+    [Setting.COLORS]: normalizeColors(guildSettings.get(guildId, Setting.COLORS)),
     // With the title and text of panels set up before the look was saved on its own.
     [Setting.TICKET_PANEL]: panelLook(guildSettings, guildId),
     [Setting.TICKET_PANELS]: normalizeExtraPanels(guildSettings.get(guildId, Setting.TICKET_PANELS)),
@@ -1057,7 +1079,7 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     const [guild, channels] = await Promise.all([discord.guild(guildId), discord.channels(guildId)]);
     let changes;
     try {
-      changes = checkSettingChanges(request.body, { guildId, channels, roles: guild.roles });
+      changes = checkSettingChanges(request.body, { guildId, channels, roles: guild.roles, colors: guildSettings.get(guildId, Setting.COLORS) });
     } catch (error) {
       if (error instanceof InvalidSetting) {
         return reply.code(400).send({ error: "invalid-setting", setting: error.setting ?? null, message: error.message });
@@ -2657,6 +2679,272 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     });
   });
 
+  // --- Color roles ----------------------------------------------------------------
+  // The same list /color keeps (colors/colors.js), changed through Discord's
+  // REST API: each change makes, edits, deletes or moves the real roles first
+  // and saves the list after, so a role Discord refused is never listed. The
+  // bot updates its color panels within a minute. Changes take turns per server.
+
+  const colorLocks = new KeyedLock();
+  const colorLimit = { config: { rateLimit: { max: 30, timeWindow: "1 minute" } } };
+  const ROLE_ID = /^\d{17,20}$/;
+  // A pack's roles are made in the background, so the page needn't wait.
+  const packsRunning = new Set();
+
+  // secondary_color only for a gradient, or null to clear one (`clearing`).
+  const roleColorBody = (hex, hex2, clearing = false) => ({
+    colors: { primary_color: hexToInt(hex), ...(hex2 ? { secondary_color: hexToInt(hex2) } : clearing ? { secondary_color: null } : {}) },
+  });
+  const canGradient = (guild) => Array.isArray(guild.features) && guild.features.includes(GRADIENT_FEATURE);
+
+  function colorRefused(reply, error) {
+    if (error.status === 403) {
+      return reply.code(403).send({ error: "bot-forbidden", message: "The bot can't change these roles. Give it Manage Roles and move its role above the color roles." });
+    }
+    if (error.status === 400) {
+      return reply.code(400).send({ error: "discord-refused", message: "Discord refused the change. A server can have 250 roles at most." });
+    }
+    if (error.status === 404) {
+      return reply.code(404).send({ error: "not-found", message: "That role is gone. Run /color sync in Discord to make it again." });
+    }
+    throw error;
+  }
+
+  // The checked { name, hex, hex2 } from the page, or a message saying what's wrong.
+  function readColorInput(body, guild) {
+    const name = cleanColorName(body?.name);
+    const hex = parseColor(body?.hex);
+    const hex2 = body?.hex2 ? parseColor(body.hex2) : null;
+    if (!name) {
+      return { problem: `Give the color a name of up to ${MAX_NAME_LENGTH} characters.` };
+    }
+    if (!hex || (body?.hex2 && !hex2)) {
+      return { problem: "Pick a colour, like #3d6fe0." };
+    }
+    if (hex2 && !canGradient(guild)) {
+      return { problem: "Gradient colors need Discord's enhanced role styles (boost level 2)." };
+    }
+    return { name, hex, hex2 };
+  }
+
+  // The color list with whether each role still exists.
+  const colorsJson = (guildId, guild) => {
+    const roleIds = new Set(guild.roles.map((role) => role.id));
+    return colorsOf(guildSettings, guildId).map((color) => ({ ...color, missing: !roleIds.has(color.roleId) }));
+  };
+
+  // Puts every color role together, right where the block already is (or
+  // under the bot's highest role). Best effort, like /color.
+  async function placeColorBlock(guildId, list, previousIds) {
+    const [guild, botMember] = await Promise.all([discord.guild(guildId), discord.botMember(guildId).catch(() => null)]);
+    const roles = guild.roles.map((role) => ({ id: role.id, position: role.position }));
+    const botTop = guild.roles.filter((role) => botMember?.roles?.includes(role.id)).sort(byRolePosition)[0];
+    if (!botTop) {
+      return;
+    }
+    const changes = blockPositions(roles, list.map((color) => color.roleId), anchorFor(roles, previousIds, botTop.id), guildId);
+    if (changes.length > 0) {
+      await discord.setRolePositions(guildId, changes, "Color roles").catch((error) => logger.warn("Couldn't move the color roles together", { guildId, error }));
+    }
+  }
+
+  app.get("/api/guilds/:id/colors", async (request, reply) => {
+    const access = await requireGuild(request, reply, { manage: true });
+    if (!access) {
+      return reply;
+    }
+    const guild = await discord.guild(access.guildId);
+    return { colors: colorsJson(access.guildId, guild), gradients: canGradient(guild), max: MAX_COLORS, packs: PACK_NAMES.map((name) => ({ name, count: PACKS[name].length })), packRunning: packsRunning.has(access.guildId) };
+  });
+
+  // The list picture, as /color list shows it.
+  app.get("/api/guilds/:id/colors/image.png", colorLimit, async (request, reply) => {
+    const access = await requireGuild(request, reply, { manage: true });
+    if (!access) {
+      return reply;
+    }
+    const list = colorsOf(guildSettings, access.guildId);
+    if (list.length === 0) {
+      return reply.code(404).send({ error: "no-colors" });
+    }
+    const png = await renderColorList(list);
+    return reply.header("Cache-Control", "no-store").type("image/png").send(png);
+  });
+
+  app.post("/api/guilds/:id/colors", colorLimit, async (request, reply) => {
+    const access = await requireGuild(request, reply, { manage: true });
+    if (!access) {
+      return reply;
+    }
+    const { guildId, session } = access;
+    const guild = await discord.guild(guildId);
+    const input = readColorInput(request.body, guild);
+    if (input.problem) {
+      return reply.code(400).send({ error: "invalid-color", message: input.problem });
+    }
+    return colorLocks.run(guildId, async () => {
+      guildSettings.reloadIfChanged();
+      const list = colorsOf(guildSettings, guildId);
+      if (list.length >= MAX_COLORS) {
+        return reply.code(409).send({ error: "colors-full", message: `A server can have up to ${MAX_COLORS} colors.` });
+      }
+      if (nameTaken(list, input.name)) {
+        return reply.code(409).send({ error: "name-taken", message: `There's already a color called ${input.name}.` });
+      }
+      let role;
+      try {
+        role = await discord.createRole(guildId, { name: input.name, permissions: "0", hoist: false, mentionable: false, ...roleColorBody(input.hex, input.hex2) }, "Color roles");
+      } catch (error) {
+        return colorRefused(reply, error);
+      }
+      const next = [...list, { roleId: role.id, name: input.name, hex: input.hex, hex2: input.hex2, made: true, addedAt: Date.now() }];
+      await saveColors(guildSettings, guildId, next);
+      await placeColorBlock(guildId, next, list.map((color) => color.roleId));
+      await logAction(guildId, session, `**Color added:** ${next.length}. <@&${role.id}> (${input.hex}${input.hex2 ? ` → ${input.hex2}` : ""})`, []);
+      return { colors: colorsJson(guildId, await discord.guild(guildId)) };
+    });
+  });
+
+  app.put("/api/guilds/:id/colors/:roleId", colorLimit, async (request, reply) => {
+    const access = await requireGuild(request, reply, { manage: true });
+    if (!access) {
+      return reply;
+    }
+    const { guildId, session } = access;
+    const roleId = request.params.roleId;
+    const guild = await discord.guild(guildId);
+    const input = readColorInput(request.body, guild);
+    if (input.problem) {
+      return reply.code(400).send({ error: "invalid-color", message: input.problem });
+    }
+    return colorLocks.run(guildId, async () => {
+      guildSettings.reloadIfChanged();
+      const list = colorsOf(guildSettings, guildId);
+      const color = ROLE_ID.test(roleId) ? list.find((entry) => entry.roleId === roleId) : undefined;
+      if (!color) {
+        return reply.code(404).send({ error: "not-found", message: "That color was deleted. Reload the page." });
+      }
+      if (nameTaken(list, input.name, roleId)) {
+        return reply.code(409).send({ error: "name-taken", message: `There's already a color called ${input.name}.` });
+      }
+      const body = { name: input.name, ...roleColorBody(input.hex, input.hex2, Boolean(color.hex2)) };
+      try {
+        await discord.editRole(guildId, roleId, body, "Color roles");
+      } catch (error) {
+        return colorRefused(reply, error);
+      }
+      const updated = { ...color, name: input.name, hex: input.hex, hex2: input.hex2 };
+      await saveColors(guildSettings, guildId, list.map((entry) => (entry === color ? updated : entry)));
+      await logAction(guildId, session, `**Color changed:** <@&${roleId}>`, [`${color.name} (${color.hex}${color.hex2 ? ` → ${color.hex2}` : ""}) → ${updated.name} (${updated.hex}${updated.hex2 ? ` → ${updated.hex2}` : ""})`]);
+      return { colors: colorsJson(guildId, await discord.guild(guildId)) };
+    });
+  });
+
+  app.delete("/api/guilds/:id/colors/:roleId", colorLimit, async (request, reply) => {
+    const access = await requireGuild(request, reply, { manage: true });
+    if (!access) {
+      return reply;
+    }
+    const { guildId, session } = access;
+    const roleId = request.params.roleId;
+    return colorLocks.run(guildId, async () => {
+      guildSettings.reloadIfChanged();
+      const list = colorsOf(guildSettings, guildId);
+      const color = ROLE_ID.test(roleId) ? list.find((entry) => entry.roleId === roleId) : undefined;
+      if (!color) {
+        return reply.code(404).send({ error: "not-found", message: "That color was already deleted." });
+      }
+      if (color.made) {
+        try {
+          await discord.deleteRole(guildId, roleId, "Color roles");
+        } catch (error) {
+          if (error.status !== 404) {
+            return colorRefused(reply, error);
+          }
+        }
+      }
+      await saveColors(guildSettings, guildId, list.filter((entry) => entry !== color));
+      const options = guildSettings.get(guildId, Setting.COLOR_OPTIONS);
+      if (options?.joinColor === roleId) {
+        const { joinColor, ...rest } = options;
+        await (Object.keys(rest).length > 0 ? guildSettings.set(guildId, Setting.COLOR_OPTIONS, rest) : guildSettings.clear(guildId, Setting.COLOR_OPTIONS));
+      }
+      await logAction(guildId, session, `**Color deleted:** ${color.name} (${color.hex})${color.made ? "" : ", role kept"}`, []);
+      return { colors: colorsJson(guildId, await discord.guild(guildId)), settings: settingsJson(guildId) };
+    });
+  });
+
+  // Makes a pack's roles one after another in the background (Discord paces
+  // role creation), then moves them together.
+  app.post("/api/guilds/:id/colors/pack", colorLimit, async (request, reply) => {
+    const access = await requireGuild(request, reply, { manage: true });
+    if (!access) {
+      return reply;
+    }
+    const { guildId, session } = access;
+    const pack = PACKS[request.body?.pack] ? request.body.pack : undefined;
+    if (!pack) {
+      return reply.code(400).send({ error: "invalid-pack", message: "Pick one of the color packs." });
+    }
+    if (packsRunning.has(guildId)) {
+      return reply.code(409).send({ error: "pack-running", message: "A pack is still being added. Wait a moment." });
+    }
+    guildSettings.reloadIfChanged();
+    const list = colorsOf(guildSettings, guildId);
+    const entries = PACKS[pack].filter(([name]) => !nameTaken(list, name)).slice(0, Math.max(0, MAX_COLORS - list.length));
+    if (entries.length === 0) {
+      return reply.code(409).send({ error: "nothing-to-add", message: list.length >= MAX_COLORS ? `The list is full (${MAX_COLORS} colors).` : "The list already has every color in that pack." });
+    }
+    packsRunning.add(guildId);
+    colorLocks
+      .run(guildId, async () => {
+        const added = [];
+        try {
+          for (const [name, hex] of entries) {
+            const role = await discord.createRole(guildId, { name, permissions: "0", hoist: false, mentionable: false, ...roleColorBody(hex, null) }, "Color roles");
+            added.push({ roleId: role.id, name, hex, hex2: null, made: true, addedAt: Date.now() });
+          }
+        } catch (error) {
+          logger.warn("Couldn't finish adding a color pack", { guildId, pack, added: added.length, error });
+        }
+        if (added.length > 0) {
+          guildSettings.reloadIfChanged();
+          const current = colorsOf(guildSettings, guildId);
+          const next = [...current, ...added.filter((color) => !nameTaken(current, color.name))].slice(0, MAX_COLORS);
+          await saveColors(guildSettings, guildId, next);
+          await placeColorBlock(guildId, next, current.map((color) => color.roleId));
+          await logAction(guildId, session, `**Color pack added:** ${pack}, ${added.length} colors`, []);
+        }
+      })
+      .catch((error) => logger.error("Color pack crashed", { guildId, error }))
+      .finally(() => packsRunning.delete(guildId));
+    return reply.code(202).send({ adding: entries.length });
+  });
+
+  app.post("/api/guilds/:id/colors/sort", colorLimit, async (request, reply) => {
+    const access = await requireGuild(request, reply, { manage: true });
+    if (!access) {
+      return reply;
+    }
+    const { guildId, session } = access;
+    const kind = Object.values(SortKind).includes(request.body?.by) ? request.body.by : undefined;
+    if (!kind) {
+      return reply.code(400).send({ error: "invalid-sort", message: "Pick how to sort the colors." });
+    }
+    return colorLocks.run(guildId, async () => {
+      guildSettings.reloadIfChanged();
+      const sorted = sortColors(colorsOf(guildSettings, guildId), kind);
+      await saveColors(guildSettings, guildId, sorted);
+      const guild = await discord.guild(guildId);
+      const changes = reorderPositions(guild.roles.map((role) => ({ id: role.id, position: role.position })), sorted.map((color) => color.roleId));
+      if (changes.length > 0) {
+        await discord.setRolePositions(guildId, changes, "Color roles").catch((error) => logger.warn("Couldn't reorder the color roles", { guildId, error }));
+      }
+      await logAction(guildId, session, `**Colors sorted:** ${kind}`, []);
+      return { colors: colorsJson(guildId, await discord.guild(guildId)) };
+    });
+  });
+
   // --- Ticket panels ------------------------------------------------------------
   // Every ticket panel (tickets/panels.js): the main one, kept in the settings
   // it always had, and up to nine more. Saving posts the panel in its channel
@@ -2982,7 +3270,7 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     let changes;
     try {
       const plan = planPreset(request.body?.preset, { roles, isRole, current: guildSettings.all(guildId) });
-      changes = checkSettingChanges(plan, { guildId, channels, roles: guild.roles });
+      changes = checkSettingChanges(plan, { guildId, channels, roles: guild.roles, colors: guildSettings.get(guildId, Setting.COLORS) });
     } catch (error) {
       if (error instanceof InvalidPreset || error instanceof InvalidSetting) {
         return reply.code(400).send({ error: "invalid-preset", message: error.message });
@@ -3052,7 +3340,7 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     const [guild, channels] = await Promise.all([discord.guild(guildId), discord.channels(guildId)]);
     let changes;
     try {
-      changes = checkSettingChanges(restore, { guildId, channels, roles: guild.roles });
+      changes = checkSettingChanges(restore, { guildId, channels, roles: guild.roles, colors: guildSettings.get(guildId, Setting.COLORS) });
     } catch (error) {
       if (error instanceof InvalidSetting) {
         return reply.code(409).send({ error: "invalid-setting", setting: error.setting ?? null, message: `This can't be undone: ${error.message}` });

@@ -3082,6 +3082,83 @@ input.has-variable-problem {
   top: 16px;
 }
 
+/* Color roles: one row per color, and the list picture on a checkerboard so
+   its transparent background shows. */
+.color-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.color-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.color-row > input.grow {
+  min-width: 140px;
+  flex: 1 1 160px;
+}
+
+.color-number {
+  min-width: 2.5em;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.color-swatch {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+}
+
+.color-inputs {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.color-inputs input[type="color"],
+.color-add input[type="color"] {
+  width: 44px;
+  height: 32px;
+  padding: 2px;
+}
+
+.check.inline {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.color-add > input.grow {
+  min-width: 0;
+  flex: 1 1 160px;
+}
+
+.color-preview-image {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background-color: #36393f;
+  background-image: linear-gradient(45deg, #2f3136 25%, transparent 25%, transparent 75%, #2f3136 75%),
+    linear-gradient(45deg, #2f3136 25%, transparent 25%, transparent 75%, #2f3136 75%);
+  background-size: 20px 20px;
+  background-position: 0 0, 10px 10px;
+}
+
 .role-panel-roles {
   list-style: none;
   margin: 0;

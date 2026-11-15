@@ -270,6 +270,28 @@ export function createDiscordApi({ config, fetch = globalThis.fetch, rest }) {
       return bot.post(Routes.channelMessages(channel.id), { body: { ...payload, allowed_mentions: { parse: [] } } });
     },
 
+    // Color roles (colors/): make, change, delete and move roles. Each one
+    // forgets the cached server, so the next page load shows the change.
+    async createRole(guildId, body, reason) {
+      const role = await bot.post(Routes.guildRoles(guildId), { body, reason });
+      guilds.forget(guildId);
+      return role;
+    },
+    async editRole(guildId, roleId, body, reason) {
+      const role = await bot.patch(Routes.guildRole(guildId, roleId), { body, reason });
+      guilds.forget(guildId);
+      return role;
+    },
+    async deleteRole(guildId, roleId, reason) {
+      await bot.delete(Routes.guildRole(guildId, roleId), { reason });
+      guilds.forget(guildId);
+    },
+    // positions: [{ id, position }], only the roles that move.
+    async setRolePositions(guildId, positions, reason) {
+      await bot.patch(Routes.guildRoles(guildId), { body: positions, reason });
+      guilds.forget(guildId);
+    },
+
     // Deletes a channel the bot made (a stats counter). `reason` goes in the audit log.
     async deleteChannel(guildId, channelId, reason) {
       await bot.delete(Routes.channel(channelId), { reason });

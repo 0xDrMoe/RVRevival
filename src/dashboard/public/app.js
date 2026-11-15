@@ -180,6 +180,7 @@ const NAV = [
     pages: [
       { id: "welcome", icon: "userPlus", tone: "pink", manage: true, on: (s) => Boolean(s.welcomeChannelId || s.welcomeDm || s.welcomeDmEmbed || s.leaveChannelId) },
       { id: "roles", icon: "layers", tone: "green", manage: true, on: (s) => Boolean(s.rolePersist?.enabled) || (s.autoroleIds ?? []).length > 0 || (s.rolePanels ?? []).length > 0 },
+      { id: "colors", icon: "palette", tone: "purple", manage: true, on: (s) => (s.colorRoles ?? []).length > 0 },
       { id: "starboard", icon: "star", tone: "amber", manage: true, on: (s) => Boolean(s.starboard?.channelId) },
       { id: "birthdays", icon: "cake", tone: "pink", manage: true, on: (s) => Boolean(s.birthdays) },
       { id: "levels", icon: "trophy", tone: "green", manage: true, on: (s) => Boolean(s.leveling?.enabled) },
@@ -1130,7 +1131,7 @@ const LANDING_FEATURES = [
   ["shieldCheck", "purple", "landingProtection", ["/raid", "/antinuke", "/quarantine"], "raid"],
   ["ticket", "cyan", "landingTickets", ["/tickets"], "tickets"],
   ["trophy", "green", "landingLeveling", ["/rank", "/leaderboard", "/levels"], "levels"],
-  ["users", "pink", "landingCommunity", ["/welcome", "/rolepanel", "/country"], "community"],
+  ["users", "pink", "landingCommunity", ["/welcome", "/rolepanel", "/color", "/country"], "community"],
   ["list", "blue", "landingLogs", ["/modlogs"], "logs"],
   ["calendar", "accent", "landingMessages", ["/schedule", "/feed", "/sticky"], "messages"],
   ["gift", "amber", "landingGiveaways", ["/giveaway", "/starboard"], "giveaways"],
@@ -4800,6 +4801,275 @@ async function showMusic(guildId) {
     ],
     fields: { music: readMusic },
   });
+}
+
+// --- Color roles -------------------------------------------------------------------
+//
+// The list /color keeps (each color a role members pick with /color set or a
+// color panel) and how it works: the list picture, where members pick, who
+// manages colors, who may pick, the join color. Colors are changed right away
+// through their own requests; the options card saves with the page's Save bar.
+
+const COLOR_PACKS = ["classic", "pastel", "neon", "earth", "jewel", "mono", "spring", "summer", "autumn", "winter"];
+const COLOR_SORTS = ["hue", "shade", "luminance", "saturation", "name", "added"];
+const COLOR_DEFAULTS = { image: true, channelId: null, managerRoleIds: [], allowRoleIds: [], denyRoleIds: [], joinColor: null, overlapWarning: true };
+
+// The options as the server saves them, or null when they're all the defaults.
+function readColorOptions(form) {
+  const join = form.querySelector("#colorJoin").value;
+  const options = {
+    image: form.querySelector("#colorImage").checked,
+    channelId: form.querySelector("#colorChannel").value || null,
+    managerRoleIds: checkedList("colorManagers")(form) ?? [],
+    allowRoleIds: checkedList("colorAllow")(form) ?? [],
+    denyRoleIds: checkedList("colorDeny")(form) ?? [],
+    joinColor: join || null,
+    overlapWarning: form.querySelector("#colorOverlap").checked,
+  };
+  const isDefault = Object.entries(COLOR_DEFAULTS).every(([key, value]) => (Array.isArray(value) ? options[key].length === 0 : options[key] === value));
+  return isDefault ? null : options;
+}
+
+async function showColors(guildId) {
+  const data = await loadManagedGuild(guildId);
+  if (!data) {
+    return;
+  }
+  const options = { ...COLOR_DEFAULTS, ...(data.settings.colorOptions ?? {}) };
+  const colors = Array.isArray(data.settings.colorRoles) ? data.settings.colorRoles : [];
+  // Fresh items for each list: a role's colour dot is an element, and one
+  // element can only sit in one list.
+  const roleItems = () => data.roles.filter((role) => !role.managed).map((role) => roleItem(role, { dot: true }));
+  const roleList = (name, label, help, checked) => [
+    h("span", { class: "field-label" }, t(label)),
+    h("p", { class: "help" }, t(help)),
+    checkList({ name, items: roleItems(), checked: checked ?? [], filterKey: "filterRoles" }),
+  ];
+  const toggle = (id, label, help, checked) =>
+    h(
+      "label",
+      { class: "switch-card" },
+      h("span", { class: "switch-text" }, h("strong", {}, t(label)), h("span", { class: "help" }, t(help))),
+      h("span", { class: "switch" }, h("input", { id, type: "checkbox", role: "switch", checked, "aria-label": t(label) })),
+    );
+  const joinPicker = h(
+    "select",
+    { id: "colorJoin" },
+    h("option", { value: "" }, t("colorJoinOff")),
+    h("option", { value: "random", selected: options.joinColor === "random" }, t("colorJoinRandom")),
+    colors.map((color, index) => h("option", { value: color.roleId, selected: options.joinColor === color.roleId }, `${index + 1}. ${color.name}`)),
+  );
+  settingsPage({
+    data,
+    pageId: "colors",
+    intro: t("colorsHelp"),
+    cards: [
+      card(
+        t("sectionColorOptions"),
+        "palette",
+        "pink",
+        toggle("colorImage", "colorImage", "colorImageHelp", options.image !== false),
+        h(
+          "div",
+          { class: "rule-body" },
+          field("colorChannel", "colorChannelHelp", picker({ id: "colorChannel", options: postableChannels(data), value: options.channelId, emptyLabel: t("colorAnyChannel") })),
+          field("colorJoin", "colorJoinHelp", joinPicker),
+        ),
+        toggle("colorOverlap", "colorOverlap", "colorOverlapHelp", options.overlapWarning !== false),
+      ),
+      card(
+        t("sectionColorAccess"),
+        "key",
+        "purple",
+        roleList("colorManagers", "colorManagers", "colorManagersHelp", options.managerRoleIds),
+        roleList("colorAllow", "colorAllow", "colorAllowHelp", options.allowRoleIds),
+        roleList("colorDeny", "colorDeny", "colorDenyHelp", options.denyRoleIds),
+      ),
+    ],
+    fields: { colorOptions: readColorOptions },
+    after: colorManager(guildId, data),
+  });
+}
+
+// The color list: add, change, delete, add a pack, sort, and the picture.
+function colorManager(guildId, data) {
+  const body = h("div", { class: "color-list" });
+  const countPill = h("span", { class: "count-pill" });
+  const preview = h("div", { class: "color-preview" });
+  let info = { colors: Array.isArray(data.settings.colorRoles) ? data.settings.colorRoles : [], gradients: false, max: 100 };
+
+  function savedColors(colors, settings) {
+    info.colors = colors;
+    data.settings = { ...(settings ?? data.settings), colorRoles: colors.map(({ missing, ...color }) => color) };
+    state.cache = { guildId, data, at: Date.now() };
+    state.shell?.nav.replaceChildren(...navLinks(data, "colors").filter(Boolean));
+    list();
+  }
+
+  // One color's row: swatch and number, name, colour(s), save and delete.
+  function row(color, index) {
+    const name = h("input", { class: "grow", value: color.name, maxLength: 32, "aria-label": t("colorName") });
+    const hex = h("input", { type: "color", value: color.hex, "aria-label": t("colorHex") });
+    const gradientOn = h("input", { type: "checkbox", checked: Boolean(color.hex2), disabled: !info.gradients && !color.hex2, "aria-label": t("colorGradient") });
+    const hex2 = h("input", { type: "color", value: color.hex2 ?? color.hex, "aria-label": t("colorGradient"), hidden: !color.hex2 });
+    gradientOn.addEventListener("change", () => (hex2.hidden = !gradientOn.checked));
+    const swatch = h("span", { class: "color-swatch", "aria-hidden": "true" });
+    const paint = () => {
+      swatch.style.background = gradientOn.checked ? `linear-gradient(90deg, ${hex.value}, ${hex2.value})` : hex.value;
+    };
+    [hex, hex2, gradientOn].forEach((input) => input.addEventListener("input", paint));
+    gradientOn.addEventListener("change", paint);
+    paint();
+    const save = h("button", { class: "ghost small", type: "button" }, t("save"));
+    save.addEventListener("click", async () => {
+      setBusy(save, true);
+      try {
+        const result = await api(`/api/guilds/${guildId}/colors/${color.roleId}`, {
+          method: "PUT",
+          body: { name: name.value, hex: hex.value, hex2: gradientOn.checked ? hex2.value : null },
+        });
+        toast(t("colorSaved"));
+        savedColors(result.colors);
+      } catch (error) {
+        failed(error);
+      } finally {
+        setBusy(save, false);
+      }
+    });
+    const remove = h("button", { class: "ghost small danger", type: "button" }, t("delete"));
+    remove.addEventListener("click", async () => {
+      if (!confirm(t(color.made ? "colorDeleteConfirm" : "colorDeleteKeepConfirm", { name: color.name }))) {
+        return;
+      }
+      setBusy(remove, true);
+      try {
+        const result = await api(`/api/guilds/${guildId}/colors/${color.roleId}`, { method: "DELETE" });
+        toast(t("colorDeleted"));
+        savedColors(result.colors, result.settings);
+      } catch (error) {
+        failed(error);
+        setBusy(remove, false);
+      }
+    });
+    return h(
+      "li",
+      { class: "color-row" },
+      h("span", { class: "color-number" }, `${index + 1}.`),
+      swatch,
+      name,
+      h("span", { class: "color-inputs" }, hex, h("label", { class: "check inline", title: t("colorGradientHelp") }, gradientOn, h("span", {}, t("colorGradient"))), hex2),
+      color.missing ? h("span", { class: "badge danger" }, t("colorMissing")) : null,
+      color.made === false ? h("span", { class: "badge", title: t("colorNotMadeHelp") }, t("colorNotMade")) : null,
+      save,
+      remove,
+    );
+  }
+
+  function refreshPreview() {
+    if (info.colors.length === 0) {
+      preview.replaceChildren(h("p", { class: "muted" }, t("colorPreviewEmpty")));
+      return;
+    }
+    const on = data.settings.colorOptions?.image !== false;
+    preview.replaceChildren(
+      h("p", { class: "help" }, t(on ? "colorPreviewHelp" : "colorPreviewOff")),
+      h("img", { class: "color-preview-image", src: `/api/guilds/${guildId}/colors/image.png?v=${Date.now()}`, alt: t("colorPreviewAlt"), loading: "lazy" }),
+    );
+  }
+
+  function list() {
+    countPill.textContent = t("tagsCount", { count: info.colors.length, max: info.max });
+    addButton.disabled = info.colors.length >= info.max;
+    body.replaceChildren(
+      info.colors.length === 0 ? h("p", { class: "muted empty" }, t("colorsNone")) : h("ol", { class: "color-rows" }, info.colors.map(row)),
+    );
+    refreshPreview();
+  }
+
+  // Adding one color.
+  const newName = h("input", { class: "grow", maxLength: 32, placeholder: t("colorNamePlaceholder"), "aria-label": t("colorName") });
+  const newHex = h("input", { type: "color", value: "#9b6bff", "aria-label": t("colorHex") });
+  const addButton = h("button", { class: "primary small", type: "button" }, icon("plus", "icon small"), t("colorAdd"));
+  addButton.addEventListener("click", async () => {
+    setBusy(addButton, true);
+    try {
+      const result = await api(`/api/guilds/${guildId}/colors`, { method: "POST", body: { name: newName.value, hex: newHex.value } });
+      newName.value = "";
+      toast(t("colorAdded"));
+      savedColors(result.colors);
+    } catch (error) {
+      failed(error);
+    } finally {
+      setBusy(addButton, false);
+    }
+  });
+
+  // A pack, made in the background; the list reloads when it's done.
+  const packPicker = h("select", { "aria-label": t("colorPack") }, COLOR_PACKS.map((pack) => h("option", { value: pack }, t(`colorPack_${pack}`))));
+  const packButton = h("button", { class: "ghost small", type: "button" }, t("colorPackAdd"));
+  packButton.addEventListener("click", async () => {
+    setBusy(packButton, true);
+    try {
+      const result = await api(`/api/guilds/${guildId}/colors/pack`, { method: "POST", body: { pack: packPicker.value } });
+      toast(t("colorPackStarted", { count: result.adding }));
+      await waitForPack();
+    } catch (error) {
+      failed(error);
+    } finally {
+      setBusy(packButton, false);
+    }
+  });
+  async function waitForPack() {
+    for (let tries = 0; tries < 60; tries += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      const latest = await api(`/api/guilds/${guildId}/colors`);
+      if (!latest.packRunning) {
+        info = latest;
+        savedColors(latest.colors);
+        toast(t("colorPackDone"));
+        return;
+      }
+    }
+  }
+
+  const sortPicker = h("select", { "aria-label": t("colorSortBy") }, COLOR_SORTS.map((kind) => h("option", { value: kind }, t(`colorSort_${kind}`))));
+  const sortButton = h("button", { class: "ghost small", type: "button" }, t("colorSortApply"));
+  sortButton.addEventListener("click", async () => {
+    setBusy(sortButton, true);
+    try {
+      const result = await api(`/api/guilds/${guildId}/colors/sort`, { method: "POST", body: { by: sortPicker.value } });
+      toast(t("colorSorted"));
+      savedColors(result.colors);
+    } catch (error) {
+      failed(error);
+    } finally {
+      setBusy(sortButton, false);
+    }
+  });
+
+  list();
+  api(`/api/guilds/${guildId}/colors`)
+    .then((latest) => {
+      info = latest;
+      list();
+    })
+    .catch(failed);
+
+  return h(
+    "div",
+    { class: "settings-cards" },
+    card(
+      t("sectionColorList"),
+      "palette",
+      "amber",
+      h("div", { class: "toolbar" }, h("p", { class: "help grow" }, t("colorListHelp")), countPill),
+      h("div", { class: "toolbar color-add" }, newName, newHex, addButton),
+      body,
+      h("div", { class: "toolbar" }, field("colorPack", "colorPackHelp", packPicker), packButton),
+      h("div", { class: "toolbar" }, field("colorSortBy", "colorSortHelp", sortPicker), sortButton),
+    ),
+    card(t("sectionColorPreview"), "image", "blue", preview),
+  );
 }
 
 // --- Custom commands ---------------------------------------------------------------
@@ -11828,6 +12098,7 @@ const SHOW_PAGE = {
   raid: showRaid,
   welcome: showWelcome,
   roles: showRoles,
+  colors: showColors,
   starboard: showStarboard,
   birthdays: showBirthdays,
   music: showMusic,

@@ -54,6 +54,8 @@ const SAME_SERVER_LABELS = {
   [Setting.TEMP_VOICE]: "Join-to-create voice",
   [Setting.STATS_COUNTERS]: "Server stats counters",
   [Setting.COUNTRY_GUIDE_POST]: "Posted country guide",
+  [Setting.COLORS]: "Color roles list",
+  [Setting.COLOR_PANELS]: "Color panels",
 };
 const KNOWN = new Set(Object.values(Setting));
 
@@ -346,7 +348,9 @@ export function planRestore(backup, { guildId, channels, roles, isOwner, canMana
         continue;
       }
       try {
-        checked = checkSettingChanges({ [setting]: value }, { guildId, channels, roles })[setting];
+        // A join color may be a color the same backup brings back.
+        const colors = [...(current?.[Setting.COLORS] ?? []), ...(sameServer ? (backup.settings[Setting.COLORS] ?? []) : [])];
+        checked = checkSettingChanges({ [setting]: value }, { guildId, channels, roles, colors })[setting];
       } catch (error) {
         if (error instanceof InvalidSetting) {
           skipped.push({ setting, reason: "invalid", message: error.message });
@@ -364,7 +368,7 @@ export function planRestore(backup, { guildId, channels, roles, isOwner, canMana
       skipped.push({ setting, reason: claimsSameServer ? "unsigned" : "other-server" });
       continue;
     }
-    if (JSON.stringify(checked ?? null) === JSON.stringify(normalized(setting, current[setting], { guildId, channels, roles }) ?? null)) {
+    if (JSON.stringify(checked ?? null) === JSON.stringify(normalized(setting, current[setting], { guildId, channels, roles, colors: current?.[Setting.COLORS] ?? [] }) ?? null)) {
       unchanged += 1;
       continue;
     }
