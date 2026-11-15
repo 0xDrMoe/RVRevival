@@ -183,6 +183,48 @@ describe("welcomer", () => {
     expect(logger.warn).toHaveBeenCalledTimes(1);
   });
 
+  it("gives autoroles before the welcome message, so a failing message can't hold them up", async () => {
+    const guild = fakeGuild();
+    guild.channels.cache.get(WELCOME_CHANNEL_ID).send.mockImplementation(() => new Promise(() => {}));
+    const guildSettings = await settingsWith({ [Setting.AUTOROLES]: [MEMBER_ROLE_ID], [Setting.WELCOME_CHANNEL]: WELCOME_CHANNEL_ID });
+    const member = fakeMember(guild);
+    createWelcomer({ guildSettings, logger: fakeLogger() }).memberJoined(member);
+    await vi.waitFor(() => expect(member.roles.add).toHaveBeenCalledWith([MEMBER_ROLE_ID], "Autorole"));
+  });
+
+  it("gives autoroles after the rules even when the bot didn't have the old member cached", async () => {
+    const guild = fakeGuild();
+    const guildSettings = await settingsWith({ [Setting.AUTOROLES]: [MEMBER_ROLE_ID] });
+    const time = Date.UTC(2026, 10, 15);
+    const welcomer = createWelcomer({ guildSettings, logger: fakeLogger(), now: () => time });
+    const partialOld = { partial: true, pending: null };
+
+    const recent = { ...fakeMember(guild), joinedTimestamp: time - 60_000 };
+    await welcomer.memberUpdated(partialOld, recent);
+    expect(recent.roles.add).toHaveBeenCalledWith([MEMBER_ROLE_ID], "Autorole");
+
+    // Someone who joined long ago only changed something else; their roles stay as staff left them.
+    const longAgo = { ...fakeMember(guild), joinedTimestamp: time - 30 * 24 * 60 * 60 * 1000 };
+    await welcomer.memberUpdated(partialOld, longAgo);
+    expect(longAgo.roles.add).not.toHaveBeenCalled();
+
+    // A cached member who wasn't pending isn't given them again on other changes.
+    const cached = { ...fakeMember(guild), joinedTimestamp: time - 60_000 };
+    await welcomer.memberUpdated({ ...cached, pending: false }, cached);
+    expect(cached.roles.add).not.toHaveBeenCalled();
+  });
+
+  it("says which autoroles it skipped and why", async () => {
+    const guild = fakeGuild();
+    guild.roles.cache.get(HIGH_ROLE_ID).name = "VIP";
+    const guildSettings = await settingsWith({ [Setting.AUTOROLES]: [MEMBER_ROLE_ID, HIGH_ROLE_ID] });
+    const logger = fakeLogger();
+    const member = fakeMember(guild);
+    await createWelcomer({ guildSettings, logger }).memberJoined(member);
+    expect(member.roles.add).toHaveBeenCalledWith([MEMBER_ROLE_ID], "Autorole");
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining("VIP (at or above the bot's highest role)"), expect.anything());
+  });
+
   it("posts the leave message, and nothing without a leave channel", async () => {
     const guild = fakeGuild();
     const welcomer = createWelcomer({ guildSettings: await settingsWith({}), logger: fakeLogger() });

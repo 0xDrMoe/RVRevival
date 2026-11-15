@@ -33,6 +33,9 @@ function givenRoles(settings) {
   for (const roleId of settings[Setting.AUTOROLES] ?? []) {
     add(roleId, "autorole", "roles");
   }
+  for (const roleId of settings[Setting.BOT_AUTOROLES] ?? []) {
+    add(roleId, "autorole", "roles");
+  }
   for (const panel of Array.isArray(settings[Setting.ROLE_PANELS]) ? settings[Setting.ROLE_PANELS] : []) {
     for (const entry of panel?.roles ?? []) {
       add(entry?.roleId, "rolePanel", "roles");

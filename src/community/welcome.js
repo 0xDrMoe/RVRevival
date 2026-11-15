@@ -33,6 +33,9 @@ import { defaultEmbedColor, renderWelcomeEmbed, savedEmbed, TEXT_SETTING } from 
 export const MAX_MESSAGE_LENGTH = 1000;
 export const MAX_AUTOROLES = 10;
 export const WELCOME_DMS_PER_MINUTE = 10;
+// How recently someone must have joined for a rules acceptance the bot only
+// half saw (see justAcceptedRules) to still give them their autoroles.
+const RECENT_JOIN_MS = 24 * 60 * 60 * 1000;
 
 // Fills in the placeholders. The member's name and the server's name can't add
 // formatting; only {user} mentions anyone.
@@ -106,7 +109,9 @@ export function createWelcomer({ guildSettings, logger, forcedLanguage, skipAuto
     }
   }
 
-  // Gives the autoroles (or, to a bot, the bot autoroles) the bot is allowed to give.
+  // Gives the autoroles (or, to a bot, the bot autoroles) the bot is allowed to
+  // give. Roles it can't give are skipped with a console warning (once per
+  // server until it works again), so the reason shows up in `pm2 logs`.
   async function giveAutoroles(member) {
     if (skipAutoroles(member)) {
       return;
@@ -114,10 +119,29 @@ export function createWelcomer({ guildSettings, logger, forcedLanguage, skipAuto
     const guild = member.guild;
     const me = guild.members.me;
     const setting = member.user?.bot ? Setting.BOT_AUTOROLES : Setting.AUTOROLES;
-    const ids = guildSettings.getList(guild.id, setting).filter((id) => {
+    const saved = guildSettings.getList(guild.id, setting).filter((id) => !member.roles.cache.has(id));
+    if (saved.length === 0) {
+      return;
+    }
+    const skipped = [];
+    const ids = saved.filter((id) => {
       const role = guild.roles.cache.get(id);
-      return role && !role.managed && !isModeratorRole(role) && me && role.position < me.roles.highest.position && !member.roles.cache.has(id);
+      if (!role) {
+        return false;
+      }
+      if (role.managed || isModeratorRole(role)) {
+        skipped.push(`${role.name} (a bot role or has moderator permissions)`);
+        return false;
+      }
+      if (!me || role.position >= me.roles.highest.position) {
+        skipped.push(`${role.name} (at or above the bot's highest role)`);
+        return false;
+      }
+      return true;
     });
+    if (skipped.length > 0) {
+      warnOnce(guild, "autoroles-skipped", `Couldn't give some autoroles: ${skipped.join(", ")}.`);
+    }
     if (ids.length === 0) {
       return;
     }
@@ -128,15 +152,37 @@ export function createWelcomer({ guildSettings, logger, forcedLanguage, skipAuto
     try {
       await member.roles.add(ids, "Autorole");
       warned.delete(`${guild.id}:autoroles`);
+      if (skipped.length === 0) {
+        warned.delete(`${guild.id}:autoroles-skipped`);
+      }
     } catch (error) {
       warnOnce(guild, "autoroles", "Couldn't give autoroles. Move the bot's role above them.", error);
     }
   }
 
+  // Whether a member who just stopped being pending (accepted the rules) still
+  // needs their autoroles. When the bot hadn't cached them (it restarted after
+  // they joined) Discord's old copy is partial and doesn't say whether they were
+  // pending, so anyone who joined in the last day counts.
+  function justAcceptedRules(oldMember, newMember) {
+    if (newMember.pending || newMember.user?.bot) {
+      return false;
+    }
+    if (oldMember?.pending === true) {
+      return true;
+    }
+    const unknown = !oldMember || oldMember.partial || oldMember.pending == null;
+    const joinedAt = newMember.joinedTimestamp ?? newMember.joinedAt?.getTime?.();
+    return unknown && typeof joinedAt === "number" && now() - joinedAt < RECENT_JOIN_MS;
+  }
+
   return {
     async memberJoined(member) {
+      // Roles first, so a slow or failing welcome message or DM can't hold them up.
+      if (member.user?.bot || !member.pending) {
+        await giveAutoroles(member).catch((error) => logger.error("Couldn't give autoroles", { guildId: member.guild.id, error }));
+      }
       if (member.user?.bot) {
-        await giveAutoroles(member);
         return;
       }
       const guild = member.guild;
@@ -152,14 +198,11 @@ export function createWelcomer({ guildSettings, logger, forcedLanguage, skipAuto
       } else if (dm) {
         logger.debug("Skipped a welcome DM; too many people joined at once", { guildId: guild.id });
       }
-      if (!member.pending) {
-        await giveAutoroles(member);
-      }
     },
 
     // Members who had to accept the rules get their autoroles once they do.
     async memberUpdated(oldMember, newMember) {
-      if (oldMember.pending && !newMember.pending && !newMember.user?.bot) {
+      if (justAcceptedRules(oldMember, newMember)) {
         await giveAutoroles(newMember);
       }
     },
