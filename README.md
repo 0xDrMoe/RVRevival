@@ -221,7 +221,7 @@ Messages the bot posts can use variables: words in curly brackets that it fills 
 
 ### Welcome and leave messages
 
-When someone joins, the bot can post a welcome message in a channel, DM them, and give them **autoroles** (starter roles, up to 10). When someone leaves, it can post a leave message. Bots get none of this. If the server makes new members accept the rules first (membership screening), autoroles wait until they've accepted.
+When someone joins, the bot can post a welcome message in a channel, DM them, and give them **autoroles** (starter roles, up to 10). When someone leaves, it can post a leave message. Bots get none of this. If the server makes new members accept the rules first (membership screening), autoroles wait until they've accepted, unless **Give autoroles right away** is switched on (dashboard, Roles & panels page); then members get them as soon as they join, before accepting the rules.
 
 Messages can use `{user}` (a mention), `{username}`, `{server}` and `{members}` (the member count; the old `{count}` still works), up to 1000 characters (see [Message variables](#message-variables)). Only `{user}` pings anyone. Unset messages use a default in the server's language: *Welcome to {server}, {user}! You're member #{members}.* and *{username} has left the server.*
 
@@ -234,8 +234,6 @@ Admins set it up on the dashboard's **Welcome & leave** and **Roles & panels** p
 - `/welcome test` previews everything privately, with you as the new member. `/welcome show` lists the setup.
 
 Giving roles needs **Manage Roles** and the bot's role above the autoroles.
-
-Autoroles not given? Run `npm run autoroles:check` (or `npm run autoroles:check -- <server ID>`) on the server. It reads the saved autoroles and asks Discord for the roles, the bot's permissions, the Server Members Intent, rules screening and Onboarding, then says for each autorole whether the bot can give it and why not.
 
 **Roles on rejoin.** `/welcome persist enabled:true` (or the switch on the dashboard's **Roles & panels** page) makes the bot remember members' roles when they leave and give them back when they rejoin, so leaving can't shake off a restricted role. Roles with moderator permissions (ban, kick, manage anything, mention everyone…), bot and booster roles, and roles above the bot are never given back automatically; the dashboard can also list roles to never give back. Saved roles are used once and forgotten after a year. Quarantined members keep their [quarantine](#quarantine) instead.
 

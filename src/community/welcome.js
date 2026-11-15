@@ -4,7 +4,8 @@
 // When someone joins, the bot posts the welcome message in the welcome channel,
 // DMs them the welcome DM and gives them the autoroles. If the server uses
 // membership screening (rules to accept first), the roles wait until they've
-// accepted, since Discord doesn't let pending members have roles. When someone
+// accepted, unless the server switched on Setting.AUTOROLES_ON_JOIN (dashboard:
+// Give autoroles right away); then they get them on join, before the rules. When someone
 // leaves, the leave message goes in the leave channel. Bots get none of this,
 // only the bot autoroles (a separate list, so a "Bots" role can be automatic).
 //
@@ -179,7 +180,7 @@ export function createWelcomer({ guildSettings, logger, forcedLanguage, skipAuto
   return {
     async memberJoined(member) {
       // Roles first, so a slow or failing welcome message or DM can't hold them up.
-      if (member.user?.bot || !member.pending) {
+      if (member.user?.bot || !member.pending || guildSettings.get(member.guild.id, Setting.AUTOROLES_ON_JOIN)) {
         await giveAutoroles(member).catch((error) => logger.error("Couldn't give autoroles", { guildId: member.guild.id, error }));
       }
       if (member.user?.bot) {

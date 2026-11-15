@@ -1938,6 +1938,8 @@
   "inviteTrackingHelp": "For /invites member and /invites top. The bot needs Manage Server to read invite counts; without it, joins are saved with no inviter.",
   "sectionBotAutoroles": "Bot autoroles",
   "botAutorolesHelp": "Roles every new bot gets instead of the member autoroles (up to {max}), like a Bots role. Onboarding doesn't cover bots.",
+  "autorolesOnJoin": "Give autoroles right away",
+  "autorolesOnJoinHelp": "On: members get the autoroles as soon as they join, even before they accept the server's rules. Off: if your server makes new members accept the rules first (Server Settings > Safety Setup or Onboarding), they get them once they've accepted. Servers without a rules screen give them on join either way.",
   "sectionDehoist": "Dehoist names",
   "dehoistOn": "Fix names that start with symbols",
   "dehoistHelp": "Names like !!!aaa sort above everyone. New members and renames lose the symbols at the start. /dehoist run fixes everyone already here. Needs Manage Nicknames.",
