@@ -139,6 +139,7 @@ import { pageRenderer, publicRobots, publicSitemap } from "./seo.js";
 import { parseTranscriptData } from "../transcripts/snapshot.js";
 import { ticketTranscriptPage } from "../transcripts/ticketPage.js";
 import { renderNotice } from "../transcripts/render.js";
+import { checkTranscriptKey, isKeyShaped, isLinkPreviewAgent, PREVIEW_KEY_PARAM, transcriptPath, transcriptPreview, transcriptPreviewPage } from "../transcripts/linkPreview.js";
 import {
   buildTestMessages,
   checkAutomodText,
@@ -200,7 +201,7 @@ const SESSION_COOKIE = "rv_session";
 const STATE_COOKIE = "rv_oauth_state";
 // Where to go after logging in (a transcript link opened while logged out).
 const NEXT_COOKIE = "rv_next";
-const SAFE_NEXT = /^\/transcripts\/\d{17,20}\/\d{1,9}$/;
+const SAFE_NEXT = /^\/transcripts\/\d{17,20}\/\d{1,9}(\?k=[A-Za-z0-9_-]{22})?$/;
 // How long a person's Discord server list (and their permissions) is trusted.
 const GUILD_LIST_MS = 5 * 60 * 1000;
 // The soonest a Refresh asks Discord for the list again.
@@ -552,12 +553,20 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
 
   // The logged-in person, or a 401 reply.
   // With `page`, errors are small web pages instead of JSON (see refuse()).
+  // Where to come back to after logging in: the page, keeping a transcript
+  // link's preview key so the address can be shared again with its preview.
+  function loginNext(request) {
+    const path = request.url.split("?")[0];
+    const key = request.query?.[PREVIEW_KEY_PARAM];
+    return isKeyShaped(key) ? `${path}?${PREVIEW_KEY_PARAM}=${key}` : path;
+  }
+
   function requireSession(request, reply, { page = false } = {}) {
     const token = request.cookies[SESSION_COOKIE];
     const session = sessions.get(token);
     if (!session) {
       if (page) {
-        reply.redirect(`/auth/login?next=${encodeURIComponent(request.url.split("?")[0])}`);
+        reply.redirect(`/auth/login?next=${encodeURIComponent(loginNext(request))}`);
       } else {
         reply.code(401).send({ error: "login" });
       }
@@ -1398,7 +1407,49 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
   // A ticket's transcript as a page that looks like the conversation, for
   // anyone who can see the server's tickets on the dashboard. ?embed=1 is the
   // Tickets page's frame; ?download=1 saves it as a file.
+  // What a chat app's link reader gets instead of the login redirect (see
+  // transcripts/linkPreview.js): a short rundown when the link has a valid
+  // key, else only that it's a transcript.
+  async function sendTranscriptPreview(request, reply) {
+    const guildId = request.params.id;
+    const number = Number(request.params.number);
+    const valid = DISCORD_ID.test(guildId) && Number.isInteger(number) && number > 0 && number < 1e9;
+    if (!valid) {
+      return refusePage(reply, 404, "not-found");
+    }
+    const keyed = checkTranscriptKey(config.sessionSecret, guildId, number, request.query?.[PREVIEW_KEY_PARAM]);
+    let guild = null;
+    let ticket = null;
+    let names = {};
+    if (keyed && (await discord.botGuildIds()).has(guildId)) {
+      guild = await discord.guild(guildId).catch(() => null);
+      ticket = tickets.byNumber(guildId, number) ?? null;
+      if (ticket) {
+        names = await peopleNames(guildId, [ticket.userId, ticket.closedBy, ticket.claimedBy]);
+      }
+    }
+    const path = transcriptPath(guildId, number, keyed ? config.sessionSecret : null);
+    const page = transcriptPreviewPage({
+      baseUrl,
+      path,
+      loginPath: `/auth/login?next=${encodeURIComponent(path)}`,
+      preview: transcriptPreview({ number, guildName: guild?.name ?? null, ticket, names }),
+      imageUrl: guild?.icon ? `https://cdn.discordapp.com/icons/${guildId}/${guild.icon}.png?size=256` : null,
+    });
+    return reply
+      .header("Content-Security-Policy", "default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
+      .header("X-Robots-Tag", "noindex, nofollow")
+      .header("Referrer-Policy", "no-referrer")
+      .header("Cache-Control", "private, no-store")
+      .type("text/html; charset=utf-8")
+      .send(page);
+  }
+
   app.get("/transcripts/:id/:number", async (request, reply) => {
+    // Link readers never log in, so they'd only see Discord's login page.
+    if (!sessions.get(request.cookies[SESSION_COOKIE]) && isLinkPreviewAgent(request.headers["user-agent"])) {
+      return sendTranscriptPreview(request, reply);
+    }
     const access = await requireGuild(request, reply, { page: true });
     if (!access) {
       return reply;
@@ -1459,7 +1510,7 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
       ticket: ticketJson(ticket, names),
       transcript,
       // The transcript page (/transcripts/…), when one can be shown.
-      transcriptPage: transcript !== null ? `/transcripts/${guildId}/${number}` : null,
+      transcriptPage: transcript !== null ? transcriptPath(guildId, number, config.sessionSecret) : null,
       events: events.map((event) => ({
         event: event.event,
         actorId: event.actorId,

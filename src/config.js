@@ -67,9 +67,16 @@ export function loadBotConfig(env = process.env) {
     forcedLanguage: botLanguage(env),
     // Optional for the bot: used for the ban-appeal link in ban DMs.
     dashboardUrl: optionalDashboardUrl(env),
+    // Optional: signs transcript links so their link previews can say what the ticket was about.
+    transcriptSecret: optionalSessionSecret(env),
     // Keys for Twitch and Kick live notifications; undefined when not set.
     live: liveCredentials(env),
   };
+}
+
+function optionalSessionSecret(env) {
+  const secret = env.DASHBOARD_SESSION_SECRET?.trim();
+  return secret && secret.length >= 32 ? secret : undefined;
 }
 
 function optionalDashboardUrl(env) {

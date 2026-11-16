@@ -235,7 +235,7 @@ async function start() {
   const inviteTracker = createInviteTracker({ logger, wants: (guild) => serverLog.tracksInvites(guild) || inviteTrackingOn(guildSettings, guild.id) });
   serverLog = createServerLog({ poster, botDeletions, guildSettings, altHints, auditTrail, inviteTracker });
   // Saves and posts everything that happens to tickets (/tickets log).
-  const ticketLog = createTicketLog({ tickets, poster, guildSettings, logger, dashboardUrl: config.dashboardUrl });
+  const ticketLog = createTicketLog({ tickets, poster, guildSettings, logger, dashboardUrl: config.dashboardUrl, transcriptSecret: config.transcriptSecret });
   // Anti-nuke (/antinuke) counts bans and kicks done through the bot as well.
   let antiNuke;
   const moderation = createModerationService({
