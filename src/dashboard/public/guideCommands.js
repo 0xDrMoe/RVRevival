@@ -623,14 +623,14 @@ export const COMMAND_PARTS = [
         tone: "cyan",
         page: "tickets",
         related: "tickets",
-        summary: "Posts ticket panels (up to 10 per server, each in its own channel) and handles tickets: private threads between a member and the staff.",
+        summary: "Posts ticket panels (up to 10 per server, each in its own channel) and handles tickets: private threads or channels between a member and the staff.",
         who: "`panel`, `off`, `log` and `log-event` need an admin (**Manage Server**). The rest needs ticket staff: a staff role of the ticket's panel or category, the mod role, or **Manage Threads**. Members can close their own ticket.",
         usages: [
           {
             usage: "/tickets panel channel [staff-role] [title] [message]",
             what: "Posts a panel in that channel, with the look, staff roles, who can open and ticket types saved on the **Tickets** page. If that channel already has a panel, it's posted again in place; otherwise a new panel is added (the first one becomes the main panel). Each panel keeps its own settings. **Admins.**",
             options: [
-              ["channel", "Where the panel goes. Tickets from it open as private threads in this channel."],
+              ["channel", "Where the panel goes. Tickets from it open as private threads in this channel, or as channels of their own (set on the Tickets page)."],
               ["staff-role", "Sets this panel's staff role: who answers its tickets and is pinged when one opens. Left out, the panel keeps the staff roles it has (the mod role when it has none). Add more staff roles on the Tickets page."],
               ["title", "The panel's title, up to 100 characters. It's saved with the panel's look, so you can leave it out next time."],
               ["message", "The panel's text, up to 1000 characters. Saved the same way. The Tickets page allows up to 4096."],
@@ -643,7 +643,7 @@ export const COMMAND_PARTS = [
           },
           {
             usage: "/tickets close [reason]",
-            what: "Closes the ticket you're in: saves a transcript to the ticket log, then locks and archives the thread. The 🔒 button in the ticket does the same.",
+            what: "Closes the ticket you're in: saves a transcript to the ticket log, then deletes the thread or channel 5 seconds later (or keeps it for staff, if the panel says so). The 🔒 button in the ticket does the same.",
             options: [["reason", "Why it's closed, up to 300 characters. Shown in the ticket and the log."]],
           },
           {
@@ -693,10 +693,10 @@ export const COMMAND_PARTS = [
         example: ["/tickets panel channel:#support staff-role:@Mods title:Need help?", "/tickets close reason:Report handled, warning given", "/tickets add member:@Witness", "/tickets log channel:#ticket-log", "/tickets log-event event:Ticket renamed enabled:False"],
         tips: [
           "The ticket log also records changes made in Discord itself: renaming or archiving a thread, mentioning someone into it, people leaving. Give the bot **View Audit Log** to show who did them.",
-          "Archiving a ticket's thread closes it; unarchiving reopens it (unless the member has opened another).",
+          "Archiving a ticket's thread closes it; with *keep it for staff*, unarchiving reopens it (unless the member has opened another).",
           "Everything else is set up on the **Tickets** page, with a live preview: the embed (colour, author, image, thumbnail, footer), buttons or a dropdown, up to 25 ticket types with their own questions, staff role, intro message and thread name, and whether staff are pinged. Saving updates the posted panel.",
           "One open ticket per member, up to 50 per server.",
-          "**Don't delete ticket threads**, or the transcript is lost. Close them instead.",
+          "**Don't delete tickets by hand**, or the transcript is lost. Close them, and the bot deletes them once the transcript is saved.",
         ],
       },
     ],

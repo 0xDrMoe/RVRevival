@@ -88,7 +88,7 @@ import { MAX_STICKIES, MAX_STICKY_LENGTH, StickyStore } from "../sticky/stickySt
 import { BotStatsStore } from "../stats/botStats.js";
 import { checkTemplate, COUNTER_PRESETS, InvalidCounter, MAX_COUNTERS, newCounterId, normalizeCounters } from "../stats/statsCounters.js";
 import { buildPanelComponents, buildPanelMessage, panelLook, TICKET_COLOR } from "../tickets/tickets.js";
-import { checkLook, DEFAULT_NAME_FORMAT, describeLook, InvalidPanel as InvalidTicketPanel, normalizeLook } from "../tickets/panel.js";
+import { checkLook, DEFAULT_CHANNEL_NAME_FORMAT, DEFAULT_NAME_FORMAT, describeLook, InvalidPanel as InvalidTicketPanel, normalizeLook } from "../tickets/panel.js";
 import { checkTicketSupport, normalizeTicketSupport } from "../tickets/support.js";
 import { normalizeWarnThresholds } from "../moderation/warnThresholds.js";
 import { BUILT_IN_GUIDE_KEYS, buildPostedGuide } from "../commands/countryHelp.js";
@@ -843,6 +843,7 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
       closeButton: text("ticketCloseButton"),
       claimButton: text("ticketClaimButton"),
       nameFormat: DEFAULT_NAME_FORMAT,
+      channelNameFormat: DEFAULT_CHANNEL_NAME_FORMAT,
       // The colour panels use when neither the look nor Branding sets one.
       color: brandingOf(guildSettings, guildId).color ?? TICKET_COLOR,
       brandColor: brandingOf(guildSettings, guildId).color,
@@ -1375,7 +1376,51 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
       openCount: tickets.countOpen(guildId),
       stats: tickets.stats(guildId, Date.now() - STATS_DAYS * DAY_MS),
       panel: Boolean(guildSettings.get(guildId, Setting.TICKETS)?.channelId),
+      // Closed tickets whose thread or channel may still be in Discord.
+      leftOver: tickets.countLeftOver(guildId),
     };
+  });
+
+  // Deletes the threads and channels of closed tickets that are still in
+  // Discord (closed before tickets were deleted on close, or kept by their
+  // panel). Only tickets whose transcript is saved, a batch at a time; the
+  // page asks again while `remaining` is above 0. Each one is noted as gone
+  // first, so the bot doesn't log the delete as a ticket deleted by hand.
+  const CLEANUP_BATCH = 20;
+  const cleanupLocks = new KeyedLock();
+  app.post("/api/guilds/:id/tickets/cleanup", { config: { rateLimit: { max: 30, timeWindow: "1 minute" } } }, async (request, reply) => {
+    const access = await requireGuild(request, reply, { manage: true });
+    if (!access) {
+      return reply;
+    }
+    const { guildId, session } = access;
+    return cleanupLocks.run(guildId, async () => {
+      let deleted = 0;
+      let failed = 0;
+      for (const ticket of tickets.leftOver(guildId, CLEANUP_BATCH)) {
+        tickets.markGone(ticket.id);
+        try {
+          await discord.deleteChannel(guildId, ticket.threadId, `Clean-up: ticket #${ticket.number} was closed`);
+          deleted += 1;
+        } catch (error) {
+          // Unknown channel: it was gone already.
+          if (error.status !== 404 && error.code !== 10003) {
+            tickets.markGone(ticket.id, false);
+            failed += 1;
+            logger.warn("Couldn't delete a closed ticket's thread or channel", { guildId, ticket: ticket.number, error });
+            // Missing permissions won't fix themselves on the next one.
+            if (error.status === 403) {
+              break;
+            }
+          }
+        }
+      }
+      if (deleted > 0) {
+        await logAction(guildId, session, `**Closed tickets cleaned up:** ${deleted} thread${deleted === 1 ? "" : "s"} or channel${deleted === 1 ? "" : "s"} deleted`, []);
+      }
+      // After a failure the rest wait for another click, so it doesn't spin.
+      return { deleted, failed, remaining: failed > 0 ? 0 : tickets.countLeftOver(guildId), leftOver: tickets.countLeftOver(guildId) };
+    });
   });
 
   // Headers for transcript pages: inline styles only, no scripts, images from
@@ -3088,13 +3133,24 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
         problem("Pick the channel the panel goes in.");
       }
     } else if (!channels.some((channel) => channel.id === channelId && channel.type === 0)) {
-      problem("Pick a text channel. Tickets are private threads, which announcement channels and forums can't have.");
+      problem("Pick a text channel. The panel can only go in one, and private ticket threads can't be made in announcement channels or forums.");
     }
     let look;
     let categories;
     try {
       look = checkLook(body.look) ?? normalizeLook(null);
       categories = checkCategories(body.categories ?? [], { isRole }) ?? [];
+      // Ticket channels go in a category; the ones picked must still be there.
+      const isCategory = (id) => channels.some((channel) => channel.id === id && channel.type === 4);
+      if (look.categoryId && !isCategory(look.categoryId)) {
+        problem("Pick a category for ticket channels, or leave it empty to use the panel channel's category.");
+      }
+      if (look.closedCategoryId && !isCategory(look.closedCategoryId)) {
+        problem("Pick a category for closed tickets, or leave it empty to leave them where they are.");
+      }
+      if (look.closedCategoryId && look.closedCategoryId === look.categoryId) {
+        problem("Pick a different category for closed tickets, or leave it empty.");
+      }
     } catch (error) {
       if (error instanceof InvalidCategories) {
         problem(error.message);

@@ -798,6 +798,8 @@
   "ticketsOff": "I ticket non sono aperti in questo server al momento.",
   "ticketAlreadyOpen": "Hai già un ticket aperto: {thread}",
   "ticketsBroken": "Non posso aprire ticket al momento. Avvisa qualcuno dello staff.",
+  "ticketDeletingSoon": "Questo ticket verrà eliminato tra {seconds} secondi. La trascrizione è salvata.",
+  "ticketCategoryFull": "Al momento non c'è spazio per un altro canale ticket. Avvisa qualcuno dello staff.",
   "ticketTooMany": "Ci sono troppi ticket aperti al momento. Riprova più tardi.",
   "ticketOpened": "Il tuo ticket è aperto: {thread}",
 

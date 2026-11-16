@@ -1,15 +1,16 @@
 // Support tickets: a panel with an "Open a ticket" button. Each ticket is a
-// private thread in the panel's channel, where only the member and staff can
-// talk. Discord has no ticket feature of its own; private threads are the
-// closest thing, so that's what this builds on.
+// private thread in the panel's channel, or (a panel's choice) a private
+// channel of its own in a category, where only the member and staff can talk.
+// Discord has no ticket feature of its own; private threads are the closest
+// thing, and channels are what the big ticket bots use.
 
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, PermissionFlagsBits, StringSelectMenuBuilder } from "discord.js";
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, EmbedBuilder, OverwriteType, PermissionFlagsBits, StringSelectMenuBuilder } from "discord.js";
 import { pickLanguage, translate } from "../i18n/i18n.js";
 import { moderatorRoleId } from "../moderation/checks.js";
 import { Setting } from "../settings/guildSettings.js";
 import { findCategory } from "./categories.js";
 import { findPanel, mainPanelCategories, mainPanelLook, panelCustomId, ticketPanels } from "./panels.js";
-import { DEFAULT_NAME_FORMAT, fillTemplate, formatThreadName, normalizeLook, PANEL_LIMITS } from "./panel.js";
+import { DEFAULT_NAME_FORMAT, fillTemplate, formatChannelName, formatThreadName, normalizeLook, PANEL_LIMITS } from "./panel.js";
 
 export const OPEN_BUTTON = "tk:open";
 export const CLOSE_BUTTON = "tk:close";
@@ -43,6 +44,38 @@ export const TICKET_PERMISSIONS = [
   PermissionFlagsBits.SendMessagesInThreads,
   PermissionFlagsBits.ManageThreads,
 ];
+
+// What the bot needs where ticket channels are made (their category, or the
+// server when there's none): making, hiding and deleting them, and letting
+// people in and out (Manage Roles is "Manage Permissions" on a channel).
+export const TICKET_CHANNEL_PERMISSIONS = [
+  PermissionFlagsBits.ViewChannel,
+  PermissionFlagsBits.SendMessages,
+  PermissionFlagsBits.EmbedLinks,
+  PermissionFlagsBits.ReadMessageHistory,
+  PermissionFlagsBits.ManageChannels,
+  PermissionFlagsBits.ManageRoles,
+];
+// What everyone in a ticket channel can do: the member, staff roles and people added.
+export const TICKET_CHANNEL_ACCESS = [
+  PermissionFlagsBits.ViewChannel,
+  PermissionFlagsBits.SendMessages,
+  PermissionFlagsBits.ReadMessageHistory,
+  PermissionFlagsBits.AttachFiles,
+  PermissionFlagsBits.EmbedLinks,
+];
+// The same, as permissionOverwrites.edit takes it.
+export const TICKET_CHANNEL_ACCESS_EDIT = Object.freeze({
+  ViewChannel: true,
+  SendMessages: true,
+  ReadMessageHistory: true,
+  AttachFiles: true,
+  EmbedLinks: true,
+});
+// Discord's limit on channels in one category.
+export const MAX_CATEGORY_CHANNELS = 50;
+// How long a closed ticket stays before it's deleted, so people see it close.
+export const CLOSE_DELETE_DELAY_MS = 5_000;
 
 export const TICKET_COLOR = 0x5865f2;
 
@@ -134,6 +167,49 @@ export const threadName = (number, name) => formatThreadName(DEFAULT_NAME_FORMAT
 // A new ticket's thread name from the category's or panel's format.
 export function ticketThreadName(format, { number, displayName, username, category, server }) {
   return formatThreadName(format, { number: paddedNumber(number), user: displayName, username, category: category ?? "ticket", server });
+}
+
+// A new ticket channel's name from the category's or panel's format.
+export function ticketChannelName(format, { number, displayName, username, category, server }) {
+  return formatChannelName(format, { number: paddedNumber(number), user: displayName, username, category: category ?? "ticket", server });
+}
+
+// Whether a ticket lives in a channel of its own (else a thread).
+export const isTicketChannel = (place) => place?.type === ChannelType.GuildText;
+
+const isCategory = (channel) => channel?.type === ChannelType.GuildCategory;
+const channelsIn = (guild, categoryId) => [...guild.channels.cache.values()].filter((channel) => channel.parentId === categoryId && !channel.isThread?.()).length;
+
+// Where a panel's next ticket channel goes: its own category, else the panel
+// channel's (else none). { parent } when the bot can make it there, or
+// { problem: "full" | "permissions" }.
+export function ticketChannelParent(guild, panelChannel, look) {
+  const chosen = look.categoryId ? guild.channels.cache.get(look.categoryId) : null;
+  const parent = isCategory(chosen) ? chosen : isCategory(panelChannel?.parent) ? panelChannel.parent : null;
+  const me = guild.members.me;
+  const permissions = parent ? parent.permissionsFor(me) : me?.permissions;
+  if (!me || !permissions?.has(TICKET_CHANNEL_PERMISSIONS)) {
+    return { problem: "permissions", parent };
+  }
+  if (parent && channelsIn(guild, parent.id) >= MAX_CATEGORY_CHANNELS) {
+    return { problem: "full", parent };
+  }
+  return { parent };
+}
+
+// Whether a category can take one more channel.
+export const categoryHasRoom = (guild, categoryId) => isCategory(guild.channels.cache.get(categoryId)) && channelsIn(guild, categoryId) < MAX_CATEGORY_CHANNELS;
+
+// A ticket channel's permissions: hidden from everyone but the member, the
+// staff roles and the bot (server admins see every channel anyway).
+export function ticketChannelOverwrites({ guild, userId, staffRoleIds = [] }) {
+  const botId = guild.members.me?.id;
+  return [
+    { id: guild.id, type: OverwriteType.Role, deny: [PermissionFlagsBits.ViewChannel] },
+    { id: userId, type: OverwriteType.Member, allow: TICKET_CHANNEL_ACCESS },
+    ...staffRoleIds.filter((id) => id !== guild.id && guild.roles.cache.has(id)).map((id) => ({ id, type: OverwriteType.Role, allow: TICKET_CHANNEL_ACCESS })),
+    ...(botId ? [{ id: botId, type: OverwriteType.Member, allow: [...TICKET_CHANNEL_ACCESS, PermissionFlagsBits.ManageChannels] }] : []),
+  ];
 }
 
 const BUTTON_STYLE = {

@@ -798,6 +798,8 @@
   "ticketsOff": "Tickets sind auf diesem Server gerade nicht offen.",
   "ticketAlreadyOpen": "Du hast schon ein offenes Ticket: {thread}",
   "ticketsBroken": "Ich kann gerade keine Tickets öffnen. Sag bitte einem Teammitglied Bescheid.",
+  "ticketDeletingSoon": "Dieses Ticket wird in {seconds} Sekunden gelöscht. Das Protokoll ist gespeichert.",
+  "ticketCategoryFull": "Gerade ist kein Platz für einen weiteren Ticket-Kanal. Sag bitte einem Teammitglied Bescheid.",
   "ticketTooMany": "Gerade sind zu viele Tickets offen. Versuch es bitte später.",
   "ticketOpened": "Dein Ticket ist offen: {thread}",
 

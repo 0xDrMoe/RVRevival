@@ -79,6 +79,7 @@ function setup({ canPost = true, mentionable = true, staffMembers = [], threadMe
           members: { add: vi.fn(async () => {}), remove: vi.fn(async () => {}) },
           send: vi.fn(async () => ({})),
           edit: vi.fn(async (changes) => Object.assign(thread, changes)),
+          delete: vi.fn(async () => guild.channels.cache.delete(thread.id)),
           messages: { fetch: fakeFetch(threadMessages) },
         };
         threads.push(thread);
@@ -350,7 +351,7 @@ describe("tickets", () => {
     expect(t.tickets.openForUser(GUILD_ID, MEMBER_ID)).toBeUndefined();
   });
 
-  it("lets the member or staff close a ticket, which locks and archives the thread", async () => {
+  it("lets the member or staff close a ticket, which deletes the thread once its transcript is saved", async () => {
     const t = setup();
     await t.postPanel({ "staff-role": { id: STAFF_ROLE_ID } });
     await t.openTicket();
@@ -361,10 +362,16 @@ describe("tickets", () => {
 
     const owner = t.interaction({ customId: CLOSE_BUTTON, userId: MEMBER_ID, channelId: thread.id });
     expect(await t.command.components[CLOSE_BUTTON].handle(owner)).toMatchObject({ status: Status.SUCCESS, key: "ticketClosedLog" });
-    expect(owner.reply.mock.calls[0][0].content).toBe(`🔒 Ticket #1 closed by <@${MEMBER_ID}>.`);
+    expect(owner.reply.mock.calls[0][0].content).toBe(`🔒 Ticket #1 closed by <@${MEMBER_ID}>.\nThis ticket will be deleted in 5 seconds. Its transcript is saved.`);
     expect(owner.reply.mock.calls[0][0].flags).toBeUndefined();
-    expect(thread.edit).toHaveBeenCalledWith(expect.objectContaining({ locked: true, archived: true }));
+    expect(thread.delete).toHaveBeenCalledTimes(1);
+    expect(thread.edit).not.toHaveBeenCalled();
     expect(t.tickets.openForUser(GUILD_ID, MEMBER_ID)).toBeUndefined();
+    expect(t.tickets.byNumber(GUILD_ID, 1)).toMatchObject({ hasTranscript: true, placeGone: true });
+    // The bot's own delete isn't logged as a ticket deleted by hand.
+    const posts = t.logPosts.length;
+    await t.command.threadDeleted(thread);
+    expect(t.logPosts).toHaveLength(posts);
 
     const twice = t.interaction({ customId: CLOSE_BUTTON, userId: MEMBER_ID, channelId: thread.id });
     expect((await t.command.components[CLOSE_BUTTON].handle(twice)).key).toBe("ticketAlreadyClosed");
@@ -399,8 +406,9 @@ describe("tickets", () => {
     // Saved as data too, for the dashboard's transcript page.
     const data = JSON.parse(t.tickets.transcriptData(GUILD_ID, 1));
     expect(data.messages).toHaveLength(3);
-    // Saved before the thread is archived.
-    expect(thread.edit).toHaveBeenCalledWith(expect.objectContaining({ archived: true }));
+    // Saved before the thread is deleted.
+    expect(thread.delete).toHaveBeenCalled();
+    expect(thread.messages.fetch.mock.invocationCallOrder[0]).toBeLessThan(thread.delete.mock.invocationCallOrder[0]);
   });
 
   it("still closes a ticket whose history can't be read", async () => {
@@ -426,7 +434,7 @@ describe("tickets", () => {
     const [thread] = t.threads;
     const close = t.interaction({ subcommand: "close", userId: STRANGER_ID, roleIds: [STAFF_ROLE_ID], channelId: thread.id, options: { reason: "Fixed" } });
     await t.command.execute(close);
-    expect(close.reply.mock.calls[0][0].content).toBe(`🔒 Ticket #1 closed by <@${STRANGER_ID}>. Reason: Fixed`);
+    expect(close.reply.mock.calls[0][0].content).toBe(`🔒 Ticket #1 closed by <@${STRANGER_ID}>. Reason: Fixed\nThis ticket will be deleted in 5 seconds. Its transcript is saved.`);
     expect(t.tickets.byThread(thread.id)).toMatchObject({ closedBy: STRANGER_ID, closeReason: "Fixed" });
   });
 
@@ -740,6 +748,8 @@ describe("ticket log", () => {
 
   it("logs renames, archiving and unarchiving done in Discord, with who did it from the audit log", async () => {
     const t = setup();
+    // Kept when closed, so unarchiving can reopen it.
+    await t.guildSettings.set(GUILD_ID, Setting.TICKET_PANEL, { onClose: "keep" });
     await t.postPanel();
     await t.openTicket();
     const [thread] = t.threads;
@@ -754,6 +764,7 @@ describe("ticket log", () => {
     await update({ archived: false }, { archived: true });
     expect(t.tickets.byNumber(GUILD_ID, 1)).toMatchObject({ closedBy: ADMIN_ID, closeReason: "Thread archived", hasTranscript: true });
     expect(t.logPosts.at(-1).files[0].name).toBe("ticket-0001.html");
+    expect(thread.delete).not.toHaveBeenCalled();
     // Unarchived again: it's open again.
     await update({ archived: true }, { archived: false });
     expect(t.tickets.openForUser(GUILD_ID, MEMBER_ID)).toMatchObject({ number: 1, closedAt: null });
@@ -1173,7 +1184,7 @@ describe("ticket claiming, auto-close and ratings", () => {
     const ticket = t.tickets.byNumber(GUILD_ID, 1);
     expect(ticket.closedAt).not.toBeNull();
     expect(ticket.closeReason).toBe("No messages for 24 hours");
-    expect(thread.edit).toHaveBeenCalledWith(expect.objectContaining({ locked: true, archived: true }));
+    expect(thread.delete).toHaveBeenCalledTimes(1);
     expect(sent).toHaveBeenCalledTimes(1);
     const buttons = sent.mock.calls[0][0].components[0].components.map((button) => button.data.custom_id);
     expect(buttons).toEqual([1, 2, 3, 4, 5].map((stars) => `${RATE_PREFIX}${ticket.id}:${stars}`));
@@ -1214,5 +1225,210 @@ describe("ticket claiming, auto-close and ratings", () => {
     expect(() => checkTicketSupport({ autoCloseHours: 721, ratings: true })).toThrow();
     expect(() => checkTicketSupport({ autoCloseHours: 1, ratings: "yes" })).toThrow();
     expect(normalizeTicketSupport({ autoCloseHours: -3, ratings: 1 })).toEqual({ autoCloseHours: 0, ratings: false });
+  });
+});
+
+describe("closing: delete or keep", () => {
+  const CATEGORY_ID = "820000000000000001";
+  const CLOSED_CATEGORY_ID = "820000000000000002";
+
+  it("keeps a closed thread, locked and archived, when the panel keeps closed tickets", async () => {
+    const t = setup();
+    await t.guildSettings.set(GUILD_ID, Setting.TICKET_PANEL, { onClose: "keep" });
+    await t.postPanel();
+    await t.openTicket();
+    const [thread] = t.threads;
+    const owner = t.interaction({ customId: CLOSE_BUTTON, userId: MEMBER_ID, channelId: thread.id });
+    await t.command.components[CLOSE_BUTTON].handle(owner);
+    expect(owner.reply.mock.calls[0][0].content).toBe(`🔒 Ticket #1 closed by <@${MEMBER_ID}>.`);
+    expect(thread.edit).toHaveBeenCalledWith(expect.objectContaining({ locked: true, archived: true }));
+    expect(thread.delete).not.toHaveBeenCalled();
+  });
+
+  it("archives the thread instead when Discord won't delete it, so it never stays open", async () => {
+    const t = setup();
+    await t.postPanel();
+    await t.openTicket();
+    const [thread] = t.threads;
+    thread.delete.mockRejectedValueOnce(Object.assign(new Error("Missing Permissions"), { code: 50013, status: 403 }));
+    await t.command.components[CLOSE_BUTTON].handle(t.interaction({ customId: CLOSE_BUTTON, userId: MEMBER_ID, channelId: thread.id }));
+    expect(thread.edit).toHaveBeenCalledWith(expect.objectContaining({ locked: true, archived: true }));
+    expect(t.tickets.byNumber(GUILD_ID, 1).placeGone).toBe(false);
+  });
+
+  it("still finishes closing when the close message can't be sent", async () => {
+    const t = setup();
+    await t.postPanel();
+    await t.openTicket();
+    const [thread] = t.threads;
+    const owner = t.interaction({ customId: CLOSE_BUTTON, userId: MEMBER_ID, channelId: thread.id });
+    owner.reply.mockRejectedValueOnce(new Error("Unknown interaction"));
+    await t.command.components[CLOSE_BUTTON].handle(owner);
+    expect(t.tickets.byNumber(GUILD_ID, 1)).toMatchObject({ hasTranscript: true, placeGone: true });
+    expect(thread.delete).toHaveBeenCalled();
+  });
+
+  it("deletes a thread Discord archived after a quiet week, once its transcript is saved", async () => {
+    const t = setup();
+    await t.postPanel();
+    await t.openTicket();
+    const [thread] = t.threads;
+    thread.guild = t.guild;
+    await t.command.threadUpdated({ ...thread, archived: false }, Object.assign(thread, { archived: true }));
+    expect(t.tickets.byNumber(GUILD_ID, 1)).toMatchObject({ closeReason: "Thread archived", hasTranscript: true });
+    expect(thread.delete).toHaveBeenCalledTimes(1);
+  });
+
+  // Tickets as channels of their own, in a category.
+  function channelMode({ look = {}, children = 0, canManage = true } = {}) {
+    const t = setup();
+    const category = (id) => ({ id, type: ChannelType.GuildCategory, permissionsFor: () => ({ has: () => canManage }) });
+    t.guild.channels.cache.set(CATEGORY_ID, category(CATEGORY_ID));
+    t.guild.channels.cache.set(CLOSED_CATEGORY_ID, category(CLOSED_CATEGORY_ID));
+    for (let index = 0; index < children; index += 1) {
+      t.guild.channels.cache.set(`83000000000000${String(index).padStart(4, "0")}`, { id: `x${index}`, type: ChannelType.GuildText, parentId: CATEGORY_ID });
+    }
+    t.channel.parent = t.guild.channels.cache.get(CATEGORY_ID);
+    t.guild.members.me = { id: BOT_ID, permissions: { has: () => canManage } };
+    t.created = [];
+    t.guild.channels.create = vi.fn(async (options) => {
+      const overwrites = new Map(options.permissionOverwrites.map((entry) => [entry.id, entry]));
+      const made = {
+        id: `84000000000000000${t.created.length + 1}`,
+        type: ChannelType.GuildText,
+        parentId: options.parent,
+        options,
+        guild: t.guild,
+        send: vi.fn(async () => ({})),
+        delete: vi.fn(async () => t.guild.channels.cache.delete(made.id)),
+        setParent: vi.fn(async (id) => Object.assign(made, { parentId: id })),
+        messages: { fetch: fakeFetch(fakeMessages(2)) },
+        permissionOverwrites: {
+          cache: overwrites,
+          edit: vi.fn(async (id, allow, extra) => overwrites.set(id, { id, type: extra?.type, allow })),
+          delete: vi.fn(async (id) => overwrites.delete(id)),
+        },
+      };
+      t.created.push(made);
+      t.guild.channels.cache.set(made.id, made);
+      return made;
+    });
+    return { t, ready: t.guildSettings.set(GUILD_ID, Setting.TICKET_PANEL, { mode: "channel", ...look }) };
+  }
+
+  it("opens a ticket as a private channel in the panel channel's category", async () => {
+    const { t, ready } = channelMode();
+    await ready;
+    await t.postPanel({ "staff-role": { id: STAFF_ROLE_ID } });
+    const { outcome } = await t.openTicket();
+    expect(outcome.key).toBe("ticketOpened");
+    expect(t.channel.threads.create).not.toHaveBeenCalled();
+    const [made] = t.created;
+    expect(made.options).toMatchObject({ name: "ticket-0001", type: ChannelType.GuildText, parent: CATEGORY_ID });
+    const rules = made.options.permissionOverwrites;
+    expect(rules).toContainEqual(expect.objectContaining({ id: GUILD_ID, deny: [PermissionFlagsBits.ViewChannel] }));
+    expect(rules.find((rule) => rule.id === MEMBER_ID).allow).toContain(PermissionFlagsBits.SendMessages);
+    expect(rules.find((rule) => rule.id === STAFF_ROLE_ID).allow).toContain(PermissionFlagsBits.ViewChannel);
+    expect(rules.find((rule) => rule.id === BOT_ID).allow).toContain(PermissionFlagsBits.ManageChannels);
+    expect(made.send).toHaveBeenCalledTimes(1);
+    expect(t.tickets.byThread(made.id)).toMatchObject({ number: 1, userId: MEMBER_ID });
+    // Messages there count as activity, like in a thread.
+    t.command.messageCreated({ author: { id: STAFF_ROLE_ID }, inGuild: () => true, channel: made, channelId: made.id, guildId: GUILD_ID, createdTimestamp: 1_234_567 });
+    expect(t.tickets.byThread(made.id).lastActivityAt).toBe(1_234_567);
+  });
+
+  it("uses the panel's own category and a channel-style name", async () => {
+    const { t, ready } = channelMode({ look: { categoryId: CLOSED_CATEGORY_ID, nameFormat: "🎫 {number} · {user}" } });
+    await ready;
+    await t.postPanel();
+    await t.openTicket();
+    expect(t.created[0].options).toMatchObject({ name: "🎫-0001-player-2", parent: CLOSED_CATEGORY_ID });
+  });
+
+  it("refuses when the category already has 50 channels, or the bot can't make channels there", async () => {
+    const full = channelMode({ children: 50 });
+    await full.ready;
+    await full.t.postPanel();
+    expect((await full.t.openTicket()).outcome.key).toBe("ticketCategoryFull");
+    expect(full.t.tickets.countOpen(GUILD_ID)).toBe(0);
+
+    const locked = channelMode({ canManage: false });
+    await locked.ready;
+    locked.t.channel.permissionsFor = () => ({ has: () => true });
+    await locked.t.postPanel();
+    expect((await locked.t.openTicket()).outcome.key).toBe("ticketsBroken");
+    expect(locked.t.guild.channels.create).not.toHaveBeenCalled();
+  });
+
+  it("adds and removes people with the channel's permissions", async () => {
+    const { t, ready } = channelMode();
+    await ready;
+    await t.postPanel();
+    await t.openTicket();
+    const [made] = t.created;
+    const staff = (subcommand) => t.interaction({ subcommand, manageThreads: true, channelId: made.id, options: { member: { id: STRANGER_ID } } });
+    expect((await t.command.execute(staff("add"))).key).toBe("ticketAdded");
+    expect(made.permissionOverwrites.edit).toHaveBeenCalledWith(STRANGER_ID, expect.objectContaining({ ViewChannel: true, SendMessages: true }), expect.anything());
+    expect((await t.command.execute(staff("remove"))).key).toBe("ticketRemoved");
+    expect(made.permissionOverwrites.delete).toHaveBeenCalledWith(STRANGER_ID, expect.any(String));
+  });
+
+  it("deletes the channel once the transcript is saved", async () => {
+    const { t, ready } = channelMode();
+    await ready;
+    await t.postPanel();
+    await t.openTicket();
+    const [made] = t.created;
+    await t.command.components[CLOSE_BUTTON].handle(t.interaction({ customId: CLOSE_BUTTON, userId: MEMBER_ID, channelId: made.id }));
+    expect(t.tickets.byNumber(GUILD_ID, 1)).toMatchObject({ hasTranscript: true, messageCount: 2, placeGone: true });
+    expect(made.delete).toHaveBeenCalledTimes(1);
+    const posts = t.logPosts.length;
+    await t.command.channelDeleted(made);
+    expect(t.logPosts).toHaveLength(posts);
+  });
+
+  it("keeps a closed channel for staff: the member loses access and it moves to the closed category", async () => {
+    const { t, ready } = channelMode({ look: { onClose: "keep", closedCategoryId: CLOSED_CATEGORY_ID } });
+    await ready;
+    await t.postPanel({ "staff-role": { id: STAFF_ROLE_ID } });
+    await t.openTicket();
+    const [made] = t.created;
+    await t.command.components[CLOSE_BUTTON].handle(t.interaction({ customId: CLOSE_BUTTON, userId: MEMBER_ID, channelId: made.id }));
+    expect(made.delete).not.toHaveBeenCalled();
+    expect(made.permissionOverwrites.delete).toHaveBeenCalledWith(MEMBER_ID, expect.any(String));
+    expect(made.permissionOverwrites.cache.has(BOT_ID)).toBe(true);
+    expect(made.permissionOverwrites.cache.has(STAFF_ROLE_ID)).toBe(true);
+    expect(made.setParent).toHaveBeenCalledWith(CLOSED_CATEGORY_ID, expect.objectContaining({ lockPermissions: false }));
+  });
+
+  it("closes a ticket whose channel was deleted by hand, and logs it", async () => {
+    const { t, ready } = channelMode();
+    await ready;
+    await t.postPanel();
+    await t.openTicket();
+    const [made] = t.created;
+    await t.command.channelDeleted(made);
+    expect(t.tickets.byNumber(GUILD_ID, 1)).toMatchObject({ closeReason: "Channel deleted", placeGone: true });
+    expect(t.logPosts.at(-1).title).toContain("deleted");
+  });
+});
+
+describe("ticket clean-up list", () => {
+  it("lists closed tickets with a transcript whose thread may still be there", () => {
+    const tickets = new TicketStore();
+    const open = (userId) => tickets.open({ guildId: GUILD_ID, userId, subject: "x" });
+    const a = open(MEMBER_ID);
+    const b = open(STRANGER_ID);
+    const c = open(ADMIN_ID);
+    for (const [ticket, thread] of [[a, "1"], [b, "2"], [c, "3"]]) {
+      tickets.setThread(ticket.id, thread);
+      tickets.close(ticket.id);
+    }
+    tickets.setTranscript(a.id, "text", 1);
+    tickets.setTranscript(b.id, "text", 1);
+    expect(tickets.leftOver(GUILD_ID).map((ticket) => ticket.number)).toEqual([1, 2]);
+    tickets.markGone(a.id);
+    expect(tickets.leftOver(GUILD_ID).map((ticket) => ticket.number)).toEqual([2]);
+    expect(tickets.countLeftOver(GUILD_ID)).toBe(1);
   });
 });

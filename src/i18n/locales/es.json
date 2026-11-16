@@ -798,6 +798,8 @@
   "ticketsOff": "Los tickets no están abiertos en este servidor ahora mismo.",
   "ticketAlreadyOpen": "Ya tienes un ticket abierto: {thread}",
   "ticketsBroken": "No puedo abrir tickets ahora mismo. Avisa a alguien del staff.",
+  "ticketDeletingSoon": "Este ticket se borrará en {seconds} segundos. Su transcripción está guardada.",
+  "ticketCategoryFull": "Ahora mismo no hay sitio para otro canal de ticket. Avisa a alguien del staff.",
   "ticketTooMany": "Hay demasiados tickets abiertos ahora mismo. Inténtalo más tarde.",
   "ticketOpened": "Tu ticket está abierto: {thread}",
 

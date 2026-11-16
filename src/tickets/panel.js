@@ -5,6 +5,12 @@
 //   how members pick     "buttons" (one per category) or "menu" (a dropdown)
 //   the single button    its label, emoji and style, when there are no categories
 //   every new ticket     the intro message, the thread name and whether staff are pinged
+//   where tickets go     "thread": a private thread in the panel's channel, or
+//                        "channel": a private channel of its own, in `categoryId`
+//                        (empty: the panel channel's category)
+//   when one closes      "delete": deleted once its transcript is saved, or
+//                        "keep": a thread is locked and archived; a channel is
+//                        hidden from the member and moved to `closedCategoryId`
 //
 // Categories (tickets/categories.js) can override the intro, the thread name
 // and the ping. Everything left empty uses the built-in text.
@@ -14,6 +20,8 @@ import { BUTTON_STYLES, isButtonEmoji } from "./categories.js";
 
 export { BUTTON_STYLES };
 export const LAYOUTS = ["buttons", "menu"];
+export const TICKET_MODES = ["thread", "channel"];
+export const CLOSE_ACTIONS = ["delete", "keep"];
 
 // Discord's embed limits, and ours for the intro and the thread name.
 export const PANEL_LIMITS = Object.freeze({
@@ -33,6 +41,8 @@ export const PANEL_LIMITS = Object.freeze({
 // What a template can say: the opener, the ticket number, the staff role, the
 // category and the server.
 export const DEFAULT_NAME_FORMAT = "🎫 {number} · {user}";
+// Channel names can't have spaces or capitals, so channels get their own default.
+export const DEFAULT_CHANNEL_NAME_FORMAT = "ticket-{number}";
 
 const DEFAULT_LOOK = Object.freeze({
   title: null,
@@ -51,7 +61,13 @@ const DEFAULT_LOOK = Object.freeze({
   intro: null,
   nameFormat: null,
   pingStaff: true,
+  mode: "thread",
+  categoryId: null,
+  onClose: "delete",
+  closedCategoryId: null,
 });
+
+const SNOWFLAKE = /^\d{17,20}$/;
 
 export class InvalidPanel extends Error {
   name = "InvalidPanel";
@@ -154,6 +170,21 @@ function readLook(value, problem) {
       problem("Ping staff must be on or off.");
     }
   }
+  choice("mode", TICKET_MODES, "ticket mode");
+  choice("onClose", CLOSE_ACTIONS, "close action");
+  for (const [key, what] of [
+    ["categoryId", "category for ticket channels"],
+    ["closedCategoryId", "category for closed tickets"],
+  ]) {
+    if (value[key] === undefined || value[key] === null || value[key] === "") {
+      continue;
+    }
+    if (typeof value[key] === "string" && SNOWFLAKE.test(value[key])) {
+      look[key] = value[key];
+    } else {
+      problem(`Pick a ${what}.`);
+    }
+  }
   const total = [look.title, look.description, look.authorName, look.footer].join("").length;
   if (total > PANEL_LIMITS.total) {
     problem(`The panel's text is ${total} characters; Discord allows ${PANEL_LIMITS.total} in one embed.`);
@@ -185,6 +216,8 @@ export function describeLook(saved) {
       look.intro ? "own intro" : null,
       look.nameFormat ? `threads "${look.nameFormat}"` : null,
       look.pingStaff ? null : "no staff ping",
+      look.mode === "channel" ? `channels${look.categoryId ? ` in <#${look.categoryId}>` : ""}` : null,
+      look.onClose === "keep" ? `kept when closed${look.mode === "channel" && look.closedCategoryId ? ` in <#${look.closedCategoryId}>` : ""}` : null,
     ]
       .filter(Boolean)
       .join(" · ")
@@ -199,4 +232,21 @@ export const fillTemplate = (template, values) => fillVariables(template, "ticke
 export function formatThreadName(format, values) {
   const name = fillTemplate(format || DEFAULT_NAME_FORMAT, values).replace(/\s+/g, " ").trim().slice(0, 100);
   return name || fillTemplate(DEFAULT_NAME_FORMAT, values).slice(0, 100);
+}
+
+// A text channel's name: Discord makes them lower case with dashes for
+// spaces, so this does the same (and drops separators like "·" that would
+// leave "-·-"), so the name the bot logs is the one Discord shows.
+export function channelNameFrom(name) {
+  return name
+    .toLowerCase()
+    .replace(/[\s·•|,.:;!?'"`~()[\]{}<>/\\]+/g, "-")
+    .replace(/-{2,}/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 100);
+}
+
+// A ticket channel's name from a format (the thread format, or "ticket-{number}").
+export function formatChannelName(format, values) {
+  return channelNameFrom(fillTemplate(format || DEFAULT_CHANNEL_NAME_FORMAT, values)) || channelNameFrom(fillTemplate(DEFAULT_CHANNEL_NAME_FORMAT, values));
 }

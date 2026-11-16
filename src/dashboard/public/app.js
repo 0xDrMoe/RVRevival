@@ -9065,6 +9065,10 @@ function readTicketLook(form) {
     intro: value("tkIntro"),
     nameFormat: value("tkNameFormat"),
     pingStaff: form.querySelector("#tkPingStaff").checked,
+    mode: form.querySelector("#tkMode").value,
+    categoryId: value("tkCategory"),
+    onClose: form.querySelector("#tkOnClose").value,
+    closedCategoryId: value("tkClosedCategory"),
   };
 }
 
@@ -9300,6 +9304,7 @@ function readColorChooser(form, id) {
 // step can be opened from the step bar, and Save works from any of them.
 const TICKET_STEPS = [
   { id: "setup", titleKey: "ticketSectionSetup", helpKey: "ticketStepSetupHelp", icon: "users", tone: "green" },
+  { id: "place", titleKey: "ticketSectionPlace", helpKey: "ticketStepPlaceHelp", icon: "folder", tone: "blue" },
   { id: "panel", titleKey: "ticketSectionPanel", helpKey: "ticketStepPanelHelp", icon: "image", tone: "purple" },
   { id: "types", titleKey: "ticketCategories", helpKey: "ticketCategoriesHelp", icon: "layers", tone: "purple" },
   { id: "pick", titleKey: "ticketSectionPick", helpKey: "ticketStepPickHelp", icon: "list", tone: "blue" },
@@ -9355,6 +9360,29 @@ function ticketPanelEditor(guildId, data, panel, { onSaved }) {
   const singleHelp = h("p", { class: "help" }, t("ticketSingleButtonHelp"));
   const pingStaff = h("input", { id: "tkPingStaff", type: "checkbox", role: "switch", checked: look.pingStaff !== false, "aria-label": t("ticketPingStaff") });
 
+  // Where tickets go: private threads, or channels of their own in a category
+  // (like the big ticket bots), and what happens when one closes.
+  const categoryItems = data.channels.filter((entry) => entry.type === CHANNEL.CATEGORY).map((entry) => ({ id: entry.id, label: `${channelPrefix(entry)}${entry.name}` }));
+  const categoryName = (id) => categoryItems.find((entry) => entry.id === id)?.label ?? t("unknownOption", { id });
+  const mode = h(
+    "select",
+    { id: "tkMode" },
+    h("option", { value: "thread", selected: look.mode !== "channel" }, t("ticketModeThread")),
+    h("option", { value: "channel", selected: look.mode === "channel" }, t("ticketModeChannel")),
+  );
+  const openCategory = picker({ id: "tkCategory", options: categoryItems, value: look.categoryId ?? "", emptyLabel: t("ticketCategoryParentDefault") });
+  const onClose = h(
+    "select",
+    { id: "tkOnClose" },
+    h("option", { value: "delete", selected: look.onClose !== "keep" }, t("ticketOnCloseDelete")),
+    h("option", { value: "keep", selected: look.onClose === "keep" }, t("ticketOnCloseKeep")),
+  );
+  const closedCategory = picker({ id: "tkClosedCategory", options: categoryItems, value: look.closedCategoryId ?? "", emptyLabel: t("ticketClosedCategoryNone") });
+  const openCategoryField = field("ticketOpenCategory", "ticketOpenCategoryHelp", openCategory);
+  const closedCategoryField = field("ticketClosedCategory", "ticketClosedCategoryHelp", closedCategory);
+  const modeHelp = h("p", { class: "help" });
+  const onCloseHelp = h("p", { class: "help" });
+
   const panelPreview = h("div", { class: "embed-preview" });
   const welcomePreview = h("div", { class: "embed-preview" });
   const reviewList = h("dl", { class: "wizard-review" });
@@ -9371,6 +9399,7 @@ function ticketPanelEditor(guildId, data, panel, { onSaved }) {
       h("div", { class: "field" }, h("span", { class: "field-label" }, t("ticketPanelStaff")), staffRoles, h("span", { class: "help" }, t("ticketPanelStaffHelp"))),
       h("div", { class: "field" }, h("span", { class: "field-label" }, t("ticketPanelOpen")), openRoles, h("span", { class: "help" }, t("ticketPanelOpenHelp"))),
     ],
+    place: [field("ticketMode", null, mode), modeHelp, openCategoryField, field("ticketOnClose", null, onClose), onCloseHelp, closedCategoryField],
     panel: [
       h("div", { class: "field" }, h("span", { class: "field-label" }, t("embedColor")), color),
       h("p", { class: "help" }, t("ticketColorHelp")),
@@ -9519,10 +9548,22 @@ function ticketPanelEditor(guildId, data, panel, { onSaved }) {
       ["setup", t("ticketPanelChannel"), where.channelId ? channelName(where.channelId) : t("ticketPanelNotPosted")],
       ["setup", t("ticketPanelStaff"), roleNames(where.staffRoleIds, "ticketPanelStaffDefault")],
       ["setup", t("ticketPanelOpen"), roleNames(where.openRoleIds, "ticketPanelOpenDefault")],
+      [
+        "place",
+        t("ticketMode"),
+        now.mode === "channel" ? `${t("ticketModeChannel")} · ${now.categoryId ? categoryName(now.categoryId) : t("ticketCategoryParentDefault")}` : t("ticketModeThread"),
+      ],
+      [
+        "place",
+        t("ticketOnClose"),
+        now.onClose === "keep" && now.mode === "channel" && now.closedCategoryId
+          ? `${t("ticketOnCloseKeep")} · ${categoryName(now.closedCategoryId)}`
+          : t(now.onClose === "keep" ? "ticketOnCloseKeep" : "ticketOnCloseDelete"),
+      ],
       ["panel", t("ticketSectionPanel"), h("span", {}, chip, `${now.title || defaults.title} · ${hexColor(now.color ?? defaults.color).toUpperCase()}`)],
       ["types", t("ticketCategories"), kinds.length > 0 ? kinds.map((kind) => `${kind.emoji ? `${kind.emoji} ` : ""}${kind.label || t("ticketCategoryNew")}`).join(", ") : t("ticketReviewNoTypes")],
       ["pick", t("ticketSectionPick"), kinds.length === 0 ? t("ticketReviewSingle", { label: now.buttonLabel || defaults.buttonLabel }) : t(now.layout === "menu" ? "ticketLayoutMenu" : "ticketLayoutButtons")],
-      ["new", t("ticketNameFormat"), now.nameFormat || defaults.nameFormat],
+      ["new", t("ticketNameFormat"), now.nameFormat || (now.mode === "channel" ? defaults.channelNameFormat : defaults.nameFormat)],
       ["new", t("ticketPingStaff"), t(now.pingStaff ? "featureOn" : "featureOff")],
     ];
     reviewList.replaceChildren(...lines.map(([stepId, label, value]) => h("div", { class: "wizard-review-row" }, h("dt", {}, label), h("dd", {}, value), edit(stepId))));
@@ -9532,6 +9573,12 @@ function ticketPanelEditor(guildId, data, panel, { onSaved }) {
     const now = readTicketLook(form);
     const kinds = readTicketCategories(form) ?? [];
     const hasCategories = kinds.length > 0;
+    const asChannel = now.mode === "channel";
+    openCategoryField.hidden = !asChannel;
+    closedCategoryField.hidden = !asChannel || now.onClose !== "keep";
+    modeHelp.textContent = t(asChannel ? "ticketModeChannelHelp" : "ticketModeThreadHelp");
+    onCloseHelp.textContent = t(now.onClose === "keep" ? (asChannel ? "ticketOnCloseKeepChannelHelp" : "ticketOnCloseKeepThreadHelp") : "ticketOnCloseDeleteHelp");
+    form.querySelector("#tkNameFormat").placeholder = asChannel ? (defaults.channelNameFormat ?? defaults.nameFormat) : defaults.nameFormat;
     menuField.hidden = !hasCategories || now.layout !== "menu";
     layoutField.hidden = !hasCategories;
     singleButton.hidden = hasCategories;
@@ -9779,6 +9826,50 @@ function ticketSupportCard(guildId, data) {
   return card(t("ticketsSupportTitle"), "sliders", "purple", form);
 }
 
+// Closed tickets whose thread or channel is still in Discord (closed before
+// tickets were deleted on close, or kept by their panel): one button deletes
+// them, a batch at a time. Their transcripts stay. Hidden while there are none.
+function ticketCleanupCard(guildId) {
+  const text = h("p", { class: "help" });
+  const button = h("button", { class: "danger", type: "button" }, icon("archive", "icon small"), h("span", {}, t("ticketsCleanupButton")));
+  const box = card(t("ticketsCleanupTitle"), "archive", "amber", text, h("div", { class: "toolbar" }, button));
+  box.hidden = true;
+  let count = 0;
+  const update = (leftOver) => {
+    count = leftOver;
+    box.hidden = count === 0;
+    text.textContent = t("ticketsCleanupHelp", { count: formatNumber(count) });
+  };
+  button.addEventListener("click", async () => {
+    if (!confirm(t("ticketsCleanupConfirm", { count: formatNumber(count) }))) {
+      return;
+    }
+    setBusy(button, true);
+    let deleted = 0;
+    try {
+      // A batch per request; stops when none are left, or one fails.
+      for (;;) {
+        const result = await api(`/api/guilds/${guildId}/tickets/cleanup`, { method: "POST", body: {} });
+        deleted += result.deleted;
+        update(result.leftOver);
+        if (result.failed > 0) {
+          toast(t("ticketsCleanupFailed", { count: formatNumber(deleted) }));
+          return;
+        }
+        if (result.remaining === 0) {
+          break;
+        }
+      }
+      toast(t("ticketsCleanupDone", { count: formatNumber(deleted) }));
+    } catch (error) {
+      failed(error);
+    } finally {
+      setBusy(button, false);
+    }
+  });
+  return { card: box, update };
+}
+
 async function showTicketList(guildId, data, query) {
   const status = TICKET_STATUSES.includes(query.get("status")) ? query.get("status") : "all";
   const userId = /^\d{17,20}$/.test(query.get("user") ?? "") ? query.get("user") : "";
@@ -9818,6 +9909,7 @@ async function showTicketList(guildId, data, query) {
   const summary = h("p", { class: "help" });
   const empty = h("p", { class: "muted empty", hidden: true }, t("ticketsNone"));
   const statsRow = h("div", { class: "stats", "aria-busy": "true" });
+  const cleanup = canManageGuild(data) ? ticketCleanupCard(guildId) : null;
   let before = null;
   const load = async () => {
     setBusy(more, true);
@@ -9833,6 +9925,7 @@ async function showTicketList(guildId, data, query) {
       if (statsRow.hasAttribute("aria-busy") && page.stats) {
         statsRow.removeAttribute("aria-busy");
         statsRow.replaceChildren(...ticketStats(page.stats, page.openCount));
+        cleanup?.update(page.leftOver ?? 0);
       }
       list.append(...page.tickets.map((ticket) => ticketRow(guildId, ticket)));
       summary.textContent = t(page.panel ? "ticketsSummary" : "ticketsSummaryNoPanel", { count: formatNumber(page.openCount) });
@@ -9852,6 +9945,7 @@ async function showTicketList(guildId, data, query) {
       statsRow,
       canManageGuild(data) && data.ticketDefaults ? ticketPanelManager(guildId, data) : null,
       canManageGuild(data) && data.settings ? ticketSupportCard(guildId, data) : null,
+      cleanup?.card ?? null,
       filters,
       card(t("page_tickets"), "ticket", "cyan", summary, empty, list, h("div", { class: "center" }, more)),
     ),
