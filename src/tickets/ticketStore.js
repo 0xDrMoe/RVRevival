@@ -1,5 +1,5 @@
 // Stores support tickets (/tickets) in the bot's SQLite database. Each ticket
-// is a private thread; the row remembers who opened it, why, how it ended, and
+// is a private thread or a private channel (its ID is kept in thread_id either way); the row remembers who opened it, why, how it ended, and
 // the conversation (saved as a transcript when it's closed). Each ticket's
 // history (opened, closed, people added…) is kept in ticket_events.
 
@@ -30,6 +30,8 @@ function toTicket(row) {
         lastActivityAt: row.last_activity_at ?? null,
         idleWarnedAt: row.idle_warned_at ?? null,
         rating: row.rating ?? null,
+        // Its thread or channel was deleted (tickets closed before this say false).
+        placeGone: Boolean(row.place_gone),
       }
     : undefined;
 }
@@ -68,6 +70,14 @@ export class TicketStore {
       listOpen: this.#db.prepare("SELECT * FROM tickets WHERE guild_id = ? AND closed_at IS NULL ORDER BY number"),
       countOpen: this.#db.prepare("SELECT COUNT(*) AS total FROM tickets WHERE guild_id = ? AND closed_at IS NULL"),
       setThread: this.#db.prepare("UPDATE tickets SET thread_id = ? WHERE id = ?"),
+      setGone: this.#db.prepare("UPDATE tickets SET place_gone = ? WHERE id = ? RETURNING *"),
+      leftOver: this.#db.prepare(`
+        SELECT * FROM tickets
+        WHERE guild_id = ? AND closed_at IS NOT NULL AND place_gone = 0 AND thread_id IS NOT NULL AND transcript IS NOT NULL
+        ORDER BY number LIMIT ?`),
+      countLeftOver: this.#db.prepare(`
+        SELECT COUNT(*) AS total FROM tickets
+        WHERE guild_id = ? AND closed_at IS NOT NULL AND place_gone = 0 AND thread_id IS NOT NULL AND transcript IS NOT NULL`),
       close: this.#db.prepare(`
         UPDATE tickets SET closed_at = ?, closed_by = ?, close_reason = ? WHERE id = ? AND closed_at IS NULL RETURNING *`),
       delete: this.#db.prepare("DELETE FROM tickets WHERE id = ?"),
@@ -199,6 +209,22 @@ export class TicketStore {
 
   setThread(id, threadId) {
     this.#statements.setThread.run(threadId, id);
+  }
+
+  // Notes that the ticket's thread or channel is gone (true) or, when deleting
+  // it failed after all, still there (false). Returns the ticket.
+  markGone(id, gone = true) {
+    return toTicket(this.#statements.setGone.get(gone ? 1 : 0, id));
+  }
+
+  // Closed tickets, with a saved transcript, whose thread or channel may still
+  // be in Discord: what the dashboard's clean-up deletes. Oldest first.
+  leftOver(guildId, limit = 25) {
+    return this.#statements.leftOver.all(guildId, limit).map(toTicket);
+  }
+
+  countLeftOver(guildId) {
+    return this.#statements.countLeftOver.get(guildId).total;
   }
 
   // Closes an open ticket. Returns the closed ticket, or undefined if it was

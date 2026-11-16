@@ -798,6 +798,8 @@
   "ticketsOff": "Tickets aren't open in this server right now.",
   "ticketAlreadyOpen": "You already have an open ticket: {thread}",
   "ticketsBroken": "I can't open tickets right now. Please tell a staff member.",
+  "ticketDeletingSoon": "This ticket will be deleted in {seconds} seconds. Its transcript is saved.",
+  "ticketCategoryFull": "There's no room for a new ticket channel right now. Please tell a staff member.",
   "ticketTooMany": "Too many tickets are open right now. Please try again later.",
   "ticketOpened": "Your ticket is open: {thread}",
 

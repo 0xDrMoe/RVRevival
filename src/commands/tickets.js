@@ -19,9 +19,12 @@
 // page; see tickets/panel.js and tickets/categories.js.
 //
 // Members open a ticket with the panel's button, which asks what they need
-// help with. The ticket is a private thread in the panel's channel with the
-// member and the staff roles in it, and a Close button that the member or staff
-// can press. Panel and off need Manage Server; the rest needs ticket staff
+// help with. The ticket is a private thread in the panel's channel, or (the
+// panel's "mode") a private channel of its own in a category, with the member
+// and the staff roles in it, and a Close button that the member or staff can
+// press. Closing saves the transcript, then deletes the thread or channel (or,
+// when the panel keeps closed tickets, locks and archives the thread, or hides
+// the channel from the member and moves it to the closed category). Panel and off need Manage Server; the rest needs ticket staff
 // (see tickets/tickets.js). Tickets are saved in data/bot.db (tickets/ticketStore.js).
 // Closing a ticket saves its transcript. Everything that happens to a ticket,
 // here or in Discord itself (renaming, archiving, adding people by hand,
@@ -39,6 +42,7 @@ import {
   SlashCommandBuilder,
   TextInputBuilder,
   TextInputStyle,
+  OverwriteType,
   ThreadAutoArchiveDuration,
 } from "discord.js";
 import { discordLocalizations, pickLanguage, translate } from "../i18n/i18n.js";
@@ -47,6 +51,13 @@ import { Setting } from "../settings/guildSettings.js";
 import {
   addStaff,
   buildPanelComponents,
+  categoryHasRoom,
+  CLOSE_DELETE_DELAY_MS,
+  isTicketChannel,
+  TICKET_CHANNEL_ACCESS_EDIT,
+  ticketChannelName,
+  ticketChannelOverwrites,
+  ticketChannelParent,
   buildPanelMessage,
   buildRatingRequest,
   buildTicketWelcome,
@@ -97,6 +108,9 @@ import { accentColor } from "../branding/branding.js";
 import { sendDm } from "../utils/dms.js";
 
 const COMMAND_NAME = "tickets";
+
+// Discord refusing a channel because its category already has 50.
+const isCategoryFullError = (error) => error?.code === 30013 || JSON.stringify(error?.rawError ?? {}).includes("CHANNEL_PARENT_MAX_CHANNELS");
 
 function withDescription(builder, key) {
   return builder.setDescription(translate("en", key)).setDescriptionLocalizations(discordLocalizations(key));
@@ -315,11 +329,16 @@ export function createTicketsCommand({
     return { language, text, answer };
   }
 
-  // The panel's channel, if the bot can open tickets there.
-  function usableChannel(guild, channelId) {
+  // The panel's channel, if the bot can open tickets there. Tickets that are
+  // channels of their own only need the panel channel to exist (their
+  // category is checked when one is made).
+  function usableChannel(guild, channelId, mode = "thread") {
     const channel = guild.channels.cache.get(channelId);
     const me = guild.members.me;
-    return channel?.type === ChannelType.GuildText && me && channel.permissionsFor(me)?.has(TICKET_PERMISSIONS) ? channel : undefined;
+    if (channel?.type !== ChannelType.GuildText || !me) {
+      return undefined;
+    }
+    return mode === "channel" || channel.permissionsFor(me)?.has(TICKET_PERMISSIONS) ? channel : undefined;
   }
 
   // The member's open ticket, unless its thread is gone or archived (then it's
@@ -357,7 +376,93 @@ export function createTicketsCommand({
       transcriptData: saved?.data,
       messageCount: saved?.messageCount,
     });
+    // Archived by someone (or Discord) already: deleted when the panel
+    // deletes closed tickets, else left as it is.
+    await finishClosed(guild, thread, closed, saved, { delay: false, keep: false, reason: `Ticket #${ticket.number} closed (${reason})` });
     return closed;
+  }
+
+  // What happens to a closed ticket's thread or channel, by its panel's
+  // setting: deleted (after `delay`, so people see it close), or kept (a
+  // thread locked and archived, a channel hidden from the member and moved to
+  // the closed category). It's only deleted once its transcript is saved
+  // (`saved`); otherwise it's kept, so nothing is lost. `keep: false` leaves a
+  // kept one as it is. Never throws.
+  async function finishClosed(guild, place, ticket, saved, { delay = true, keep = true, reason }) {
+    if (!place || !guild) {
+      return;
+    }
+    const look = findPanel(guildSettings, guild.id, ticket.panelId)?.look ?? normalizeLook(null);
+    if (look.onClose === "delete") {
+      if (saved) {
+        if (await deleteClosed(place, ticket, { delay, reason })) {
+          return;
+        }
+      } else {
+        logger.warn("Kept a closed ticket instead of deleting it: its transcript couldn't be saved", { guildId: guild.id, ticket: ticket.number });
+      }
+    }
+    if (keep) {
+      await keepClosed(guild, place, ticket, look, reason);
+    }
+  }
+
+  // Deletes a closed ticket's thread or channel. Returns whether it's gone.
+  async function deleteClosed(place, ticket, { delay, reason }) {
+    if (delay) {
+      await sleep(CLOSE_DELETE_DELAY_MS);
+    }
+    // Unarchived (so reopened) in the meantime: it stays.
+    if (tickets.get(ticket.id)?.closedAt === null) {
+      return true;
+    }
+    // Noted first, so the delete event doesn't log it as a ticket deleted by hand.
+    tickets.markGone(ticket.id);
+    try {
+      await place.delete(reason);
+      logger.info("Closed ticket deleted", { guildId: ticket.guildId, ticket: ticket.number });
+      return true;
+    } catch (error) {
+      if (error?.status === 404 || error?.code === 10003) {
+        return true;
+      }
+      tickets.markGone(ticket.id, false);
+      logger.warn(
+        isTicketChannel(place)
+          ? "Couldn't delete a closed ticket's channel; give the bot Manage Channels there"
+          : "Couldn't delete a closed ticket's thread; give the bot Manage Threads in its channel",
+        { guildId: ticket.guildId, ticket: ticket.number, error },
+      );
+      return false;
+    }
+  }
+
+  // Keeps a closed ticket readable for staff only.
+  async function keepClosed(guild, place, ticket, look, reason) {
+    if (!isTicketChannel(place)) {
+      await place
+        .edit({ locked: true, archived: true, reason })
+        .catch((error) => logger.warn("Couldn't lock and archive a closed ticket", { guildId: ticket.guildId, ticket: ticket.number, error }));
+      return;
+    }
+    // Everyone let in one by one (the member, people added) loses access; staff roles keep it.
+    const botId = guild.members.me?.id;
+    const people = [...(place.permissionOverwrites?.cache?.values() ?? [])].filter((entry) => entry.type === OverwriteType.Member && entry.id !== botId);
+    for (const entry of people) {
+      await place.permissionOverwrites
+        .delete(entry.id, reason)
+        .catch((error) => logger.warn("Couldn't take someone out of a closed ticket channel", { guildId: ticket.guildId, ticket: ticket.number, error }));
+    }
+    const closedCategoryId = look.closedCategoryId;
+    if (closedCategoryId && place.parentId !== closedCategoryId) {
+      if (categoryHasRoom(guild, closedCategoryId)) {
+        await place
+          .setParent(closedCategoryId, { lockPermissions: false, reason })
+          .catch((error) => logger.warn("Couldn't move a closed ticket channel to the closed category", { guildId: ticket.guildId, ticket: ticket.number, error }));
+      } else {
+        logger.warn("The closed tickets category is full or gone; the closed ticket stays where it is", { guildId: ticket.guildId, ticket: ticket.number });
+      }
+    }
   }
 
   // Saves the conversation, as text and as data for the dashboard's
@@ -384,22 +489,29 @@ export function createTicketsCommand({
     }
   }
 
-  // Marks the ticket closed, says so in the thread, saves the transcript, then
-  // locks and archives it so only staff can read it afterwards.
+  // Marks the ticket closed, says so in the ticket, saves the transcript, then
+  // deletes the thread or channel, or keeps it for staff (finishClosed).
+  // Each step carries on when the one before failed, so a closed ticket is
+  // never left open in Discord.
   async function closeTicket(interaction, ticket, reason) {
     const { answer } = answerer(interaction);
+    const guild = interaction.guild;
     const closed = tickets.close(ticket.id, { closedBy: interaction.user.id, reason, closedAt: now() });
     if (!closed) {
       return answer(Status.REFUSED, "ticketAlreadyClosed");
     }
-    const language = serverLanguage(interaction.guild, forcedLanguage);
-    const values = { user: `<@${interaction.user.id}>`, number: ticket.number, reason };
-    await interaction.reply({
-      content: translate(language, reason ? "ticketClosedReason" : "ticketClosedMessage", values),
-      allowedMentions: { parse: [] },
-    });
-    const saved = await saveTranscript(interaction.channel, closed, interaction.guild);
-    await ticketLog.record(interaction.guild, closed, {
+    const place = interaction.channel ?? (await guild.channels.fetch(interaction.channelId).catch(() => null));
+    const language = serverLanguage(guild, forcedLanguage);
+    const values = { user: `<@${interaction.user.id}>`, number: ticket.number, reason, seconds: CLOSE_DELETE_DELAY_MS / 1000 };
+    const deleting = (findPanel(guildSettings, guild.id, ticket.panelId)?.look ?? normalizeLook(null)).onClose === "delete";
+    const content = [translate(language, reason ? "ticketClosedReason" : "ticketClosedMessage", values), deleting ? translate(language, "ticketDeletingSoon", values) : null]
+      .filter(Boolean)
+      .join("\n");
+    await interaction
+      .reply({ content, allowedMentions: { parse: [] } })
+      .catch((error) => logger.warn("Couldn't say a ticket is closed", { guildId: ticket.guildId, ticket: ticket.number, error }));
+    const saved = place ? await saveTranscript(place, closed, guild) : undefined;
+    await ticketLog.record(guild, closed, {
       event: TicketEvent.CLOSED,
       actorId: interaction.user.id,
       detail: reason,
@@ -407,10 +519,8 @@ export function createTicketsCommand({
       transcriptData: saved?.data,
       messageCount: saved?.messageCount,
     });
-    await interaction.channel
-      .edit({ locked: true, archived: true, reason: `Ticket #${ticket.number} closed by ${interaction.user.id}` })
-      .catch((error) => logger.warn("Couldn't lock and archive a closed ticket", { guildId: ticket.guildId, ticket: ticket.number, error }));
     logger.info("Ticket closed", { guildId: ticket.guildId, ticket: ticket.number });
+    await finishClosed(guild, place, closed, saved, { reason: `Ticket #${ticket.number} closed by ${interaction.user.id}` });
     await askForRating(interaction.guild, closed);
     return result(Status.SUCCESS, "ticketClosedLog", { number: ticket.number });
   }
@@ -494,7 +604,7 @@ export function createTicketsCommand({
   // A message in a ticket keeps it from closing for inactivity and, from
   // anyone but the member, counts as the first response.
   function messageCreated(message) {
-    if (message.author?.bot || !message.inGuild?.() || !message.channel?.isThread?.()) {
+    if (message.author?.bot || !message.inGuild?.() || !(message.channel?.isThread?.() || isTicketChannel(message.channel))) {
       return;
     }
     const ticket = tickets.byThread(message.channelId);
@@ -540,10 +650,8 @@ export function createTicketsCommand({
           transcriptData: saved?.data,
           messageCount: saved?.messageCount,
         });
-        await thread
-          .edit({ locked: true, archived: true, reason: `Ticket #${ticket.number} closed for inactivity` })
-          .catch((error) => logger.warn("Couldn't lock and archive an idle ticket", { guildId: ticket.guildId, ticket: ticket.number, error }));
         logger.info("Ticket closed for inactivity", { guildId: ticket.guildId, ticket: ticket.number });
+        await finishClosed(guild, thread, closed, saved, { delay: false, reason: `Ticket #${ticket.number} closed for inactivity` });
         await askForRating(guild, closed);
       } catch (error) {
         logger.warn("Couldn't check a ticket for inactivity", { guildId: ticket.guildId, ticket: ticket.number, error });
@@ -662,10 +770,15 @@ export function createTicketsCommand({
     }
     const user = interaction.options.getUser("member", true);
     const values = { member: `<@${user.id}>`, number: ticket.number };
+    const place = interaction.channel;
     if (subcommand === "add") {
       expectChange(ticket.threadId, user.id);
       try {
-        await interaction.channel.members.add(user.id);
+        if (isTicketChannel(place)) {
+          await place.permissionOverwrites.edit(user.id, TICKET_CHANNEL_ACCESS_EDIT, { type: OverwriteType.Member, reason: `Added to ticket #${ticket.number} by ${interaction.user.id}` });
+        } else {
+          await place.members.add(user.id);
+        }
       } catch (error) {
         // Discord refuses people who can't see the panel's channel.
         logger.debug("Couldn't add someone to a ticket", { guildId, ticket: ticket.number, error });
@@ -679,7 +792,11 @@ export function createTicketsCommand({
       return answer(Status.REFUSED, "ticketCannotRemoveOwner");
     }
     expectChange(ticket.threadId, user.id);
-    await interaction.channel.members.remove(user.id);
+    if (isTicketChannel(place)) {
+      await place.permissionOverwrites.delete(user.id, `Removed from ticket #${ticket.number} by ${interaction.user.id}`);
+    } else {
+      await place.members.remove(user.id);
+    }
     const outcome = await answer(Status.SUCCESS, "ticketRemoved", values);
     await ticketLog.record(guild, ticket, { event: TicketEvent.MEMBER_REMOVED, actorId: interaction.user.id, userIds: [user.id] });
     return outcome;
@@ -844,7 +961,8 @@ export function createTicketsCommand({
     return undefined;
   }
 
-  // The form: opens the ticket's private thread in its panel's channel.
+  // The form: opens the ticket, as a private thread in its panel's channel or
+  // a private channel of its own (the panel's mode).
   async function handleForm(interaction) {
     const { answer } = answerer(interaction);
     const { parsed, panel } = panelOf(interaction);
@@ -860,10 +978,24 @@ export function createTicketsCommand({
     if (refused) {
       return refused;
     }
-    const channel = usableChannel(guild, panel.channelId);
+    const look = panel.look;
+    const asChannel = look.mode === "channel";
+    const channel = usableChannel(guild, panel.channelId, look.mode);
     if (!channel) {
       logger.warn("Can't open tickets in the panel's channel; check the bot's permissions there", { guildId: guild.id, channelId: panel.channelId });
       return answer(Status.FAILED, "ticketsBroken");
+    }
+    const where = asChannel ? ticketChannelParent(guild, channel, look) : null;
+    if (where?.problem === "permissions") {
+      logger.warn("Can't make ticket channels; give the bot View Channel, Send Messages, Embed Links, Read Message History, Manage Channels and Manage Permissions in the ticket category", {
+        guildId: guild.id,
+        categoryId: where.parent?.id ?? null,
+      });
+      return answer(Status.FAILED, "ticketsBroken");
+    }
+    if (where?.problem === "full") {
+      logger.warn("The ticket category has 50 channels, Discord's limit; pick another category for this panel on the dashboard", { guildId: guild.id, categoryId: where.parent.id });
+      return answer(Status.FAILED, "ticketCategoryFull");
     }
     const open = liveTicket(guild, interaction.user.id);
     if (open) {
@@ -897,25 +1029,39 @@ export function createTicketsCommand({
     }
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-    const look = panel.look;
-    const name = interaction.member.displayName ?? interaction.user.username;
+    const staffRoleIds = ticketStaffRoleIds(guildSettings, guild.id, panel, category);
+    const nameValues = {
+      number: ticket.number,
+      displayName: interaction.member.displayName ?? interaction.user.username,
+      username: interaction.user.username,
+      category: category?.label,
+      server: guild.name,
+    };
+    const nameFormat = category?.nameFormat ?? look.nameFormat;
+    const reason = `Ticket #${ticket.number} opened by ${interaction.user.id}`;
     let thread;
     try {
-      thread = await channel.threads.create({
-        name: ticketThreadName(category?.nameFormat ?? look.nameFormat, {
-          number: ticket.number,
-          displayName: name,
-          username: interaction.user.username,
-          category: category?.label,
-          server: guild.name,
-        }),
-        type: ChannelType.PrivateThread,
-        invitable: false,
-        autoArchiveDuration: ThreadAutoArchiveDuration.OneWeek,
-        reason: `Ticket #${ticket.number} opened by ${interaction.user.id}`,
-      });
+      thread = asChannel
+        ? await guild.channels.create({
+            name: ticketChannelName(nameFormat, nameValues),
+            type: ChannelType.GuildText,
+            parent: where.parent?.id ?? null,
+            topic: `Ticket #${ticket.number} · <@${interaction.user.id}>`,
+            permissionOverwrites: ticketChannelOverwrites({ guild, userId: interaction.user.id, staffRoleIds }),
+            reason,
+          })
+        : await channel.threads.create({
+            name: ticketThreadName(nameFormat, nameValues),
+            type: ChannelType.PrivateThread,
+            invitable: false,
+            autoArchiveDuration: ThreadAutoArchiveDuration.OneWeek,
+            reason,
+          });
     } catch (error) {
       tickets.delete(ticket.id);
+      if (isCategoryFullError(error)) {
+        return answer(Status.FAILED, "ticketCategoryFull");
+      }
       if (isPermissionError(error)) {
         return answer(Status.FAILED, "ticketsBroken");
       }
@@ -923,9 +1069,10 @@ export function createTicketsCommand({
     }
     tickets.setThread(ticket.id, thread.id);
 
-    const staffRoleIds = ticketStaffRoleIds(guildSettings, guild.id, panel, category);
     const ping = category?.pingStaff ?? look.pingStaff;
-    await thread.members.add(interaction.user.id);
+    if (!asChannel) {
+      await thread.members.add(interaction.user.id);
+    }
     const welcome = buildTicketWelcome(serverLanguage(guild, forcedLanguage), {
       ticket: { ...ticket, userName: interaction.user.username },
       staffRoleIds,
@@ -937,8 +1084,11 @@ export function createTicketsCommand({
     await thread.send(welcome);
     logger.info("Ticket opened", { guildId: guild.id, ticket: ticket.number });
     const outcome = await answer(Status.SUCCESS, "ticketOpened", { thread: `<#${thread.id}>`, number: ticket.number });
-    // After answering, since it can take a while on a big staff team.
-    await addStaff({ thread, guild, staffRoleIds, logger, pinged: welcome.allowedMentions.roles.length > 0 });
+    // After answering, since it can take a while on a big staff team. A
+    // channel lets the staff roles in itself.
+    if (!asChannel) {
+      await addStaff({ thread, guild, staffRoleIds, logger, pinged: welcome.allowedMentions.roles.length > 0 });
+    }
     await ticketLog.record(guild, { ...ticket, threadId: thread.id }, {
       event: TicketEvent.OPENED,
       actorId: interaction.user.id,
@@ -960,22 +1110,29 @@ export function createTicketsCommand({
     return closeTicket(interaction, ticket, null);
   }
 
-  // A deleted ticket thread closes its ticket. The transcript can't be read
-  // any more, so only what was saved before is kept.
+  // A deleted ticket thread or channel closes its ticket. The transcript
+  // can't be read any more, so only what was saved before is kept. Closed
+  // tickets the bot deleted itself (on close, or the dashboard's clean-up)
+  // were noted as gone first, and aren't logged again.
   async function threadDeleted(thread) {
     const ticket = tickets.byThread(thread.id);
     if (!ticket) {
       return;
     }
-    const closed = tickets.close(ticket.id, { reason: "Thread deleted", closedAt: now() });
+    if (ticket.placeGone && ticket.closedAt !== null) {
+      return;
+    }
+    tickets.markGone(ticket.id);
+    const asChannel = isTicketChannel(thread);
+    const closed = tickets.close(ticket.id, { reason: asChannel ? "Channel deleted" : "Thread deleted", closedAt: now() });
     if (closed) {
-      logger.info("Ticket closed because its thread was deleted", { guildId: ticket.guildId, ticket: ticket.number });
+      logger.info(`Ticket closed because its ${asChannel ? "channel" : "thread"} was deleted`, { guildId: ticket.guildId, ticket: ticket.number });
     }
     const guild = thread.guild;
     if (!guild) {
       return;
     }
-    const actorId = await auditActor(guild, AuditLogEvent.ThreadDelete, thread.id);
+    const actorId = await auditActor(guild, asChannel ? AuditLogEvent.ChannelDelete : AuditLogEvent.ThreadDelete, thread.id);
     await ticketLog.record(guild, closed ?? ticket, {
       event: TicketEvent.DELETED,
       actorId,
@@ -992,7 +1149,7 @@ export function createTicketsCommand({
       return;
     }
     if (oldThread.name && newThread.name && oldThread.name !== newThread.name) {
-      const actorId = await auditActor(guild, AuditLogEvent.ThreadUpdate, newThread.id, changed("name"));
+      const actorId = await auditActor(guild, isTicketChannel(newThread) ? AuditLogEvent.ChannelUpdate : AuditLogEvent.ThreadUpdate, newThread.id, changed("name"));
       await ticketLog.record(guild, ticket, { event: TicketEvent.RENAMED, actorId, detail: `${oldThread.name} → ${newThread.name}` });
     }
     if (!oldThread.archived && newThread.archived && ticket.closedAt === null) {
@@ -1046,6 +1203,8 @@ export function createTicketsCommand({
     data: buildTicketsCommandData(),
     execute,
     threadDeleted,
+    // A deleted ticket channel: the same as a deleted thread.
+    channelDeleted: threadDeleted,
     threadUpdated,
     threadMembersUpdated,
     messageCreated,

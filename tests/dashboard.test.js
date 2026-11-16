@@ -1905,6 +1905,70 @@ describe("dashboard", () => {
     expect((await write(cookies, "DELETE", `${base}/${id}`)).statusCode).toBe(404);
   });
 
+  it("saves where a panel's tickets go and what happens when they close", async () => {
+    const CATEGORY_ID = "810000000000000001";
+    const OTHER_CATEGORY_ID = "810000000000000002";
+    discord.channels = vi.fn(async () => [
+      { id: TEXT_ID, name: "general", type: ChannelType.GuildText, position: 1 },
+      { id: CATEGORY_ID, name: "Tickets", type: ChannelType.GuildCategory, position: 2 },
+      { id: OTHER_CATEGORY_ID, name: "Closed", type: ChannelType.GuildCategory, position: 3 },
+    ]);
+    discord.postMessage = vi.fn(async () => ({ id: "830000000000000009" }));
+    const cookies = await login();
+    const base = `/api/guilds/${GUILD_ID}/ticket-panels`;
+    const save = (look) => write(cookies, "PUT", `${base}/main`, { channelId: TEXT_ID, look, categories: [] });
+
+    expect((await save({ mode: "rooms" })).statusCode).toBe(400);
+    expect((await save({ onClose: "shred" })).statusCode).toBe(400);
+    expect((await save({ mode: "channel", categoryId: TEXT_ID })).json().message).toContain("category for ticket channels");
+    expect((await save({ mode: "channel", onClose: "keep", closedCategoryId: TEXT_ID })).json().message).toContain("category for closed tickets");
+    expect((await save({ mode: "channel", categoryId: CATEGORY_ID, closedCategoryId: CATEGORY_ID })).json().message).toContain("different category");
+
+    const saved = await save({ mode: "channel", categoryId: CATEGORY_ID, onClose: "keep", closedCategoryId: OTHER_CATEGORY_ID });
+    expect(saved.statusCode).toBe(200);
+    expect(guildSettings.get(GUILD_ID, Setting.TICKET_PANEL)).toMatchObject({ mode: "channel", categoryId: CATEGORY_ID, onClose: "keep", closedCategoryId: OTHER_CATEGORY_ID });
+    // Back to the defaults (threads, deleted when closed): nothing to save.
+    await save({});
+    expect(guildSettings.get(GUILD_ID, Setting.TICKET_PANEL)).toBeUndefined();
+  });
+
+  it("deletes closed tickets' leftover threads and channels, keeping their transcripts", async () => {
+    const tickets = new TicketStore(db);
+    const make = (userId, threadId, transcript = true) => {
+      const ticket = tickets.open({ guildId: GUILD_ID, userId, subject: "x" });
+      tickets.setThread(ticket.id, threadId);
+      tickets.close(ticket.id);
+      if (transcript) {
+        tickets.setTranscript(ticket.id, "text", 1);
+      }
+      return ticket;
+    };
+    make("300000000000000011", "840000000000000001");
+    make("300000000000000012", "840000000000000002");
+    make("300000000000000013", "840000000000000003", false);
+    const open = tickets.open({ guildId: GUILD_ID, userId: "300000000000000014", subject: "still open" });
+    tickets.setThread(open.id, "840000000000000004");
+    discord.deleteChannel = vi.fn(async (_guild, channelId) => {
+      if (channelId === "840000000000000002") {
+        throw Object.assign(new Error("Unknown Channel"), { status: 404, code: 10003 });
+      }
+    });
+    const cookies = await login();
+    expect((await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}/tickets`, cookies })).json().leftOver).toBe(2);
+
+    const result = await write(cookies, "POST", `/api/guilds/${GUILD_ID}/tickets/cleanup`, {});
+    expect(result.json()).toEqual({ deleted: 1, failed: 0, remaining: 0, leftOver: 0 });
+    expect(discord.deleteChannel.mock.calls.map(([, channelId]) => channelId)).toEqual(["840000000000000001", "840000000000000002"]);
+    expect(tickets.byNumber(GUILD_ID, 1)).toMatchObject({ placeGone: true, hasTranscript: true });
+
+    // A refusal puts that one back for next time.
+    make("300000000000000015", "840000000000000005");
+    discord.deleteChannel = vi.fn(async () => {
+      throw Object.assign(new Error("Missing Permissions"), { status: 403, code: 50013 });
+    });
+    expect((await write(cookies, "POST", `/api/guilds/${GUILD_ID}/tickets/cleanup`, {})).json()).toEqual({ deleted: 0, failed: 1, remaining: 0, leftOver: 1 });
+  });
+
   it("refuses a new ticket panel once the server has the most", async () => {
     await guildSettings.set(
       GUILD_ID,

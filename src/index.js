@@ -3,7 +3,7 @@
 import { forgetPanelsIn } from "./tickets/panels.js";
 import { ReportStore } from "./moderation/reports.js";
 import { AltHints } from "./moderation/altHints.js";
-import { Client, Events, GatewayCloseCodes, GatewayIntentBits, Options, Partials } from "discord.js";
+import { ChannelType, Client, Events, GatewayCloseCodes, GatewayIntentBits, Options, Partials } from "discord.js";
 import { createAutomod } from "./automod/automod.js";
 import { normalizeAutomod } from "./automod/config.js";
 import { createCountryChannelGuard } from "./channels/countryChannelGuard.js";
@@ -614,6 +614,11 @@ async function start() {
 
     client.on(Events.ThreadDelete, safely("a deleted thread", (thread) => commands.get("tickets").threadDeleted(thread)));
     client.on(Events.ThreadUpdate, safely("a changed thread", (before, after) => commands.get("tickets").threadUpdated(before, after)));
+    // A ticket channel renamed (tickets in channels mode): logged like a renamed thread.
+    client.on(
+      Events.ChannelUpdate,
+      safely("a changed channel", (before, after) => after.type === ChannelType.GuildText && commands.get("tickets").threadUpdated(before, after)),
+    );
     client.on(Events.ThreadUpdate, safely("keeping a thread open", (before, after) => automation.threadUpdated(before, after)));
     client.on(
       Events.ThreadMembersUpdate,
@@ -638,6 +643,13 @@ async function start() {
         (Object.keys(routes).length > 0 ? guildSettings.set(channel.guildId, Setting.LOG_ROUTES, routes) : guildSettings.clear(channel.guildId, Setting.LOG_ROUTES))
           .then(() => logger.info("A log channel was deleted; those entries go to the usual log channel again", { guildId: channel.guildId }))
           .catch((error) => logger.error("Couldn't forget a deleted log channel", { error }));
+      }
+      // A ticket's own channel (tickets in channels mode) closes the ticket.
+      if (channel.guildId && channel.type === ChannelType.GuildText) {
+        commands
+          .get("tickets")
+          .channelDeleted(channel)
+          .catch((error) => logger.error("Couldn't close a ticket after its channel was deleted", { error }));
       }
       tempVoice.channelDeleted(channel);
       stickies.channelDeleted(channel);

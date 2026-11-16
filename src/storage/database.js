@@ -590,6 +590,13 @@ const MIGRATIONS = [
   `
   ALTER TABLE tickets ADD COLUMN panel_id TEXT;
   `,
+  // 39: whether a ticket's thread or channel is gone from Discord (deleted on
+  // close, by hand, or by the dashboard's clean-up), so the clean-up only
+  // tries closed tickets that may still be there.
+  `
+  ALTER TABLE tickets ADD COLUMN place_gone INTEGER NOT NULL DEFAULT 0;
+  CREATE INDEX tickets_left_over ON tickets (guild_id, number) WHERE closed_at IS NOT NULL AND place_gone = 0 AND thread_id IS NOT NULL;
+  `,
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS.length;

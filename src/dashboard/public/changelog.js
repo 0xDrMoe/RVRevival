@@ -4,6 +4,16 @@
 export const CHANGELOG = [
   {
     date: "2026-11-16",
+    title: "Tickets: deleted when closed, or as channels of their own",
+    items: [
+      "Closed tickets are now deleted once their transcript is saved (5 seconds after closing), instead of piling up as archived threads. The transcript stays in the ticket log and on the Tickets page. If it can't be saved, the ticket is kept so nothing is lost.",
+      "Each ticket panel picks where its tickets go: private threads in the panel's channel, or private channels of their own in a category (the panel channel's category, or one you pick), like most big ticket bots.",
+      "Each panel also picks what happens on close: delete, or keep it for staff. Kept channels are hidden from the member and can move to a closed tickets category.",
+      "Old closed tickets still sitting in Discord? The Tickets page shows how many and deletes them in one click.",
+    ],
+  },
+  {
+    date: "2026-11-16",
     title: "Transcript links with a proper preview",
     items: [
       "A ticket's transcript link posted in Discord (or Slack, X, Telegram…) now previews as that ticket instead of Discord's login page: its subject, who opened and closed it and when, the category, the close reason and how many messages. Never the messages themselves; reading those still needs a staff login.",
