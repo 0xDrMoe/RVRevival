@@ -108,6 +108,7 @@ export const SETTING_RULES = Object.freeze({
   [Setting.TICKET_CATEGORIES]: { kind: "ticketCategories", label: "Ticket categories" },
   [Setting.TICKET_LOG_CHANNEL]: { kind: "channel", types: POSTING_CHANNELS, label: "Ticket log channel" },
   [Setting.DISABLED_TICKET_LOG_EVENTS]: { kind: "ticketEvents", label: "Switched-off ticket log events" },
+  [Setting.TICKET_TRANSCRIPT_FILE]: { kind: "onByDefault", label: "Attach transcript file to the ticket log" },
   [Setting.TICKET_SUPPORT]: { kind: "ticketSupport", label: "Ticket auto-close and ratings" },
   [Setting.WARN_THRESHOLDS]: { kind: "warnThresholds", label: "Automatic punishments for warnings" },
   [Setting.STARBOARD]: { kind: "starboard", types: POSTING_CHANNELS, label: "Starboard" },

@@ -669,6 +669,8 @@
   "ticketLogChannel": "Ticket-Log-Kanal",
   "ticketLogChannelHelp": "Wo Ticket-Ereignisse gepostet werden, mit dem Transkript beim Schließen. Nicht gesetzt: der Mod-Log-Kanal.",
   "ticketLogEventsHelp": "Entferne den Haken, um ein Ereignis nicht mehr zu posten. Jedes Ereignis bleibt im Verlauf des Tickets auf der Seite Tickets.",
+  "ticketTranscriptFile": "Transkript-Datei anhängen",
+  "ticketTranscriptFileHelp": "Wenn ein Ticket geschlossen wird, bekommt sein Log-Eintrag einen Button „Transkript ansehen“, der das Transkript im Dashboard öffnet. Schalte dies aus, um die .html-Kopie des Transkripts wegzulassen. Ohne Dashboard-Link wird die Datei immer angehängt.",
   "ticketEvent_opened": "Geöffnet",
   "ticketEvent_closed": "Geschlossen",
   "ticketEvent_reopened": "Wieder geöffnet",

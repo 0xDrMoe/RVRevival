@@ -669,6 +669,8 @@
   "ticketLogChannel": "Ticket log channel",
   "ticketLogChannelHelp": "Where ticket events are posted, with the transcript when a ticket closes. Not set: the mod-log channel.",
   "ticketLogEventsHelp": "Untick an event to stop posting it. Every event is still kept in the ticket's history on the Tickets page.",
+  "ticketTranscriptFile": "Attach the transcript file",
+  "ticketTranscriptFileHelp": "When a ticket closes, its log entry gets a View transcript button that opens the transcript on the dashboard. Turn this off to skip the .html copy of the transcript as well. Servers without a dashboard link always get the file.",
   "ticketEvent_opened": "Opened",
   "ticketEvent_closed": "Closed",
   "ticketEvent_reopened": "Reopened",

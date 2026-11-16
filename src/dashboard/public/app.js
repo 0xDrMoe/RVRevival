@@ -3002,6 +3002,16 @@ async function showLogging(guildId) {
         field("ticketLogChannel", "ticketLogChannelHelp", channelPicker("ticketLogChannelId")),
         h("p", { class: "help" }, t("ticketLogEventsHelp")),
         h("div", { class: "switch-grid" }, ticketSwitches),
+        h(
+          "label",
+          { class: "switch-card" },
+          h("span", { class: "switch-text" }, h("strong", {}, t("ticketTranscriptFile")), h("span", { class: "help" }, t("ticketTranscriptFileHelp"))),
+          h(
+            "span",
+            { class: "switch" },
+            h("input", { id: "ticketTranscriptFile", type: "checkbox", role: "switch", checked: data.settings.ticketTranscriptFile !== false, "aria-label": t("ticketTranscriptFile") }),
+          ),
+        ),
       ),
       card(
         t("ignoredChannels"),
@@ -3042,6 +3052,7 @@ async function showLogging(guildId) {
         const off = [...form.querySelectorAll('input[name="ticketLogEvent"]')].filter((box) => !box.checked).map((box) => box.value);
         return off.length > 0 ? off : null;
       },
+      ticketTranscriptFile: (form) => (form.querySelector("#ticketTranscriptFile").checked ? null : false),
       logRoutes: routes.read,
     },
   });

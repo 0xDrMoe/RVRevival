@@ -173,6 +173,18 @@ describe("log channel poster", () => {
     expect(webhook.send.mock.calls.map(descriptions)).toEqual([["first"], ["a"], ["with file"], ["case"], ["b", "c"]]);
   });
 
+  it("gives entries with buttons their own message, sent with components allowed", async () => {
+    const first = await holdFirstPost();
+    const row = { type: 1, components: [{ type: 2, style: 5, label: "View transcript", url: "https://r.example/t" }] };
+    const posts = [first.posted, post(entry("a")), post(() => ({ embed: new EmbedBuilder().setDescription("button"), components: [row] })), post(entry("b"))];
+    first.release();
+    await Promise.all(posts);
+    expect(webhook.send.mock.calls.map(descriptions)).toEqual([["first"], ["a"], ["button"], ["b"]]);
+    expect(webhook.send.mock.calls[2][0]).toMatchObject({ components: [row], withComponents: true });
+    expect(webhook.send.mock.calls[1][0]).not.toHaveProperty("components");
+    expect(webhook.send.mock.calls[1][0]).not.toHaveProperty("withComponents");
+  });
+
   it("warns once when the log channel can't be posted in", async () => {
     permissions.delete(PermissionFlagsBits.ManageWebhooks);
     channel.send.mockRejectedValue(discordError(50013));
