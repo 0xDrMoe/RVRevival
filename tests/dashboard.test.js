@@ -1,3 +1,4 @@
+import { transcriptKey } from "../src/transcripts/linkPreview.js";
 import { ChannelType } from "discord.js";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -1139,7 +1140,7 @@ describe("dashboard", () => {
     expect(plain.statusCode).toBe(200);
     expect(plain.body).toContain("plain &lt;i&gt;text&lt;/i&gt;");
     const api = (await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}/tickets/1`, cookies })).json();
-    expect(api.transcriptPage).toBe(`/transcripts/${GUILD_ID}/1`);
+    expect(api.transcriptPage).toBe(`/transcripts/${GUILD_ID}/1?k=${transcriptKey(SECRET, GUILD_ID, 1)}`);
 
     const missing = await app.inject({ method: "GET", url: `/transcripts/${GUILD_ID}/99`, cookies });
     expect(missing.statusCode).toBe(404);
@@ -1147,6 +1148,50 @@ describe("dashboard", () => {
     const forbidden = await app.inject({ method: "GET", url: `/transcripts/${OTHER_GUILD_ID}/1`, cookies });
     expect(forbidden.statusCode).toBe(403);
     expect(forbidden.headers["content-type"]).toContain("text/html");
+  });
+
+  it("gives chat apps' link readers a preview of a transcript instead of the login", async () => {
+    const ticketStore = new TicketStore(db);
+    const ticket = ticketStore.open({ guildId: GUILD_ID, userId: USER_ID, subject: "Rank role missing", createdAt: Date.UTC(2026, 10, 14) });
+    ticketStore.close(ticket.id, { closedBy: USER_ID, closedAt: Date.UTC(2026, 10, 16), reason: "Fixed" });
+    ticketStore.setTranscript(ticket.id, "Ticket #1\nsecret words here", 3);
+    discord.member.mockImplementation(async () => ({ nick: "Moe" }));
+    const bot = { "user-agent": "Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)" };
+    const key = transcriptKey(SECRET, GUILD_ID, 1);
+
+    const keyed = await app.inject({ method: "GET", url: `/transcripts/${GUILD_ID}/1?k=${key}`, headers: bot });
+    expect(keyed.statusCode).toBe(200);
+    expect(keyed.headers["x-robots-tag"]).toContain("noindex");
+    expect(keyed.body).toContain('<meta property="og:title" content="Ticket #1 transcript · Rumbleverse Revival" />');
+    expect(keyed.body).toContain("Rank role missing");
+    expect(keyed.body).toContain("Opened by Moe · 14 Nov 2026");
+    expect(keyed.body).toContain("Closed by Moe · 16 Nov 2026 · Reason: Fixed");
+    expect(keyed.body).toContain("3 messages");
+    expect(keyed.body).not.toContain("secret words");
+    expect(keyed.body).toContain(`href="/auth/login?next=${encodeURIComponent(`/transcripts/${GUILD_ID}/1?k=${key}`)}"`);
+
+    // No key, a wrong key or another ticket's key: only what the page is.
+    for (const url of [`/transcripts/${GUILD_ID}/1`, `/transcripts/${GUILD_ID}/1?k=${"A".repeat(22)}`, `/transcripts/${GUILD_ID}/1?k=${transcriptKey(SECRET, GUILD_ID, 2)}`]) {
+      const plain = await app.inject({ method: "GET", url, headers: bot });
+      expect(plain.statusCode).toBe(200);
+      expect(plain.body).toContain('<meta property="og:title" content="Ticket #1 transcript" />');
+      expect(plain.body).not.toContain("Rank role");
+      expect(plain.body).not.toContain("Rumbleverse");
+    }
+
+    // A browser still goes to log in, keeping the key for the way back.
+    const browser = await app.inject({ method: "GET", url: `/transcripts/${GUILD_ID}/1?k=${key}` });
+    expect(browser.statusCode).toBe(302);
+    expect(browser.headers.location).toBe(`/auth/login?next=${encodeURIComponent(`/transcripts/${GUILD_ID}/1?k=${key}`)}`);
+    const start = await app.inject({ method: "GET", url: browser.headers.location });
+    expect(start.cookies.find((entry) => entry.name === "rv_next")).toBeDefined();
+
+    // Logged in, even with a link reader's user agent: the transcript, and the dashboard's link carries the key.
+    const cookies = await login();
+    const page = await app.inject({ method: "GET", url: `/transcripts/${GUILD_ID}/1?k=${key}`, headers: bot, cookies });
+    expect(page.body).toContain("secret words");
+    const api = (await app.inject({ method: "GET", url: `/api/guilds/${GUILD_ID}/tickets/1`, cookies })).json();
+    expect(api.transcriptPage).toBe(`/transcripts/${GUILD_ID}/1?k=${key}`);
   });
 
   it("lists tickets with names, filters them, and shows and downloads a transcript", async () => {

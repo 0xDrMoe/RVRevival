@@ -3,6 +3,14 @@
 
 export const CHANGELOG = [
   {
+    date: "2026-11-16",
+    title: "Transcript links with a proper preview",
+    items: [
+      "A ticket's transcript link posted in Discord (or Slack, X, Telegram…) now previews as that ticket instead of Discord's login page: its subject, who opened and closed it and when, the category, the close reason and how many messages. Never the messages themselves; reading those still needs a staff login.",
+      "Only links from the ticket log or the Tickets page get the summary, since they carry a key. A link typed by hand only says it's a ticket transcript.",
+    ],
+  },
+  {
     date: "2026-11-14",
     title: "One place for automatic punishments after warnings",
     items: [

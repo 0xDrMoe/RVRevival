@@ -11,6 +11,7 @@
 import { AttachmentBuilder, EmbedBuilder, escapeMarkdown } from "discord.js";
 import { LogRoute, ticketRoute } from "../logs/logRoutes.js";
 import { Setting } from "../settings/guildSettings.js";
+import { transcriptPath } from "../transcripts/linkPreview.js";
 import { ticketTranscriptPage } from "../transcripts/ticketPage.js";
 
 // The values are saved in the database and the settings, so never rename one.
@@ -49,9 +50,11 @@ const MAX_PEOPLE_SHOWN = 20;
 
 export const transcriptFileName = (ticket, extension = "html") => `ticket-${String(ticket.number).padStart(4, "0")}.${extension}`;
 
-// Where a ticket's transcript page is on the dashboard.
-export const transcriptUrl = (dashboardUrl, ticket) =>
-  dashboardUrl ? `${dashboardUrl.replace(/\/+$/, "")}/transcripts/${ticket.guildId}/${ticket.number}` : null;
+// Where a ticket's transcript page is on the dashboard. With the dashboard's
+// session secret the link carries a key, so its link preview can say what the
+// ticket was about (transcripts/linkPreview.js).
+export const transcriptUrl = (dashboardUrl, ticket, secret = null) =>
+  dashboardUrl ? `${dashboardUrl.replace(/\/+$/, "")}${transcriptPath(ticket.guildId, ticket.number, secret)}` : null;
 
 function peopleList(userIds) {
   const shown = userIds.slice(0, MAX_PEOPLE_SHOWN).map((id) => `<@${id}>`);
@@ -109,8 +112,9 @@ export function buildTicketEventEmbed({ ticket, event, actorId = null, userIds =
 //   tickets        the TicketStore (where the history is saved)
 //   poster         posts in log channels (logs/logChannel.js)
 //   dashboardUrl   links closed tickets to their transcript page, when set
+//   transcriptSecret  DASHBOARD_SESSION_SECRET, to key those links (optional)
 //   guildSettings, logger, now
-export function createTicketLog({ tickets, poster, guildSettings, logger, dashboardUrl = null, now = Date.now }) {
+export function createTicketLog({ tickets, poster, guildSettings, logger, dashboardUrl = null, transcriptSecret = null, now = Date.now }) {
   const isPosted = (guildId, event) => !guildSettings.getList(guildId, Setting.DISABLED_TICKET_LOG_EVENTS).includes(event);
 
   return {
@@ -145,7 +149,7 @@ export function createTicketLog({ tickets, poster, guildSettings, logger, dashbo
               userIds,
               detail,
               messageCount,
-              transcriptLink: transcript || transcriptData ? transcriptUrl(dashboardUrl, ticket) : null,
+              transcriptLink: transcript || transcriptData ? transcriptUrl(dashboardUrl, ticket, transcriptSecret) : null,
               at,
             }),
             files:
