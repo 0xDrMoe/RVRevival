@@ -149,8 +149,8 @@ export function createLogChannelPoster({ guildSettings, logger, now = Date.now }
         return true;
       }
       try {
-        const { embed, files = [] } = entry.build({ canAttach });
-        entry.built = { embed, length: embedLength(embed.toJSON?.() ?? embed), files: canAttach ? files : [] };
+        const { embed, files = [], components = [] } = entry.build({ canAttach });
+        entry.built = { embed, length: embedLength(embed.toJSON?.() ?? embed), files: canAttach ? files : [], components };
         entry.builtFor = canAttach;
         return true;
       } catch (error) {
@@ -161,18 +161,21 @@ export function createLogChannelPoster({ guildSettings, logger, now = Date.now }
     });
   }
 
-  // Takes the entries for the next message off the front of `pending`. Entries
-  // with files, or that will be edited later, go on their own.
+  // Entries with files or buttons (which belong to that entry), or that will be
+  // edited later, go on their own.
+  const ownMessage = (entry) => entry.alone || entry.built.files.length > 0 || entry.built.components.length > 0;
+
+  // Takes the entries for the next message off the front of `pending`.
   function takeBatch(pending) {
     const batch = [pending.shift()];
-    if (batch[0].alone || batch[0].built.files.length > 0) {
+    if (ownMessage(batch[0])) {
       return batch;
     }
     let total = batch[0].built.length;
     while (pending.length > 0 && batch.length < MAX_EMBEDS) {
       const next = pending[0];
       const { length } = next.built;
-      if (next.alone || next.built.files.length > 0 || total + length > MAX_EMBED_TOTAL) {
+      if (ownMessage(next) || total + length > MAX_EMBED_TOTAL) {
         break;
       }
       batch.push(pending.shift());
@@ -181,11 +184,15 @@ export function createLogChannelPoster({ guildSettings, logger, now = Date.now }
     return batch;
   }
 
-  const payloadOf = (batch) => ({
-    embeds: batch.map((entry) => entry.built.embed),
-    files: batch.flatMap((entry) => entry.built.files),
-    allowedMentions: { parse: [] },
-  });
+  const payloadOf = (batch) => {
+    const components = batch.flatMap((entry) => entry.built.components);
+    return {
+      embeds: batch.map((entry) => entry.built.embed),
+      files: batch.flatMap((entry) => entry.built.files),
+      ...(components.length > 0 ? { components } : {}),
+      allowedMentions: { parse: [] },
+    };
+  };
 
   // Sends one message for `batch`: through the webhook when there is one, else
   // (or if that fails) as the bot. Returns the message.
@@ -201,6 +208,8 @@ export function createLogChannelPoster({ guildSettings, logger, now = Date.now }
           username: me?.displayName ?? me?.user?.username,
           avatarURL: me?.displayAvatarURL?.() ?? me?.user?.displayAvatarURL?.(),
           threadId: threadIdOf(channel),
+          // Link buttons; the bot's own webhook may send them.
+          ...(batch.some((entry) => entry.built.components.length > 0) ? { withComponents: true } : {}),
         });
       } catch (error) {
         if (WEBHOOK_GONE.has(error.code)) {
@@ -257,7 +266,7 @@ export function createLogChannelPoster({ guildSettings, logger, now = Date.now }
     // Posts in the channel picked for `route` or its group (see logRoutes.js;
     // `route` can be a list, looked at in order), else in the first channel of
     // `settings` that is set. `build({ canAttach })`
-    // returns { embed, files? }. With `alone`, the entry gets a message of its
+    // returns { embed, files?, components? } (components: link buttons only). With `alone`, the entry gets a message of its
     // own (so it can be edited later). Returns the posted message, or undefined.
     async post(guild, settings, build, { alone = false, route } = {}) {
       if (!guild) {

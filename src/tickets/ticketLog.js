@@ -8,7 +8,7 @@
 //
 // Log entries are in English, like every other log.
 
-import { AttachmentBuilder, EmbedBuilder, escapeMarkdown } from "discord.js";
+import { ActionRowBuilder, AttachmentBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, escapeMarkdown } from "discord.js";
 import { LogRoute, ticketRoute } from "../logs/logRoutes.js";
 import { Setting } from "../settings/guildSettings.js";
 import { transcriptPath } from "../transcripts/linkPreview.js";
@@ -62,9 +62,14 @@ function peopleList(userIds) {
   return `${shown.join(", ")}${more > 0 ? ` and ${more} more` : ""}`;
 }
 
-// One log entry. `messageCount` is for a closed ticket's transcript.
-// `transcriptLink` is the dashboard page for a closed ticket's transcript.
-export function buildTicketEventEmbed({ ticket, event, actorId = null, userIds = [], detail = null, messageCount, transcriptLink = null, at = Date.now() }) {
+// The "View transcript" link button under a closed ticket's log entry.
+export function transcriptButtonRow(transcriptLink) {
+  return new ActionRowBuilder().addComponents(new ButtonBuilder().setStyle(ButtonStyle.Link).setLabel("View transcript").setEmoji("📄").setURL(transcriptLink));
+}
+
+// One log entry. `messageCount` is for a closed ticket's transcript; its
+// dashboard page is a button under the entry (transcriptButtonRow).
+export function buildTicketEventEmbed({ ticket, event, actorId = null, userIds = [], detail = null, messageCount, at = Date.now() }) {
   const style = STYLE[event] ?? STYLE[TicketEvent.CLOSED];
   const embed = new EmbedBuilder()
     .setColor(style.color)
@@ -92,7 +97,6 @@ export function buildTicketEventEmbed({ ticket, event, actorId = null, userIds =
       field("Category", ticket.categoryLabel, true);
       field("Subject", ticket.subject);
       field("Reason", detail);
-      field("Transcript", transcriptLink ? `[Open it on the dashboard](${transcriptLink})` : null);
       break;
     case TicketEvent.MEMBER_ADDED:
     case TicketEvent.MEMBER_REMOVED:
@@ -119,9 +123,12 @@ export function createTicketLog({ tickets, poster, guildSettings, logger, dashbo
 
   return {
     // Saves the event in the ticket's history and posts it, unless that kind
-    // is switched off. The transcript is attached as a web page (from
+    // is switched off. A closed ticket's entry gets a View transcript button
+    // (the dashboard page) and the transcript as a web page file (from
     // `transcriptData`, else the `transcript` text) when the channel allows
-    // files. Never throws: the ticket carries on whatever the log does.
+    // files and the server hasn't switched the file off
+    // (Setting.TICKET_TRANSCRIPT_FILE). Never throws: the ticket carries on
+    // whatever the log does.
     async record(guild, ticket, { event, actorId = null, userIds = [], detail = null, transcript, transcriptData, messageCount }) {
       const at = now();
       try {
@@ -137,23 +144,19 @@ export function createTicketLog({ tickets, poster, guildSettings, logger, dashbo
       const route = guildSettings.get(guild.id, Setting.TICKET_LOG_CHANNEL)
         ? ticketRoute(event)
         : [ticketRoute(event), LogRoute.MOD_ACTIONS];
+      const hasTranscript = Boolean(transcript || transcriptData);
+      const link = hasTranscript ? transcriptUrl(dashboardUrl, ticket, transcriptSecret) : null;
+      // Without a dashboard link the file is the only way to read it, so it's always attached then.
+      const attachFile = hasTranscript && (!link || guildSettings.get(guild.id, Setting.TICKET_TRANSCRIPT_FILE) !== false);
       try {
         return await poster.post(
           guild,
           TICKET_LOG_SETTINGS,
           ({ canAttach }) => ({
-            embed: buildTicketEventEmbed({
-              ticket,
-              event,
-              actorId,
-              userIds,
-              detail,
-              messageCount,
-              transcriptLink: transcript || transcriptData ? transcriptUrl(dashboardUrl, ticket, transcriptSecret) : null,
-              at,
-            }),
+            embed: buildTicketEventEmbed({ ticket, event, actorId, userIds, detail, messageCount, at }),
+            components: link ? [transcriptButtonRow(link)] : [],
             files:
-              (transcript || transcriptData) && canAttach
+              attachFile && canAttach
                 ? [
                     new AttachmentBuilder(Buffer.from(ticketTranscriptPage({ ticket, data: transcriptData, text: transcript }), "utf8"), {
                       name: transcriptFileName(ticket),
