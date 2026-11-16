@@ -669,6 +669,8 @@
   "ticketLogChannel": "Canale del registro dei ticket",
   "ticketLogChannelHelp": "Dove vengono pubblicati gli eventi dei ticket, con la trascrizione alla chiusura. Non impostato: il canale di moderazione.",
   "ticketLogEventsHelp": "Togli la spunta a un evento per non pubblicarlo più. Ogni evento resta nella cronologia del ticket nella pagina Ticket.",
+  "ticketTranscriptFile": "Allega il file della trascrizione",
+  "ticketTranscriptFileHelp": "Quando un ticket si chiude, la sua voce di log ha un pulsante Vedi trascrizione che la apre nella dashboard. Disattiva per non allegare anche la copia .html della trascrizione. Senza link alla dashboard il file viene sempre allegato.",
   "ticketEvent_opened": "Aperto",
   "ticketEvent_closed": "Chiuso",
   "ticketEvent_reopened": "Riaperto",

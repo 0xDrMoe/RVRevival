@@ -669,6 +669,8 @@
   "ticketLogChannel": "Salon du journal des tickets",
   "ticketLogChannelHelp": "Où les événements des tickets sont publiés, avec la transcription à la fermeture. Non défini : le salon de modération.",
   "ticketLogEventsHelp": "Décoche un événement pour ne plus le publier. Chaque événement reste dans l'historique du ticket sur la page Tickets.",
+  "ticketTranscriptFile": "Joindre le fichier de la transcription",
+  "ticketTranscriptFileHelp": "À la fermeture d'un ticket, son entrée de journal a un bouton Voir la transcription qui l'ouvre sur le tableau de bord. Désactive ceci pour ne plus joindre la copie .html de la transcription. Sans lien vers le tableau de bord, le fichier est toujours joint.",
   "ticketEvent_opened": "Ouvert",
   "ticketEvent_closed": "Fermé",
   "ticketEvent_reopened": "Rouvert",

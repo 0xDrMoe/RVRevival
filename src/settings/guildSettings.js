@@ -67,6 +67,7 @@ export const Setting = Object.freeze({
   TICKET_PANELS: "ticketPanels", // every other ticket panel, [{ id, channelId, messageId, staffRoleIds, openRoleIds, look, categories }] (see tickets/panels.js)
   TICKET_LOG_CHANNEL: "ticketLogChannelId", // where ticket events are posted; unset = the mod-log channel (see tickets/ticketLog.js)
   DISABLED_TICKET_LOG_EVENTS: "disabledTicketLogEvents", // ticket events not posted, a list of names (they're still saved)
+  TICKET_TRANSCRIPT_FILE: "ticketTranscriptFile", // false: closed-ticket log entries don't attach the transcript .html (the View transcript button stays)
   TICKET_SUPPORT: "ticketSupport", // auto-close after inactivity and ratings, { autoCloseHours, ratings } (see tickets/support.js)
   WARN_THRESHOLDS: "warnThresholds", // automatic timeout, kick or ban after N /warn cases in D days, [{ count, days, action, minutes }] (see moderation/warnThresholds.js)
   JOIN_GATE: "joinGate", // new-account gate and join alerts, an object (see raid/raid.js)

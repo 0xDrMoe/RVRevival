@@ -1,5 +1,7 @@
-import { describe, expect, it } from "vitest";
-import { buildTicketEventEmbed, TicketEvent, transcriptUrl } from "../src/tickets/ticketLog.js";
+import { describe, expect, it, vi } from "vitest";
+import { GuildSettings, Setting } from "../src/settings/guildSettings.js";
+import { TicketStore } from "../src/tickets/ticketStore.js";
+import { buildTicketEventEmbed, createTicketLog, TicketEvent, transcriptButtonRow, transcriptUrl } from "../src/tickets/ticketLog.js";
 import {
   checkTranscriptKey,
   isLinkPreviewAgent,
@@ -32,8 +34,10 @@ describe("transcript link keys", () => {
     expect(transcriptUrl("https://rabble.example.com/", ticket)).toBe(`https://rabble.example.com/transcripts/${GUILD}/22`);
     expect(transcriptUrl("https://rabble.example.com", ticket, SECRET)).toBe(`https://rabble.example.com${transcriptPath(GUILD, 22, SECRET)}`);
     expect(transcriptUrl(null, ticket, SECRET)).toBeNull();
-    const embed = buildTicketEventEmbed({ ticket: { ...ticket, userId: "1" }, event: TicketEvent.CLOSED, transcriptLink: transcriptUrl("https://r.example", ticket, SECRET) });
-    expect(JSON.stringify(embed.toJSON())).toContain("?k=");
+    const row = transcriptButtonRow(transcriptUrl("https://r.example", ticket, SECRET)).toJSON();
+    expect(row.components[0]).toMatchObject({ style: 5, label: "View transcript", url: `https://r.example${transcriptPath(GUILD, 22, SECRET)}` });
+    const embed = buildTicketEventEmbed({ ticket: { ...ticket, userId: "1" }, event: TicketEvent.CLOSED });
+    expect(JSON.stringify(embed.toJSON())).not.toContain("Transcript");
   });
 });
 
@@ -111,5 +115,40 @@ describe("transcript previews", () => {
     expect(page).toContain(`<meta property="og:url" content="https://rabble.example.com/transcripts/${GUILD}/22" />`);
     expect(page).toContain('<meta property="og:image" content="https://rabble.example.com/og-image.jpg" />');
     expect(page).toContain('href="/auth/login?next=x"');
+  });
+});
+
+describe("closed-ticket log entries", () => {
+  async function closeEntry({ fileOff = false, dashboardUrl = "https://r.example" } = {}) {
+    const guildSettings = new GuildSettings();
+    if (fileOff) {
+      await guildSettings.set(GUILD, Setting.TICKET_TRANSCRIPT_FILE, false);
+    }
+    const tickets = new TicketStore();
+    const ticket = tickets.open({ guildId: GUILD, userId: "1", subject: "Help", createdAt: 1 });
+    let built;
+    const poster = { post: vi.fn(async (_guild, _settings, build) => ((built = build({ canAttach: true })), {})) };
+    const logger = { warn: vi.fn() };
+    const log = createTicketLog({ tickets, poster, guildSettings, logger, dashboardUrl, transcriptSecret: SECRET });
+    await log.record({ id: GUILD }, ticket, { event: TicketEvent.CLOSED, transcript: "hello", messageCount: 1 });
+    return built;
+  }
+
+  it("has a View transcript button and the file", async () => {
+    const built = await closeEntry();
+    expect(built.components[0].toJSON().components[0]).toMatchObject({ label: "View transcript", url: `https://r.example${transcriptPath(GUILD, 1, SECRET)}` });
+    expect(built.files[0].name).toBe("ticket-0001.html");
+  });
+
+  it("leaves the file off when the server says so, keeping the button", async () => {
+    const built = await closeEntry({ fileOff: true });
+    expect(built.files).toEqual([]);
+    expect(built.components).toHaveLength(1);
+  });
+
+  it("always attaches the file without a dashboard to link to", async () => {
+    const built = await closeEntry({ fileOff: true, dashboardUrl: null });
+    expect(built.components).toEqual([]);
+    expect(built.files).toHaveLength(1);
   });
 });

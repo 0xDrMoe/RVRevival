@@ -669,6 +669,8 @@
   "ticketLogChannel": "Canal del registro de tickets",
   "ticketLogChannelHelp": "Dónde se publican los eventos de tickets, con la transcripción al cerrarse. Sin definir: el canal de registro de moderación.",
   "ticketLogEventsHelp": "Desmarca un evento para dejar de publicarlo. Todos los eventos se siguen guardando en el historial del ticket en la página Tickets.",
+  "ticketTranscriptFile": "Adjuntar el archivo de la transcripción",
+  "ticketTranscriptFileHelp": "Al cerrarse un ticket, su entrada del registro tiene un botón Ver transcripción que la abre en el panel. Desactívalo para no adjuntar además la copia .html de la transcripción. Sin enlace al panel, el archivo se adjunta siempre.",
   "ticketEvent_opened": "Abierto",
   "ticketEvent_closed": "Cerrado",
   "ticketEvent_reopened": "Reabierto",
