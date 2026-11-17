@@ -597,6 +597,48 @@ const MIGRATIONS = [
   ALTER TABLE tickets ADD COLUMN place_gone INTEGER NOT NULL DEFAULT 0;
   CREATE INDEX tickets_left_over ON tickets (guild_id, number) WHERE closed_at IS NOT NULL AND place_gone = 0 AND thread_id IS NOT NULL;
   `,
+  // 40: the quote book (/quote, the Make it a quote app, quotes/quoteStore.js).
+  // Numbers count up per server and are never reused. `private` = the message
+  // came from a channel @everyone can't see, `nsfw` = from an age-restricted
+  // one, so a quote is never shown somewhere that would leak it. `style` is
+  // the card's look as JSON (quotes/card.js). The card message is the one the
+  // quote was first posted as, deleted with the quote. quote_optouts: members
+  // who don't want to be quoted, on every server.
+  `
+  CREATE TABLE quote_counters (
+    guild_id TEXT    PRIMARY KEY,
+    last     INTEGER NOT NULL
+  ) WITHOUT ROWID;
+  CREATE TABLE quotes (
+    guild_id        TEXT    NOT NULL,
+    number          INTEGER NOT NULL,
+    content         TEXT    NOT NULL,
+    author_id       TEXT    NOT NULL,
+    author_name     TEXT    NOT NULL,
+    author_username TEXT    NOT NULL,
+    author_avatar   TEXT,
+    channel_id      TEXT,
+    message_id      TEXT,
+    said_at         INTEGER NOT NULL,
+    added_by        TEXT    NOT NULL,
+    added_at        INTEGER NOT NULL,
+    via             TEXT    NOT NULL,
+    private         INTEGER NOT NULL DEFAULT 0,
+    nsfw            INTEGER NOT NULL DEFAULT 0,
+    style           TEXT,
+    card_channel_id TEXT,
+    card_message_id TEXT,
+    edited_at       INTEGER,
+    PRIMARY KEY (guild_id, number)
+  ) WITHOUT ROWID;
+  CREATE UNIQUE INDEX quotes_by_message ON quotes (guild_id, message_id) WHERE message_id IS NOT NULL;
+  CREATE INDEX quotes_by_author ON quotes (guild_id, author_id);
+  CREATE INDEX quotes_by_author_everywhere ON quotes (author_id);
+  CREATE TABLE quote_optouts (
+    user_id TEXT    PRIMARY KEY,
+    at      INTEGER NOT NULL
+  ) WITHOUT ROWID;
+  `,
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS.length;

@@ -96,6 +96,7 @@ export const Setting = Object.freeze({
   COLOR_OPTIONS: "colorOptions", // how color roles work: the list picture, channel, managers, who can pick, join color, an object (see colors/options.js)
   COLOR_PANELS: "colorPanels", // posted color panels, a list of { channelId, messageId, key } (see colors/colorService.js)
   MUSIC: "music", // the music player, { djRoleId, defaultVolume, maxQueue, announce, leaveAfterMinutes } (see music/config.js)
+  QUOTES: "quotes", // the quote book: on/off, quote channel, who may make, show and manage quotes, the quote reaction and the card look new quotes start with, an object (see quotes/options.js)
 });
 
 const KNOWN_SETTINGS = new Set(Object.values(Setting));

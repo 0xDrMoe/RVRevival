@@ -61,6 +61,8 @@ import { createInviteTracker } from "./logs/inviteTracker.js";
 import { GrowthStore } from "./members/growthStore.js";
 import { createInviteStats, inviteTrackingOn } from "./members/inviteStats.js";
 import { createPersonalData } from "./members/personalData.js";
+import { createQuotes } from "./quotes/quotes.js";
+import { QuoteStore } from "./quotes/quoteStore.js";
 import { createColorService } from "./colors/colorService.js";
 import { createMilestones } from "./community/milestones.js";
 import { createDehoist } from "./moderation/dehoist.js";
@@ -314,6 +316,8 @@ async function start() {
 
   // The starboard (/starboard): messages with enough stars are reposted.
   const starboard = createStarboard({ guildSettings, store: new StarboardStore(db), logger, forcedLanguage, botDeletions });
+  // The quote book (/quote, the Make it a quote app, the quote reaction).
+  const quotes = createQuotes({ guildSettings, store: new QuoteStore(db), logger, forcedLanguage });
 
   const leveling = createLeveling({ guildSettings, store: levels, logger, forcedLanguage });
   // The music player (/play, /radio, /music). Nothing is saved; a restart ends every session.
@@ -369,6 +373,7 @@ async function start() {
       onDeleted: ({ highlightGuildIds }) => highlightGuildIds.forEach((guildId) => highlights.changed(guildId)),
     }),
     colors,
+    quotes,
     dashboardUrl: config.dashboardUrl,
     memberLoader,
   });
@@ -533,6 +538,7 @@ async function start() {
       }),
     );
     client.on(Events.MessageReactionAdd, safely("a reaction", (reaction) => starboard.reactionChanged(reaction)));
+    client.on(Events.MessageReactionAdd, safely("a quote reaction", (reaction, user) => quotes.reactionAdded(reaction, user)));
     client.on(Events.MessageReactionRemove, safely("a removed reaction", (reaction) => starboard.reactionChanged(reaction)));
     client.on(Events.MessageReactionRemoveAll, safely("cleared reactions", (message) => starboard.reactionsCleared(message)));
     client.on(
