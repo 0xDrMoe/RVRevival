@@ -120,6 +120,13 @@ import { GRADIENT_FEATURE } from "../colors/colorService.js";
 import { checkNewColors, insertColors, MAX_DRAFTS } from "../colors/drafts.js";
 import { renderColorList } from "../colors/listImage.js";
 import { normalizeColorOptions } from "../colors/options.js";
+import { normalizeQuoteOptions } from "../quotes/options.js";
+import { readableText, renderQuoteCard } from "../quotes/card.js";
+import { MAX_QUOTE_LENGTH, MAX_QUOTES_PER_SERVER, QuoteStore } from "../quotes/quoteStore.js";
+import { normalizeStyle } from "../quotes/style.js";
+
+// Quotes per page on the dashboard's Quotes page.
+const QUOTE_DASHBOARD_PAGE = 20;
 import { PACK_NAMES, PACKS } from "../colors/packs.js";
 import { ActivityStore } from "./activityStore.js";
 import { errorReference } from "../utils/errorReference.js";
@@ -361,6 +368,7 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
   const feeds = new FeedStore(db);
   const stickies = new StickyStore(db);
   const botStats = new BotStatsStore(db);
+  const quotes = new QuoteStore(db);
   const inviteUrl = inviteLink(discord.clientId);
   const secureCookies = config.url.startsWith("https://");
   const cookieOptions = { path: "/", httpOnly: true, secure: secureCookies, sameSite: "lax" };
@@ -704,6 +712,7 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     [Setting.MEDIA_ONLY]: normalizeMediaOnly(guildSettings.get(guildId, Setting.MEDIA_ONLY)),
     [Setting.MUSIC]: normalizeMusic(guildSettings.get(guildId, Setting.MUSIC)),
     [Setting.COLOR_OPTIONS]: normalizeColorOptions(guildSettings.get(guildId, Setting.COLOR_OPTIONS)),
+    [Setting.QUOTES]: normalizeQuoteOptions(guildSettings.get(guildId, Setting.QUOTES)),
     [Setting.COLORS]: normalizeColors(guildSettings.get(guildId, Setting.COLORS)),
     // With the title and text of panels set up before the look was saved on its own.
     [Setting.TICKET_PANEL]: panelLook(guildSettings, guildId),
@@ -3052,6 +3061,138 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
       await logAction(guildId, session, `**Color deleted:** ${color.name} (${color.hex})${color.made ? "" : ", role kept"}`, []);
       return { colors: colorsJson(guildId, await discord.guild(guildId)), settings: settingsJson(guildId) };
     });
+  });
+
+  // --- Quotes ---------------------------------------------------------------------
+  //
+  // The quote book /quote and the Make it a quote app keep (quotes/quoteStore.js):
+  // browse and search it, fix a quote's text, delete quotes, and see a card.
+  // How quotes work (who may make them, the quote channel...) is the Quotes
+  // setting, saved with the page's Save bar.
+
+  const quoteLimit = { config: { rateLimit: { max: 60, timeWindow: "1 minute" } } };
+  const quoteImageLimit = { config: { rateLimit: { max: 40, timeWindow: "1 minute" } } };
+  const QUOTE_NUMBER = /^\d{1,9}$/;
+  const quoteJson = (quote) => ({
+    number: quote.number,
+    content: quote.content,
+    authorId: quote.authorId,
+    authorName: quote.authorName,
+    authorUsername: quote.authorUsername,
+    addedBy: quote.addedBy,
+    addedAt: quote.addedAt,
+    saidAt: quote.saidAt,
+    via: quote.via,
+    link: quote.channelId && quote.messageId ? `https://discord.com/channels/${quote.guildId}/${quote.channelId}/${quote.messageId}` : null,
+    channelId: quote.channelId,
+    private: quote.private,
+    nsfw: quote.nsfw,
+    editedAt: quote.editedAt,
+  });
+  const userAvatar = (session) => (session.avatar ? `https://cdn.discordapp.com/avatars/${session.userId}/${session.avatar}.png?size=512` : null);
+
+  app.get("/api/guilds/:id/quotes", quoteLimit, async (request, reply) => {
+    const access = await requireGuild(request, reply, { manage: true });
+    if (!access) {
+      return reply;
+    }
+    const query = request.query ?? {};
+    const text = typeof query.q === "string" ? query.q.trim().slice(0, 100) : "";
+    const authorId = typeof query.user === "string" && ROLE_ID.test(query.user) ? query.user : null;
+    const page = Number.parseInt(query.page, 10) || 1;
+    const found = quotes.search(access.guildId, { text: text || null, authorId, page, pageSize: QUOTE_DASHBOARD_PAGE });
+    return {
+      quotes: found.quotes.map(quoteJson),
+      total: found.total,
+      page: found.page,
+      pages: found.pages,
+      count: quotes.count(access.guildId),
+      authors: quotes.topAuthors(access.guildId, 25),
+      max: MAX_QUOTES_PER_SERVER,
+    };
+  });
+
+  // A quote's card as Discord shows it (with its own look).
+  app.get("/api/guilds/:id/quotes/:number/card.png", quoteImageLimit, async (request, reply) => {
+    const access = await requireGuild(request, reply, { manage: true });
+    if (!access) {
+      return reply;
+    }
+    const quote = QUOTE_NUMBER.test(request.params.number) ? quotes.get(access.guildId, Number(request.params.number)) : undefined;
+    if (!quote) {
+      return reply.code(404).send({ error: "not-found", message: "That quote was deleted." });
+    }
+    const options = normalizeQuoteOptions(guildSettings.get(access.guildId, Setting.QUOTES));
+    try {
+      const png = await renderQuoteCard(
+        { text: readableText(quote.content), name: quote.authorName, username: quote.authorUsername, mark: `Rabble · #${quote.number}`, avatarUrl: quote.authorAvatar },
+        normalizeStyle(quote.style, options.style),
+      );
+      return reply.header("Cache-Control", "private, no-store").type("image/png").send(png);
+    } catch (error) {
+      logger.warn("Couldn't draw a quote card for the dashboard", { guildId: access.guildId, error });
+      return reply.code(500).send({ error: "render-failed", message: "The card couldn't be drawn." });
+    }
+  });
+
+  // The look new cards start with, drawn with sample words and your avatar.
+  app.get("/api/guilds/:id/quotes/preview.png", quoteImageLimit, async (request, reply) => {
+    const access = await requireGuild(request, reply, { manage: true });
+    if (!access) {
+      return reply;
+    }
+    const query = request.query ?? {};
+    const flag = (value) => (value === "1" ? true : value === "0" ? false : undefined);
+    const style = normalizeStyle({ theme: query.theme, font: query.font, light: flag(query.light), color: flag(query.color), bold: flag(query.bold) });
+    const sample = typeof query.text === "string" && query.text.trim() ? query.text.trim().slice(0, 300) : "Every quote starts as a message. This one is a sample.";
+    try {
+      const png = await renderQuoteCard({ text: sample, name: access.session.username, username: access.session.username, mark: "Rabble · #1", avatarUrl: userAvatar(access.session) }, style);
+      return reply.header("Cache-Control", "private, no-store").type("image/png").send(png);
+    } catch (error) {
+      logger.warn("Couldn't draw the quote card preview", { guildId: access.guildId, error });
+      return reply.code(500).send({ error: "render-failed", message: "The card couldn't be drawn." });
+    }
+  });
+
+  // Fixes a quote's text (a typo, say). The card already posted keeps its old
+  // picture until someone presses Refresh under it.
+  app.put("/api/guilds/:id/quotes/:number", quoteLimit, async (request, reply) => {
+    const access = await requireGuild(request, reply, { manage: true });
+    if (!access) {
+      return reply;
+    }
+    const { guildId, session } = access;
+    const quote = QUOTE_NUMBER.test(request.params.number) ? quotes.get(guildId, Number(request.params.number)) : undefined;
+    if (!quote) {
+      return reply.code(404).send({ error: "not-found", message: "That quote was deleted." });
+    }
+    const content = typeof request.body?.content === "string" ? request.body.content.replace(/\r\n/g, "\n").trim() : "";
+    if (!content || content.length > MAX_QUOTE_LENGTH) {
+      return reply.code(400).send({ error: "invalid-quote", message: `A quote is 1 to ${MAX_QUOTE_LENGTH} characters.` });
+    }
+    if (content === quote.content) {
+      return { quote: quoteJson(quote) };
+    }
+    quotes.setContent(guildId, quote.number, content, Date.now());
+    await logAction(guildId, session, `**Quote #${quote.number} edited** (of <@${quote.authorId}>)`, [`Before: ${quote.content}`, `After: ${content}`]);
+    return { quote: quoteJson(quotes.get(guildId, quote.number)) };
+  });
+
+  app.delete("/api/guilds/:id/quotes/:number", quoteLimit, async (request, reply) => {
+    const access = await requireGuild(request, reply, { manage: true });
+    if (!access) {
+      return reply;
+    }
+    const { guildId, session } = access;
+    const quote = QUOTE_NUMBER.test(request.params.number) ? quotes.delete(guildId, Number(request.params.number)) : undefined;
+    if (!quote) {
+      return reply.code(404).send({ error: "not-found", message: "That quote was already deleted." });
+    }
+    if (quote.cardChannelId && quote.cardMessageId) {
+      await discord.deleteMessage(quote.cardChannelId, quote.cardMessageId).catch(() => {});
+    }
+    await logAction(guildId, session, `**Quote #${quote.number} deleted** (of <@${quote.authorId}>)`, [quote.content]);
+    return { deleted: quote.number, count: quotes.count(guildId) };
   });
 
   // Makes a pack's roles one after another in the background (Discord paces

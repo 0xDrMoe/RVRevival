@@ -52,6 +52,7 @@ import { createTimestampCommand } from "./timestamp.js";
 import { createMyDataCommand } from "./myData.js";
 import { createMusicCommands } from "./music.js";
 import { createAutomateCommand } from "./automate.js";
+import { createQuoteCommands } from "./quote.js";
 
 // Each command is { name, data, execute(interaction), autocomplete?(interaction),
 // components?, componentPrefixes? }. `components` maps a button, form or menu
@@ -85,6 +86,7 @@ import { createAutomateCommand } from "./automate.js";
 // runs /invites, `dehoist` (moderation/dehoist.js) /dehoist run, and
 // `personalData` (members/personalData.js) /mydata. `colors`
 // (colors/colorService.js) is shared with the join color (made by /color when left out).
+// `quotes` (quotes/quotes.js) runs /quote and the Make it a quote app.
 export function createCommands({
   logger,
   guildSettings,
@@ -121,6 +123,7 @@ export function createCommands({
   dehoist,
   personalData,
   colors,
+  quotes,
   roleConfirmations = createRoleConfirmations({ guildSettings, store: new RoleConfirmStore(), forcedLanguage }),
   dashboardUrl,
   memberLoader = createMemberLoader(),
@@ -183,6 +186,8 @@ export function createCommands({
     // Right-click apps: Report message, User info, Moderation history.
     ...createContextMenus({ guildSettings, reports, moderation, forcedLanguage, logger }),
     createRemindMeMenu({ reminders, forcedLanguage }),
+    // /quote and the Make it a quote app.
+    ...createQuoteCommands({ quotes }),
   ];
   return new Map(commands.map((command) => [command.name, command]));
 }

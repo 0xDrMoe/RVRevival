@@ -3,6 +3,16 @@
 
 export const CHANGELOG = [
   {
+    date: "2026-11-17",
+    title: "Quotes: make any message a quote card",
+    items: [
+      "Right-click a message, then Apps > Make it a quote: the bot posts a card with the member's avatar fading into it, their words and \"- Name\" under them, and saves it in the server's numbered quote book.",
+      "Buttons under every card: light or dark, avatar in colour or greyscale, bold, refresh, five fonts, six colour themes, Remove my quote, and To GIF, which makes the card again with an animated avatar moving.",
+      "/quote random, get, search, list and top bring quotes back; /quote add saves something said in voice; /quote opt-out stops anyone quoting you.",
+      "New Quotes page on the dashboard: turn quotes off, pick who may make, show and manage them, set a quote channel, a quote reaction (say 3 × 💬 makes a quote) and the look new cards start with, and search, fix or delete quotes.",
+    ],
+  },
+  {
     date: "2026-11-16",
     title: "Tickets: deleted when closed, or as channels of their own",
     items: [

@@ -182,6 +182,7 @@ const NAV = [
       { id: "roles", icon: "layers", tone: "green", manage: true, on: (s) => Boolean(s.rolePersist?.enabled) || (s.autoroleIds ?? []).length > 0 || (s.rolePanels ?? []).length > 0 },
       { id: "colors", icon: "palette", tone: "purple", manage: true, on: (s) => (s.colorRoles ?? []).length > 0 },
       { id: "starboard", icon: "star", tone: "amber", manage: true, on: (s) => Boolean(s.starboard?.channelId) },
+      { id: "quotes", icon: "message", tone: "blue", manage: true, on: (s) => s.quotes?.enabled !== false },
       { id: "birthdays", icon: "cake", tone: "pink", manage: true, on: (s) => Boolean(s.birthdays) },
       { id: "levels", icon: "trophy", tone: "green", manage: true, on: (s) => Boolean(s.leveling?.enabled) },
       { id: "music", icon: "music", tone: "pink", manage: true },
@@ -4669,6 +4670,295 @@ async function showRoles(guildId) {
     },
     after: rolePanelManager(guildId, data),
   });
+}
+
+// --- Quotes -------------------------------------------------------------------------
+//
+// How quotes work (quotes/options.js): on or off, the quote channel, who may
+// make, show and manage quotes, the quote reaction and the look new cards
+// start with, saved with the page's Save bar. Under them, the quote book
+// itself: search, fix a quote's text, delete, and see each card.
+
+const QUOTE_THEMES = ["mono", "rabble", "ocean", "forest", "sunset", "rose"];
+const QUOTE_FONTS = ["sans", "serif", "mono", "hand", "round"];
+const QUOTE_STYLE_DEFAULTS = { theme: "mono", light: false, color: false, bold: false, font: "sans" };
+const QUOTE_DEFAULTS = {
+  enabled: true,
+  channelId: null,
+  makeRoleIds: [],
+  viewRoleIds: [],
+  managerRoleIds: [],
+  denyRoleIds: [],
+  removeOwn: true,
+  selfQuotes: true,
+  botQuotes: true,
+  reactionEmoji: null,
+  reactionCount: 3,
+  style: QUOTE_STYLE_DEFAULTS,
+};
+const MAX_QUOTE_REACTIONS = 50;
+
+function readQuoteStyle(form) {
+  return {
+    theme: form.querySelector("#quoteTheme").value,
+    light: form.querySelector("#quoteLight").checked,
+    color: form.querySelector("#quoteColor").checked,
+    bold: form.querySelector("#quoteBold").checked,
+    font: form.querySelector("#quoteFont").value,
+  };
+}
+
+// Always the whole object: the server saves the defaults as no value.
+function readQuotes(form) {
+  const count = Number(form.querySelector("#quoteReactionCount").value);
+  return {
+    enabled: form.querySelector("#quotesEnabled").checked,
+    channelId: form.querySelector("#quoteChannel").value || null,
+    makeRoleIds: checkedList("quoteMake")(form) ?? [],
+    viewRoleIds: checkedList("quoteView")(form) ?? [],
+    managerRoleIds: checkedList("quoteManagers")(form) ?? [],
+    denyRoleIds: checkedList("quoteDeny")(form) ?? [],
+    removeOwn: form.querySelector("#quoteRemoveOwn").checked,
+    selfQuotes: form.querySelector("#quoteSelf").checked,
+    botQuotes: form.querySelector("#quoteBots").checked,
+    reactionEmoji: form.querySelector("#quoteReactionEmoji").value.trim() || null,
+    reactionCount: Number.isInteger(count) ? count : QUOTE_DEFAULTS.reactionCount,
+    style: readQuoteStyle(form),
+  };
+}
+
+async function showQuotes(guildId) {
+  const data = await loadManagedGuild(guildId);
+  if (!data) {
+    return;
+  }
+  const options = { ...QUOTE_DEFAULTS, ...(data.settings.quotes ?? {}) };
+  const style = { ...QUOTE_STYLE_DEFAULTS, ...(options.style ?? {}) };
+  const roleItems = () => data.roles.filter((role) => !role.managed).map((role) => roleItem(role, { dot: true }));
+  const roleList = (name, label, help, checked) => [
+    h("span", { class: "field-label" }, t(label)),
+    h("p", { class: "help" }, t(help)),
+    checkList({ name, items: roleItems(), checked: checked ?? [], filterKey: "filterRoles" }),
+  ];
+  const toggle = (id, label, help, checked) =>
+    h(
+      "label",
+      { class: "switch-card" },
+      h("span", { class: "switch-text" }, h("strong", {}, t(label)), h("span", { class: "help" }, t(help))),
+      h("span", { class: "switch" }, h("input", { id, type: "checkbox", role: "switch", checked, "aria-label": t(label) })),
+    );
+  const select = (id, names, value, prefix) =>
+    h("select", { id }, names.map((name) => h("option", { value: name, selected: name === value }, t(`${prefix}${name}`))));
+
+  // The look's preview: redrawn by the server a moment after a change.
+  const preview = h("img", { class: "quote-card-image", alt: t("quotePreviewAlt"), loading: "lazy" });
+  let previewTimer;
+  const redraw = () => {
+    clearTimeout(previewTimer);
+    previewTimer = setTimeout(() => {
+      const form = preview.closest("form");
+      const look = form ? readQuoteStyle(form) : style;
+      const query = new URLSearchParams({ theme: look.theme, font: look.font, light: look.light ? "1" : "0", color: look.color ? "1" : "0", bold: look.bold ? "1" : "0" });
+      preview.src = `/api/guilds/${guildId}/quotes/preview.png?${query}`;
+    }, 250);
+  };
+  const lookCard = card(
+    t("sectionQuoteLook"),
+    "image",
+    "pink",
+    h("p", { class: "help" }, t("quoteLookHelp")),
+    h("div", { class: "rule-body" }, field("quoteTheme", "quoteThemeHelp", select("quoteTheme", QUOTE_THEMES, style.theme, "quoteTheme_")), field("quoteFont", "quoteFontHelp", select("quoteFont", QUOTE_FONTS, style.font, "quoteFont_"))),
+    toggle("quoteLight", "quoteLight", "quoteLightHelp", style.light),
+    toggle("quoteColor", "quoteColor", "quoteColorHelp", style.color),
+    toggle("quoteBold", "quoteBold", "quoteBoldHelp", style.bold),
+    h("div", { class: "quote-preview" }, preview),
+  );
+  lookCard.addEventListener("input", redraw);
+  lookCard.addEventListener("change", redraw);
+
+  settingsPage({
+    data,
+    pageId: "quotes",
+    intro: t("quotesHelp"),
+    cards: [
+      card(
+        t("sectionQuotes"),
+        "message",
+        "blue",
+        toggle("quotesEnabled", "quotesEnabled", "quotesEnabledHelp", options.enabled !== false),
+        field("quoteChannel", "quoteChannelHelp", picker({ id: "quoteChannel", options: postableChannels(data), value: options.channelId, emptyLabel: t("quoteChannelWhereMade") })),
+        toggle("quoteRemoveOwn", "quoteRemoveOwn", "quoteRemoveOwnHelp", options.removeOwn !== false),
+        toggle("quoteSelf", "quoteSelf", "quoteSelfHelp", options.selfQuotes !== false),
+        toggle("quoteBots", "quoteBots", "quoteBotsHelp", options.botQuotes !== false),
+      ),
+      card(
+        t("sectionQuoteAccess"),
+        "key",
+        "purple",
+        h("p", { class: "help" }, t("quoteAccessHelp")),
+        roleList("quoteMake", "quoteMake", "quoteMakeHelp", options.makeRoleIds),
+        roleList("quoteView", "quoteView", "quoteViewHelp", options.viewRoleIds),
+        roleList("quoteManagers", "quoteManagers", "quoteManagersHelp", options.managerRoleIds),
+        roleList("quoteDeny", "quoteDeny", "quoteDenyHelp", options.denyRoleIds),
+      ),
+      card(
+        t("sectionQuoteReaction"),
+        "smile",
+        "amber",
+        h("p", { class: "help" }, t("quoteReactionHelp")),
+        h(
+          "div",
+          { class: "rule-body" },
+          field("quoteReactionEmoji", "quoteReactionEmojiHelp", emojiInput(data, { id: "quoteReactionEmoji", value: options.reactionEmoji ?? "", placeholder: "💬" })),
+          field("quoteReactionCount", "quoteReactionCountHelp", h("input", { id: "quoteReactionCount", type: "number", min: 1, max: MAX_QUOTE_REACTIONS, step: 1, value: options.reactionCount ?? 3, required: true })),
+        ),
+      ),
+      lookCard,
+    ],
+    fields: { quotes: readQuotes },
+    after: quoteBook(guildId),
+  });
+  redraw();
+}
+
+// The quote book: search by words or member, page through, fix a quote's
+// text, delete one, and open its card.
+function quoteBook(guildId) {
+  const list = h("div", { class: "quote-list" });
+  const countPill = h("span", { class: "count-pill" });
+  const search = h("input", { type: "search", class: "grow", placeholder: t("quoteSearchPlaceholder"), "aria-label": t("quoteSearchPlaceholder"), maxLength: 100 });
+  const author = h("select", { "aria-label": t("quoteAuthorFilter") }, h("option", { value: "" }, t("quoteAuthorAll")));
+  const pager = h("div", { class: "toolbar pager" });
+  let page = 1;
+  let searchTimer;
+
+  function row(quote) {
+    const text = h("textarea", { rows: Math.min(6, Math.max(2, Math.ceil(quote.content.length / 70))), maxLength: 4000, "aria-label": t("quoteText", { number: quote.number }) });
+    text.value = quote.content;
+    const save = h("button", { class: "ghost small", type: "button" }, t("save"));
+    save.addEventListener("click", async () => {
+      setBusy(save, true);
+      try {
+        await api(`/api/guilds/${guildId}/quotes/${quote.number}`, { method: "PUT", body: { content: text.value } });
+        toast(t("quoteSaved", { number: quote.number }));
+      } catch (error) {
+        failed(error);
+      } finally {
+        setBusy(save, false);
+      }
+    });
+    const remove = h("button", { class: "ghost small danger", type: "button" }, t("delete"));
+    remove.addEventListener("click", async () => {
+      if (!confirm(t("quoteDeleteConfirm", { number: quote.number }))) {
+        return;
+      }
+      setBusy(remove, true);
+      try {
+        await api(`/api/guilds/${guildId}/quotes/${quote.number}`, { method: "DELETE" });
+        toast(t("quoteDeleted", { number: quote.number }));
+        load();
+      } catch (error) {
+        failed(error);
+        setBusy(remove, false);
+      }
+    });
+    const image = h("img", { class: "quote-card-image", alt: t("quoteCardAlt", { number: quote.number }), hidden: true });
+    const showCard = h("button", { class: "ghost small", type: "button" }, icon("image", "icon small"), t("quoteShowCard"));
+    showCard.addEventListener("click", () => {
+      image.hidden = !image.hidden;
+      if (!image.hidden && !image.src) {
+        image.src = `/api/guilds/${guildId}/quotes/${quote.number}/card.png`;
+      }
+    });
+    const badges = [
+      quote.private ? h("span", { class: "badge", title: t("quotePrivateHelp") }, t("quotePrivate")) : null,
+      quote.nsfw ? h("span", { class: "badge danger" }, t("quoteNsfw")) : null,
+      quote.editedAt ? h("span", { class: "badge" }, t("quoteEdited")) : null,
+    ];
+    return h(
+      "li",
+      { class: "quote-row" },
+      h(
+        "div",
+        { class: "quote-head" },
+        h("strong", {}, `#${quote.number}`),
+        h("span", { class: "grow" }, `${quote.authorName} (@${quote.authorUsername})`),
+        h("span", { class: "muted" }, formatDate(quote.saidAt)),
+        ...badges,
+      ),
+      text,
+      h(
+        "div",
+        { class: "toolbar" },
+        h("span", { class: "help grow" }, t(`quoteVia_${quote.via}`)),
+        quote.link ? h("a", { class: "button ghost small", href: quote.link, target: "_blank", rel: "noopener" }, icon("external", "icon small"), t("quoteJump")) : null,
+        showCard,
+        save,
+        remove,
+      ),
+      image,
+    );
+  }
+
+  async function load() {
+    const query = new URLSearchParams({ page: String(page) });
+    if (search.value.trim()) {
+      query.set("q", search.value.trim());
+    }
+    if (author.value) {
+      query.set("user", author.value);
+    }
+    try {
+      const result = await api(`/api/guilds/${guildId}/quotes?${query}`);
+      page = result.page;
+      countPill.textContent = t("tagsCount", { count: result.count, max: result.max });
+      const chosen = author.value;
+      author.replaceChildren(
+        h("option", { value: "" }, t("quoteAuthorAll")),
+        result.authors.map((entry) => h("option", { value: entry.authorId, selected: entry.authorId === chosen }, `${entry.name} (${formatNumber(entry.total)})`)),
+      );
+      list.replaceChildren(
+        result.quotes.length === 0
+          ? h("p", { class: "muted empty" }, t(result.count === 0 ? "quotesNone" : "quotesNoMatch"))
+          : h("ol", { class: "quote-rows" }, result.quotes.map(row)),
+      );
+      const previous = h("button", { class: "ghost small", type: "button", disabled: result.page <= 1 }, icon("chevronLeft", "icon small"), t("levelsPrev"));
+      const next = h("button", { class: "ghost small", type: "button", disabled: result.page >= result.pages }, t("levelsNext"), icon("chevronRight", "icon small"));
+      previous.addEventListener("click", () => {
+        page -= 1;
+        load();
+      });
+      next.addEventListener("click", () => {
+        page += 1;
+        load();
+      });
+      pager.replaceChildren(previous, h("span", { class: "muted" }, t("quotePage", { page: result.page, pages: result.pages })), next);
+    } catch (error) {
+      failed(error);
+    }
+  }
+
+  search.addEventListener("input", () => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => {
+      page = 1;
+      load();
+    }, 300);
+  });
+  author.addEventListener("change", () => {
+    page = 1;
+    load();
+  });
+  load();
+  return card(
+    t("sectionQuoteBook"),
+    "book",
+    "green",
+    h("div", { class: "toolbar" }, h("p", { class: "help grow" }, t("quoteBookHelp")), countPill),
+    h("div", { class: "toolbar quote-filters" }, search, author),
+    list,
+    pager,
+  );
 }
 
 async function showStarboard(guildId) {
@@ -12551,6 +12841,7 @@ const SHOW_PAGE = {
   roles: showRoles,
   colors: showColors,
   starboard: showStarboard,
+  quotes: showQuotes,
   birthdays: showBirthdays,
   music: showMusic,
   levels: showLevels,

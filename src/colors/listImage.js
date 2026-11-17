@@ -9,7 +9,7 @@
 // font can't draw (emoji, Chinese, Japanese...) are left out of the picture.
 
 import { readFile } from "node:fs/promises";
-import { createRequire } from "node:module";
+import { escapeXml, renderPng } from "../images/renderer.js";
 import { readFontMetrics } from "./fontMetrics.js";
 
 const FONT_FILE = new URL("./fonts/NotoSans-Bold.ttf", import.meta.url);
@@ -27,26 +27,16 @@ export const LAYOUT = Object.freeze({
 
 let ready;
 
-// Loads the font and the WebAssembly renderer once, on first use.
+// Loads the font once, on first use.
 function load() {
-  ready ??= (async () => {
-    const require = createRequire(import.meta.url);
-    const [{ initWasm, Resvg }, wasm, font] = await Promise.all([
-      import("@resvg/resvg-wasm"),
-      readFile(require.resolve("@resvg/resvg-wasm/index_bg.wasm")),
-      readFile(FONT_FILE),
-    ]);
-    await initWasm(wasm);
-    return { Resvg, font, metrics: readFontMetrics(font) };
-  })().catch((error) => {
-    // Let the next call try again (a missing file is fixed by a deploy).
-    ready = undefined;
-    throw error;
-  });
+  ready ??= readFile(FONT_FILE)
+    .then((font) => ({ font, metrics: readFontMetrics(font) }))
+    .catch((error) => {
+      ready = undefined;
+      throw error;
+    });
   return ready;
 }
-
-const escapeXml = (text) => text.replace(/[&<>"']/g, (char) => `&#${char.codePointAt(0)};`);
 
 // The label a color gets: "3. Gold", without characters the font lacks, cut
 // with "…" to fit `maxWidth`.
@@ -109,19 +99,9 @@ export async function renderColorList(colors) {
   if (colors.length === 0) {
     throw new Error("No colors to draw");
   }
-  const { Resvg, font, metrics } = await load();
+  const { font, metrics } = await load();
   const { svg } = buildListSvg(colors, metrics);
-  const resvg = new Resvg(svg, { font: { fontBuffers: [font], defaultFontFamily: FONT_FAMILY, loadSystemFonts: false } });
-  try {
-    const image = resvg.render();
-    try {
-      return Buffer.from(image.asPng());
-    } finally {
-      image.free();
-    }
-  } finally {
-    resvg.free();
-  }
+  return renderPng(svg, { fonts: [font], defaultFontFamily: FONT_FAMILY });
 }
 
 // For tests and the dashboard preview: the font's metrics without the renderer.

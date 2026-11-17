@@ -1454,6 +1454,74 @@ export const COMMAND_PARTS = [
         ],
       },
       {
+        id: "cmdquote",
+        command: "/quote",
+        title: "/quote",
+        icon: "message",
+        tone: "blue",
+        page: "quotes",
+        related: "quotes",
+        summary: "The server's quote book: show, search and remove quotes made with the **Make it a quote** app.",
+        who: "Everyone, unless the **Quotes** page limits making or showing quotes to some roles. Removing someone else's quote: quote managers.",
+        usages: [
+          {
+            usage: "/quote random [user] [private]",
+            what: "Posts a random quote card. In a public channel, quotes from private or age-restricted channels are left out.",
+            options: [
+              ["user", "Only quotes of this member."],
+              ["private", "Shows it only to you."],
+            ],
+          },
+          {
+            usage: "/quote get number [private]",
+            what: "Posts one quote card by its number. A quote that would leak a private channel is shown only to you.",
+            options: [
+              ["number", "The quote's number, from its card or `/quote list`."],
+              ["private", "Shows it only to you."],
+            ],
+          },
+          {
+            usage: "/quote search text [user] [page]",
+            what: "Lists the quotes (and quoted names) containing some words, newest first. Only you see it.",
+            options: [
+              ["text", "The words to look for, 2 to 100 characters."],
+              ["user", "Only quotes of this member."],
+              ["page", "Which page of results, 10 per page."],
+            ],
+          },
+          {
+            usage: "/quote list [user] [page]",
+            what: "Lists the server's quotes, newest first, with links to the messages. Only you see it.",
+            options: [
+              ["user", "Only quotes of this member."],
+              ["page", "Which page, 10 per page."],
+            ],
+          },
+          { usage: "/quote top", what: "The 10 most quoted members. Only you see it.", options: [] },
+          {
+            usage: "/quote add user text",
+            what: "Saves something a member said out loud (in voice, say) and posts its card. It has no message to link to, so the card says who added it.",
+            options: [
+              ["user", "Who said it."],
+              ["text", "What they said, up to 1000 characters."],
+            ],
+          },
+          {
+            usage: "/quote delete number",
+            what: "Removes a quote and deletes its card. The member quoted and whoever made it can remove their own; quote managers can remove any.",
+            options: [["number", "The quote's number."]],
+          },
+          { usage: "/quote opt-out", what: "Stops anyone quoting you, on every server with this bot. Only you see the answer.", options: [] },
+          { usage: "/quote opt-in", what: "Lets others quote you again.", options: [] },
+        ],
+        example: ["/quote random", "/quote get number:42 private:True", "/quote search text:pizza user:@Sam"],
+        tips: [
+          "To make a quote, right-click (or long-press) a message, then **Apps** > **Make it a quote**.",
+          "The buttons under every card change its look, refresh the name and avatar, make a GIF (animated avatars) or remove it.",
+          "Who may make, show and manage quotes is set on the dashboard's **Quotes** page.",
+        ],
+      },
+      {
         id: "cmdbirthday",
         command: "/birthday",
         title: "/birthday",

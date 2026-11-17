@@ -330,6 +330,18 @@ When a message gets enough ⭐ reactions, the bot reposts it in a starboard chan
 
 Needs **Manage Server**. The bot needs View Channel, Send Messages and Embed Links in the starboard channel, and Read Message History in the channels people star in. Message text needs the **Message Content** intent.
 
+### Quotes
+
+Members turn messages into quote cards, like the popular quote bots: right-click a message, **Apps** > **Make it a quote**. The bot posts a picture card (the author's avatar fading into the card on the left, their words centred on the right, "- Name" and @username under them, a small `Rabble · #12` mark) and saves it in the server's numbered quote book.
+
+- **Under every card:** Light/Dark, Colour (avatar in colour or greyscale), Bold, Refresh (the newest name and avatar), a font menu (Noto Sans, Noto Serif, Noto Sans Mono, Kalam, Varela Round), a colour theme menu (black and white, Rabble violet, ocean, forest, sunset, rose), **Remove my quote**, **To GIF** and a link to the message. Whoever made the quote, the member quoted and quote managers can change the look.
+- **To GIF** draws the card again with the member's animated avatar moving: 6 seconds at 15 fps, 800 px wide (smaller if it would pass 10 MB), one GIF at a time for the whole bot, one per person every 30 seconds and 4 per server a minute. It uses the bundled ffmpeg (`ffmpeg-static`, the same one music uses), which only reads files the bot downloaded itself.
+- `/quote random [user] [private]`, `/quote get number`, `/quote search text`, `/quote list`, `/quote top`, `/quote add user text` (something said in voice), `/quote delete number`, `/quote opt-out` and `/quote opt-in` (on every server).
+- **Dashboard Quotes page** (setting `quotes`, see `src/quotes/options.js`): on/off, a quote channel, who can make, show and manage quotes (role lists, plus blocked roles), whether members can remove their own, quote themselves or quote bots, a quote reaction (say 3 × 💬 makes a quote) and the look new cards start with, with a live preview. Below it, the quote book: search by words or member, fix a quote's text, delete, open a card.
+- A quote from a channel @everyone can't see is only shown in channels like that (elsewhere only to the member asking), and one from an age-restricted channel only in age-restricted channels. A message is only quoted once.
+
+Cards are SVG drawn to PNG by resvg (WebAssembly, `src/images/renderer.js`) with fonts bundled in `src/quotes/fonts` (SIL Open Font License). Quotes live in `data/bot.db` (tables `quotes`, `quote_counters`, `quote_optouts`, migration 40), up to 10,000 per server. `/mydata` counts and deletes quotes of a member. The bot needs Send Messages, Attach Files and Embed Links where cards are posted, and the **Message Content** intent to read message text.
+
 ### Support tickets
 
 Members open a private ticket with a button, and only they and the staff can see it. Discord has no ticket feature of its own, so each ticket is a **private thread** in the ticket channel.

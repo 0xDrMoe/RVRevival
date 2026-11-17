@@ -37,6 +37,7 @@ import { checkMusic, describeMusic, InvalidMusic, normalizeMusic } from "../musi
 import { channelTypesFor, checkAutomation, describeAutomation, InvalidAutomation, normalizeAutomation } from "../channels/automation.js";
 import { checkColorOptions, describeColorOptions, InvalidColorOptions, normalizeColorOptions } from "../colors/options.js";
 import { normalizeColors } from "../colors/colors.js";
+import { checkQuoteOptions, describeQuoteOptions, InvalidQuoteOptions, normalizeQuoteOptions } from "../quotes/options.js";
 import { Setting } from "../settings/guildSettings.js";
 import { variableError } from "./public/variables.js";
 
@@ -123,6 +124,7 @@ export const SETTING_RULES = Object.freeze({
   [Setting.MEDIA_ONLY]: { kind: "mediaOnly", types: [ChannelType.GuildText, ChannelType.GuildAnnouncement], label: "Media-only channels" },
   [Setting.MUSIC]: { kind: "music", label: "Music" },
   [Setting.COLOR_OPTIONS]: { kind: "colorOptions", types: POSTING_CHANNELS, label: "Color roles" },
+  [Setting.QUOTES]: { kind: "quotes", types: POSTING_CHANNELS, label: "Quotes" },
   [Setting.CHANNEL_AUTOMATION]: { kind: "channelAutomation", label: "Channel automation" },
   [Setting.SETUP_SKIPPED]: { kind: "setupSteps", label: "Skipped setup steps" },
   [Setting.LOG_ROUTES]: { kind: "logRoutes", types: POSTING_CHANNELS, label: "Log channels per log type" },
@@ -361,6 +363,15 @@ function checkValue(setting, value, { guildId, channels, roles, colors = [] }) {
         }
         throw error;
       }
+    case "quotes":
+      try {
+        return checkQuoteOptions(value, { isRole: roleOk, isChannel: (id) => channelOk(id, rule.types) });
+      } catch (error) {
+        if (error instanceof InvalidQuoteOptions) {
+          throw new InvalidSetting(setting, error.message);
+        }
+        throw error;
+      }
     case "colorOptions":
       try {
         return checkColorOptions(value, {
@@ -595,6 +606,9 @@ export function describeValue(setting, value) {
   if (SETTING_RULES[setting]?.kind === "colorOptions") {
     return describeColorOptions(value);
   }
+  if (SETTING_RULES[setting]?.kind === "quotes") {
+    return describeQuoteOptions(value);
+  }
   if (value === null || value === undefined || (Array.isArray(value) && value.length === 0)) {
     return "*none*";
   }
@@ -678,6 +692,7 @@ const NORMALIZE = {
   commandRules: normalizeCommandRules,
   music: normalizeMusic,
   colorOptions: normalizeColorOptions,
+  quotes: normalizeQuoteOptions,
   channelAutomation: normalizeAutomation,
   milestones: normalizeMilestones,
   ticketSupport: normalizeTicketSupport,

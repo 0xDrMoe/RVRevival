@@ -1,6 +1,6 @@
 // A member's own data, for /mydata: what the bot keeps about them that they
 // chose to give it (reminders, highlight words, AFK, birthdays, playlists,
-// role pick preferences) or that's about them personally (who invited them,
+// role pick preferences, quotes of them) or that's about them personally (who invited them,
 // being the last to count), in every server, and deleting all of it.
 //
 // Server records (moderation cases, tickets, XP, logs) belong to the server's
@@ -24,6 +24,9 @@ export const PERSONAL_DATA = [
   { key: "afk", count: "SELECT COUNT(*) AS total FROM afk WHERE user_id = ?", remove: ["DELETE FROM afk WHERE user_id = ?"] },
   { key: "birthdays", count: "SELECT COUNT(*) AS total FROM birthdays WHERE user_id = ?", remove: ["DELETE FROM birthdays WHERE user_id = ?"] },
   { key: "playlists", count: "SELECT COUNT(*) AS total FROM music_playlists WHERE user_id = ?", remove: ["DELETE FROM music_playlists WHERE user_id = ?"] },
+  // Quotes of them (quotes/quoteStore.js), in every server. Cards already
+  // posted in Discord stay; the member can remove those with Remove my quote.
+  { key: "quotes", count: "SELECT COUNT(*) AS total FROM quotes WHERE author_id = ?", remove: ["DELETE FROM quotes WHERE author_id = ?"] },
   { key: "rolePicks", count: "SELECT COUNT(*) AS total FROM role_confirm_prefs WHERE user_id = ?", remove: ["DELETE FROM role_confirm_prefs WHERE user_id = ?"] },
   {
     key: "invites",

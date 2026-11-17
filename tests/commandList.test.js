@@ -84,6 +84,8 @@ describe("command list", () => {
       "User info",
       "Moderation history",
       "Remind me",
+      "quote",
+      "Make it a quote",
     ]);
     for (const command of commands.values()) {
       expect(command.data.name).toBe(command.name);

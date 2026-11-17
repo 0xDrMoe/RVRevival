@@ -8029,3 +8029,64 @@ input.has-variable-problem {
 .ticket-panels .panel-list .toolbar {
   flex-wrap: wrap;
 }
+
+/* Quotes page: the card preview and the quote book. */
+.quote-preview {
+  margin-top: 12px;
+}
+
+.quote-card-image {
+  display: block;
+  width: 100%;
+  max-width: 600px;
+  aspect-ratio: 1200 / 630;
+  height: auto;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+}
+
+.quote-card-image[hidden] {
+  display: none;
+}
+
+.quote-filters > input,
+.quote-filters > select {
+  min-width: 0;
+  flex: 1 1 200px;
+}
+
+.quote-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.quote-row {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  min-width: 0;
+}
+
+.quote-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.quote-head > .grow {
+  overflow-wrap: anywhere;
+}
+
+.quote-row textarea {
+  width: 100%;
+  resize: vertical;
+}
