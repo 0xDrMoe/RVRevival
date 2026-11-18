@@ -372,6 +372,19 @@ Members open a private ticket with a button, and only they and the staff can see
 
 `panel`, `off`, `log` and `log-event` need **Manage Server**. Closing any ticket, `add`, `remove` and `list` need **Manage Threads**, Manage Server, a staff role of any panel or type, or the mod role (inside a ticket: its own panel's or type's staff roles, or the mod role). The bot needs View Channel, Send Messages, Embed Links, Create Private Threads, Send Messages in Threads and Manage Threads in the ticket channel (plus Read Message History and Attach Files in the ticket log channel and ticket channel for transcripts), and members need **Send Messages in Threads** there (they don't need Send Messages, so the channel can stay read-only apart from the threads).
 
+### AI ticket assistant
+
+An AI that helps staff with tickets (phase 1: it never answers members on its own). **Off for every server until it turns it on** on the dashboard's **AI assistant** page (setting `ticketAi`, see `src/ai/options.js`), and off for the whole bot without `ANTHROPIC_API_KEY`.
+
+- **Knowledge base:** articles each server writes on the AI assistant page (up to 100, 4,000 characters each), plus its tags unless switched off. The assistant answers only from these. Retrieval is keyword search (BM25 with light English stemming, `src/ai/retrieval.js`): only the articles that match a ticket go with each request. **Try the search** on the page shows what a member's words would bring up, without calling the AI.
+- **Triage:** when a ticket opens, the AI reads the form and returns (structured JSON) a priority (low, normal, high, urgent), a one-line summary, a better ticket type of the panel and up to three matching articles. Saved on the ticket and posted as a ticket log entry (`aiTriaged`), which only staff see.
+- **✨ Staff assist** button in every ticket (staff only, ephemeral): the triage, **Summarize ticket**, and **Suggest reply**, a draft staff **Edit and send** (a form) or **Send as it is**. It's posted as an embed with the staff member's name and avatar and *Drafted with AI, checked by staff*, and counts as the staff's first reply. Drafts live in memory for 30 minutes and send once. One request per staff member every 8 seconds. Each use is a ticket log entry (`aiUsed`).
+- **Close summary:** two or three sentences on how the ticket went, in the closed entry of the ticket log and on the ticket's dashboard page.
+- **Guardrails:** the model gets no tools (it can't act on Discord); it's told to state facts only from the knowledge base and mark unknowns as `[check: …]`; member and staff text goes in escaped inside data tags, never as instructions; whatever it writes is stripped of mentions and sent with no pings; a refusal, cut-off or failure just shows an error and the ticket carries on.
+- **Cost:** Claude Haiku 5.5 by default (`AI_MODEL` to change), low effort, one request per action. Each server has a monthly limit (default 200, up to 5,000) capped by the bot's `AI_MONTHLY_LIMIT` (default 500); counts in `ai_usage` per UTC month.
+
+Code: `src/ai/` (client on the official `@anthropic-ai/sdk`, options, knowledge and usage stores, retrieval, the assistant and its prompts) and `src/tickets/ticketAi.js` (the Discord side). Tables `kb_articles`, `ai_usage` and the tickets' `ai_triage` and `ai_summary` columns (migration 41). The Privacy Policy says what is sent to Anthropic.
+
 ### Raid protection
 
 For when a server is flooded by bots or a coordinated group. Discord's own tools come first (Server Settings → Safety Setup: verification level, raid and DM-spam alerts); this adds what they don't have.

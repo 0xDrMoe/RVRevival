@@ -639,6 +639,32 @@ const MIGRATIONS = [
     at      INTEGER NOT NULL
   ) WITHOUT ROWID;
   `,
+  // 41: the AI ticket assistant (ai/ticketAssistant.js). kb_articles: each
+  // server's knowledge base, written on the dashboard. ai_usage: AI requests
+  // per server per month ("2026-11"), for the monthly limit. On tickets: the
+  // triage done when it opened (JSON: priority, summary, suggested category
+  // and articles) and the AI summary written when it closed.
+  `
+  CREATE TABLE kb_articles (
+    id         INTEGER PRIMARY KEY,
+    guild_id   TEXT    NOT NULL,
+    title      TEXT    NOT NULL,
+    body       TEXT    NOT NULL,
+    updated_by TEXT,
+    updated_at INTEGER NOT NULL
+  );
+  CREATE INDEX kb_articles_by_guild ON kb_articles (guild_id);
+  CREATE TABLE ai_usage (
+    guild_id      TEXT    NOT NULL,
+    month         TEXT    NOT NULL,
+    requests      INTEGER NOT NULL DEFAULT 0,
+    input_tokens  INTEGER NOT NULL DEFAULT 0,
+    output_tokens INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (guild_id, month)
+  ) WITHOUT ROWID;
+  ALTER TABLE tickets ADD COLUMN ai_triage TEXT;
+  ALTER TABLE tickets ADD COLUMN ai_summary TEXT;
+  `,
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS.length;

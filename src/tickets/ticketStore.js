@@ -5,6 +5,17 @@
 
 import { inTransaction, openDatabase } from "../storage/database.js";
 
+function parseTriage(text) {
+  if (!text) {
+    return null;
+  }
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
 function toTicket(row) {
   return row
     ? {
@@ -26,6 +37,10 @@ function toTicket(row) {
         messageCount: row.message_count ?? null,
         claimedBy: row.claimed_by ?? null,
         claimedAt: row.claimed_at ?? null,
+        // The AI assistant's notes (ai/ticketAssistant.js): the triage done when
+        // it opened, and the summary written when it closed. null without.
+        aiTriage: parseTriage(row.ai_triage),
+        aiSummary: row.ai_summary ?? null,
         firstResponseAt: row.first_response_at ?? null,
         lastActivityAt: row.last_activity_at ?? null,
         idleWarnedAt: row.idle_warned_at ?? null,
@@ -110,6 +125,8 @@ export class TicketStore {
           AND (:before IS NULL OR number < :before)
         ORDER BY number DESC
         LIMIT :limit`),
+      setTriage: this.#db.prepare("UPDATE tickets SET ai_triage = ? WHERE id = ? RETURNING *"),
+      setAiSummary: this.#db.prepare("UPDATE tickets SET ai_summary = ? WHERE id = ? RETURNING *"),
       claim: this.#db.prepare("UPDATE tickets SET claimed_by = ?, claimed_at = ? WHERE id = ? AND closed_at IS NULL RETURNING *"),
       // A message in the ticket: it's active again (any idle warning is
       // forgotten), and the first message by someone other than the member is
@@ -281,6 +298,17 @@ export class TicketStore {
   }
 
   // Someone wrote in the ticket.
+  // The AI triage of a new ticket ({ priority, summary, categoryId, articles,
+  // needsStaff }). Returns the ticket.
+  setTriage(id, triage) {
+    return toTicket(this.#statements.setTriage.get(JSON.stringify(triage), id));
+  }
+
+  // The AI summary of a closed ticket. Returns the ticket.
+  setAiSummary(id, summary) {
+    return toTicket(this.#statements.setAiSummary.get(summary, id));
+  }
+
   noteActivity(id, authorId, at = Date.now()) {
     this.#statements.activity.run({ id, authorId, at });
   }

@@ -3,6 +3,16 @@
 
 export const CHANGELOG = [
   {
+    date: "2026-11-18",
+    title: "AI ticket assistant for staff",
+    items: [
+      "New AI assistant page: write a knowledge base (your FAQ, rules and fixes), then turn the assistant on. It's off until you do.",
+      "Triage: when a ticket opens, the AI notes a priority, a one-line summary, a better ticket type and the articles that may answer it, in the ticket log where only staff look.",
+      "✨ Staff assist in every ticket: Summarize ticket, and Suggest reply, a draft from your knowledge base that staff edit and send with their name.",
+      "Closed tickets get a short AI summary in the ticket log and on their page. A monthly limit per server keeps the cost in check.",
+    ],
+  },
+  {
     date: "2026-11-17",
     title: "Quotes: make any message a quote card",
     items: [

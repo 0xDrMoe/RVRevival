@@ -313,7 +313,8 @@ export function buildPanelComponents(language, { look: saved, categories = [], p
 // the built-in one), what the member answered, and the Close button.
 // `ping` says whether the staff roles are pinged; when they are and the intro
 // doesn't mention them, the mentions go on a line of their own.
-export function buildTicketWelcome(language, { ticket, staffRoleIds = [], color = TICKET_COLOR, intro = null, ping = true, server = "" }) {
+// `extraButtons` go after Close and Claim (the AI assistant's Staff assist).
+export function buildTicketWelcome(language, { ticket, staffRoleIds = [], color = TICKET_COLOR, intro = null, ping = true, server = "", extraButtons = [] }) {
   const staffMention = staffRoleIds.length > 0 ? staffRoleIds.map((id) => `<@&${id}>`).join(" ") : null;
   const values = {
     user: `<@${ticket.userId}>`,
@@ -346,7 +347,7 @@ export function buildTicketWelcome(language, { ticket, staffRoleIds = [], color 
   return {
     content: content.slice(0, 2000),
     embeds: [embed],
-    components: [new ActionRowBuilder().addComponents(button, claim)],
+    components: [new ActionRowBuilder().addComponents(button, claim, ...extraButtons)],
     allowedMentions: { users: [ticket.userId], roles: pingsStaff ? staffRoleIds : [] },
   };
 }

@@ -61,6 +61,8 @@ export const LogRoute = Object.freeze({
   TICKET_CLAIMED: "ticketClaimed",
   TICKET_UNCLAIMED: "ticketUnclaimed",
   TICKET_RATED: "ticketRated",
+  TICKET_AI_TRIAGED: "ticketAiTriaged",
+  TICKET_AI_USED: "ticketAiUsed",
 });
 export const LOG_ROUTES = Object.values(LogRoute);
 

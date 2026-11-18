@@ -83,6 +83,10 @@ import { GuildSettings, Setting } from "./settings/guildSettings.js";
 import { moveAutomodEscalation } from "./moderation/warnStepsMigration.js";
 import { TicketStore } from "./tickets/ticketStore.js";
 import { createTicketLog } from "./tickets/ticketLog.js";
+import { createAiClient } from "./ai/client.js";
+import { KnowledgeStore } from "./ai/knowledgeStore.js";
+import { createTicketAssistant } from "./ai/ticketAssistant.js";
+import { AiUsageStore } from "./ai/usageStore.js";
 import { closeDatabase, DEFAULT_DATABASE_FILE, openDatabase, optimizeDatabase } from "./storage/database.js";
 import { logger, registerSecret } from "./utils/logger.js";
 import { isRenameLimited } from "./utils/rateLimits.js";
@@ -161,6 +165,9 @@ async function start() {
   for (const secret of liveSecrets(config.live)) {
     registerSecret(secret);
   }
+  if (config.ai?.apiKey) {
+    registerSecret(config.ai.apiKey);
+  }
 
   // Settings and moderation cases live in data/bot.db (SQLite).
   const db = openDatabase(DEFAULT_DATABASE_FILE);
@@ -237,6 +244,16 @@ async function start() {
   const inviteTracker = createInviteTracker({ logger, wants: (guild) => serverLog.tracksInvites(guild) || inviteTrackingOn(guildSettings, guild.id) });
   serverLog = createServerLog({ poster, botDeletions, guildSettings, altHints, auditTrail, inviteTracker });
   // Saves and posts everything that happens to tickets (/tickets log).
+  // The AI ticket assistant: off for a server until it turns it on, and for
+  // every server without ANTHROPIC_API_KEY.
+  const ticketAssistant = createTicketAssistant({
+    ai: createAiClient({ apiKey: config.ai?.apiKey, model: config.ai?.model }),
+    knowledge: new KnowledgeStore(db),
+    usage: new AiUsageStore(db),
+    guildSettings,
+    logger,
+    botMonthlyLimit: config.ai?.monthlyLimit,
+  });
   const ticketLog = createTicketLog({ tickets, poster, guildSettings, logger, dashboardUrl: config.dashboardUrl, transcriptSecret: config.transcriptSecret });
   // Anti-nuke (/antinuke) counts bans and kicks done through the bot as well.
   let antiNuke;
@@ -357,6 +374,7 @@ async function start() {
     giveaways,
     tickets,
     ticketLog,
+    ticketAssistant,
     levels,
     leveling,
     tempVoice: tempVoiceChannels,

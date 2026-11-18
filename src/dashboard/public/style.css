@@ -8090,3 +8090,59 @@ input.has-variable-problem {
   width: 100%;
   resize: vertical;
 }
+
+/* --- AI assistant: knowledge base ------------------------------------------ */
+
+.kb-list {
+  display: grid;
+  gap: 8px;
+}
+
+.kb-articles,
+.kb-matches {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.kb-article {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  min-width: 0;
+}
+
+.kb-article.kb-new {
+  border-style: dashed;
+  background: transparent;
+}
+
+.kb-article input,
+.kb-article textarea {
+  width: 100%;
+  min-width: 0;
+}
+
+.kb-article input {
+  font-weight: 600;
+}
+
+.kb-article textarea {
+  resize: vertical;
+}
+
+.kb-matches li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow-wrap: anywhere;
+}
