@@ -26,6 +26,10 @@ export const TicketEvent = Object.freeze({
   CLAIMED: "claimed",
   UNCLAIMED: "unclaimed",
   RATED: "rated",
+  // The AI assistant (ai/ticketAssistant.js): its triage of a new ticket, and
+  // each time staff used Summarize or Suggest reply.
+  AI_TRIAGED: "aiTriaged",
+  AI_USED: "aiUsed",
 });
 export const TICKET_EVENTS = Object.values(TicketEvent);
 
@@ -43,7 +47,12 @@ const STYLE = {
   [TicketEvent.CLAIMED]: { title: "claimed", color: 0x7c5cff },
   [TicketEvent.UNCLAIMED]: { title: "unclaimed", color: 0x99aab5 },
   [TicketEvent.RATED]: { title: "rated", color: 0xfee75c },
+  [TicketEvent.AI_TRIAGED]: { title: "triaged by AI", color: 0xc061cb },
+  [TicketEvent.AI_USED]: { title: "AI helper used", color: 0xc061cb },
 };
+
+const PRIORITY_LABEL = { low: "🟢 Low", normal: "🔵 Normal", high: "🟠 High", urgent: "🔴 Urgent" };
+export const priorityLabel = (priority) => PRIORITY_LABEL[priority] ?? PRIORITY_LABEL.normal;
 
 const UNKNOWN = "Unknown or automatic";
 const MAX_PEOPLE_SHOWN = 20;
@@ -69,7 +78,8 @@ export function transcriptButtonRow(transcriptLink) {
 
 // One log entry. `messageCount` is for a closed ticket's transcript; its
 // dashboard page is a button under the entry (transcriptButtonRow).
-export function buildTicketEventEmbed({ ticket, event, actorId = null, userIds = [], detail = null, messageCount, at = Date.now() }) {
+// `aiSummary` is a closed ticket's AI summary; `triage` a new ticket's AI triage.
+export function buildTicketEventEmbed({ ticket, event, actorId = null, userIds = [], detail = null, messageCount, aiSummary = null, triage = null, at = Date.now() }) {
   const style = STYLE[event] ?? STYLE[TicketEvent.CLOSED];
   const embed = new EmbedBuilder()
     .setColor(style.color)
@@ -97,6 +107,18 @@ export function buildTicketEventEmbed({ ticket, event, actorId = null, userIds =
       field("Category", ticket.categoryLabel, true);
       field("Subject", ticket.subject);
       field("Reason", detail);
+      field("AI summary", aiSummary);
+      break;
+    case TicketEvent.AI_TRIAGED:
+      if (triage) {
+        field("Priority", priorityLabel(triage.priority), true);
+        field("Needs staff", triage.needsStaff === false ? "Maybe not: the knowledge base may answer it" : "Yes", true);
+        field("Summary", triage.summary);
+        field("Better category", triage.categoryLabel);
+        field("Articles that may answer it", triage.articles?.length ? triage.articles.map((article) => `• ${article.title}`).join("\n") : null);
+      } else {
+        field("Note", detail);
+      }
       break;
     case TicketEvent.MEMBER_ADDED:
     case TicketEvent.MEMBER_REMOVED:
@@ -129,7 +151,7 @@ export function createTicketLog({ tickets, poster, guildSettings, logger, dashbo
     // files and the server hasn't switched the file off
     // (Setting.TICKET_TRANSCRIPT_FILE). Never throws: the ticket carries on
     // whatever the log does.
-    async record(guild, ticket, { event, actorId = null, userIds = [], detail = null, transcript, transcriptData, messageCount }) {
+    async record(guild, ticket, { event, actorId = null, userIds = [], detail = null, transcript, transcriptData, messageCount, aiSummary = null, triage = null }) {
       const at = now();
       try {
         tickets.addEvent(ticket, { event, actorId, userIds, detail, createdAt: at });
@@ -153,7 +175,7 @@ export function createTicketLog({ tickets, poster, guildSettings, logger, dashbo
           guild,
           TICKET_LOG_SETTINGS,
           ({ canAttach }) => ({
-            embed: buildTicketEventEmbed({ ticket, event, actorId, userIds, detail, messageCount, at }),
+            embed: buildTicketEventEmbed({ ticket, event, actorId, userIds, detail, messageCount, aiSummary, triage, at }),
             components: link ? [transcriptButtonRow(link)] : [],
             files:
               attachFile && canAttach

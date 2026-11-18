@@ -73,7 +73,7 @@ const LOG_EVENTS = LOG_EVENT_GROUPS.flatMap((group) => group.events);
 // How server-log entries look and what they include, with their defaults (logs/logEvents.js).
 const LOG_OPTION_DEFAULTS = { compact: false, showIds: true, logBots: false, editDiff: true, whoDidIt: true, invites: true };
 // What the ticket log records (tickets/ticketLog.js).
-const TICKET_EVENTS = ["opened", "closed", "reopened", "memberAdded", "memberRemoved", "renamed", "deleted", "claimed", "unclaimed", "rated"];
+const TICKET_EVENTS = ["opened", "closed", "reopened", "memberAdded", "memberRemoved", "renamed", "deleted", "claimed", "unclaimed", "rated", "aiTriaged", "aiUsed"];
 const CASE_ACTIONS = ["ban", "softban", "unban", "kick", "timeout", "untimeout", "warn", "note"];
 const AUTOMOD_RULES = ["scamLinks", "bannedWords", "invites", "links", "mentions", "spam", "duplicates", "caps", "emojis", "lines", "zalgo"];
 const AUTOMOD_ACTIONS = ["delete", "warn", "timeout", "log"];
@@ -164,6 +164,7 @@ const NAV = [
       { id: "cases", icon: "folder", tone: "pink" },
       { id: "members", icon: "users", tone: "purple" },
       { id: "tickets", icon: "ticket", tone: "cyan" },
+      { id: "ai", icon: "sparkles", tone: "purple", manage: true, on: (s) => Boolean(s.ticketAi?.enabled) },
       { id: "appeals", icon: "inbox", tone: "amber", manage: true, on: (s) => Boolean(s.appeals?.enabled) },
     ],
   },
@@ -4959,6 +4960,190 @@ function quoteBook(guildId) {
     list,
     pager,
   );
+}
+
+// --- AI assistant ---------------------------------------------------------------------
+//
+// The AI ticket assistant (ai/options.js): on or off, which helpers, the
+// monthly limit and which ticket panels, saved with the page's Save bar.
+// Above them, whether this bot has an AI key and this month's use; under
+// them, the knowledge base the assistant answers from, and a search to see
+// which articles a ticket would bring up.
+
+const TICKET_AI_DEFAULTS = { enabled: false, triage: true, helpers: true, closeSummary: true, useTags: true, monthlyLimit: 200, panelIds: [] };
+const MAX_AI_MONTHLY_LIMIT = 5000;
+
+function readTicketAi(form) {
+  const limit = Number(form.querySelector("#aiMonthlyLimit").value);
+  return {
+    enabled: form.querySelector("#aiEnabled").checked,
+    triage: form.querySelector("#aiTriage").checked,
+    helpers: form.querySelector("#aiHelpers").checked,
+    closeSummary: form.querySelector("#aiCloseSummary").checked,
+    useTags: form.querySelector("#aiUseTags").checked,
+    monthlyLimit: Number.isInteger(limit) ? limit : TICKET_AI_DEFAULTS.monthlyLimit,
+    panelIds: checkedList("aiPanels")(form) ?? [],
+  };
+}
+
+async function showAi(guildId) {
+  const data = await loadManagedGuild(guildId);
+  if (!data) {
+    return;
+  }
+  let info;
+  try {
+    info = await api(`/api/guilds/${guildId}/ai`);
+  } catch (error) {
+    failed(error);
+    return;
+  }
+  const options = { ...TICKET_AI_DEFAULTS, ...(data.settings.ticketAi ?? {}) };
+  const toggle = (id, label, help, checked) =>
+    h(
+      "label",
+      { class: "switch-card" },
+      h("span", { class: "switch-text" }, h("strong", {}, t(label)), h("span", { class: "help" }, t(help))),
+      h("span", { class: "switch" }, h("input", { id, type: "checkbox", role: "switch", checked, "aria-label": t(label) })),
+    );
+  const defaults = data.ticketDefaults ?? { title: t("page_tickets") };
+  const panelItems = ticketPanelsOf(data).map((panel) => ({ id: panel.id, label: ticketPanelLabel(panel, defaults) }));
+  const used = info.usage.requests;
+  const status = card(
+    t("sectionAiStatus"),
+    "sparkles",
+    "purple",
+    info.available ? null : h("p", { class: "tip" }, icon("lock"), h("span", {}, t("aiNoKey"))),
+    h(
+      "div",
+      { class: "meters" },
+      h(
+        "div",
+        { class: "meter-row" },
+        h("span", { class: "meter-label" }, t("aiUsedThisMonth")),
+        h("span", { class: "meter" }, fillBar("meter-fill", info.limit > 0 ? Math.min(1, used / info.limit) : 0)),
+        h("span", { class: "meter-value" }, t("aiUsedOf", { used: formatNumber(used), limit: formatNumber(info.limit) })),
+      ),
+    ),
+    h("p", { class: "help" }, t("aiUsageHelp", { model: info.model, tokens: formatNumber(info.usage.inputTokens + info.usage.outputTokens) })),
+  );
+  settingsPage({
+    data,
+    pageId: "ai",
+    intro: t("aiHelp"),
+    cards: [
+      status,
+      card(
+        t("sectionAi"),
+        "bot",
+        "purple",
+        toggle("aiEnabled", "aiEnabled", "aiEnabledHelp", options.enabled === true),
+        h("p", { class: "tip" }, icon("shieldCheck"), h("span", {}, t("aiPrivacyTip"))),
+        toggle("aiTriage", "aiTriage", "aiTriageHelp", options.triage !== false),
+        toggle("aiHelpers", "aiHelpers", "aiHelpersHelp", options.helpers !== false),
+        toggle("aiCloseSummary", "aiCloseSummary", "aiCloseSummaryHelp", options.closeSummary !== false),
+        toggle("aiUseTags", "aiUseTags", "aiUseTagsHelp", options.useTags !== false),
+        field(
+          "aiMonthlyLimit",
+          "aiMonthlyLimitHelp",
+          h("input", { id: "aiMonthlyLimit", type: "number", min: 1, max: MAX_AI_MONTHLY_LIMIT, step: 1, value: options.monthlyLimit, required: true }),
+        ),
+        h("p", { class: "help" }, t("aiBotLimit", { limit: formatNumber(info.botLimit) })),
+        h("span", { class: "field-label" }, t("aiPanels")),
+        h("p", { class: "help" }, t("aiPanelsHelp")),
+        checkList({ name: "aiPanels", items: panelItems, checked: options.panelIds ?? [], filterKey: "aiPanelsFilter" }),
+      ),
+    ],
+    fields: { ticketAi: readTicketAi },
+    after: [knowledgeBase(guildId, info), knowledgeSearch(guildId)],
+  });
+}
+
+// The knowledge base: every article, each one editable, and a form for a new one.
+function knowledgeBase(guildId, info) {
+  const list = h("div", { class: "kb-list" });
+  const countPill = h("span", { class: "count-pill" });
+  let articles = info.articles;
+
+  function editor(article) {
+    const title = h("input", { type: "text", maxLength: info.max.title, required: true, placeholder: t("aiArticleTitlePlaceholder"), "aria-label": t("aiArticleTitle") });
+    title.value = article?.title ?? "";
+    const body = h("textarea", { rows: article ? Math.min(12, Math.max(3, Math.ceil(article.body.length / 80))) : 5, maxLength: info.max.body, placeholder: t("aiArticleBodyPlaceholder"), "aria-label": t("aiArticleBody") });
+    body.value = article?.body ?? "";
+    const save = h("button", { class: article ? "ghost small" : "primary small", type: "button" }, t(article ? "save" : "aiArticleAdd"));
+    save.addEventListener("click", async () => {
+      setBusy(save, true);
+      try {
+        const result = await api(article ? `/api/guilds/${guildId}/ai/articles/${article.id}` : `/api/guilds/${guildId}/ai/articles`, {
+          method: article ? "PUT" : "POST",
+          body: { title: title.value, body: body.value },
+        });
+        articles = article ? articles.map((entry) => (entry.id === article.id ? result.article : entry)) : [...articles, result.article];
+        toast(t(article ? "aiArticleSaved" : "aiArticleAdded", { title: result.article.title }));
+        draw();
+      } catch (error) {
+        failed(error);
+        setBusy(save, false);
+      }
+    });
+    const remove = article ? h("button", { class: "ghost small danger", type: "button" }, t("delete")) : null;
+    remove?.addEventListener("click", async () => {
+      if (!confirm(t("aiArticleDeleteConfirm", { title: article.title }))) {
+        return;
+      }
+      setBusy(remove, true);
+      try {
+        await api(`/api/guilds/${guildId}/ai/articles/${article.id}`, { method: "DELETE" });
+        articles = articles.filter((entry) => entry.id !== article.id);
+        toast(t("aiArticleDeleted", { title: article.title }));
+        draw();
+      } catch (error) {
+        failed(error);
+        setBusy(remove, false);
+      }
+    });
+    return h(
+      article ? "li" : "div",
+      { class: article ? "kb-article" : "kb-article kb-new" },
+      title,
+      body,
+      h("div", { class: "toolbar" }, h("span", { class: "help grow" }, article ? t("aiArticleUpdated", { date: formatDate(article.updatedAt) }) : t("aiArticleNewHelp")), save, remove),
+    );
+  }
+
+  function draw() {
+    countPill.textContent = t("tagsCount", { count: articles.length, max: info.max.articles });
+    list.replaceChildren(
+      articles.length === 0 ? h("p", { class: "muted empty" }, t("aiArticlesNone")) : h("ul", { class: "kb-articles" }, articles.map(editor)),
+      articles.length < info.max.articles ? editor(null) : h("p", { class: "muted" }, t("aiArticlesFull")),
+    );
+  }
+
+  draw();
+  return card(t("sectionAiKnowledge"), "book", "green", h("div", { class: "toolbar" }, h("p", { class: "help grow" }, t("aiKnowledgeHelp", { tags: info.tags })), countPill), list);
+}
+
+// Type what a member might write and see which articles the assistant would read.
+function knowledgeSearch(guildId) {
+  const text = h("textarea", { rows: 3, maxLength: 2000, placeholder: t("aiSearchPlaceholder"), "aria-label": t("aiSearchPlaceholder") });
+  const results = h("div", { class: "kb-results" });
+  const go = h("button", { class: "ghost small", type: "button" }, icon("search", "icon small"), t("aiSearchButton"));
+  go.addEventListener("click", async () => {
+    setBusy(go, true);
+    try {
+      const { matches } = await api(`/api/guilds/${guildId}/ai/search`, { method: "POST", body: { text: text.value } });
+      results.replaceChildren(
+        matches.length === 0
+          ? h("p", { class: "muted empty" }, t("aiSearchNone"))
+          : h("ol", { class: "kb-matches" }, matches.map((match) => h("li", {}, match.title, match.kind === "tag" ? h("span", { class: "badge" }, t("aiSearchTag")) : null))),
+      );
+    } catch (error) {
+      failed(error);
+    } finally {
+      setBusy(go, false);
+    }
+  });
+  return card(t("sectionAiSearch"), "search", "blue", h("p", { class: "help" }, t("aiSearchHelp")), text, h("div", { class: "toolbar" }, go), results);
 }
 
 async function showStarboard(guildId) {
@@ -10288,6 +10473,9 @@ async function showTicket(guildId, data, number) {
     ticket.claimedBy ? [t("ticketsClaimedBy"), ticketPerson(guildId, ticket.claimedBy, ticket.claimedByName)] : null,
     ticket.firstResponseAt ? [t("ticketsFirstReply"), formatDuration(ticket.firstResponseAt - ticket.createdAt)] : null,
     ticket.rating ? [t("ticketsRating"), ratingStars(ticket.rating)] : null,
+    ticket.aiPriority ? [t("ticketsAiPriority"), t(`aiPriority_${ticket.aiPriority}`)] : null,
+    ticket.aiTriageSummary ? [t("ticketsAiTriage"), ticket.aiTriageSummary] : null,
+    ticket.aiSummary ? [t("ticketsAiSummary"), ticket.aiSummary] : null,
   ].filter(Boolean);
   const actions = h(
     "div",
@@ -12842,6 +13030,7 @@ const SHOW_PAGE = {
   colors: showColors,
   starboard: showStarboard,
   quotes: showQuotes,
+  ai: showAi,
   birthdays: showBirthdays,
   music: showMusic,
   levels: showLevels,

@@ -27,7 +27,7 @@
     <main class="main">
       <article class="legal">
         <h1>Privacy Policy</h1>
-        <p class="legal-updated">Last updated: 17 November 2026</p>
+        <p class="legal-updated">Last updated: 18 November 2026</p>
 
         <p>
           This policy explains what the Rabble Discord bot (“the bot”) and its web dashboard at
@@ -95,6 +95,15 @@
           and, if the server asks for ratings, the 1 to 5 star rating the member gave by DM after it closed. Unless a
           server keeps closed tickets, Rabble deletes the ticket's thread or channel in Discord once the transcript is
           saved, and notes that it is gone; the saved record and transcript stay, as described below.
+        </p>
+        <h3>AI ticket assistant</h3>
+        <p>
+          Off unless a server turns it on. When it is on, Rabble saves, for each ticket, the AI's triage (a priority, a
+          one-line summary, a suggested ticket type and the titles of knowledge base articles that may answer it) and,
+          when it closes, a short AI summary of the conversation. It also saves the server's knowledge base articles
+          (written by its staff, with who last changed each one) and how many AI requests and tokens the server used each
+          month. Replies the AI suggests are kept in memory for up to 30 minutes and only posted if a staff member sends
+          them.
         </p>
         <h3>Community features</h3>
         <ul>
@@ -182,6 +191,14 @@
             dashboard is posted in Discord or another chat app, its preview shows a short summary of the ticket: the server's
             name, the subject and category, the display names of who opened, claimed and closed it, when, the close reason,
             the number of messages and the rating. Never the messages themselves; reading those still needs a staff login.
+          </li>
+          <li>
+            <strong>Anthropic, our AI provider</strong>, only for servers that turn the AI ticket assistant on, and only
+            while it runs: a ticket's form answers and subject, its messages (text, file names, and the display names of
+            who wrote them), the server's name, its ticket types, and the knowledge base articles and tags that match the
+            ticket. No user IDs, emails or passwords are sent. Anthropic processes this under its commercial terms, which
+            don't let it train its models on it, and keeps it only for a limited time, as Anthropic's own privacy policy
+            explains.
           </li>
           <li><strong>Discord</strong>, which carries everything the bot does. Discord’s own Privacy Policy applies to your use of Discord.</li>
           <li><strong>Our hosting provider</strong>, which runs the server the bot and its database are on.</li>

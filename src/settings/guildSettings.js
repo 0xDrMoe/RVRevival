@@ -97,6 +97,7 @@ export const Setting = Object.freeze({
   COLOR_PANELS: "colorPanels", // posted color panels, a list of { channelId, messageId, key } (see colors/colorService.js)
   MUSIC: "music", // the music player, { djRoleId, defaultVolume, maxQueue, announce, leaveAfterMinutes } (see music/config.js)
   QUOTES: "quotes", // the quote book: on/off, quote channel, who may make, show and manage quotes, the quote reaction and the card look new quotes start with, an object (see quotes/options.js)
+  TICKET_AI: "ticketAi", // the AI ticket assistant: on/off, triage, staff helpers, close summaries, tags as knowledge, the monthly limit and which panels, an object (see ai/options.js)
 });
 
 const KNOWN_SETTINGS = new Set(Object.values(Setting));

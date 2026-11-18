@@ -25,6 +25,11 @@
 //   DELETE /api/guilds/:id/ticket-panels/:panel  delete a ticket panel's message (and the panel, unless it's the main one)
 //   POST   /api/guilds/:id/test                  send a labelled test of a message (welcome, logs, level-up...)
 //   POST   /api/guilds/:id/automod/test          which automod rules a message would break
+//   GET    /api/guilds/:id/ai                    the AI ticket assistant: on for this bot?, this month's use, the knowledge base
+//   POST   /api/guilds/:id/ai/articles           add a knowledge base article
+//   PUT    /api/guilds/:id/ai/articles/:article  change one
+//   DELETE /api/guilds/:id/ai/articles/:article  delete one
+//   POST   /api/guilds/:id/ai/search             which articles (and tags) a ticket's words would bring up
 //
 // Two levels of access to a server the bot is in:
 //   - "manage": Manage Server, Administrator or the owner. Everything.
@@ -121,6 +126,13 @@ import { checkNewColors, insertColors, MAX_DRAFTS } from "../colors/drafts.js";
 import { renderColorList } from "../colors/listImage.js";
 import { normalizeColorOptions } from "../colors/options.js";
 import { normalizeQuoteOptions } from "../quotes/options.js";
+import { normalizeTicketAi } from "../ai/options.js";
+import { InvalidArticle, KnowledgeStore, MAX_ARTICLE_BODY, MAX_ARTICLE_TITLE, MAX_ARTICLES } from "../ai/knowledgeStore.js";
+import { search as searchKnowledge } from "../ai/retrieval.js";
+import { AiUsageStore } from "../ai/usageStore.js";
+import { tagsOf } from "../community/tags.js";
+import { DEFAULT_AI_MODEL } from "../ai/client.js";
+import { DEFAULT_BOT_MONTHLY_LIMIT } from "../ai/ticketAssistant.js";
 import { readableText, renderQuoteCard } from "../quotes/card.js";
 import { MAX_QUOTE_LENGTH, MAX_QUOTES_PER_SERVER, QuoteStore } from "../quotes/quoteStore.js";
 import { normalizeStyle } from "../quotes/style.js";
@@ -369,6 +381,8 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
   const stickies = new StickyStore(db);
   const botStats = new BotStatsStore(db);
   const quotes = new QuoteStore(db);
+  const knowledge = new KnowledgeStore(db);
+  const aiUsage = new AiUsageStore(db);
   const inviteUrl = inviteLink(discord.clientId);
   const secureCookies = config.url.startsWith("https://");
   const cookieOptions = { path: "/", httpOnly: true, secure: secureCookies, sameSite: "lax" };
@@ -713,6 +727,7 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     [Setting.MUSIC]: normalizeMusic(guildSettings.get(guildId, Setting.MUSIC)),
     [Setting.COLOR_OPTIONS]: normalizeColorOptions(guildSettings.get(guildId, Setting.COLOR_OPTIONS)),
     [Setting.QUOTES]: normalizeQuoteOptions(guildSettings.get(guildId, Setting.QUOTES)),
+    [Setting.TICKET_AI]: normalizeTicketAi(guildSettings.get(guildId, Setting.TICKET_AI)),
     [Setting.COLORS]: normalizeColors(guildSettings.get(guildId, Setting.COLORS)),
     // With the title and text of panels set up before the look was saved on its own.
     [Setting.TICKET_PANEL]: panelLook(guildSettings, guildId),
@@ -1356,6 +1371,10 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
     claimedByName: names[ticket.claimedBy] ?? null,
     firstResponseAt: ticket.firstResponseAt,
     rating: ticket.rating,
+    // The AI assistant's notes (ai/ticketAssistant.js), when it was on.
+    aiPriority: ticket.aiTriage?.priority ?? null,
+    aiTriageSummary: ticket.aiTriage?.summary ?? null,
+    aiSummary: ticket.aiSummary,
   });
 
   app.get("/api/guilds/:id/tickets", async (request, reply) => {
@@ -3061,6 +3080,117 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
       await logAction(guildId, session, `**Color deleted:** ${color.name} (${color.hex})${color.made ? "" : ", role kept"}`, []);
       return { colors: colorsJson(guildId, await discord.guild(guildId)), settings: settingsJson(guildId) };
     });
+  });
+
+  // --- AI ticket assistant -----------------------------------------------------------
+  //
+  // Whether it's on (Setting.TICKET_AI) is saved with the page's Save bar.
+  // These routes show whether this bot has an AI key and what's been used this
+  // month, and edit the knowledge base the assistant answers from
+  // (ai/knowledgeStore.js). Nothing here calls the AI.
+
+  const aiLimit = { config: { rateLimit: { max: 60, timeWindow: "1 minute" } } };
+  const ARTICLE_ID = /^\d{1,12}$/;
+  const articleJson = (article) => ({ id: article.id, title: article.title, body: article.body, updatedBy: article.updatedBy, updatedAt: article.updatedAt });
+  const botAiLimit = config.ai?.monthlyLimit ?? DEFAULT_BOT_MONTHLY_LIMIT;
+
+  app.get("/api/guilds/:id/ai", aiLimit, async (request, reply) => {
+    const access = await requireGuild(request, reply, { manage: true });
+    if (!access) {
+      return reply;
+    }
+    const options = normalizeTicketAi(guildSettings.get(access.guildId, Setting.TICKET_AI));
+    return {
+      available: Boolean(config.ai?.apiKey) && botAiLimit > 0,
+      model: config.ai?.model ?? DEFAULT_AI_MODEL,
+      usage: aiUsage.get(access.guildId),
+      limit: Math.min(options.monthlyLimit, botAiLimit),
+      botLimit: botAiLimit,
+      articles: knowledge.list(access.guildId).map(articleJson),
+      tags: tagsOf(guildSettings, access.guildId).length,
+      max: { articles: MAX_ARTICLES, title: MAX_ARTICLE_TITLE, body: MAX_ARTICLE_BODY },
+    };
+  });
+
+  app.post("/api/guilds/:id/ai/articles", aiLimit, async (request, reply) => {
+    const access = await requireGuild(request, reply, { manage: true });
+    if (!access) {
+      return reply;
+    }
+    const { guildId, session } = access;
+    let article;
+    try {
+      article = knowledge.add(guildId, request.body ?? {}, { by: session.userId });
+    } catch (error) {
+      if (error instanceof InvalidArticle) {
+        return reply.code(400).send({ error: "invalid-article", message: error.message });
+      }
+      throw error;
+    }
+    if (!article) {
+      return reply.code(409).send({ error: "too-many", message: `A server can have up to ${MAX_ARTICLES} articles.` });
+    }
+    await logAction(guildId, session, `**AI knowledge base: article added** (${article.title})`, [article.body]);
+    return { article: articleJson(article) };
+  });
+
+  app.put("/api/guilds/:id/ai/articles/:article", aiLimit, async (request, reply) => {
+    const access = await requireGuild(request, reply, { manage: true });
+    if (!access) {
+      return reply;
+    }
+    const { guildId, session } = access;
+    const before = ARTICLE_ID.test(request.params.article) ? knowledge.get(guildId, Number(request.params.article)) : undefined;
+    if (!before) {
+      return reply.code(404).send({ error: "not-found", message: "That article was deleted." });
+    }
+    let article;
+    try {
+      article = knowledge.update(guildId, before.id, request.body ?? {}, { by: session.userId });
+    } catch (error) {
+      if (error instanceof InvalidArticle) {
+        return reply.code(400).send({ error: "invalid-article", message: error.message });
+      }
+      throw error;
+    }
+    if (article.title !== before.title || article.body !== before.body) {
+      await logAction(guildId, session, `**AI knowledge base: article changed** (${article.title})`, [
+        before.title !== article.title ? `Title: ${before.title} → ${article.title}` : null,
+        before.body !== article.body ? `Text before: ${before.body}` : null,
+        before.body !== article.body ? `Text after: ${article.body}` : null,
+      ].filter(Boolean));
+    }
+    return { article: articleJson(article) };
+  });
+
+  app.delete("/api/guilds/:id/ai/articles/:article", aiLimit, async (request, reply) => {
+    const access = await requireGuild(request, reply, { manage: true });
+    if (!access) {
+      return reply;
+    }
+    const { guildId, session } = access;
+    const article = ARTICLE_ID.test(request.params.article) ? knowledge.delete(guildId, Number(request.params.article)) : undefined;
+    if (!article) {
+      return reply.code(404).send({ error: "not-found", message: "That article was already deleted." });
+    }
+    await logAction(guildId, session, `**AI knowledge base: article deleted** (${article.title})`, [article.body]);
+    return { deleted: article.id };
+  });
+
+  // Which articles (and tags, when the assistant may use them) a ticket's
+  // words bring up, the same search triage and Suggest reply use. Free: no AI.
+  app.post("/api/guilds/:id/ai/search", aiLimit, async (request, reply) => {
+    const access = await requireGuild(request, reply, { manage: true });
+    if (!access) {
+      return reply;
+    }
+    const text = typeof request.body?.text === "string" ? request.body.text.slice(0, 2000) : "";
+    const options = normalizeTicketAi(guildSettings.get(access.guildId, Setting.TICKET_AI));
+    const documents = [
+      ...knowledge.list(access.guildId).map((article) => ({ id: `a${article.id}`, title: article.title, body: article.body, kind: "article" })),
+      ...(options.useTags ? tagsOf(guildSettings, access.guildId).map((tag) => ({ id: `t-${tag.name}`, title: `/tag ${tag.name}`, body: tag.content, kind: "tag" })) : []),
+    ];
+    return { matches: searchKnowledge(documents, text, { limit: 5 }).map(({ id, title, kind }) => ({ id, title, kind })) };
   });
 
   // --- Quotes ---------------------------------------------------------------------

@@ -103,6 +103,8 @@ import { findCategory, subjectFromAnswers } from "../tickets/categories.js";
 import { buildTicketTranscript, fetchThreadMessages } from "../tickets/transcript.js";
 import { buildTranscriptData } from "../transcripts/snapshot.js";
 import { noTicketLog, TICKET_EVENTS, TicketEvent } from "../tickets/ticketLog.js";
+import { assistButton, createTicketAi } from "../tickets/ticketAi.js";
+import { noTicketAssistant } from "../ai/ticketAssistant.js";
 import { isPermissionError } from "../utils/discordErrors.js";
 import { accentColor } from "../branding/branding.js";
 import { sendDm } from "../utils/dms.js";
@@ -263,6 +265,8 @@ function categoryOf(panel, categoryId) {
 // Options:
 //   tickets      the TicketStore (only needed to run the command, not to register it)
 //   ticketLog    saves and posts what happens to tickets (tickets/ticketLog.js)
+//   ticketAssistant  the AI assistant (ai/ticketAssistant.js; tickets/ticketAi.js
+//                runs it in tickets): triage, Staff assist, close summaries
 //   guildSettings, logger, forcedLanguage, now, sleep
 export function createTicketsCommand({
   tickets,
@@ -270,9 +274,11 @@ export function createTicketsCommand({
   logger,
   forcedLanguage,
   ticketLog = noTicketLog,
+  ticketAssistant = noTicketAssistant,
   now = Date.now,
   sleep = sleepFor,
 }) {
+  const ticketAi = createTicketAi({ tickets, assistant: ticketAssistant, ticketLog, guildSettings, logger, forcedLanguage, now });
   // "<thread id>:<user id>" -> when a change made by a command stops being expected.
   const expectedChanges = new Map();
 
@@ -375,6 +381,7 @@ export function createTicketsCommand({
       transcript: saved?.transcript,
       transcriptData: saved?.data,
       messageCount: saved?.messageCount,
+      aiSummary: await ticketAi.summarizeClosed(guild, closed, saved?.messages),
     });
     // Archived by someone (or Discord) already: deleted when the panel
     // deletes closed tickets, else left as it is.
@@ -466,7 +473,7 @@ export function createTicketsCommand({
   }
 
   // Saves the conversation, as text and as data for the dashboard's
-  // transcript page. Returns { transcript, data, messageCount }, or undefined
+  // transcript page. Returns { transcript, data, messageCount, messages }, or undefined
   // if it couldn't be read. Never throws: a ticket whose history can't be read still closes.
   async function saveTranscript(thread, ticket, guild) {
     try {
@@ -482,7 +489,7 @@ export function createTicketsCommand({
       const transcript = buildTicketTranscript({ ticket, guildName: guild.name, messages, names });
       const data = buildTranscriptData({ guild, channel: thread, messages });
       tickets.setTranscript(ticket.id, transcript, messages.length, data);
-      return { transcript, data, messageCount: messages.length };
+      return { transcript, data, messageCount: messages.length, messages };
     } catch (error) {
       logger.warn("Couldn't save a ticket's transcript", { guildId: guild.id, ticket: ticket.number, error });
       return undefined;
@@ -518,6 +525,7 @@ export function createTicketsCommand({
       transcript: saved?.transcript,
       transcriptData: saved?.data,
       messageCount: saved?.messageCount,
+      aiSummary: await ticketAi.summarizeClosed(guild, closed, saved?.messages),
     });
     logger.info("Ticket closed", { guildId: ticket.guildId, ticket: ticket.number });
     await finishClosed(guild, place, closed, saved, { reason: `Ticket #${ticket.number} closed by ${interaction.user.id}` });
@@ -649,6 +657,7 @@ export function createTicketsCommand({
           transcript: saved?.transcript,
           transcriptData: saved?.data,
           messageCount: saved?.messageCount,
+          aiSummary: await ticketAi.summarizeClosed(guild, closed, saved?.messages),
         });
         logger.info("Ticket closed for inactivity", { guildId: ticket.guildId, ticket: ticket.number });
         await finishClosed(guild, thread, closed, saved, { delay: false, reason: `Ticket #${ticket.number} closed for inactivity` });
@@ -1080,6 +1089,7 @@ export function createTicketsCommand({
       intro: category?.intro ?? look.intro,
       ping,
       server: guild.name,
+      extraButtons: ticketAi.assistShown(guild.id, ticket.panelId) ? [assistButton(serverLanguage(guild, forcedLanguage))] : [],
     });
     await thread.send(welcome);
     logger.info("Ticket opened", { guildId: guild.id, ticket: ticket.number });
@@ -1094,6 +1104,8 @@ export function createTicketsCommand({
       actorId: interaction.user.id,
       detail: ticket.categoryLabel,
     });
+    // After the member has their ticket: the AI reads the form, for staff only.
+    await ticketAi.triageOpened(guild, { ...ticket, threadId: thread.id }, { panel, answers });
     return outcome;
   }
 
@@ -1215,6 +1227,7 @@ export function createTicketsCommand({
       [FORM_ID]: { label: "Ticket form", handle: handleForm },
       [CLOSE_BUTTON]: { label: "Close ticket button", handle: handleCloseButton },
       [MENU_ID]: { label: "Ticket panel dropdown", handle: handleMenu },
+      ...ticketAi.components,
     },
     componentPrefixes: {
       [OPEN_PREFIX]: { label: "Open ticket category button", handle: handleOpenButton },
@@ -1222,6 +1235,7 @@ export function createTicketsCommand({
       // Every panel but the main one: "tk:p:<panel>:open|menu|form[:<category>]".
       [PANEL_PREFIX]: { label: "Ticket panel button, dropdown or form", handle: handlePanelComponent },
       [RATE_PREFIX]: { label: "Ticket rating", handle: handleRating },
+      ...ticketAi.componentPrefixes,
     },
   };
 }

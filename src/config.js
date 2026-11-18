@@ -58,6 +58,27 @@ function appCredentials(env, prefix, platform) {
   return { clientId, clientSecret };
 }
 
+// Optional: the AI ticket assistant (ai/ticketAssistant.js). Off without
+// ANTHROPIC_API_KEY. AI_MODEL picks the model; AI_MONTHLY_LIMIT is the most
+// AI requests any one server may make a month (each server can set less).
+export const DEFAULT_AI_MONTHLY_LIMIT = 500;
+function aiSettings(env) {
+  const apiKey = env.ANTHROPIC_API_KEY?.trim();
+  if (!apiKey) {
+    return undefined;
+  }
+  const limitText = env.AI_MONTHLY_LIMIT?.trim();
+  const monthlyLimit = limitText ? Number(limitText) : DEFAULT_AI_MONTHLY_LIMIT;
+  if (!Number.isInteger(monthlyLimit) || monthlyLimit < 0) {
+    throw new ConfigError("AI_MONTHLY_LIMIT should be a whole number of AI requests per server per month, like 500 (0 turns the assistant off).");
+  }
+  const model = env.AI_MODEL?.trim() || undefined;
+  if (model && !/^[\w.:-]{1,100}$/.test(model)) {
+    throw new ConfigError("AI_MODEL should be a model ID, like claude-haiku-5-5.");
+  }
+  return { apiKey, model, monthlyLimit };
+}
+
 const liveCredentials = (env) => ({ twitch: appCredentials(env, "TWITCH", "Twitch"), kick: appCredentials(env, "KICK", "Kick") });
 
 // Settings for running the bot.
@@ -71,6 +92,8 @@ export function loadBotConfig(env = process.env) {
     transcriptSecret: optionalSessionSecret(env),
     // Keys for Twitch and Kick live notifications; undefined when not set.
     live: liveCredentials(env),
+    // The AI ticket assistant's key, model and monthly limit; undefined when off.
+    ai: aiSettings(env),
   };
 }
 
@@ -149,5 +172,7 @@ export function loadDashboardConfig(env = process.env) {
     legalContact: env.LEGAL_CONTACT?.trim() || DEFAULT_LEGAL_CONTACT,
     // Lets the Feeds page add Twitch and Kick channels.
     live: liveCredentials(env),
+    // Whether the AI assistant is on for this bot, and its limit, for the AI assistant page.
+    ai: aiSettings(env),
   };
 }

@@ -38,6 +38,7 @@ import { channelTypesFor, checkAutomation, describeAutomation, InvalidAutomation
 import { checkColorOptions, describeColorOptions, InvalidColorOptions, normalizeColorOptions } from "../colors/options.js";
 import { normalizeColors } from "../colors/colors.js";
 import { checkQuoteOptions, describeQuoteOptions, InvalidQuoteOptions, normalizeQuoteOptions } from "../quotes/options.js";
+import { checkTicketAi, describeTicketAi, InvalidTicketAi, normalizeTicketAi } from "../ai/options.js";
 import { Setting } from "../settings/guildSettings.js";
 import { variableError } from "./public/variables.js";
 
@@ -111,6 +112,7 @@ export const SETTING_RULES = Object.freeze({
   [Setting.DISABLED_TICKET_LOG_EVENTS]: { kind: "ticketEvents", label: "Switched-off ticket log events" },
   [Setting.TICKET_TRANSCRIPT_FILE]: { kind: "onByDefault", label: "Attach transcript file to the ticket log" },
   [Setting.TICKET_SUPPORT]: { kind: "ticketSupport", label: "Ticket auto-close and ratings" },
+  [Setting.TICKET_AI]: { kind: "ticketAi", label: "AI ticket assistant" },
   [Setting.WARN_THRESHOLDS]: { kind: "warnThresholds", label: "Automatic punishments for warnings" },
   [Setting.STARBOARD]: { kind: "starboard", types: POSTING_CHANNELS, label: "Starboard" },
   [Setting.LEVELING]: { kind: "leveling", label: "Leveling" },
@@ -485,6 +487,15 @@ function checkValue(setting, value, { guildId, channels, roles, colors = [] }) {
         }
         throw error;
       }
+    case "ticketAi":
+      try {
+        return checkTicketAi(value);
+      } catch (error) {
+        if (error instanceof InvalidTicketAi) {
+          throw new InvalidSetting(setting, error.message);
+        }
+        throw error;
+      }
     case "ticketSupport":
       try {
         return checkTicketSupport(value);
@@ -587,6 +598,9 @@ export function describeValue(setting, value) {
   }
   if (SETTING_RULES[setting]?.kind === "ticketSupport") {
     return describeTicketSupport(value);
+  }
+  if (SETTING_RULES[setting]?.kind === "ticketAi") {
+    return describeTicketAi(value);
   }
   if (SETTING_RULES[setting]?.kind === "onByDefault") {
     return value === false ? "off" : "on";
@@ -696,6 +710,7 @@ const NORMALIZE = {
   channelAutomation: normalizeAutomation,
   milestones: normalizeMilestones,
   ticketSupport: normalizeTicketSupport,
+  ticketAi: normalizeTicketAi,
   antiNuke: normalizeAntiNuke,
   countryRoles: normalizeCountryOptions,
   warnThresholds: normalizeWarnThresholds,
