@@ -5,8 +5,9 @@
 // giveaways on time (giveawayScheduler.js).
 
 import { randomInt } from "node:crypto";
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } from "discord.js";
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, RESTJSONErrorCodes } from "discord.js";
 import { pickLanguage, translate } from "../i18n/i18n.js";
+import { getDiscordErrorCode } from "../utils/discordErrors.js";
 
 export const BUTTON_PREFIX = "gw:";
 export const MIN_GIVEAWAY_MS = 60 * 1000;
@@ -156,13 +157,25 @@ export async function pickWinners(guild, giveaway, entrants, { count, exclude = 
   return winners;
 }
 
+// Discord's answer when the giveaway's message (or its channel) was deleted.
+const GONE_CODES = new Set([RESTJSONErrorCodes.UnknownMessage, RESTJSONErrorCodes.UnknownChannel]);
+
+// The giveaway's channel and message. `gone` is true only when Discord says the
+// message or channel was deleted, not when fetching failed for another reason.
 async function fetchGiveawayMessage(guild, giveaway) {
   const channel = guild?.channels.cache.get(giveaway.channelId);
-  if (!channel?.isTextBased?.() || !giveaway.messageId) {
-    return { channel };
+  if (!channel) {
+    return { gone: Boolean(guild) };
   }
-  const message = await channel.messages.fetch(giveaway.messageId).catch(() => undefined);
-  return { channel, message };
+  if (!channel.isTextBased?.() || !giveaway.messageId) {
+    return { channel, gone: false };
+  }
+  let gone = false;
+  const message = await channel.messages.fetch(giveaway.messageId).catch((error) => {
+    gone = GONE_CODES.has(getDiscordErrorCode(error));
+    return undefined;
+  });
+  return { channel, message, gone };
 }
 
 // Posts in the giveaway's channel, as a reply to the giveaway when it still exists.
@@ -188,7 +201,14 @@ export async function endGiveaway({ giveaway, guild, store, logger, forcedLangua
     return ended;
   }
   const language = giveawayLanguage(guild, forcedLanguage);
-  const { channel, message } = await fetchGiveawayMessage(guild, giveaway);
+  const { channel, message, gone } = await fetchGiveawayMessage(guild, giveaway);
+  if (gone) {
+    // Someone deleted the giveaway's message (or its channel) without
+    // cancelling it, usually to post it again. Announcing a result for it would
+    // look like a stray "no winners" message next to the real giveaway.
+    logger.info("A giveaway ended after its message was deleted; not announcing it", { guildId: guild.id, giveaway: giveaway.id });
+    return ended;
+  }
   try {
     await message?.edit(buildGiveawayMessage(ended, { language, entries: entrants.length, state: "ended" }));
     if (channel?.isTextBased?.()) {
@@ -224,6 +244,19 @@ export async function rerollGiveaway({ giveaway, guild, store, logger, forcedLan
     );
   }
   return winnerIds;
+}
+
+// A message was deleted: if it was a running giveaway's message, the giveaway
+// is cancelled (forgotten with its entries), the same as /giveaway cancel.
+// Returns the cancelled giveaway, or undefined.
+export function cancelGiveawayForDeletedMessage({ store, messageId, logger }) {
+  const giveaway = messageId ? store.runningByMessage(messageId) : undefined;
+  if (!giveaway) {
+    return undefined;
+  }
+  store.delete(giveaway.id);
+  logger?.info("Giveaway cancelled because its message was deleted", { guildId: giveaway.guildId, giveaway: giveaway.id });
+  return giveaway;
 }
 
 // Shows a giveaway as cancelled (the giveaway itself is deleted by the caller).

@@ -15,6 +15,7 @@ import { createGuildJoinHandler } from "./guilds/guildJoin.js";
 import { loadCommandMentions } from "./commands/commandMentions.js";
 import { normalizeAppeals } from "./appeals/config.js";
 import { ConfigError, loadBotConfig } from "./config.js";
+import { cancelGiveawayForDeletedMessage } from "./giveaways/giveaways.js";
 import { createGiveawayScheduler } from "./giveaways/giveawayScheduler.js";
 import { GiveawayStore } from "./giveaways/giveawayStore.js";
 import { createInteractionHandler } from "./interactionHandler.js";
@@ -547,10 +548,17 @@ async function start() {
     // The server log (/settings server-log-channel).
     client.on(Events.MessageDelete, safely("a deleted message", (message) => serverLog.messageDeleted(message)));
     client.on(Events.MessageDelete, safely("the starboard on a deletion", (message) => starboard.messageDeleted(message)));
+    // Deleting a giveaway's message cancels the giveaway, so it can't end later
+    // with a stray "no winners" message.
+    client.on(
+      Events.MessageDelete,
+      safely("a deleted giveaway", (message) => cancelGiveawayForDeletedMessage({ store: giveaways, messageId: message.id, logger })),
+    );
     client.on(
       Events.MessageBulkDelete,
       safely("the starboard on a bulk delete", async (messages) => {
         for (const message of messages.values()) {
+          cancelGiveawayForDeletedMessage({ store: giveaways, messageId: message.id, logger });
           await starboard.messageDeleted(message);
         }
       }),
