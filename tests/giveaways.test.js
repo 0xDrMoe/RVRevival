@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { buildGiveawayCommandData, createGiveawayCommand } from "../src/commands/giveaway.js";
 import { createGiveawayScheduler } from "../src/giveaways/giveawayScheduler.js";
 import { GiveawayStore } from "../src/giveaways/giveawayStore.js";
-import { KEEP_ENDED_MS, pickWinners, shuffle } from "../src/giveaways/giveaways.js";
+import { cancelGiveawayForDeletedMessage, KEEP_ENDED_MS, pickWinners, shuffle } from "../src/giveaways/giveaways.js";
 import { Status } from "../src/logs/actionLog.js";
 import { GuildSettings, Setting } from "../src/settings/guildSettings.js";
 
@@ -236,6 +236,59 @@ describe("/giveaway", () => {
     expect(outcome).toMatchObject({ key: "giveawayEndedNow", values: { count: 0 } });
     expect(sent.at(-1).content).toContain("no one could be picked");
     expect((await run({ subcommand: "end", options: { giveaway: giveaway.id } })).key).toBe("giveawayAlreadyEnded");
+  });
+
+  // The Nitro giveaway (2026-11-25): a giveaway was posted, its message deleted
+  // and posted again. The deleted one kept running with no entries and ended
+  // first with a stray "no one could be picked" message.
+  it("ends a giveaway whose message was deleted without announcing anything", async () => {
+    const { run, store, sent, edits, channel, guild, later, now } = setup({ members: [fakeMember(user(1))] });
+    await run({ subcommand: "start", options: { prize: "Nitro", duration: "1h" } });
+    const [giveaway] = store.running(GUILD_ID);
+    channel.messages.fetch.mockRejectedValueOnce(Object.assign(new Error("Unknown Message"), { code: 10008 }));
+    const editsBefore = edits.length;
+
+    later(HOUR);
+    const scheduler = createGiveawayScheduler({ client: { guilds: { cache: new Map([[GUILD_ID, guild]]) } }, store, logger, now, random });
+    await scheduler.sweep();
+    expect(store.get(giveaway.id).endedAt).not.toBeNull();
+    expect(sent).toHaveLength(1);
+    expect(edits).toHaveLength(editsBefore);
+  });
+
+  it("still announces when the message couldn't be fetched for another reason", async () => {
+    const { run, store, sent, click, channel } = setup({ members: [fakeMember(user(1))] });
+    await run({ subcommand: "start", options: { prize: "Nitro", duration: "1h" } });
+    const [giveaway] = store.running(GUILD_ID);
+    await click(giveaway.id, user(1));
+    channel.messages.fetch.mockRejectedValueOnce(Object.assign(new Error("Service unavailable"), { status: 503 }));
+    await run({ subcommand: "end", options: { giveaway: giveaway.id } });
+    expect(sent).toHaveLength(2);
+    expect(sent.at(-1).content).toContain(`<@${user(1)}>`);
+  });
+
+  it("cancels a running giveaway when its message is deleted", async () => {
+    const { run, store, sent } = setup();
+    await run({ subcommand: "start", options: { prize: "Nitro", duration: "1h" } });
+    const [giveaway] = store.running(GUILD_ID);
+    expect(cancelGiveawayForDeletedMessage({ store, messageId: "600000000000000999", logger })).toBeUndefined();
+    expect(store.get(giveaway.id)).toBeDefined();
+
+    expect(cancelGiveawayForDeletedMessage({ store, messageId: giveaway.messageId, logger })).toMatchObject({
+      id: giveaway.id,
+    });
+    expect(store.get(giveaway.id)).toBeUndefined();
+    expect(store.running(GUILD_ID)).toHaveLength(0);
+    expect(sent).toHaveLength(1);
+  });
+
+  it("keeps an ended giveaway for reroll when its message is deleted", async () => {
+    const { run, store } = setup();
+    await run({ subcommand: "start", options: { prize: "Nitro", duration: "1h" } });
+    const [giveaway] = store.running(GUILD_ID);
+    await run({ subcommand: "end", options: { giveaway: giveaway.id } });
+    expect(cancelGiveawayForDeletedMessage({ store, messageId: store.get(giveaway.id).messageId, logger })).toBeUndefined();
+    expect(store.get(giveaway.id).endedAt).not.toBeNull();
   });
 
   it("rerolls without picking a previous winner", async () => {
