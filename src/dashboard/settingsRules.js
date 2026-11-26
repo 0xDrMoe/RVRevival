@@ -489,7 +489,7 @@ function checkValue(setting, value, { guildId, channels, roles, colors = [] }) {
       }
     case "ticketAi":
       try {
-        return checkTicketAi(value);
+        return checkTicketAi(value, { isRole: roleOk });
       } catch (error) {
         if (error instanceof InvalidTicketAi) {
           throw new InvalidSetting(setting, error.message);

@@ -30,6 +30,8 @@
 //   PUT    /api/guilds/:id/ai/articles/:article  change one
 //   DELETE /api/guilds/:id/ai/articles/:article  delete one
 //   POST   /api/guilds/:id/ai/search             which articles (and tags) a ticket's words would bring up
+//   POST   /api/guilds/:id/ai/preview            what the AI would be told with these (unsaved) settings; no AI request
+//   POST   /api/guilds/:id/ai/try                one AI request with these (unsaved) settings, on a sample ticket
 //
 // Two levels of access to a server the bot is in:
 //   - "manage": Manage Server, Administrator or the owner. Everything.
@@ -126,13 +128,13 @@ import { checkNewColors, insertColors, MAX_DRAFTS } from "../colors/drafts.js";
 import { renderColorList } from "../colors/listImage.js";
 import { normalizeColorOptions } from "../colors/options.js";
 import { normalizeQuoteOptions } from "../quotes/options.js";
-import { normalizeTicketAi } from "../ai/options.js";
+import { checkTicketAi, InvalidTicketAi, normalizeTicketAi } from "../ai/options.js";
 import { InvalidArticle, KnowledgeStore, MAX_ARTICLE_BODY, MAX_ARTICLE_TITLE, MAX_ARTICLES } from "../ai/knowledgeStore.js";
 import { search as searchKnowledge } from "../ai/retrieval.js";
 import { AiUsageStore } from "../ai/usageStore.js";
 import { tagsOf } from "../community/tags.js";
-import { DEFAULT_AI_MODEL } from "../ai/client.js";
-import { DEFAULT_BOT_MONTHLY_LIMIT } from "../ai/ticketAssistant.js";
+import { AiErrorCode, createAiClient, DEFAULT_AI_MODEL } from "../ai/client.js";
+import { createTicketAssistant, DEFAULT_BOT_MONTHLY_LIMIT } from "../ai/ticketAssistant.js";
 import { readableText, renderQuoteCard } from "../quotes/card.js";
 import { MAX_QUOTE_LENGTH, MAX_QUOTES_PER_SERVER, QuoteStore } from "../quotes/quoteStore.js";
 import { normalizeStyle } from "../quotes/style.js";
@@ -364,7 +366,7 @@ const sameText = (a, b) =>
 //   store           CaseStore on the same database
 //   logger
 // `feedFetchOptions` replaces fetch and DNS for feeds in tests, `live` the Twitch and Kick APIs.
-export async function buildDashboard({ config, db, discord, guildSettings, store, logger, feedFetchOptions, live: liveApis }) {
+export async function buildDashboard({ config, db, discord, guildSettings, store, logger, feedFetchOptions, live: liveApis, aiClient }) {
   const live = liveApis ?? createLiveApis(config.live);
   const sessions = new SessionStore(db, { secret: config.sessionSecret });
   const memberEvents = new MemberEventStore(db);
@@ -3191,6 +3193,99 @@ export async function buildDashboard({ config, db, discord, guildSettings, store
       ...(options.useTags ? tagsOf(guildSettings, access.guildId).map((tag) => ({ id: `t-${tag.name}`, title: `/tag ${tag.name}`, body: tag.content, kind: "tag" })) : []),
     ];
     return { matches: searchKnowledge(documents, text, { limit: 5 }).map(({ id, title, kind }) => ({ id, title, kind })) };
+  });
+
+  // The assistant itself, for Try it: the same code the bot runs, counting
+  // toward the server's month like any other request.
+  const ai = aiClient ?? createAiClient({ apiKey: config.ai?.apiKey, model: config.ai?.model });
+  const assistant = createTicketAssistant({ ai, knowledge, usage: aiUsage, guildSettings, logger, botMonthlyLimit: botAiLimit });
+  const aiTryLimit = { config: { rateLimit: { max: 6, timeWindow: "1 minute" } } };
+  const TRY_KINDS = ["triage", "reply", "summary", "close"];
+  const MAX_SAMPLE = 2000;
+
+  // Settings from the page (unsaved), checked like a save would; null for the
+  // saved ones. Sends a 400 and returns undefined when they're not valid.
+  function settingsFromBody(body, roles, reply) {
+    if (body?.settings === undefined || body.settings === null) {
+      return null;
+    }
+    try {
+      return checkTicketAi(body.settings, { isRole: (id) => roles.some((role) => role.id === id) }) ?? {};
+    } catch (error) {
+      if (error instanceof InvalidTicketAi) {
+        reply.code(400).send({ error: "invalid-settings", message: error.message });
+        return undefined;
+      }
+      throw error;
+    }
+  }
+  const PANEL_ID = /^[a-z0-9-]{1,32}$/;
+  const panelFromBody = (body) => (typeof body?.panelId === "string" && PANEL_ID.test(body.panelId) && body.panelId !== "main" ? body.panelId : null);
+  const sampleFromBody = (body) => (typeof body?.text === "string" ? body.text.replace(/\r\n?/g, "\n").trim().slice(0, MAX_SAMPLE) : "");
+
+  // What the AI is told for each task: the locked rules, the persona and the
+  // server's guidance, and each task's words. Free: no AI.
+  app.post("/api/guilds/:id/ai/preview", aiLimit, async (request, reply) => {
+    const access = await requireGuild(request, reply, { manage: true });
+    if (!access) {
+      return reply;
+    }
+    const guild = await discord.guild(access.guildId);
+    const override = settingsFromBody(request.body, guild.roles ?? [], reply);
+    if (override === undefined) {
+      return reply;
+    }
+    return assistant.preview({
+      guildId: access.guildId,
+      guildName: guild.name,
+      panelId: panelFromBody(request.body),
+      override: override ?? undefined,
+      serverLanguage: pickLanguage(guild.preferred_locale, config.forcedLanguage),
+      sample: sampleFromBody(request.body),
+    });
+  });
+
+  // One real AI request on a sample ticket, with the page's settings, so
+  // admins can hear how the assistant sounds before saving. Counts toward
+  // the month; works while the assistant is off.
+  app.post("/api/guilds/:id/ai/try", aiTryLimit, async (request, reply) => {
+    const access = await requireGuild(request, reply, { manage: true });
+    if (!access) {
+      return reply;
+    }
+    const kind = request.body?.kind;
+    const text = sampleFromBody(request.body);
+    if (!TRY_KINDS.includes(kind) || text.length === 0) {
+      return reply.code(400).send({ error: "invalid-try", message: `Send { kind: ${TRY_KINDS.join(" | ")}, text } with the member's words.` });
+    }
+    const guild = await discord.guild(access.guildId);
+    const override = settingsFromBody(request.body, guild.roles ?? [], reply);
+    if (override === undefined) {
+      return reply;
+    }
+    const options = override ?? normalizeTicketAi(guildSettings.get(access.guildId, Setting.TICKET_AI));
+    const panelId = panelFromBody(request.body);
+    const serverLanguage = pickLanguage(guild.preferred_locale, config.forcedLanguage);
+    const ticket = { id: 0, number: 1, panelId, subject: text, categoryId: null, categoryLabel: null, userId: "member", closeReason: null };
+    const staffName = access.session.username ?? "Staff member";
+    const conversation = [{ role: "member", name: "Member", text }];
+    const base = { guildId: access.guildId, guildName: guild.name, ticket, options, serverLanguage };
+    try {
+      if (kind === "triage") {
+        return { kind, triage: await assistant.triage({ ...base, answers: [{ question: null, answer: text }] }), status: assistant.status(access.guildId) };
+      }
+      if (kind === "reply") {
+        return { kind, text: await assistant.suggestReply({ ...base, conversation, staffName, memberName: "Member" }), status: assistant.status(access.guildId) };
+      }
+      if (kind === "summary") {
+        return { kind, text: await assistant.summarize({ ...base, conversation, language: serverLanguage }), status: assistant.status(access.guildId) };
+      }
+      return { kind, text: await assistant.closeSummary({ ...base, conversation }), status: assistant.status(access.guildId) };
+    } catch (error) {
+      const code = error?.code ?? AiErrorCode.FAILED;
+      const status = code === AiErrorCode.OFF ? 409 : code === AiErrorCode.LIMIT || code === AiErrorCode.RATE_LIMITED ? 429 : 502;
+      return reply.code(status).send({ error: "ai-failed", code, message: error?.message ?? "The AI request failed." });
+    }
   });
 
   // --- Quotes ---------------------------------------------------------------------

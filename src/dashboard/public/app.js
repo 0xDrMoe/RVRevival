@@ -4970,21 +4970,188 @@ function quoteBook(guildId) {
 // them, the knowledge base the assistant answers from, and a search to see
 // which articles a ticket would bring up.
 
-const TICKET_AI_DEFAULTS = { enabled: false, triage: true, helpers: true, closeSummary: true, useTags: true, monthlyLimit: 200, panelIds: [] };
-const MAX_AI_MONTHLY_LIMIT = 5000;
+// The settings below mirror ai/options.js: the page sends the whole object,
+// and the server answers with it normalized, so text is cleaned the same way
+// here (oneLine, multiLine, wordList) or the save bar would never settle.
+const AI_TONES = ["friendly", "professional", "casual", "formal", "playful", "empathetic"];
+const AI_EMOJI = ["none", "few", "often"];
+const AI_LENGTHS = ["short", "medium", "long"];
+const AI_FORMATS = ["markdown", "plain"];
+const AI_KNOWLEDGE = ["strict", "general"];
+const AI_DISCLOSURES = ["checked", "assisted"];
+const AI_SUMMARY_STYLES = ["bullets", "paragraph"];
+const AI_CLOSE_DETAILS = ["brief", "detailed"];
+const AI_LOG_LANGUAGES = ["en", "server"];
+const AI_PRIORITIES = ["urgent", "high", "normal", "low"];
+const AI_PANEL_SWITCHES = ["enabled", "triage", "helpers", "closeSummary"];
+const AI_LIMITS = {
+  monthly: 5000,
+  name: 32,
+  toneNotes: 300,
+  greeting: 150,
+  instructions: 2000,
+  panelInstructions: 1000,
+  priorityNote: 200,
+  words: 20,
+  word: 40,
+  topics: 20,
+  topic: 100,
+  roles: 10,
+  articles: 5,
+  cooldown: [3, 300],
+  messages: [20, 300],
+  points: [3, 8],
+};
+const TICKET_AI_DEFAULTS = {
+  enabled: false,
+  triage: true,
+  helpers: true,
+  closeSummary: true,
+  useTags: true,
+  monthlyLimit: 200,
+  panelIds: [],
+  persona: { name: "", tone: "friendly", toneNotes: "", emoji: "none" },
+  replies: { length: "medium", language: "member", greeting: "", signOff: "", format: "markdown", knowledge: "strict", placeholders: true, disclosure: "checked" },
+  triageRules: { priorities: { low: "", normal: "", high: "", urgent: "" }, urgentWords: [], highWords: [], suggestCategory: true, maxArticles: 3, summaryLanguage: "en" },
+  summaries: { style: "bullets", maxPoints: 5, closeDetail: "brief", closeLanguage: "en" },
+  instructions: "",
+  avoidTopics: [],
+  privacy: { redactEmails: true, redactPhones: true, redactIps: true, fileNames: true },
+  access: { roleIds: [], cooldownSeconds: 8, messageLimit: 300 },
+  panels: {},
+};
 
-function readTicketAi(form) {
-  const limit = Number(form.querySelector("#aiMonthlyLimit").value);
+// The saved settings with every default filled in (the server always sends them whole, but be safe).
+function ticketAiOptions(saved) {
+  const value = saved ?? {};
+  const merge = (key) => ({ ...TICKET_AI_DEFAULTS[key], ...(value[key] ?? {}) });
+  const triageRules = merge("triageRules");
+  triageRules.priorities = { ...TICKET_AI_DEFAULTS.triageRules.priorities, ...(value.triageRules?.priorities ?? {}) };
   return {
-    enabled: form.querySelector("#aiEnabled").checked,
-    triage: form.querySelector("#aiTriage").checked,
-    helpers: form.querySelector("#aiHelpers").checked,
-    closeSummary: form.querySelector("#aiCloseSummary").checked,
-    useTags: form.querySelector("#aiUseTags").checked,
-    monthlyLimit: Number.isInteger(limit) ? limit : TICKET_AI_DEFAULTS.monthlyLimit,
-    panelIds: checkedList("aiPanels")(form) ?? [],
+    ...TICKET_AI_DEFAULTS,
+    ...value,
+    persona: merge("persona"),
+    replies: merge("replies"),
+    triageRules,
+    summaries: merge("summaries"),
+    privacy: merge("privacy"),
+    access: merge("access"),
+    panels: value.panels ?? {},
   };
 }
+
+const aiOneLine = (text, max) =>
+  String(text ?? "")
+    .replace(/[\u0000-\u001f\u007f]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, max);
+const aiMultiLine = (text, max) =>
+  String(text ?? "")
+    .replace(/\r\n?/g, "\n")
+    .replace(/[\u0000-\u0009\u000b-\u001f\u007f]/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim()
+    .slice(0, max);
+// One entry per line (or comma), lower case, no repeats.
+const aiWordList = (text, maxItems, maxLength) =>
+  [...new Set(String(text ?? "").split(/[\n,]/).map((entry) => aiOneLine(entry, maxLength).toLowerCase()).filter(Boolean))].slice(0, maxItems);
+const aiTopicList = (text, maxItems, maxLength) =>
+  [...new Set(String(text ?? "").split("\n").map((entry) => aiOneLine(entry, maxLength).toLowerCase()).filter(Boolean))].slice(0, maxItems);
+
+function readTicketAi(form) {
+  const value = (id) => form.querySelector(`#${id}`)?.value ?? "";
+  const checked = (id) => form.querySelector(`#${id}`)?.checked === true;
+  const integer = (id, fallback) => {
+    const number = Number(value(id));
+    return Number.isInteger(number) ? number : fallback;
+  };
+  const defaults = TICKET_AI_DEFAULTS;
+  const panels = {};
+  for (const box of form.querySelectorAll("[data-ai-panel]")) {
+    const id = box.dataset.aiPanel;
+    const panel = {};
+    for (const key of AI_PANEL_SWITCHES) {
+      const choice = box.querySelector(`[data-key="${key}"]`).value;
+      if (choice) {
+        panel[key] = choice === "on";
+      }
+    }
+    for (const key of ["tone", "length", "language"]) {
+      const choice = box.querySelector(`[data-key="${key}"]`).value;
+      if (choice) {
+        panel[key] = choice;
+      }
+    }
+    const instructions = aiMultiLine(box.querySelector('[data-key="instructions"]').value, AI_LIMITS.panelInstructions);
+    if (instructions) {
+      panel.instructions = instructions;
+    }
+    if (Object.keys(panel).length > 0) {
+      panels[id] = panel;
+    }
+  }
+  return {
+    enabled: checked("aiEnabled"),
+    triage: checked("aiTriage"),
+    helpers: checked("aiHelpers"),
+    closeSummary: checked("aiCloseSummary"),
+    useTags: checked("aiUseTags"),
+    monthlyLimit: integer("aiMonthlyLimit", defaults.monthlyLimit),
+    panelIds: checkedList("aiPanels")(form) ?? [],
+    persona: {
+      name: aiOneLine(value("aiName"), AI_LIMITS.name),
+      tone: value("aiTone") || defaults.persona.tone,
+      toneNotes: aiOneLine(value("aiToneNotes"), AI_LIMITS.toneNotes),
+      emoji: value("aiEmoji") || defaults.persona.emoji,
+    },
+    replies: {
+      length: value("aiLength") || defaults.replies.length,
+      language: value("aiLanguage") || defaults.replies.language,
+      greeting: aiOneLine(value("aiGreeting"), AI_LIMITS.greeting),
+      signOff: aiOneLine(value("aiSignOff"), AI_LIMITS.greeting),
+      format: value("aiFormat") || defaults.replies.format,
+      knowledge: value("aiKnowledge") || defaults.replies.knowledge,
+      placeholders: checked("aiPlaceholders"),
+      disclosure: value("aiDisclosure") || defaults.replies.disclosure,
+    },
+    triageRules: {
+      priorities: Object.fromEntries(AI_PRIORITIES.map((level) => [level, aiOneLine(value(`aiPriority-${level}`), AI_LIMITS.priorityNote)])),
+      urgentWords: aiWordList(value("aiUrgentWords"), AI_LIMITS.words, AI_LIMITS.word),
+      highWords: aiWordList(value("aiHighWords"), AI_LIMITS.words, AI_LIMITS.word),
+      suggestCategory: checked("aiSuggestCategory"),
+      maxArticles: integer("aiMaxArticles", defaults.triageRules.maxArticles),
+      summaryLanguage: value("aiTriageLanguage") || defaults.triageRules.summaryLanguage,
+    },
+    summaries: {
+      style: value("aiSummaryStyle") || defaults.summaries.style,
+      maxPoints: integer("aiSummaryPoints", defaults.summaries.maxPoints),
+      closeDetail: value("aiCloseDetail") || defaults.summaries.closeDetail,
+      closeLanguage: value("aiCloseLanguage") || defaults.summaries.closeLanguage,
+    },
+    instructions: aiMultiLine(value("aiInstructions"), AI_LIMITS.instructions),
+    avoidTopics: aiTopicList(value("aiAvoidTopics"), AI_LIMITS.topics, AI_LIMITS.topic),
+    privacy: {
+      redactEmails: checked("aiRedactEmails"),
+      redactPhones: checked("aiRedactPhones"),
+      redactIps: checked("aiRedactIps"),
+      fileNames: checked("aiFileNames"),
+    },
+    access: {
+      roleIds: checkedList("aiAssistRoles")(form) ?? [],
+      cooldownSeconds: integer("aiCooldown", defaults.access.cooldownSeconds),
+      messageLimit: integer("aiMessageLimit", defaults.access.messageLimit),
+    },
+    panels,
+  };
+}
+
+// The languages a reply can be written in, for the select menus.
+const aiLanguageChoices = () => [
+  ["member", t("aiLanguage_member")],
+  ["server", t("aiLanguage_server")],
+  ...Object.entries(LANGUAGES),
+];
 
 async function showAi(guildId) {
   const data = await loadManagedGuild(guildId);
@@ -4998,7 +5165,7 @@ async function showAi(guildId) {
     failed(error);
     return;
   }
-  const options = { ...TICKET_AI_DEFAULTS, ...(data.settings.ticketAi ?? {}) };
+  const options = ticketAiOptions(data.settings.ticketAi);
   const toggle = (id, label, help, checked) =>
     h(
       "label",
@@ -5006,14 +5173,35 @@ async function showAi(guildId) {
       h("span", { class: "switch-text" }, h("strong", {}, t(label)), h("span", { class: "help" }, t(help))),
       h("span", { class: "switch" }, h("input", { id, type: "checkbox", role: "switch", checked, "aria-label": t(label) })),
     );
+  // A select of `names`, each labelled t(`${prefix}${name}`).
+  const select = (id, names, value, prefix) => h("select", { id }, names.map((name) => h("option", { value: name, selected: name === value }, t(`${prefix}${name}`))));
+  const pairs = (id, choices, value, attributes = {}) => h("select", { id, ...attributes }, choices.map(([key, label]) => h("option", { value: key, selected: key === value }, label)));
+  const text = (id, value, max, placeholder = "") => h("input", { id, type: "text", maxLength: max, value, placeholder });
+  const area = (id, value, max, rows, placeholder = "") => {
+    const box = h("textarea", { id, rows, maxLength: max, placeholder });
+    box.value = value;
+    return box;
+  };
+  const number = (id, value, min, max) => h("input", { id, type: "number", min, max, step: 1, value, required: true });
+  const counter = (box, max) => {
+    const count = h("span", { class: "help ai-count" });
+    const update = () => (count.textContent = t("aiCharacters", { count: formatNumber(box.value.length), max: formatNumber(max) }));
+    box.addEventListener("input", update);
+    update();
+    return count;
+  };
+  const locked = (key) => h("p", { class: "tip" }, icon("lock"), h("span", {}, t(key)));
   const defaults = data.ticketDefaults ?? { title: t("page_tickets") };
   const panelItems = ticketPanelsOf(data).map((panel) => ({ id: panel.id, label: ticketPanelLabel(panel, defaults) }));
+  const panels = panelItems;
+  const roleItems = data.roles.filter((role) => !role.managed && role.id !== data.guild.id).map((role) => roleItem(role, { dot: true }));
   const used = info.usage.requests;
+
   const status = card(
     t("sectionAiStatus"),
     "sparkles",
     "purple",
-    info.available ? null : h("p", { class: "tip" }, icon("lock"), h("span", {}, t("aiNoKey"))),
+    info.available ? null : locked("aiNoKey"),
     h(
       "div",
       { class: "meters" },
@@ -5027,36 +5215,295 @@ async function showAi(guildId) {
     ),
     h("p", { class: "help" }, t("aiUsageHelp", { model: info.model, tokens: formatNumber(info.usage.inputTokens + info.usage.outputTokens) })),
   );
+
+  const features = card(
+    t("sectionAi"),
+    "bot",
+    "purple",
+    toggle("aiEnabled", "aiEnabled", "aiEnabledHelp", options.enabled === true),
+    h("p", { class: "tip" }, icon("shieldCheck"), h("span", {}, t("aiPrivacyTip"))),
+    toggle("aiTriage", "aiTriage", "aiTriageHelp", options.triage !== false),
+    toggle("aiHelpers", "aiHelpers", "aiHelpersHelp", options.helpers !== false),
+    toggle("aiCloseSummary", "aiCloseSummary", "aiCloseSummaryHelp", options.closeSummary !== false),
+    toggle("aiUseTags", "aiUseTags", "aiUseTagsHelp", options.useTags !== false),
+    field("aiMonthlyLimit", "aiMonthlyLimitHelp", number("aiMonthlyLimit", options.monthlyLimit, 1, AI_LIMITS.monthly)),
+    h("p", { class: "help" }, t("aiBotLimit", { limit: formatNumber(info.botLimit) })),
+    h("span", { class: "field-label" }, t("aiPanels")),
+    h("p", { class: "help" }, t("aiPanelsHelp")),
+    checkList({ name: "aiPanels", items: panelItems, checked: options.panelIds ?? [], filterKey: "aiPanelsFilter" }),
+  );
+
+  const toneNotes = text("aiToneNotes", options.persona.toneNotes, AI_LIMITS.toneNotes, t("aiToneNotesPlaceholder"));
+  const personality = card(
+    t("sectionAiPersona"),
+    "smile",
+    "pink",
+    h("p", { class: "help" }, t("aiPersonaHelp")),
+    h(
+      "div",
+      { class: "rule-body" },
+      field("aiName", "aiNameHelp", text("aiName", options.persona.name, AI_LIMITS.name, "Rabble AI")),
+      field("aiTone", "aiToneHelp", select("aiTone", AI_TONES, options.persona.tone, "aiTone_")),
+      field("aiEmoji", "aiEmojiHelp", select("aiEmoji", AI_EMOJI, options.persona.emoji, "aiEmoji_")),
+    ),
+    field("aiToneNotes", "aiToneNotesHelp", toneNotes),
+    locked("aiNameLocked"),
+  );
+
+  const replies = card(
+    t("sectionAiReplies"),
+    "message",
+    "blue",
+    h("p", { class: "help" }, t("aiRepliesHelp")),
+    h(
+      "div",
+      { class: "rule-body" },
+      field("aiLength", "aiLengthHelp", select("aiLength", AI_LENGTHS, options.replies.length, "aiLength_")),
+      field("aiLanguage", "aiLanguageHelp", pairs("aiLanguage", aiLanguageChoices(), options.replies.language)),
+      field("aiFormat", "aiFormatHelp", select("aiFormat", AI_FORMATS, options.replies.format, "aiFormat_")),
+      field("aiKnowledge", "aiKnowledgeModeHelp", select("aiKnowledge", AI_KNOWLEDGE, options.replies.knowledge, "aiKnowledge_")),
+    ),
+    h(
+      "div",
+      { class: "rule-body" },
+      field("aiGreeting", "aiTemplateHelp", text("aiGreeting", options.replies.greeting, AI_LIMITS.greeting, t("aiGreetingPlaceholder"))),
+      field("aiSignOff", "aiTemplateHelp", text("aiSignOff", options.replies.signOff, AI_LIMITS.greeting, t("aiSignOffPlaceholder"))),
+    ),
+    toggle("aiPlaceholders", "aiPlaceholders", "aiPlaceholdersHelp", options.replies.placeholders !== false),
+    field("aiDisclosure", "aiDisclosureHelp", select("aiDisclosure", AI_DISCLOSURES, options.replies.disclosure, "aiDisclosure_")),
+    locked("aiDisclosureLocked"),
+  );
+
+  const instructionsBox = area("aiInstructions", options.instructions, AI_LIMITS.instructions, 8, t("aiInstructionsPlaceholder"));
+  const instructions = card(
+    t("sectionAiInstructions"),
+    "edit",
+    "amber",
+    h("p", { class: "help" }, t("aiInstructionsHelp")),
+    instructionsBox,
+    counter(instructionsBox, AI_LIMITS.instructions),
+    field("aiAvoidTopics", "aiAvoidTopicsHelp", area("aiAvoidTopics", options.avoidTopics.join("\n"), AI_LIMITS.topics * (AI_LIMITS.topic + 1), 4, t("aiAvoidTopicsPlaceholder"))),
+    locked("aiInstructionsLocked"),
+  );
+
+  const triage = card(
+    t("sectionAiTriage"),
+    "zap",
+    "red",
+    h("p", { class: "help" }, t("aiTriageRulesHelp")),
+    h(
+      "div",
+      { class: "ai-priorities" },
+      AI_PRIORITIES.map((level) =>
+        field(`aiPriority_${level}`, null, text(`aiPriority-${level}`, options.triageRules.priorities[level], AI_LIMITS.priorityNote, t(`aiPriorityDefault_${level}`))),
+      ),
+    ),
+    h(
+      "div",
+      { class: "rule-body" },
+      field("aiUrgentWords", "aiUrgentWordsHelp", area("aiUrgentWords", options.triageRules.urgentWords.join("\n"), AI_LIMITS.words * (AI_LIMITS.word + 1), 3, t("aiUrgentWordsPlaceholder"))),
+      field("aiHighWords", "aiHighWordsHelp", area("aiHighWords", options.triageRules.highWords.join("\n"), AI_LIMITS.words * (AI_LIMITS.word + 1), 3, t("aiHighWordsPlaceholder"))),
+    ),
+    h(
+      "div",
+      { class: "rule-body" },
+      field("aiMaxArticles", "aiMaxArticlesHelp", number("aiMaxArticles", options.triageRules.maxArticles, 0, AI_LIMITS.articles)),
+      field("aiTriageLanguage", "aiTriageLanguageHelp", select("aiTriageLanguage", AI_LOG_LANGUAGES, options.triageRules.summaryLanguage, "aiLogLanguage_")),
+    ),
+    toggle("aiSuggestCategory", "aiSuggestCategory", "aiSuggestCategoryHelp", options.triageRules.suggestCategory !== false),
+  );
+
+  const summaries = card(
+    t("sectionAiSummaries"),
+    "list",
+    "green",
+    h(
+      "div",
+      { class: "rule-body" },
+      field("aiSummaryStyle", "aiSummaryStyleHelp", select("aiSummaryStyle", AI_SUMMARY_STYLES, options.summaries.style, "aiSummaryStyle_")),
+      field("aiSummaryPoints", "aiSummaryPointsHelp", number("aiSummaryPoints", options.summaries.maxPoints, ...AI_LIMITS.points)),
+      field("aiCloseDetail", "aiCloseDetailHelp", select("aiCloseDetail", AI_CLOSE_DETAILS, options.summaries.closeDetail, "aiCloseDetail_")),
+      field("aiCloseLanguage", "aiCloseLanguageHelp", select("aiCloseLanguage", AI_LOG_LANGUAGES, options.summaries.closeLanguage, "aiLogLanguage_")),
+    ),
+  );
+
+  const privacy = card(
+    t("sectionAiPrivacy"),
+    "eyeOff",
+    "blue",
+    h("p", { class: "help" }, t("aiRedactHelp")),
+    toggle("aiRedactEmails", "aiRedactEmails", "aiRedactEmailsHelp", options.privacy.redactEmails !== false),
+    toggle("aiRedactPhones", "aiRedactPhones", "aiRedactPhonesHelp", options.privacy.redactPhones !== false),
+    toggle("aiRedactIps", "aiRedactIps", "aiRedactIpsHelp", options.privacy.redactIps !== false),
+    toggle("aiFileNames", "aiFileNames", "aiFileNamesHelp", options.privacy.fileNames !== false),
+    locked("aiRedactLocked"),
+  );
+
+  const access = card(
+    t("sectionAiAccess"),
+    "key",
+    "purple",
+    h("span", { class: "field-label" }, t("aiAssistRoles")),
+    h("p", { class: "help" }, t("aiAssistRolesHelp", { max: AI_LIMITS.roles })),
+    checkList({ name: "aiAssistRoles", items: roleItems, checked: options.access.roleIds, filterKey: "filterRoles" }),
+    h(
+      "div",
+      { class: "rule-body" },
+      field("aiCooldown", "aiCooldownHelp", number("aiCooldown", options.access.cooldownSeconds, ...AI_LIMITS.cooldown)),
+      field("aiMessageLimit", "aiMessageLimitHelp", number("aiMessageLimit", options.access.messageLimit, ...AI_LIMITS.messages)),
+    ),
+  );
+
+  // One box per panel: anything left on "Same as the server" follows the server's setting.
+  const same = t("aiSameAsServer");
+  const panelBox = (panel) => {
+    const saved = options.panels[panel.id] ?? {};
+    const tri = (key) =>
+      h(
+        "select",
+        { "data-key": key, "aria-label": t(`aiPanel_${key}`) },
+        [
+          ["", same],
+          ["on", t("aiOn")],
+          ["off", t("aiOff")],
+        ].map(([value, label]) => h("option", { value, selected: value === (saved[key] === undefined ? "" : saved[key] ? "on" : "off") }, label)),
+      );
+    const choice = (key, choices) =>
+      h(
+        "select",
+        { "data-key": key, "aria-label": t(`aiPanel_${key}`) },
+        [["", same], ...choices].map(([value, label]) => h("option", { value, selected: value === (saved[key] ?? "") }, label)),
+      );
+    const box = area(`aiPanelInstructions-${panel.id}`, saved.instructions ?? "", AI_LIMITS.panelInstructions, 3, t("aiPanelInstructionsPlaceholder"));
+    box.dataset.key = "instructions";
+    const changed = Object.keys(saved).length;
+    return h(
+      "details",
+      { class: "ai-panel", "data-ai-panel": panel.id, open: changed > 0 },
+      h("summary", {}, h("strong", {}, panel.label), changed > 0 ? h("span", { class: "badge" }, t("aiPanelChanged", { count: changed })) : null),
+      h(
+        "div",
+        { class: "ai-panel-grid" },
+        AI_PANEL_SWITCHES.map((key) => h("label", { class: "field" }, h("span", { class: "field-label" }, t(`aiPanel_${key}`)), tri(key))),
+        h("label", { class: "field" }, h("span", { class: "field-label" }, t("aiTone")), choice("tone", AI_TONES.map((name) => [name, t(`aiTone_${name}`)]))),
+        h("label", { class: "field" }, h("span", { class: "field-label" }, t("aiLength")), choice("length", AI_LENGTHS.map((name) => [name, t(`aiLength_${name}`)]))),
+        h("label", { class: "field" }, h("span", { class: "field-label" }, t("aiLanguage")), choice("language", aiLanguageChoices())),
+      ),
+      h("label", { class: "field" }, h("span", { class: "field-label" }, t("aiPanelInstructions")), box),
+    );
+  };
+  const panelChanges = card(t("sectionAiPanels"), "layers", "amber", h("p", { class: "help" }, t("aiPanelChangesHelp")), panels.map(panelBox));
+
+  const rules = card(
+    t("sectionAiRules"),
+    "shieldCheck",
+    "green",
+    h("p", { class: "help" }, t("aiRulesHelp")),
+    h(
+      "ul",
+      { class: "ai-rules" },
+      ["data", "ai", "actions", "facts", "secrets", "discord", "respect", "advice", "danger", "pings", "label"].map((key) => h("li", {}, icon("lock", "icon small"), t(`aiRule_${key}`))),
+    ),
+  );
+
   settingsPage({
     data,
     pageId: "ai",
     intro: t("aiHelp"),
-    cards: [
-      status,
-      card(
-        t("sectionAi"),
-        "bot",
-        "purple",
-        toggle("aiEnabled", "aiEnabled", "aiEnabledHelp", options.enabled === true),
-        h("p", { class: "tip" }, icon("shieldCheck"), h("span", {}, t("aiPrivacyTip"))),
-        toggle("aiTriage", "aiTriage", "aiTriageHelp", options.triage !== false),
-        toggle("aiHelpers", "aiHelpers", "aiHelpersHelp", options.helpers !== false),
-        toggle("aiCloseSummary", "aiCloseSummary", "aiCloseSummaryHelp", options.closeSummary !== false),
-        toggle("aiUseTags", "aiUseTags", "aiUseTagsHelp", options.useTags !== false),
-        field(
-          "aiMonthlyLimit",
-          "aiMonthlyLimitHelp",
-          h("input", { id: "aiMonthlyLimit", type: "number", min: 1, max: MAX_AI_MONTHLY_LIMIT, step: 1, value: options.monthlyLimit, required: true }),
-        ),
-        h("p", { class: "help" }, t("aiBotLimit", { limit: formatNumber(info.botLimit) })),
-        h("span", { class: "field-label" }, t("aiPanels")),
-        h("p", { class: "help" }, t("aiPanelsHelp")),
-        checkList({ name: "aiPanels", items: panelItems, checked: options.panelIds ?? [], filterKey: "aiPanelsFilter" }),
-      ),
-    ],
+    cards: [status, features, personality, replies, instructions, triage, summaries, privacy, access, panelChanges, rules],
     fields: { ticketAi: readTicketAi },
-    after: [knowledgeBase(guildId, info), knowledgeSearch(guildId)],
+    after: [aiTryIt(guildId, info, panels), aiPromptPreview(guildId, panels), knowledgeBase(guildId, info), knowledgeSearch(guildId)],
   });
+}
+
+// The page's settings as they stand, saved or not, for Try it and the preview.
+const aiPageSettings = () => {
+  const form = document.querySelector("form.settings");
+  return form ? readTicketAi(form) : undefined;
+};
+const aiPanelPicker = (panels) => h("select", { "aria-label": t("aiTryPanel") }, panels.map((panel) => h("option", { value: panel.id }, panel.label)));
+
+// Try it: a sample ticket through the real assistant with the page's settings.
+function aiTryIt(guildId, info, panels) {
+  const sample = h("textarea", { class: "ai-sample", rows: 4, maxLength: 2000, placeholder: t("aiTryPlaceholder"), "aria-label": t("aiTryPlaceholder") });
+  const kind = h("select", { "aria-label": t("aiTryKind") }, ["reply", "triage", "summary", "close"].map((name) => h("option", { value: name }, t(`aiTry_${name}`))));
+  const panel = aiPanelPicker(panels);
+  const output = h("div", { class: "ai-try-output", "aria-live": "polite" });
+  const go = h("button", { class: "primary small", type: "button", disabled: !info.available }, icon("sparkles", "icon small"), t("aiTryButton"));
+  go.addEventListener("click", async () => {
+    if (!sample.value.trim()) {
+      toast(t("aiTryEmpty"), "error");
+      return;
+    }
+    setBusy(go, true);
+    try {
+      const result = await api(`/api/guilds/${guildId}/ai/try`, { method: "POST", body: { kind: kind.value, text: sample.value, panelId: panel.value, settings: aiPageSettings() } });
+      if (result.triage) {
+        const triage = result.triage;
+        output.replaceChildren(
+          h(
+            "dl",
+            { class: "facts" },
+            h("dt", {}, t("aiPriority")),
+            h("dd", {}, t(`aiPriority_${triage.priority}`), triage.raisedBy ? h("span", { class: "help" }, ` ${t("aiRaisedBy", { word: triage.raisedBy })}`) : null),
+            h("dt", {}, t("aiTriageSummary")),
+            h("dd", {}, triage.summary),
+            h("dt", {}, t("aiNeedsStaff")),
+            h("dd", {}, t(triage.needsStaff ? "aiOn" : "aiOff")),
+            triage.articles.length ? [h("dt", {}, t("aiTriageArticles")), h("dd", {}, triage.articles.map((article) => article.title).join(", "))] : null,
+          ),
+        );
+      } else {
+        output.replaceChildren(h("div", { class: "ai-try-text" }, result.text));
+      }
+      output.append(h("p", { class: "help" }, t("aiTryUsed", { used: formatNumber(result.status.requests), limit: formatNumber(result.status.limit) })));
+    } catch (error) {
+      if (error instanceof ApiError && error.body?.error === "ai-failed") {
+        toast(t(`aiTryError_${error.body.code}`), "error");
+      } else {
+        failed(error);
+      }
+    } finally {
+      setBusy(go, false);
+    }
+  });
+  return card(
+    t("sectionAiTry"),
+    "sparkles",
+    "pink",
+    h("p", { class: "help" }, t("aiTryHelp")),
+    info.available ? null : h("p", { class: "tip" }, icon("lock"), h("span", {}, t("aiNoKey"))),
+    sample,
+    h("div", { class: "toolbar" }, kind, panel, go),
+    output,
+  );
+}
+
+// What the AI is told: the locked rules, the persona and guidance, and each task's words.
+function aiPromptPreview(guildId, panels) {
+  const output = h("div", { class: "ai-prompt" });
+  const panel = aiPanelPicker(panels);
+  const go = h("button", { class: "ghost small", type: "button" }, icon("eye", "icon small"), t("aiPromptButton"));
+  go.addEventListener("click", async () => {
+    setBusy(go, true);
+    try {
+      const result = await api(`/api/guilds/${guildId}/ai/preview`, { method: "POST", body: { panelId: panel.value, settings: aiPageSettings() } });
+      output.replaceChildren(
+        ...[
+          ["system", result.system],
+          ["suggestReply", result.suggestReply],
+          ["triage", result.triage],
+          ["summarize", result.summarize],
+          ["closeSummary", result.closeSummary],
+        ].map(([key, body], index) => h("details", { open: index === 0 }, h("summary", {}, t(`aiPrompt_${key}`)), h("pre", { class: "ai-prompt-text" }, body))),
+      );
+    } catch (error) {
+      failed(error);
+    } finally {
+      setBusy(go, false);
+    }
+  });
+  return card(t("sectionAiPrompt"), "eye", "blue", h("p", { class: "help" }, t("aiPromptHelp")), h("div", { class: "toolbar" }, panel, go), output);
 }
 
 // The knowledge base: every article, each one editable, and a form for a new one.
@@ -5125,7 +5572,7 @@ function knowledgeBase(guildId, info) {
 
 // Type what a member might write and see which articles the assistant would read.
 function knowledgeSearch(guildId) {
-  const text = h("textarea", { rows: 3, maxLength: 2000, placeholder: t("aiSearchPlaceholder"), "aria-label": t("aiSearchPlaceholder") });
+  const text = h("textarea", { class: "ai-sample", rows: 3, maxLength: 2000, placeholder: t("aiSearchPlaceholder"), "aria-label": t("aiSearchPlaceholder") });
   const results = h("div", { class: "kb-results" });
   const go = h("button", { class: "ghost small", type: "button" }, icon("search", "icon small"), t("aiSearchButton"));
   go.addEventListener("click", async () => {

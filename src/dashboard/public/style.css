@@ -8146,3 +8146,126 @@ input.has-variable-problem {
   border-radius: 10px;
   overflow-wrap: anywhere;
 }
+
+/* --- AI assistant: customization ------------------------------------------- */
+
+#aiInstructions,
+#aiAvoidTopics,
+#aiUrgentWords,
+#aiHighWords,
+.ai-panel textarea,
+.ai-sample {
+  width: 100%;
+  min-width: 0;
+  resize: vertical;
+}
+
+.ai-count {
+  display: block;
+  text-align: end;
+  margin-top: 4px;
+}
+
+.ai-priorities {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.ai-priorities .field {
+  margin-bottom: 0;
+}
+
+.ai-panel {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-top: 10px;
+  min-width: 0;
+}
+
+.ai-panel > summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.ai-panel[open] > summary {
+  margin-bottom: 10px;
+}
+
+.ai-panel-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 180px), 1fr));
+  gap: 10px;
+}
+
+.ai-panel-grid .field {
+  margin-bottom: 0;
+}
+
+.ai-rules {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.ai-rules li {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  line-height: 1.45;
+}
+
+.ai-rules li .icon {
+  flex: none;
+  margin-top: 3px;
+  color: var(--muted);
+}
+
+.ai-try-output,
+.ai-prompt {
+  min-width: 0;
+}
+
+.ai-try-output:not(:empty) {
+  margin-top: 12px;
+  padding: 10px 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.ai-try-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.5;
+}
+
+.ai-prompt details {
+  margin-top: 10px;
+}
+
+.ai-prompt summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.ai-prompt-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 420px;
+  overflow: auto;
+  margin: 8px 0 0;
+  padding: 10px 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 0.85rem;
+}
