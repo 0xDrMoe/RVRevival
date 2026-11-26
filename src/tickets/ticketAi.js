@@ -21,6 +21,7 @@ import {
   LabelBuilder,
   MessageFlags,
   ModalBuilder,
+  PermissionFlagsBits,
   TextInputBuilder,
   TextInputStyle,
 } from "discord.js";
@@ -44,9 +45,11 @@ const SEND = `${AI_PREFIX}send:`;
 const MODAL = `${AI_PREFIX}m:`;
 const REPLY_INPUT = "reply";
 
-// The newest messages the AI reads for Summarize and Suggest reply.
+// The newest messages the AI reads for Summarize and Suggest reply (a
+// server can lower it: access.messageLimit).
 export const MAX_AI_MESSAGES = 300;
-// One AI request per staff member this often, so a busy button can't drain the month.
+// One AI request per staff member this often by default, so a busy button
+// can't drain the month (a server sets its own: access.cooldownSeconds).
 export const AI_COOLDOWN_MS = 8_000;
 // How long a suggested reply can still be sent.
 export const DRAFT_TTL_MS = 30 * 60_000;
@@ -85,6 +88,13 @@ function triageFields(language, triage, panel) {
   ].filter(Boolean);
 }
 
+// The AI label under a reply staff sent. Always there: a server picks the
+// wording (replies.disclosure), not whether it shows.
+export function replyFooter(language, options) {
+  const name = options?.persona?.name || "Rabble AI";
+  return translate(language, options?.replies?.disclosure === "assisted" ? "ticketAiFooterAssisted" : "ticketAiFooterChecked", { name }).slice(0, 2048);
+}
+
 // Options:
 //   tickets        the TicketStore
 //   assistant      the AI assistant (ai/ticketAssistant.js)
@@ -120,11 +130,11 @@ export function createTicketAi({ tickets, assistant = noTicketAssistant, ticketL
     return draft && draft.expires >= now() ? draft : undefined;
   }
 
-  // Waits AI_COOLDOWN_MS between one person's requests; true when they must wait.
-  function coolingDown(userId) {
+  // Waits `cooldownMs` between one person's requests; true when they must wait.
+  function coolingDown(userId, cooldownMs = AI_COOLDOWN_MS) {
     const at = now();
     const last = lastAsked.get(userId);
-    if (last !== undefined && at - last < AI_COOLDOWN_MS) {
+    if (last !== undefined && at - last < cooldownMs) {
       return true;
     }
     if (lastAsked.size > 1000) {
@@ -136,6 +146,17 @@ export function createTicketAi({ tickets, assistant = noTicketAssistant, ticketL
 
   const panelOfTicket = (guildId, ticket) => findPanel(guildSettings, guildId, ticket.panelId);
 
+  // Staff assist roles (access.roleIds): when a server picks some, only ticket
+  // staff with one of them (or Manage Server) can use the helpers.
+  function mayUseAssist(interaction, options) {
+    const roleIds = options.access?.roleIds ?? [];
+    if (roleIds.length === 0 || interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
+      return true;
+    }
+    const roles = interaction.member?.roles;
+    return roleIds.some((id) => (roles?.cache ? roles.cache.has(id) : Array.isArray(roles) && roles.includes(id)));
+  }
+
   // A new ticket's triage: saved on the ticket and posted in the ticket log.
   // `answers` is the form ([{ question, answer }]). Never throws.
   async function triageOpened(guild, ticket, { panel, answers }) {
@@ -144,7 +165,7 @@ export function createTicketAi({ tickets, assistant = noTicketAssistant, ticketL
     }
     try {
       const categories = (panel?.categories ?? []).map((category) => ({ id: category.id, label: category.label, description: category.description ?? null }));
-      const triage = await assistant.triage({ guildId: guild.id, guildName: guild.name, ticket, answers, categories });
+      const triage = await assistant.triage({ guildId: guild.id, guildName: guild.name, ticket, answers, categories, serverLanguage: serverLanguage(guild, forcedLanguage) });
       const saved = tickets.setTriage(ticket.id, triage) ?? ticket;
       const better = triage.categoryId ? findCategory(panel?.categories ?? [], triage.categoryId) : null;
       await ticketLog.record(guild, saved, { event: TicketEvent.AI_TRIAGED, triage: { ...triage, categoryLabel: better?.label ?? null }, detail: `${triage.priority}: ${triage.summary}` });
@@ -166,7 +187,7 @@ export function createTicketAi({ tickets, assistant = noTicketAssistant, ticketL
       return null;
     }
     try {
-      const summary = await assistant.closeSummary({ guildId: guild.id, guildName: guild.name, ticket, conversation });
+      const summary = await assistant.closeSummary({ guildId: guild.id, guildName: guild.name, ticket, conversation, serverLanguage: serverLanguage(guild, forcedLanguage) });
       tickets.setAiSummary(ticket.id, summary);
       return summary;
     } catch (error) {
@@ -191,7 +212,12 @@ export function createTicketAi({ tickets, assistant = noTicketAssistant, ticketL
       await reply("ticketAlreadyClosed");
       return { refused: result(Status.REFUSED, "ticketAlreadyClosed") };
     }
-    return { ticket };
+    const options = assistant.optionsFor(interaction.guildId, ticket.panelId);
+    if (!mayUseAssist(interaction, options)) {
+      await reply("ticketAiRoleOnly");
+      return { refused: result(Status.REFUSED, "ticketAiRoleOnly") };
+    }
+    return { ticket, options };
   }
 
   // ✨ Staff assist: the triage, this month's use, and the two helpers.
@@ -209,6 +235,7 @@ export function createTicketAi({ tickets, assistant = noTicketAssistant, ticketL
     const status = assistant.status(interaction.guildId);
     const embed = new EmbedBuilder()
       .setColor(AI_COLOR)
+      .setAuthor({ name: status.name ?? "Rabble AI" })
       .setTitle(translate(language, "ticketAiAssistTitle", { number: ticket.number }))
       .setDescription(translate(language, ticket.aiTriage ? "ticketAiAssistIntro" : "ticketAiAssistIntroNoTriage"))
       .addFields(triageFields(language, ticket.aiTriage, panelOfTicket(interaction.guildId, ticket)))
@@ -228,26 +255,27 @@ export function createTicketAi({ tickets, assistant = noTicketAssistant, ticketL
   }
 
   // Reads the ticket's conversation for Summarize and Suggest reply.
-  async function conversationOf(interaction, ticket) {
+  async function conversationOf(interaction, ticket, limit = MAX_AI_MESSAGES) {
     const channel = interaction.channel ?? (await interaction.guild.channels.fetch(interaction.channelId).catch(() => null));
-    const messages = channel ? await fetchThreadMessages(channel, MAX_AI_MESSAGES) : [];
+    const messages = channel ? await fetchThreadMessages(channel, Math.min(MAX_AI_MESSAGES, limit)) : [];
     return conversationFromMessages(messages, ticket);
   }
 
   // Runs one helper after the checks every helper shares. `work` returns what to show.
   async function runHelper(interaction, name, work) {
     const language = pickLanguage(interaction.locale, forcedLanguage);
-    const { ticket, refused } = await staffTicket(interaction, language);
+    const { ticket, options, refused } = await staffTicket(interaction, language);
     if (refused) {
       return refused;
     }
-    if (coolingDown(interaction.user.id)) {
-      await interaction.reply({ content: translate(language, "ticketAiCooldown", { seconds: AI_COOLDOWN_MS / 1000 }), flags: MessageFlags.Ephemeral });
-      return result(Status.REFUSED, "ticketAiCooldown", { seconds: AI_COOLDOWN_MS / 1000 });
+    const seconds = options.access?.cooldownSeconds ?? AI_COOLDOWN_MS / 1000;
+    if (coolingDown(interaction.user.id, seconds * 1000)) {
+      await interaction.reply({ content: translate(language, "ticketAiCooldown", { seconds }), flags: MessageFlags.Ephemeral });
+      return result(Status.REFUSED, "ticketAiCooldown", { seconds });
     }
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     try {
-      const conversation = await conversationOf(interaction, ticket);
+      const conversation = await conversationOf(interaction, ticket, options.access?.messageLimit);
       const shown = await work({ ticket, conversation, language });
       await interaction.editReply(shown);
       await ticketLog.record(interaction.guild, ticket, { event: TicketEvent.AI_USED, actorId: interaction.user.id, detail: name });
@@ -273,7 +301,17 @@ export function createTicketAi({ tickets, assistant = noTicketAssistant, ticketL
   async function handleSuggest(interaction) {
     return runHelper(interaction, "Suggest reply", async ({ ticket, conversation, language }) => {
       const staffName = interaction.member?.displayName ?? interaction.user.username;
-      const text = await assistant.suggestReply({ guildId: interaction.guildId, guildName: interaction.guild.name, ticket, conversation, staffName });
+      const spoken = conversation.find((entry) => entry.role === "member")?.name;
+      const memberName = interaction.guild.members?.cache?.get(ticket.userId)?.displayName ?? (spoken && spoken !== "someone" ? spoken : "");
+      const text = await assistant.suggestReply({
+        guildId: interaction.guildId,
+        guildName: interaction.guild.name,
+        ticket,
+        conversation,
+        staffName,
+        memberName,
+        serverLanguage: serverLanguage(interaction.guild, forcedLanguage),
+      });
       const id = saveDraft({ guildId: interaction.guildId, ticketId: ticket.id, channelId: interaction.channelId, userId: interaction.user.id, text });
       const embed = new EmbedBuilder()
         .setColor(AI_COLOR)
@@ -336,7 +374,7 @@ export function createTicketAi({ tickets, assistant = noTicketAssistant, ticketL
       .setColor(accentColor(guildSettings, interaction.guildId, TICKET_COLOR))
       .setAuthor({ name, iconURL: interaction.member?.displayAvatarURL?.() ?? interaction.user.displayAvatarURL?.() })
       .setDescription(text)
-      .setFooter({ text: translate(serverLang, "ticketAiReplyFooter") });
+      .setFooter({ text: replyFooter(serverLang, assistant.optionsFor(interaction.guildId, ticket.panelId)) });
     const channel = interaction.channel ?? (await interaction.guild.channels.fetch(interaction.channelId).catch(() => null));
     try {
       await channel.send({ embeds: [embed], allowedMentions: { parse: [] } });

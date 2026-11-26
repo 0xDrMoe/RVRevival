@@ -3,6 +3,17 @@
 
 export const CHANGELOG = [
   {
+    date: "2026-11-26",
+    title: "Make the AI assistant your own",
+    items: [
+      "Personality: give the assistant a name, a tone (friendly, professional, casual, formal, playful or empathetic), how much emoji it uses and notes in your own words.",
+      "Replies: length, language (the member's, the server's or a fixed one), plain text or formatting, a greeting and sign-off with {member}, {staff}, {server} and {assistant}, check markers, and the wording of the AI label.",
+      "Your instructions and topics to stay out of; what each priority means and words that always make a ticket urgent or high; how summaries read; what's removed from ticket text before it's sent; which staff roles can use Staff assist, the cooldown and how much of a ticket it reads.",
+      "Changes per ticket panel, Try it to test the assistant on a sample ticket before saving, and What the AI is told to see its exact instructions.",
+      "Some rules never change: it says it's an AI, never poses as a person, staff, Discord or Anthropic, never asks for passwords or card numbers, never helps break Discord's rules, and the AI label always shows.",
+    ],
+  },
+  {
     date: "2026-11-18",
     title: "AI ticket assistant for staff",
     items: [

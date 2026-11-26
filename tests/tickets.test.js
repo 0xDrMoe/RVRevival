@@ -1541,7 +1541,7 @@ describe("tickets with the AI assistant", () => {
     const form = staff(editId.replace(":edit:", ":m:"), { subject: "Please verify your game files in the launcher." });
     expect((await handle(form)).key).toBe("ticketAiSentLog");
     const sent = thread.send.mock.calls.at(-1)[0];
-    expect(sent.embeds[0].toJSON()).toMatchObject({ author: { name: "Player 3" }, description: "Please verify your game files in the launcher.", footer: { text: "Drafted with AI, checked by staff" } });
+    expect(sent.embeds[0].toJSON()).toMatchObject({ author: { name: "Player 3" }, description: "Please verify your game files in the launcher.", footer: { text: "Rabble AI · AI draft, checked by staff" } });
     expect(sent.allowedMentions).toEqual({ parse: [] });
     expect(t.tickets.byNumber(GUILD_ID, 1).firstResponseAt).not.toBeNull();
     // Each draft is sent once.
@@ -1573,6 +1573,63 @@ describe("tickets with the AI assistant", () => {
     expect(post.fields).toContainEqual({ name: "AI summary", value: "- Member's game crashes\n- Staff asked for logs", inline: false });
     expect(t.tickets.byNumber(GUILD_ID, 1).aiSummary).toContain("Member's game crashes");
     expect(ai.usage.get(GUILD_ID, 0).requests).toBe(2);
+  });
+
+  it("follows the server's settings: who can use it, how often, the reply's frame and the AI label", async () => {
+    const LEADS_ID = "700000000000000077";
+    const ai = fakeAi({ text: "Please verify your game files." });
+    const t = setup({ ticketAssistant: ai.factory });
+    await t.guildSettings.set(GUILD_ID, Setting.TICKET_AI, {
+      enabled: true,
+      persona: { name: "Pip", tone: "formal", emoji: "none" },
+      replies: { greeting: "Hi {member}!", signOff: "{staff} for {server}", disclosure: "assisted", length: "short", language: "de" },
+      triageRules: { urgentWords: ["hacked"] },
+      access: { roleIds: [LEADS_ID], cooldownSeconds: 30, messageLimit: 50 },
+    });
+    await t.postPanel({ "staff-role": { id: STAFF_ROLE_ID } });
+    await t.openTicket(MEMBER_ID, "My account got hacked yesterday");
+    const [thread] = t.threads;
+    // An urgent word wins over what the AI thought (it said high).
+    expect(t.tickets.byNumber(GUILD_ID, 1).aiTriage).toMatchObject({ priority: "urgent", raisedBy: "hacked" });
+    expect(ai.ask.mock.calls[0][0].system).toContain("Your name is Pip.");
+    expect(ai.ask.mock.calls[0][0].system).toContain("formal and courteous");
+
+    const handle = t.command.componentPrefixes[AI_PREFIX].handle;
+    // Staff without one of the picked roles can't use it; Manage Server always can.
+    const plain = t.interaction({ customId: `${AI_PREFIX}reply`, userId: STRANGER_ID, roleIds: [STAFF_ROLE_ID], channelId: thread.id });
+    expect((await handle(plain)).key).toBe("ticketAiRoleOnly");
+    const lead = (customId, extra = {}) => t.interaction({ customId, userId: STRANGER_ID, roleIds: [STAFF_ROLE_ID, LEADS_ID], channelId: thread.id, ...extra });
+    const suggest = lead(`${AI_PREFIX}reply`);
+    expect((await handle(suggest)).status).toBe(Status.SUCCESS);
+    const { prompt } = ai.ask.mock.calls.at(-1)[0];
+    expect(prompt).toContain("Write in German");
+    expect(prompt).toContain("under 60 words");
+    expect(prompt).toContain("Don't start with a greeting");
+    const draft = suggest.editReply.mock.calls.at(-1)[0];
+    expect(draft.embeds[0].toJSON().description).toBe("Hi!\n\nPlease verify your game files.\n\nPlayer 3 for Rumbleverse Revival");
+    // The server's own cooldown.
+    t.advance(AI_COOLDOWN_MS);
+    expect((await handle(lead(`${AI_PREFIX}sum`))).key).toBe("ticketAiCooldown");
+    const [, sendId] = draft.components[0].toJSON().components.map((button) => button.custom_id);
+    expect((await handle(lead(sendId))).key).toBe("ticketAiSentLog");
+    expect(thread.send.mock.calls.at(-1)[0].embeds[0].toJSON().footer.text).toBe("Pip · written with AI assistance");
+    expect(t.logPosts.find((entry) => entry.title === "🎫 Ticket #1 triaged by AI").fields).toContainEqual({ name: "Priority", value: '🔴 Urgent (raised by the word "hacked")', inline: true });
+  });
+
+  it("follows a panel's own changes", async () => {
+    const ai = fakeAi();
+    const t = setup({ ticketAssistant: ai.factory });
+    await t.guildSettings.set(GUILD_ID, Setting.TICKET_AI, { enabled: true, panels: { main: { triage: false, instructions: "Applications only." } } });
+    await t.postPanel({ "staff-role": { id: STAFF_ROLE_ID } });
+    await t.openTicket();
+    expect(ai.ask).not.toHaveBeenCalled();
+    const summarize = t.interaction({ customId: `${AI_PREFIX}sum`, userId: STRANGER_ID, roleIds: [STAFF_ROLE_ID], channelId: t.threads[0].id });
+    await t.command.componentPrefixes[AI_PREFIX].handle(summarize);
+    expect(ai.ask.mock.calls[0][0].system).toContain("Applications only.");
+
+    await t.guildSettings.set(GUILD_ID, Setting.TICKET_AI, { enabled: true, panels: { main: { enabled: false } } });
+    const press = t.interaction({ customId: ASSIST_BUTTON, userId: STRANGER_ID, roleIds: [STAFF_ROLE_ID], channelId: t.threads[0].id });
+    expect((await t.command.components[ASSIST_BUTTON].handle(press)).key).toBe("ticketAiErrorOff");
   });
 
   it("stops at the monthly limit and skips panels it isn't on for", async () => {

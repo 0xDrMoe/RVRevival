@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import Anthropic from "@anthropic-ai/sdk";
 import { AiError, AiErrorCode, createAiClient, DEFAULT_AI_MODEL } from "../src/ai/client.js";
 import { cleanArticle, KnowledgeStore, MAX_ARTICLE_BODY } from "../src/ai/knowledgeStore.js";
-import { checkTicketAi, describeTicketAi, normalizeTicketAi, panelUsesAi } from "../src/ai/options.js";
+import { checkTicketAi, DEFAULT_TICKET_AI, describeTicketAi, normalizeTicketAi, optionsForPanel, panelUsesAi } from "../src/ai/options.js";
+import { LOCKED_RULES, raisePriority, redact, systemPrompt } from "../src/ai/guardrails.js";
 import { pickContext, search, words } from "../src/ai/retrieval.js";
 import { conversationBlock, conversationFromMessages, createTicketAssistant, defuseMentions } from "../src/ai/ticketAssistant.js";
 import { AiUsageStore, monthOf } from "../src/ai/usageStore.js";
@@ -15,7 +16,8 @@ const logger = { info: vi.fn(), warn: vi.fn(), debug: vi.fn(), error: vi.fn() };
 
 describe("AI assistant options", () => {
   it("is off by default, with every helper ready", () => {
-    expect(normalizeTicketAi(undefined)).toEqual({ enabled: false, triage: true, helpers: true, closeSummary: true, useTags: true, monthlyLimit: 200, panelIds: [] });
+    expect(normalizeTicketAi(undefined)).toEqual(JSON.parse(JSON.stringify(DEFAULT_TICKET_AI)));
+    expect(normalizeTicketAi(undefined)).toMatchObject({ enabled: false, triage: true, helpers: true, closeSummary: true, useTags: true, monthlyLimit: 200, panelIds: [] });
     expect(normalizeTicketAi({ enabled: "yes", monthlyLimit: 99999, panelIds: ["main", "BAD!", "main"] })).toMatchObject({ enabled: false, monthlyLimit: 5000, panelIds: ["main"] });
   });
 
@@ -26,7 +28,7 @@ describe("AI assistant options", () => {
     expect(() => checkTicketAi({ helpers: "on" })).toThrow(/helpers/);
     expect(() => checkTicketAi({ apiKey: "x" })).toThrow(/Unknown/);
     expect(() => checkTicketAi({ panelIds: ["nope"] }, { isPanel: () => false })).toThrow(/panels/);
-    expect(describeTicketAi({ enabled: true, closeSummary: false })).toBe("on (triage, staff helpers, tags as knowledge; every panel; 200 requests a month)");
+    expect(describeTicketAi({ enabled: true, closeSummary: false })).toBe("on (triage, staff helpers, tags as knowledge; every panel; 200 requests a month; friendly tone, medium replies)");
     expect(describeTicketAi(undefined)).toBe("off");
   });
 
@@ -168,7 +170,7 @@ describe("ticket assistant", () => {
     const t = setup();
     expect(t.assistant.blocked(GUILD_ID, null, "triage")).toBe("off");
     await t.guildSettings.set(GUILD_ID, Setting.TICKET_AI, { enabled: true, triage: false, panelIds: ["abc"], monthlyLimit: 1 });
-    expect(t.assistant.blocked(GUILD_ID, null, "triage")).toBe("feature");
+    expect(t.assistant.blocked(GUILD_ID, "abc", "triage")).toBe("feature");
     expect(t.assistant.blocked(GUILD_ID, null, "helpers")).toBe("panel");
     expect(t.assistant.blocked(GUILD_ID, "abc", "helpers")).toBeNull();
     t.usage.record(GUILD_ID, {}, 0);
@@ -183,7 +185,7 @@ describe("ticket assistant", () => {
     await t.guildSettings.set(GUILD_ID, Setting.TICKET_AI, { enabled: true });
     t.knowledge.add(GUILD_ID, { title: "Refunds", body: "Refunds take five days." }, { by: "1" });
     const triage = await t.assistant.triage({ guildId: GUILD_ID, guildName: "G", ticket, answers: [{ question: "What happened?", answer: "I want a refund" }], categories: [{ id: "c1", label: "Billing" }] });
-    expect(triage).toEqual({ priority: "normal", summary: "Needs a refund @user", categoryId: null, articles: [{ id: "a1", title: "Refunds" }], needsStaff: false });
+    expect(triage).toEqual({ priority: "normal", summary: "Needs a refund @user", categoryId: null, articles: [{ id: "a1", title: "Refunds" }], needsStaff: false, raisedBy: null });
     expect(t.usage.get(GUILD_ID, 0).requests).toBe(1);
   });
 

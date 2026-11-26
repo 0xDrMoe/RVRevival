@@ -464,9 +464,11 @@ const FEATURE_PARTS = [
         steps: [
           "**Write your knowledge base** on the **AI assistant** page: one article per topic (refunds, how to report a bug, the rules for appeals). Your tags count too, unless you switch that off. **Try the search** shows which articles a member's words would bring up.",
           "**Turn it on** and pick what it does: **Triage new tickets**, **Staff helpers**, a **Summary when a ticket closes**, and which panels it works on. Tell your members, since ticket text is sent to the AI provider while it's on.",
+          "**Make it yours** on the same page: its **name**, **tone** (friendly, professional, casual, formal, playful or empathetic) and emoji; how long replies are, their **language** (the member's, the server's or a fixed one), format, a **greeting** and **sign-off** (`{member}`, `{staff}`, `{server}`, `{assistant}`) and the wording of the AI label; **your instructions** in your own words and **topics to stay out of**; what each **priority** means, words that always make a ticket **urgent** or **high**; how summaries read; what's **taken out** before text is sent; **who** of the staff can use it, how often and how much of a ticket it reads; and **changes per panel**.",
+          "**Try it** before saving: write what a member might send and see the reply, triage or summary with the page's settings. **What the AI is told** shows the exact instructions, free.",
           "**When a ticket opens**, the AI reads the form and notes a priority (🟢 low to 🔴 urgent), a one-line summary, a better ticket type when the member picked the wrong one, and the articles that may answer it. It goes in the ticket log and the ticket's history, where only staff look.",
           "**In a ticket**, staff press **✨ Staff assist**: only they see the triage, with **Summarize ticket** (where it stands, in a few lines) and **Suggest reply** (a draft from the knowledge base).",
-          "**Check the draft**, then **Edit and send** or **Send as it is**. It's posted with your name and avatar, marked *Drafted with AI, checked by staff*. Anything the AI couldn't know is marked `[check: …]` for you to fill in.",
+          "**Check the draft**, then **Edit and send** or **Send as it is**. It's posted with your name and avatar, with the AI label underneath (*AI draft, checked by staff* or *Written with AI assistance*). Anything the AI couldn't know is marked `[check: …]` for you to fill in.",
           "**When the ticket closes**, two or three sentences on how it went go in the ticket log, under the transcript button, and on the ticket's page.",
         ],
         tips: [
@@ -475,6 +477,8 @@ const FEATURE_PARTS = [
           "Member messages are read as data, so a ticket that says *ignore your rules* doesn't change what it does. The AI's text never pings anyone.",
           "Each triage, summary and suggested reply is one AI request. The page shows this month's count against the server's **Monthly limit** (the bot's owner sets the most a server can have). At the limit it stops until the 1st.",
           "Every use is in the ticket log as **AI helper used**, with who used it. Switch that kind of entry off with `/tickets log-event`.",
+          "Some rules no setting changes: it says it's an AI when asked and never poses as a person, staff, Discord or Anthropic; it never asks for passwords, codes or card numbers; it never helps break Discord's rules or the law; it gives no professional medical, legal or financial advice; it points anyone in danger to emergency services; and the AI label always shows. Your instructions sit below these rules, and the name can't impersonate anyone.",
+          "Card numbers, Discord tokens and API keys are always taken out of ticket text before it's sent. Emails, phone numbers and IP addresses are too, unless you switch that off.",
           "The bot's owner turns AI on for the whole bot with an Anthropic API key (`ANTHROPIC_API_KEY`). Without it the page says the assistant can't run.",
         ],
       },

@@ -111,7 +111,7 @@ export function buildTicketEventEmbed({ ticket, event, actorId = null, userIds =
       break;
     case TicketEvent.AI_TRIAGED:
       if (triage) {
-        field("Priority", priorityLabel(triage.priority), true);
+        field("Priority", triage.raisedBy ? `${priorityLabel(triage.priority)} (raised by the word "${triage.raisedBy}")` : priorityLabel(triage.priority), true);
         field("Needs staff", triage.needsStaff === false ? "Maybe not: the knowledge base may answer it" : "Yes", true);
         field("Summary", triage.summary);
         field("Better category", triage.categoryLabel);
