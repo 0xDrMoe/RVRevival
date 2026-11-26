@@ -47,6 +47,7 @@ export class GiveawayStore {
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *`),
       setMessage: db.prepare("UPDATE giveaways SET message_id = ? WHERE id = ?"),
       get: db.prepare("SELECT * FROM giveaways WHERE id = ?"),
+      runningByMessage: db.prepare("SELECT * FROM giveaways WHERE message_id = ? AND ended_at IS NULL"),
       running: db.prepare("SELECT * FROM giveaways WHERE guild_id = ? AND ended_at IS NULL ORDER BY ends_at"),
       ended: db.prepare("SELECT * FROM giveaways WHERE guild_id = ? AND ended_at IS NOT NULL ORDER BY ended_at DESC LIMIT 25"),
       due: db.prepare("SELECT * FROM giveaways WHERE ended_at IS NULL AND ends_at <= ? ORDER BY ends_at LIMIT ?"),
@@ -75,6 +76,11 @@ export class GiveawayStore {
 
   get(id) {
     return toGiveaway(this.#statements.get.get(id));
+  }
+
+  // The running giveaway posted as this message, if any.
+  runningByMessage(messageId) {
+    return toGiveaway(this.#statements.runningByMessage.get(messageId));
   }
 
   // A server's giveaways that haven't ended, ending soonest first.

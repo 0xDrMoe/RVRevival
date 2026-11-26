@@ -1120,6 +1120,7 @@ const FEATURE_PARTS = [
         tips: [
           "1 minute to 30 days, 1 to 20 winners, up to 10 running at once. Ended ones can be rerolled for 30 days.",
           "Winners must still be in the server (and have the role) when it ends.",
+          "Deleting a giveaway's message cancels it, so a giveaway you post again won't leave a stray \"no winners\" message behind.",
           "Only promise prizes you have, and say in the prize how to claim it.",
         ],
       },
